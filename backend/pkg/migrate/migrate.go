@@ -112,6 +112,10 @@ func (m *Migrator) loadMigrations() error {
 		} else {
 			migrations[version].DownSQL = string(data)
 		}
+
+		if version > maxVersion {
+			maxVersion = version
+		}
 	}
 
 	if maxVersion == -1 {
