@@ -3,4 +3,5 @@ builder = "RAILPACK"
 buildCommand = "go build -o migrate ./cmd/migrate && go build -o telegram-bot ./cmd/telegram-bot"
 
 [deploy]
+preDeployCommand = "go run ./cmd/migrate up"
 startCommand = "./telegram-bot"
