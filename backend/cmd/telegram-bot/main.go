@@ -7,8 +7,8 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/Alarion239/my239/backend/internal/constants"
-	"github.com/Alarion239/my239/backend/internal/handlers"
+	constants "github.com/Alarion239/my239/backend/internal/constants"
+	handlers "github.com/Alarion239/my239/backend/internal/tg-bot-handlers"
 
 	"github.com/go-telegram/bot"
 )
@@ -48,8 +48,5 @@ func main() {
 		http.ListenAndServe(":8080", b.WebhookHandler())
 	}()
 
-	// Use StartWebhook instead of Start
 	b.StartWebhook(ctx)
-
-	// call methods.DeleteWebhook if needed
 }
