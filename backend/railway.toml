@@ -1,6 +1,6 @@
 [build]
-builder = "NIXPACKS"
+buildCommand = "go build -o migrate ./cmd/migrate && go build -o telegram-bot ./cmd/telegram-bot"
 
 [deploy]
-startCommand = "./migrate up && exec ./telegram-bot"
-buildCommand = "go build -o migrate ./cmd/migrate && go build -o telegram-bot ./cmd/telegram-bot"
+preDeployCommand = ["./migrate", "up"]
+startCommand = "./telegram-bot"
