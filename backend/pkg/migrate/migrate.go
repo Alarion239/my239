@@ -4,6 +4,7 @@ package migrate
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"os"
@@ -129,7 +130,8 @@ func (m *Migrator) loadMigrations() error {
 		}
 	}
 
-	m.migrations = migrations
+	// Slice the array to only include valid migrations (0 to maxVersion)
+	m.migrations = migrations[:maxVersion+1]
 	return nil
 }
 
@@ -138,11 +140,11 @@ func (m *Migrator) GetCurrentVersion(ctx context.Context) (int, error) {
 		return 0, fmt.Errorf("context cancelled: %w", err)
 	}
 
-	var version int
-	err := m.conn.QueryRow(ctx, "SELECT version FROM migrations LIMIT 1").Scan(&version)
+	var version sql.NullInt64 // Use NullInt64 to handle NULL from MAX()
+	err := m.conn.QueryRow(ctx, "SELECT MAX(version) FROM migrations").Scan(&version)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return 0, nil // Table is empty (shouldn't happen after migration 0, but handle gracefully)
+			return 0, nil // Table is empty, no migrations applied
 		}
 
 		var pgErr *pgconn.PgError
@@ -151,7 +153,13 @@ func (m *Migrator) GetCurrentVersion(ctx context.Context) (int, error) {
 		}
 		return 0, fmt.Errorf("failed to get current migration version: %w", err)
 	}
-	return version, nil
+
+	// If MAX returns NULL (empty table), return 0
+	if !version.Valid {
+		return 0, nil
+	}
+
+	return int(version.Int64), nil
 }
 
 // Up applies all pending migrations in order starting from currentVersion + 1.
@@ -232,11 +240,9 @@ func (m *Migrator) applyMigration(ctx context.Context, migration Migration, up b
 	}
 
 	var sql string
-	var newVersion int
 
 	if up {
 		sql = migration.UpSQL
-		newVersion = migration.Version
 		if strings.TrimSpace(sql) == "" {
 			return fmt.Errorf("migration %d has empty up.sql content", migration.Version)
 		}
@@ -245,8 +251,6 @@ func (m *Migrator) applyMigration(ctx context.Context, migration Migration, up b
 		if strings.TrimSpace(sql) == "" {
 			return fmt.Errorf("migration %d has empty down.sql content", migration.Version)
 		}
-		// Previous version is currentVersion - 1 (migrations are sequential from 0)
-		newVersion = currentVersion - 1
 	}
 
 	// Start transaction
@@ -261,12 +265,23 @@ func (m *Migrator) applyMigration(ctx context.Context, migration Migration, up b
 		return fmt.Errorf("failed to execute migration SQL for version %d: %w", migration.Version, err)
 	}
 
-	// Update version in migrations table using INSERT ... ON CONFLICT
-	if _, err := tx.Exec(ctx,
-		"INSERT INTO migrations (version) VALUES ($1) ON CONFLICT (version) DO UPDATE SET version = $1",
-		newVersion,
-	); err != nil {
-		return fmt.Errorf("failed to update migration version to %d: %w", newVersion, err)
+	// Update migrations table based on direction
+	if up {
+		// Insert the version when applying a migration (idempotent with ON CONFLICT DO NOTHING)
+		if _, err := tx.Exec(ctx,
+			"INSERT INTO migrations (version) VALUES ($1) ON CONFLICT (version) DO NOTHING",
+			migration.Version, // The version being applied
+		); err != nil {
+			return fmt.Errorf("failed to record migration version %d: %w", migration.Version, err)
+		}
+	} else {
+		// Delete the version when rolling back a migration
+		if _, err := tx.Exec(ctx,
+			"DELETE FROM migrations WHERE version = $1",
+			migration.Version, // The version being rolled back (same as currentVersion)
+		); err != nil {
+			return fmt.Errorf("failed to remove migration version %d: %w", migration.Version, err)
+		}
 	}
 
 	// Commit transaction
