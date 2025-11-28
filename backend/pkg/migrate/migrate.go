@@ -260,9 +260,17 @@ func (m *Migrator) applyMigration(ctx context.Context, migration Migration, up b
 	}
 	defer tx.Rollback(ctx)
 
-	// Execute migration SQL
-	if _, err := tx.Exec(ctx, sql); err != nil {
-		return fmt.Errorf("failed to execute migration SQL for version %d: %w", migration.Version, err)
+	// Execute migration SQL - split by semicolon and execute each statement separately
+	// This ensures each statement is executed properly even if they contain complex SQL
+	statements := strings.Split(sql, ";")
+	for i, stmt := range statements {
+		stmt = strings.TrimSpace(stmt)
+		if stmt == "" {
+			continue // Skip empty statements
+		}
+		if _, err := tx.Exec(ctx, stmt); err != nil {
+			return fmt.Errorf("failed to execute migration SQL for version %d (statement %d): %w\nStatement: %s", migration.Version, i+1, err, stmt)
+		}
 	}
 
 	// Update migrations table based on direction
