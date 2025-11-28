@@ -46,15 +46,19 @@ func main() {
 }
 
 func handleUp(ctx context.Context, migrator *migrate.Migrator) {
+	fmt.Println("Applying migrations...")
 	if err := migrator.Up(ctx); err != nil {
 		log.Fatalf("Failed to apply migrations: %v", err)
 	}
+	fmt.Println("Migrations applied successfully!")
 }
 
 func handleDown(ctx context.Context, migrator *migrate.Migrator) {
+	fmt.Println("Rolling back migration...")
 	if err := migrator.Down(ctx); err != nil {
 		log.Fatalf("Failed to rollback migration: %v", err)
 	}
+	fmt.Println("Migration rolled back successfully!")
 }
 
 func handleSteps(ctx context.Context, migrator *migrate.Migrator, args []string) {

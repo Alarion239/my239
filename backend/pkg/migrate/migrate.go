@@ -183,10 +183,12 @@ func (m *Migrator) Up(ctx context.Context) error {
 			return fmt.Errorf("context cancelled while applying migration %d: %w", version, err)
 		}
 
+		fmt.Printf("Applying migration %d...\n", version)
 		err = m.applyMigration(ctx, migration, true, currentVersion)
 		if err != nil {
 			return fmt.Errorf("failed to apply migration %d: %w", version, err)
 		}
+		fmt.Printf("Migration %d applied successfully\n", version)
 
 		currentVersion = version
 	}
@@ -228,7 +230,13 @@ func (m *Migrator) Down(ctx context.Context) error {
 		return fmt.Errorf("migration %d does not have a down.sql file or it is empty", currentVersion)
 	}
 
-	return m.applyMigration(ctx, *migrationToRollback, false, currentVersion)
+	fmt.Printf("Rolling back migration %d...\n", currentVersion)
+	err = m.applyMigration(ctx, *migrationToRollback, false, currentVersion)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Migration %d rolled back successfully\n", currentVersion)
+	return nil
 }
 
 // applyMigration applies a single migration (up or down) within a transaction.
