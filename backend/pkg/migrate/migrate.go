@@ -28,17 +28,12 @@ type Migrator struct {
 	migrations []Migration
 }
 
-func NewMigrator(ctx context.Context) (*Migrator, error) {
+func NewMigrator(ctx context.Context, connectionString string) (*Migrator, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("context cancelled: %w", err)
 	}
 
-	connString := os.Getenv(constants.DATABASE_URL)
-	if connString == "" {
-		return nil, fmt.Errorf("%s environment variable is not set", constants.DATABASE_URL)
-	}
-
-	conn, err := pgx.Connect(ctx, connString)
+	conn, err := pgx.Connect(ctx, connectionString)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
