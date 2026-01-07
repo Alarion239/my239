@@ -19,18 +19,30 @@ func main() {
 
 	command := os.Args[1]
 
+	// Check for help command BEFORE connecting to database
+	if command == "help" || command == "-h" || command == "--help" {
+		printUsage()
+		os.Exit(0)
+	}
+
+	fmt.Println("Initializing migration tool...")
 	ctx := context.Background()
 
+	fmt.Print("Checking DATABASE_URL environment variable...")
 	connectionString := os.Getenv(constants.DATABASE_URL)
 	if connectionString == "" {
 		logger.LogError("DATABASE_URL environment variable is not set", nil)
 		os.Exit(1)
 	}
+	fmt.Println("✓ DATABASE_URL found")
+
+	fmt.Print("Connecting to database...")
 	migrator, err := migrate.NewMigrator(ctx, connectionString)
 	if err != nil {
 		logger.LogError("Failed to create migrator", err)
 		os.Exit(1)
 	}
+	fmt.Println("✓ Connected to database")
 	defer migrator.Close(ctx)
 
 	switch command {
@@ -42,8 +54,6 @@ func main() {
 		handleSteps(ctx, migrator, os.Args[2:])
 	case "version", "status":
 		handleVersion(ctx, migrator)
-	case "help", "-h", "--help":
-		printUsage()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
 		printUsage()
@@ -52,21 +62,21 @@ func main() {
 }
 
 func handleUp(ctx context.Context, migrator *migrate.Migrator) {
-	logger.LogInfo("Applying migrations...")
+	fmt.Println("\n=== Applying Migrations ===")
 	if err := migrator.Up(ctx); err != nil {
 		logger.LogError("Failed to apply migrations", err)
 		os.Exit(1)
 	}
-	logger.LogInfo("Migrations applied successfully!")
+	fmt.Println("\n✓ All migrations applied successfully!")
 }
 
 func handleDown(ctx context.Context, migrator *migrate.Migrator) {
-	fmt.Println("Rolling back migration...")
+	fmt.Println("\n=== Rolling Back Migration ===")
 	if err := migrator.Down(ctx); err != nil {
 		logger.LogError("Failed to rollback migration", err)
 		os.Exit(1)
 	}
-	fmt.Println("Migration rolled back successfully!")
+	fmt.Println("\n✓ Migration rolled back successfully!")
 }
 
 func handleSteps(ctx context.Context, migrator *migrate.Migrator, args []string) {
@@ -88,13 +98,14 @@ func handleSteps(ctx context.Context, migrator *migrate.Migrator, args []string)
 }
 
 func handleVersion(ctx context.Context, migrator *migrate.Migrator) {
+	fmt.Print("Checking current migration version...")
 	version, err := migrator.GetCurrentVersion(ctx)
 	if err != nil {
 		logger.LogError("Failed to get current version", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("Current migration version: %d\n", version)
+	fmt.Printf("✓ Current migration version: %d\n", version)
 }
 
 func printUsage() {
