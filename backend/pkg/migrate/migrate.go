@@ -271,7 +271,8 @@ func (m *Migrator) applyMigration(ctx context.Context, migration Migration, up b
 		if stmt == "" {
 			continue // Skip empty statements
 		}
-		if _, err := tx.Exec(ctx, stmt); err != nil {
+		// Add semicolon back for execution
+		if _, err := tx.Exec(ctx, stmt+";"); err != nil {
 			return fmt.Errorf("failed to execute migration SQL for version %d (statement %d): %w\nStatement: %s", migration.Version, i+1, err, stmt)
 		}
 	}
