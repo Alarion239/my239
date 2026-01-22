@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/Alarion239/my239/backend/internal/config"
-	"github.com/Alarion239/my239/backend/models/authorization"
+	"github.com/Alarion239/my239/backend/models/authorize"
 	"github.com/Alarion239/my239/backend/pkg/db"
 )
 
@@ -101,8 +101,8 @@ func createToken(db *db.DB) {
 	token := hex.EncodeToString(tokenBytes)
 
 	ctx := context.Background()
-	Token := authorization.InvitationToken{ID: -1, Token: token, Description: description, MaxUses: maxUses, ExpiresAt: expiresAt, CreatedAt: createdAt}
-	Token.ID, err = authorization.NewInvitationTokenRepo(db).Create(ctx, &Token)
+	Token := authorize.InvitationToken{ID: -1, Token: token, Description: description, MaxUses: maxUses, ExpiresAt: expiresAt, CreatedAt: createdAt}
+	Token.ID, err = authorize.NewInvitationTokenRepo(db).Create(ctx, &Token)
 	if err != nil {
 		log.Fatalf("Failed to create token: %v", err)
 	}
@@ -117,7 +117,7 @@ func createToken(db *db.DB) {
 
 func listTokens(database *db.DB) {
 	// Get database connection
-	repo := authorization.NewInvitationTokenRepo(database)
+	repo := authorize.NewInvitationTokenRepo(database)
 
 	ctx := context.Background()
 	tokens, err := repo.ListAll(ctx)
@@ -187,14 +187,14 @@ func revokeToken(database *db.DB) {
 		log.Fatal("Only one of --token or --id can be specified")
 	}
 
-	repo := authorization.NewInvitationTokenRepo(database)
+	repo := authorize.NewInvitationTokenRepo(database)
 	ctx := context.Background()
 
 	var err error
 	if token != "" {
 		err = repo.Revoke(ctx, token)
 		if err != nil {
-			if errors.Is(err, authorization.ErrTokenNotFound) {
+			if errors.Is(err, authorize.ErrTokenNotFound) {
 				log.Fatalf("Token not found: %s", token)
 			}
 			log.Fatalf("Failed to revoke token: %v", err)
@@ -203,7 +203,7 @@ func revokeToken(database *db.DB) {
 	} else {
 		err = repo.RevokeByID(ctx, tokenID)
 		if err != nil {
-			if errors.Is(err, authorization.ErrTokenNotFound) {
+			if errors.Is(err, authorize.ErrTokenNotFound) {
 				log.Fatalf("Token not found with ID: %d", tokenID)
 			}
 			log.Fatalf("Failed to revoke token: %v", err)

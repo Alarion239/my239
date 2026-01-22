@@ -1,2 +1,2 @@
-DROP TABLE IF EXISTS authorization.invitation_tokens;
-DROP SCHEMA IF EXISTS authorization CASCADE;
+DROP TABLE IF EXISTS authorize.invitation_tokens;
+DROP SCHEMA IF EXISTS authorize CASCADE;

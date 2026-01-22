@@ -1,4 +1,4 @@
-package authorization
+package authorize
 
 import (
 	"context"
@@ -33,7 +33,7 @@ func (repo *InvitationTokenRepo) GetByToken(ctx context.Context, token string) (
 	var it InvitationToken
 	err := repo.db.Pool().QueryRow(ctx, `
 		SELECT id, description, token, max_uses, expires_at, created_at
-		FROM authorization.invitation_tokens
+		FROM authorize.invitation_tokens
 		WHERE token = $1
 	`, token).Scan(
 		&it.ID,
@@ -72,7 +72,7 @@ func (repo *InvitationTokenRepo) CountUsesOfToken(ctx context.Context, tokenID i
 func (repo *InvitationTokenRepo) Create(ctx context.Context, token *InvitationToken) (int64, error) {
 	var id int64
 	err := repo.db.Pool().QueryRow(ctx, `
-		INSERT INTO authorization.invitation_tokens
+		INSERT INTO authorize.invitation_tokens
 			(token, max_uses, description, expires_at, created_at)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id
@@ -87,7 +87,7 @@ func (repo *InvitationTokenRepo) Create(ctx context.Context, token *InvitationTo
 func (repo *InvitationTokenRepo) ListAll(ctx context.Context) ([]*InvitationToken, error) {
 	rows, err := repo.db.Pool().Query(ctx, `
 		SELECT id, token, description, max_uses, expires_at, created_at
-		FROM authorization.invitation_tokens
+		FROM authorize.invitation_tokens
 		ORDER BY created_at DESC
 	`)
 	if err != nil {
@@ -121,7 +121,7 @@ func (repo *InvitationTokenRepo) ListAll(ctx context.Context) ([]*InvitationToke
 
 func (repo *InvitationTokenRepo) Revoke(ctx context.Context, token string) error {
 	result, err := repo.db.Pool().Exec(ctx, `
-		UPDATE authorization.invitation_tokens
+		UPDATE authorize.invitation_tokens
 		SET expires_at = NOW()
 		WHERE token = $1
 	`, token)
@@ -138,7 +138,7 @@ func (repo *InvitationTokenRepo) Revoke(ctx context.Context, token string) error
 
 func (repo *InvitationTokenRepo) RevokeByID(ctx context.Context, tokenID int64) error {
 	result, err := repo.db.Pool().Exec(ctx, `
-		UPDATE authorization.invitation_tokens
+		UPDATE authorize.invitation_tokens
 		SET expires_at = NOW()
 		WHERE id = $1
 	`, tokenID)

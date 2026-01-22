@@ -1,7 +1,7 @@
 ALTER TABLE common.users
 ADD COLUMN username VARCHAR(100) UNIQUE NOT NULL,
 ADD COLUMN password_hash VARCHAR(255) NOT NULL,
-ADD COLUMN invitation_token_id BIGINT NOT NULL REFERENCES authorization.invitation_tokens(id),
+ADD COLUMN invitation_token_id BIGINT NOT NULL REFERENCES authorize.invitation_tokens(id),
 ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 

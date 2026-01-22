@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/Alarion239/my239/backend/internal/auth"
-	"github.com/Alarion239/my239/backend/models/authorization"
+	"github.com/Alarion239/my239/backend/models/authorize"
 	"github.com/Alarion239/my239/backend/models/common"
 	"github.com/Alarion239/my239/backend/pkg/db"
 	"github.com/go-playground/validator/v10"
@@ -48,7 +48,7 @@ func Register(db *db.DB, ctx context.Context, w http.ResponseWriter, r *http.Req
 	}
 
 	// Get database connection
-	tokenRepo := authorization.NewInvitationTokenRepo(db)
+	tokenRepo := authorize.NewInvitationTokenRepo(db)
 
 	// Check invitation token
 	invitationToken, err := tokenRepo.GetByToken(ctx, req.InvitationToken)
