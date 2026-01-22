@@ -38,6 +38,14 @@ Register a new user account.
 }
 ```
 
+**Validation Rules:**
+- `username`: Required, 3-50 characters, alphanumeric only
+- `password`: Required, 8-128 characters
+- `invitation_token`: Required
+- `first_name`: Required, max 255 characters
+- `middle_name`: Optional, max 255 characters (omitted from response if null)
+- `last_name`: Optional, max 255 characters
+
 **Response (201 Created):**
 ```json
 {
@@ -48,6 +56,7 @@ Register a new user account.
     "first_name": "John",
     "middle_name": "Michael",
     "last_name": "Doe",
+    "invitation_token_id": 5,
     "created_at": "2024-01-07T10:00:00Z",
     "updated_at": "2024-01-07T10:00:00Z"
   }
@@ -55,8 +64,10 @@ Register a new user account.
 ```
 
 **Error Responses:**
-- `400 Bad Request` - Invalid input data
-- `401 Unauthorized` - Invalid or expired invitation token
+- `400 Bad Request` - Invalid input data or validation failed
+- `401 Unauthorized` - Invalid invitation token
+- `401 Unauthorized` - Invitation token has expired
+- `401 Unauthorized` - Invitation token has reached maximum uses
 - `500 Internal Server Error` - Server error
 
 ### POST /auth/login
@@ -70,6 +81,10 @@ Authenticate an existing user.
 }
 ```
 
+**Validation Rules:**
+- `username`: Required, 3-50 characters
+- `password`: Required, 8-128 characters
+
 **Response (200 OK):**
 ```json
 {
@@ -80,6 +95,7 @@ Authenticate an existing user.
     "first_name": "John",
     "middle_name": "Michael",
     "last_name": "Doe",
+    "invitation_token_id": 5,
     "created_at": "2024-01-07T10:00:00Z",
     "updated_at": "2024-01-07T10:00:00Z"
   }
@@ -87,7 +103,7 @@ Authenticate an existing user.
 ```
 
 **Error Responses:**
-- `400 Bad Request` - Invalid input data
+- `400 Bad Request` - Invalid input data or validation failed
 - `401 Unauthorized` - Invalid username or password
 - `500 Internal Server Error` - Server error
 
@@ -107,14 +123,18 @@ Authorization: Bearer <jwt-token>
   "first_name": "John",
   "middle_name": "Michael",
   "last_name": "Doe",
+  "invitation_token_id": 5,
   "created_at": "2024-01-07T10:00:00Z",
   "updated_at": "2024-01-07T10:00:00Z"
 }
 ```
 
+**Note:** The `middle_name` field is omitted from the response if null.
+
 **Error Responses:**
+- `405 Method Not Allowed` - Non-GET request
 - `401 Unauthorized` - Missing or invalid token
-- `500 Internal Server Error` - Server error
+- `500 Internal Server Error` - Failed to fetch user data
 
 ## Telegram Webhook
 
