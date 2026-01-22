@@ -6,7 +6,7 @@ import (
 	"os"
 	"strconv"
 
-	constants "github.com/Alarion239/my239/backend/internal/constants"
+	"github.com/Alarion239/my239/backend/internal/config"
 	"github.com/Alarion239/my239/backend/internal/logger"
 	"github.com/Alarion239/my239/backend/pkg/migrate"
 )
@@ -28,13 +28,9 @@ func main() {
 	fmt.Println("Initializing migration tool...")
 	ctx := context.Background()
 
-	fmt.Print("Checking DATABASE_URL environment variable...")
-	connectionString := os.Getenv(constants.DATABASE_URL)
-	if connectionString == "" {
-		logger.LogError("DATABASE_URL environment variable is not set", nil)
-		os.Exit(1)
-	}
-	fmt.Println("✓ DATABASE_URL found")
+	fmt.Print("Using DATABASE_URL from configuration...")
+	connectionString := config.DatabaseURL
+	fmt.Println("✓ DATABASE_URL ready")
 
 	fmt.Print("Connecting to database...")
 	migrator, err := migrate.NewMigrator(ctx, connectionString)
@@ -128,5 +124,5 @@ Examples:
   migrate steps 2
   migrate steps -1
   migrate version
-`, constants.DATABASE_URL)
+`, "DATABASE_URL")
 }

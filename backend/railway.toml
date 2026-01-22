@@ -1,6 +1,6 @@
 [build]
 builder = "RAILPACK"
-buildCommand = "go build -o migrate ./cmd/migrate && go build -o telegram-bot ./cmd/telegram-bot"
+buildCommand = "go build -o migrate ./cmd/migrate && go build -o token-generator ./cmd/token-generator && go build -o server ./cmd/server"
 
 [deploy]
-startCommand = "./telegram-bot"
+startCommand = "./migrate up && ./server"

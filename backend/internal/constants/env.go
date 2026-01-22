@@ -1,7 +1,0 @@
-package constants
-
-const (
-	TELEGRAM_BOT_TOKEN = "TELEGRAM_BOT_TOKEN"
-	BACKEND_DOMAIN     = "BACKEND_DOMAIN"
-	DATABASE_URL       = "DATABASE_URL"
-)

@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Alarion239/my239/backend/internal/logger"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// DB represents a database connection pool and must be initialized using NewDB.
 type DB struct {
 	pool *pgxpool.Pool
 }
@@ -15,20 +15,17 @@ type DB struct {
 // NewDB creates and initializes a new DB instance with a connection pool.
 func NewDB(ctx context.Context, connectionString string) (*DB, error) {
 	if err := ctx.Err(); err != nil {
-
 		return nil, fmt.Errorf("context cancelled: %w", err)
 	}
 
 	pool, err := pgxpool.New(ctx, connectionString)
 	if err != nil {
-		logger.LogError("Failed to create connection pool", err)
 		return nil, fmt.Errorf("failed to create connection pool: %w", err)
 	}
 
 	// Verify the connection pool works by pinging the database
 	if err := pool.Ping(ctx); err != nil {
 		pool.Close()
-		logger.LogError("Failed to ping database", err)
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 

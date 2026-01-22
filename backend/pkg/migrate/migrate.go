@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	constants "github.com/Alarion239/my239/backend/internal/constants"
+	"github.com/Alarion239/my239/backend/internal/config"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -57,9 +57,9 @@ func (m *Migrator) Close(ctx context.Context) error {
 }
 
 func (m *Migrator) loadMigrations() error {
-	entries, err := os.ReadDir(constants.MIGRATIONS_DIR)
+	entries, err := os.ReadDir(config.MIGRATIONS_DIR)
 	if err != nil {
-		return fmt.Errorf("failed to read migrations directory %s: %w", constants.MIGRATIONS_DIR, err)
+		return fmt.Errorf("failed to read migrations directory %s: %w", config.MIGRATIONS_DIR, err)
 	}
 
 	fileCount := len(entries)
@@ -97,7 +97,7 @@ func (m *Migrator) loadMigrations() error {
 			migrations[version] = Migration{Version: version}
 		}
 
-		filePath := filepath.Join(constants.MIGRATIONS_DIR, baseName)
+		filePath := filepath.Join(config.MIGRATIONS_DIR, baseName)
 		data, err := os.ReadFile(filePath)
 		if err != nil {
 			return fmt.Errorf("failed to read migration file %s: %w", filePath, err)
@@ -115,7 +115,7 @@ func (m *Migrator) loadMigrations() error {
 	}
 
 	if maxVersion == -1 {
-		return fmt.Errorf("no valid migration files found in directory %s", constants.MIGRATIONS_DIR)
+		return fmt.Errorf("no valid migration files found in directory %s", config.MIGRATIONS_DIR)
 	}
 
 	// Validate all migrations exist and have UpSQL
