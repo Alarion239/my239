@@ -95,8 +95,7 @@ func initTelegramBot(ctx context.Context) *bot.Bot {
 	secretToken := bot.RandomString(128)
 	webhookURL := config.BackendDomain + "/webhooks/telegram"
 
-	logger.LogInfo("Initializing Telegram bot")
-	logger.LogInfo("Webhook URL:", webhookURL)
+	logger.LogInfo("Telegram bot configured", "webhook_url", webhookURL)
 
 	opts := []bot.Option{
 		bot.WithDefaultHandler(tghandlers.TelegramWebhooksHandler),
