@@ -1,15 +1,44 @@
 package logger
 
 import (
+	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 )
 
 var Logger *slog.Logger
 
-// Init initializes the logger to output to console (stdout) with JSON format
+// Init initializes the logger to output to both console and file with JSON format
 func Init() {
-	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+	// Create logs directory if it doesn't exist
+	logDir := "logs"
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		// Fallback to stdout only if we can't create the directory
+		handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			Level:     slog.LevelInfo,
+			AddSource: true,
+		})
+		Logger = slog.New(handler)
+		return
+	}
+
+	// Open log file (append mode, create if not exists)
+	logFile, err := os.OpenFile(filepath.Join(logDir, "app.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		// Fallback to stdout only if we can't open the file
+		handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			Level:     slog.LevelInfo,
+			AddSource: true,
+		})
+		Logger = slog.New(handler)
+		return
+	}
+
+	// Create multi-writer to output to both stdout and file
+	multiWriter := io.MultiWriter(os.Stdout, logFile)
+
+	handler := slog.NewJSONHandler(multiWriter, &slog.HandlerOptions{
 		Level:     slog.LevelInfo,
 		AddSource: true, // Include file and line number in logs
 	})
