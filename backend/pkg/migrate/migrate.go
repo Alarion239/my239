@@ -179,7 +179,7 @@ func (m *Migrator) Up(ctx context.Context) error {
 		}
 
 		fmt.Printf("Applying migration %d...\n", version)
-		err = m.applyMigration(ctx, migration, true, currentVersion)
+		err = m.applyMigration(ctx, migration, true)
 		if err != nil {
 			return fmt.Errorf("failed to apply migration %d: %w", version, err)
 		}
@@ -226,7 +226,7 @@ func (m *Migrator) Down(ctx context.Context) error {
 	}
 
 	fmt.Printf("Rolling back migration %d...\n", currentVersion)
-	err = m.applyMigration(ctx, *migrationToRollback, false, currentVersion)
+	err = m.applyMigration(ctx, *migrationToRollback, false)
 	if err != nil {
 		return err
 	}
@@ -320,7 +320,7 @@ func (m *Migrator) Steps(ctx context.Context, steps int) error {
 				return fmt.Errorf("context cancelled while applying migration %d: %w", version, err)
 			}
 
-			if err := m.applyMigration(ctx, migration, true, currentVersion); err != nil {
+			if err := m.applyMigration(ctx, migration, true); err != nil {
 				return fmt.Errorf("failed to apply migration %d: %w", version, err)
 			}
 
@@ -356,7 +356,7 @@ func (m *Migrator) Steps(ctx context.Context, steps int) error {
 				return fmt.Errorf("migration %d does not have a down.sql file or it is empty", currentVersion)
 			}
 
-			if err := m.applyMigration(ctx, *migrationToRollback, false, currentVersion); err != nil {
+			if err := m.applyMigration(ctx, *migrationToRollback, false); err != nil {
 				return fmt.Errorf("failed to rollback migration %d: %w", currentVersion, err)
 			}
 
