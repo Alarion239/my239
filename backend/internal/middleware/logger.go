@@ -1,9 +1,10 @@
 package middleware
 
 import (
-	"log"
 	"net/http"
 	"time"
+
+	"github.com/Alarion239/my239/backend/internal/logger"
 )
 
 // LoggerMiddleware logs HTTP requests
@@ -18,7 +19,12 @@ func LoggerMiddleware(next http.Handler) http.Handler {
 
 		// Log the request (but never log passwords or tokens)
 		duration := time.Since(start)
-		log.Printf("%s %s %d %v", r.Method, r.URL.Path, rw.statusCode, duration)
+		logger.LogInfo("HTTP request",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", rw.statusCode,
+			"duration", duration,
+		)
 	})
 }
 

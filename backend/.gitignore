@@ -4,9 +4,7 @@
 *.dll
 *.so
 *.dylib
-api-server
 server
-telegram-bot
 migrate
 token-generator
 
@@ -29,6 +27,7 @@ go.work
 # IDE
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 *~

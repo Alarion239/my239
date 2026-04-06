@@ -51,7 +51,10 @@ func main() {
 	case "version", "status":
 		handleVersion(ctx, migrator)
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
+		_, err := fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
+		if err != nil {
+			return
+		}
 		printUsage()
 		os.Exit(1)
 	}
@@ -105,7 +108,7 @@ func handleVersion(ctx context.Context, migrator *migrate.Migrator) {
 }
 
 func printUsage() {
-	fmt.Fprintf(os.Stdout, `Usage: migrate <command>
+	_, err := fmt.Fprintf(os.Stdout, `Usage: migrate <command>
 
 Commands:
   up                  Apply all pending migrations
@@ -125,4 +128,7 @@ Examples:
   migrate steps -1
   migrate version
 `, "DATABASE_URL")
+	if err != nil {
+		return
+	}
 }

@@ -144,7 +144,7 @@ func (m *Migrator) GetCurrentVersion(ctx context.Context) (int, error) {
 
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "42P01" {
-			return 0, nil // Table doesn't exist yet, no migrations applied
+			return -1, nil // Table doesn't exist yet; start from migration 0
 		}
 		return 0, fmt.Errorf("failed to get current migration version: %w", err)
 	}
@@ -236,22 +236,22 @@ func (m *Migrator) Down(ctx context.Context) error {
 
 // applyMigration applies a single migration (up or down) within a transaction.
 // It validates that SQL content is not empty before execution.
-func (m *Migrator) applyMigration(ctx context.Context, migration Migration, up bool, currentVersion int) error {
+func (m *Migrator) applyMigration(ctx context.Context, migration Migration, up bool) error {
 	// Check context cancellation
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("context cancelled: %w", err)
 	}
 
-	var sql string
+	var postgresql string
 
 	if up {
-		sql = migration.UpSQL
-		if strings.TrimSpace(sql) == "" {
+		postgresql = migration.UpSQL
+		if strings.TrimSpace(postgresql) == "" {
 			return fmt.Errorf("migration %d has empty up.sql content", migration.Version)
 		}
 	} else {
-		sql = migration.DownSQL
-		if strings.TrimSpace(sql) == "" {
+		postgresql = migration.DownSQL
+		if strings.TrimSpace(postgresql) == "" {
 			return fmt.Errorf("migration %d has empty down.sql content", migration.Version)
 		}
 	}
@@ -265,7 +265,7 @@ func (m *Migrator) applyMigration(ctx context.Context, migration Migration, up b
 
 	// Execute migration SQL
 	// PostgreSQL can execute multiple statements in a single Exec call
-	if _, err := tx.Exec(ctx, sql); err != nil {
+	if _, err := tx.Exec(ctx, postgresql); err != nil {
 		return fmt.Errorf("failed to execute migration SQL for version %d: %w", migration.Version, err)
 	}
 

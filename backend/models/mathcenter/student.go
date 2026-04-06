@@ -8,6 +8,6 @@ type Student struct {
 	GroupID      int64 `json:"group_id" db:"group_id"`             // Foreign key
 
 	// Not in the database
-	commonUser *common.User `json:"-" db:"-"`
-	group      *Group       `json:"-" db:"-"`
+	commonUser *common.User
+	group      *Group
 }

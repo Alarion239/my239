@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -27,84 +26,72 @@ type RegisterResponse struct {
 	User  common.User `json:"user"`
 }
 
-// Register handles user registration
-func Register(db *db.DB, ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
+// Register handles user registration.
+func Register(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		var req RegisterRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		validate := validator.New()
+		if err := validate.Struct(req); err != nil {
+			http.Error(w, "Validation failed: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		tokenRepo := authorize.NewInvitationTokenRepo(database)
+
+		invitationToken, err := tokenRepo.GetByToken(ctx, req.InvitationToken)
+		if err != nil {
+			http.Error(w, "Invalid invitation token", http.StatusUnauthorized)
+			return
+		}
+
+		if time.Now().After(invitationToken.ExpiresAt) {
+			http.Error(w, "Invitation token has expired", http.StatusUnauthorized)
+			return
+		}
+
+		tokenUses, err := tokenRepo.CountUsesOfToken(ctx, invitationToken.ID)
+		if err != nil {
+			http.Error(w, "Failed to count token uses", http.StatusInternalServerError)
+			return
+		}
+
+		if tokenUses >= invitationToken.MaxUses {
+			http.Error(w, "Invitation token has reached maximum uses", http.StatusUnauthorized)
+			return
+		}
+
+		passwordHash, err := auth.HashPassword(req.Password)
+		if err != nil {
+			http.Error(w, "Failed to process password", http.StatusInternalServerError)
+			return
+		}
+
+		user, err := common.NewUserRepo(database).Create(
+			ctx, req.Username, req.FirstName, req.MiddleName, req.LastName, invitationToken.ID, passwordHash,
+		)
+		if err != nil {
+			http.Error(w, "Failed to create user", http.StatusInternalServerError)
+			return
+		}
+
+		token, err := auth.GenerateJWT(user.ID, req.Username)
+		if err != nil {
+			http.Error(w, "Failed to generate authentication token", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		err = json.NewEncoder(w).Encode(RegisterResponse{Token: token, User: *user})
+		if err != nil {
+			return
+		}
 	}
-
-	var req RegisterRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
-		return
-	}
-
-	// Validate input
-	validate := validator.New()
-	if err := validate.Struct(req); err != nil {
-		http.Error(w, "Validation failed: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// Get database connection
-	tokenRepo := authorize.NewInvitationTokenRepo(db)
-
-	// Check invitation token
-	invitationToken, err := tokenRepo.GetByToken(ctx, req.InvitationToken)
-	if err != nil {
-		http.Error(w, "Invalid invitation token", http.StatusUnauthorized)
-		return
-	}
-
-	// Check if token is expired
-	if time.Now().After(invitationToken.ExpiresAt) {
-		http.Error(w, "Invitation token has expired", http.StatusUnauthorized)
-		return
-	}
-
-	// Count the uses of token
-	tokenUses, err := tokenRepo.CountUsesOfToken(ctx, invitationToken.ID)
-	if err != nil {
-		http.Error(w, "Failed to count token uses", http.StatusInternalServerError)
-		return
-	}
-
-	// Check if token has available uses
-	if tokenUses >= invitationToken.MaxUses {
-		http.Error(w, "Invitation token has reached maximum uses", http.StatusUnauthorized)
-		return
-	}
-
-	// Hash password
-	passwordHash, err := auth.HashPassword(req.Password)
-	if err != nil {
-		http.Error(w, "Failed to process password", http.StatusInternalServerError)
-		return
-	}
-
-	// Insert user
-	user, err := common.NewUserRepo(db).Create(
-		ctx, req.Username, req.FirstName, req.MiddleName, req.LastName, invitationToken.ID, passwordHash,
-	)
-	if err != nil {
-		http.Error(w, "Failed to create user", http.StatusInternalServerError)
-		return
-	}
-
-	// Generate JWT
-	token, err := auth.GenerateJWT(user.ID, req.Username)
-	if err != nil {
-		http.Error(w, "Failed to generate authentication token", http.StatusInternalServerError)
-		return
-	}
-
-	response := RegisterResponse{
-		Token: token,
-		User:  *user,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(response)
 }

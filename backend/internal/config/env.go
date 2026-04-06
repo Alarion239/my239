@@ -17,10 +17,6 @@ var (
 	// Server
 	Port        string
 	FrontendURL string
-
-	// Telegram (optional)
-	TelegramBotToken string
-	BackendDomain    string
 )
 
 func init() {
@@ -56,8 +52,4 @@ func init() {
 	if err != nil {
 		panic(fmt.Sprintf("Invalid JWT_EXPIRATION_HOURS: %v (must be an integer)", err))
 	}
-
-	// Optional Telegram variables (no defaults, empty string means disabled)
-	TelegramBotToken = os.Getenv("TELEGRAM_BOT_TOKEN")
-	BackendDomain = os.Getenv("BACKEND_DOMAIN")
 }

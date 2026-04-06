@@ -1,6 +1,2 @@
 [build]
-builder = "RAILPACK"
-buildCommand = "go build -o migrate ./cmd/migrate && go build -o token-generator ./cmd/token-generator && go build -o server ./cmd/server"
-
-[deploy]
-startCommand = "./migrate up && ./server"
+builder = "DOCKERFILE"
