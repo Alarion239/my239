@@ -6,50 +6,49 @@ import (
 	"strconv"
 )
 
-var (
-	// Database
-	DatabaseURL string
-
-	// JWT
-	JWTSECRET          string
+type Config struct {
+	DatabaseURL        string
+	JWTSecret          string
 	JWTExpirationHours int
+	Port               string
+	FrontendURL        string
+}
 
-	// Server
-	Port        string
-	FrontendURL string
-)
-
-func init() {
-	// Required variables - panic if missing
-	DatabaseURL = os.Getenv("DATABASE_URL")
-	if DatabaseURL == "" {
-		panic("DATABASE_URL environment variable is required")
+func Load() (*Config, error) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		return nil, fmt.Errorf("DATABASE_URL environment variable is required")
 	}
 
-	JWTSECRET = os.Getenv("JWT_SECRET")
-	if JWTSECRET == "" {
-		panic("JWT_SECRET environment variable is required")
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		return nil, fmt.Errorf("JWT_SECRET environment variable is required")
 	}
 
-	// Optional variables with defaults
-	portStr := os.Getenv("PORT")
-	if portStr == "" {
-		portStr = "8080"
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
 	}
-	Port = portStr
 
-	FrontendURL = os.Getenv("FRONTEND_URL")
-	if FrontendURL == "" {
-		FrontendURL = "http://localhost:3000"
+	frontendURL := os.Getenv("FRONTEND_URL")
+	if frontendURL == "" {
+		frontendURL = "http://localhost:3000"
 	}
 
 	expirationStr := os.Getenv("JWT_EXPIRATION_HOURS")
 	if expirationStr == "" {
 		expirationStr = "24"
 	}
-	var err error
-	JWTExpirationHours, err = strconv.Atoi(expirationStr)
+	expirationHours, err := strconv.Atoi(expirationStr)
 	if err != nil {
-		panic(fmt.Sprintf("Invalid JWT_EXPIRATION_HOURS: %v (must be an integer)", err))
+		return nil, fmt.Errorf("invalid JWT_EXPIRATION_HOURS: %v (must be an integer)", err)
 	}
+
+	return &Config{
+		DatabaseURL:        databaseURL,
+		JWTSecret:          jwtSecret,
+		JWTExpirationHours: expirationHours,
+		Port:               port,
+		FrontendURL:        frontendURL,
+	}, nil
 }

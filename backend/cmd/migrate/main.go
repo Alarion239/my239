@@ -6,7 +6,6 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/Alarion239/my239/backend/internal/config"
 	"github.com/Alarion239/my239/backend/internal/logger"
 	"github.com/Alarion239/my239/backend/pkg/migrate"
 )
@@ -28,8 +27,11 @@ func main() {
 	fmt.Println("Initializing migration tool...")
 	ctx := context.Background()
 
-	fmt.Print("Using DATABASE_URL from configuration...")
-	connectionString := config.DatabaseURL
+	connectionString := os.Getenv("DATABASE_URL")
+	if connectionString == "" {
+		logger.LogError("DATABASE_URL environment variable is required", nil)
+		os.Exit(1)
+	}
 	fmt.Println("✓ DATABASE_URL ready")
 
 	fmt.Print("Connecting to database...")

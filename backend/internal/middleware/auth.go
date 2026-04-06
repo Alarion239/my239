@@ -10,7 +10,7 @@ import (
 )
 
 // AuthMiddleware validates JWT tokens and injects user info into context.
-func AuthMiddleware() func(http.Handler) http.Handler {
+func AuthMiddleware(jwtSvc *auth.JWTService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
@@ -27,7 +27,7 @@ func AuthMiddleware() func(http.Handler) http.Handler {
 			}
 
 			// Validate JWT
-			claims, err := auth.ValidateJWT(tokenParts[1])
+			claims, err := jwtSvc.Validate(tokenParts[1])
 			if err != nil {
 				http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
 				return

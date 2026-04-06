@@ -21,7 +21,7 @@ type LoginResponse struct {
 }
 
 // Login handles user authentication.
-func Login(database *db.DB) http.HandlerFunc {
+func Login(database *db.DB, jwtSvc *auth.JWTService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
@@ -48,7 +48,7 @@ func Login(database *db.DB) http.HandlerFunc {
 			return
 		}
 
-		token, err := auth.GenerateJWT(user.ID, user.Username)
+		token, err := jwtSvc.Generate(user.ID, user.Username)
 		if err != nil {
 			http.Error(w, "Failed to generate authentication token", http.StatusInternalServerError)
 			return

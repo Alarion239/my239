@@ -11,14 +11,18 @@ import (
 	"os"
 	"time"
 
-	"github.com/Alarion239/my239/backend/internal/config"
 	"github.com/Alarion239/my239/backend/models/authorize"
 	"github.com/Alarion239/my239/backend/pkg/db"
 )
 
 func main() {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		log.Fatal("DATABASE_URL environment variable is required")
+	}
+
 	// Initialize database
-	db, err := db.NewDB(context.Background(), config.DatabaseURL)
+	db, err := db.NewDB(context.Background(), databaseURL)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}

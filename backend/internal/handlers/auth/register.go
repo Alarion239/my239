@@ -27,7 +27,7 @@ type RegisterResponse struct {
 }
 
 // Register handles user registration.
-func Register(database *db.DB) http.HandlerFunc {
+func Register(database *db.DB, jwtSvc *auth.JWTService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
@@ -81,7 +81,7 @@ func Register(database *db.DB) http.HandlerFunc {
 			return
 		}
 
-		token, err := auth.GenerateJWT(user.ID, req.Username)
+		token, err := jwtSvc.Generate(user.ID, req.Username)
 		if err != nil {
 			http.Error(w, "Failed to generate authentication token", http.StatusInternalServerError)
 			return

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Alarion239/my239/backend/internal/config"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -16,9 +15,17 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-// GenerateJWT creates a new JWT token for a user
-func GenerateJWT(userID int64, username string) (string, error) {
-	expirationTime := time.Now().Add(time.Duration(config.JWTExpirationHours) * time.Hour)
+type JWTService struct {
+	secret          string
+	expirationHours int
+}
+
+func NewJWTService(secret string, expirationHours int) *JWTService {
+	return &JWTService{secret: secret, expirationHours: expirationHours}
+}
+
+func (s *JWTService) Generate(userID int64, username string) (string, error) {
+	expirationTime := time.Now().Add(time.Duration(s.expirationHours) * time.Hour)
 
 	claims := &Claims{
 		UserID:   userID,
@@ -30,21 +37,15 @@ func GenerateJWT(userID int64, username string) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString([]byte(config.JWTSECRET))
-	if err != nil {
-		return "", err
-	}
-
-	return tokenString, nil
+	return token.SignedString([]byte(s.secret))
 }
 
-// ValidateJWT validates a JWT token and returns the claims
-func ValidateJWT(tokenString string) (*Claims, error) {
+func (s *JWTService) Validate(tokenString string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		return []byte(config.JWTSECRET), nil
+		return []byte(s.secret), nil
 	})
 
 	if err != nil {
