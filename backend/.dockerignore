@@ -1,0 +1,16 @@
+# compiled binaries
+server
+migrate
+token-generator
+
+# logs
+logs/
+*.log
+
+# git
+.git/
+.gitignore
+
+# local env files (never bake secrets into the image)
+.env
+.env.*
