@@ -1,28 +1,35 @@
 package auth
 
 import (
-	"time"
-
 	internalAuth "github.com/Alarion239/my239/backend/internal/auth"
 	"github.com/Alarion239/my239/backend/internal/middleware"
 	"github.com/Alarion239/my239/backend/pkg/db"
+	"github.com/Alarion239/my239/backend/pkg/ratelimit"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/httprate"
 )
 
 // Router returns a chi sub-router for all /auth endpoints.
 // Mount it at /api/v1/auth in the main router.
-func Router(database *db.DB, jwtSvc *internalAuth.JWTService) chi.Router {
+//
+// Per-endpoint rate limits sit between coarse global protection (no global
+// limit; we trust upstream / Cloudflare for that) and what each endpoint can
+// reasonably tolerate. login + refresh are tighter than register because
+// they're attractive bruteforce targets.
+func Router(database *db.DB, tokens *internalAuth.TokenService, limiter ratelimit.Limiter) chi.Router {
 	r := chi.NewRouter()
 
-	// Public endpoints
-	r.With(httprate.LimitByIP(100, time.Minute)).Post("/register", Register(database, jwtSvc))
-	r.With(httprate.LimitByIP(20, time.Minute)).Post("/login", Login(database, jwtSvc))
+	r.With(limiter.Middleware("auth.register", 10, 60)).
+		Post("/register", Register(database, tokens))
+	r.With(limiter.Middleware("auth.login", 10, 60)).
+		Post("/login", Login(database, tokens))
+	r.With(limiter.Middleware("auth.refresh", 30, 60)).
+		Post("/refresh", Refresh(database, tokens))
+	r.With(limiter.Middleware("auth.logout", 30, 60)).
+		Post("/logout", Logout(tokens))
 
-	// Protected endpoints — require valid JWT
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.AuthMiddleware(jwtSvc))
-		r.With(httprate.LimitByIP(200, time.Minute)).Get("/me", Me(database))
+		r.Use(middleware.AuthMiddleware(tokens.Access()))
+		r.With(limiter.Middleware("auth.me", 60, 60)).Get("/me", Me(database))
 	})
 
 	return r

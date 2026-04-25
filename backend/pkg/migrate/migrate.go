@@ -1,369 +1,141 @@
-// Package migrate provides database migration functionality for PostgreSQL databases.
-// It supports applying, rolling back, and stepping through migrations with transaction safety.
+// Package migrate is a thin wrapper around golang-migrate that hides the
+// driver wiring (embedded SQL files, pgx/v5 database driver) and exposes a
+// small Go interface the rest of the codebase can depend on without pulling
+// the migrate types into every caller.
+//
+// We use golang-migrate (rather than goose) because the existing
+// {version}_{name}.up.sql / .down.sql layout already matches what it expects,
+// it has the most-used CLI binary if we ever need direct ops access, and the
+// embed.FS source driver gives us a self-contained binary.
 package migrate
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 
-	"github.com/Alarion239/my239/backend/internal/config"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/Alarion239/my239/backend/migrations"
+	"github.com/golang-migrate/migrate/v4"
+	pgxdriver "github.com/golang-migrate/migrate/v4/database/pgx/v5"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 )
 
-type Migration struct {
-	Version int
-	UpSQL   string
-	DownSQL string
+// Migrator is the user-facing interface. Implemented by *golangMigrator (real)
+// and easy to mock in tests.
+type Migrator interface {
+	// Up applies all pending migrations.
+	Up(ctx context.Context) error
+	// Down rolls back the most recently applied migration.
+	Down(ctx context.Context) error
+	// Steps applies (positive) or rolls back (negative) the given number of
+	// migrations.
+	Steps(ctx context.Context, n int) error
+	// Version returns the current applied version, whether the schema is
+	// dirty (a migration failed mid-way), and ErrNoVersion if no migrations
+	// have been applied.
+	Version(ctx context.Context) (version uint, dirty bool, err error)
+	// Close releases the underlying resources.
+	Close() error
 }
 
-type Migrator struct {
-	conn       *pgx.Conn
-	migrations []Migration
-}
+// ErrNoVersion is returned by Version when no migration has been applied yet.
+var ErrNoVersion = errors.New("no migration version recorded")
 
-func NewMigrator(ctx context.Context, connectionString string) (*Migrator, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
-	}
-
-	conn, err := pgx.Connect(ctx, connectionString)
+// New constructs a Migrator backed by golang-migrate, reading migration files
+// from the embedded filesystem.
+//
+// On the happy path the source driver's lifetime is taken over by the returned
+// *migrate.Migrate (closed via golangMigrator.Close). On any error path before
+// hand-off, we close srcDriver explicitly to avoid leaking the embed.FS reader.
+func New(dbURL string) (Migrator, error) {
+	srcDriver, err := iofs.New(migrations.FS, ".")
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to database: %w", err)
+		return nil, fmt.Errorf("init migration source: %w", err)
 	}
 
-	m := &Migrator{
-		conn: conn,
-	}
-
-	// Load migrations from directory using constant
-	err = m.loadMigrations()
+	url, err := toPgxURL(dbURL)
 	if err != nil {
-		conn.Close(ctx)
-		return nil, fmt.Errorf("failed to load migrations: %w", err)
+		_ = srcDriver.Close()
+		return nil, err
 	}
 
-	return m, nil
+	m, err := migrate.NewWithSourceInstance("iofs", srcDriver, url)
+	if err != nil {
+		_ = srcDriver.Close()
+		return nil, fmt.Errorf("init migrator: %w", err)
+	}
+	return &golangMigrator{m: m}, nil
 }
 
-func (m *Migrator) Close(ctx context.Context) error {
-	return m.conn.Close(ctx)
+// toPgxURL ensures the connection string uses the pgx5:// scheme that the
+// golang-migrate pgx/v5 driver registers under.
+func toPgxURL(dbURL string) (string, error) {
+	switch {
+	case strings.HasPrefix(dbURL, "pgx5://"):
+		return dbURL, nil
+	case strings.HasPrefix(dbURL, "postgres://"):
+		return "pgx5://" + strings.TrimPrefix(dbURL, "postgres://"), nil
+	case strings.HasPrefix(dbURL, "postgresql://"):
+		return "pgx5://" + strings.TrimPrefix(dbURL, "postgresql://"), nil
+	default:
+		return "", fmt.Errorf("unsupported database URL scheme; expected postgres:// or pgx5://")
+	}
 }
 
-func (m *Migrator) loadMigrations() error {
-	entries, err := os.ReadDir(config.MIGRATIONS_DIR)
-	if err != nil {
-		return fmt.Errorf("failed to read migrations directory %s: %w", config.MIGRATIONS_DIR, err)
-	}
-
-	fileCount := len(entries)
-
-	migrations := make([]Migration, fileCount/2+5) // Every migration has 2 files: up and down
-	maxVersion := -1
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-
-		baseName := entry.Name()
-		if len(baseName) < 6 {
-			continue
-		}
-
-		versionStr := baseName[:6]
-		version, err := strconv.Atoi(versionStr)
-		if err != nil {
-			continue
-		}
-
-		var isUp bool
-		switch {
-		case strings.HasSuffix(baseName, ".up.sql"):
-			isUp = true
-		case strings.HasSuffix(baseName, ".down.sql"):
-			isUp = false
-		default:
-			continue
-		}
-
-		if migrations[version] == (Migration{}) {
-			migrations[version] = Migration{Version: version}
-		}
-
-		filePath := filepath.Join(config.MIGRATIONS_DIR, baseName)
-		data, err := os.ReadFile(filePath)
-		if err != nil {
-			return fmt.Errorf("failed to read migration file %s: %w", filePath, err)
-		}
-
-		if isUp {
-			migrations[version].UpSQL = string(data)
-		} else {
-			migrations[version].DownSQL = string(data)
-		}
-
-		if version > maxVersion {
-			maxVersion = version
-		}
-	}
-
-	if maxVersion == -1 {
-		return fmt.Errorf("no valid migration files found in directory %s", config.MIGRATIONS_DIR)
-	}
-
-	// Validate all migrations exist and have UpSQL
-	for version := 0; version <= maxVersion; version++ {
-		if migrations[version].UpSQL == "" {
-			return fmt.Errorf("migration %d is missing up.sql file", version)
-		}
-	}
-
-	// Slice the array to only include valid migrations (0 to maxVersion)
-	m.migrations = migrations[:maxVersion+1]
-	return nil
+// golangMigrator is the real Migrator. It exists only to translate
+// golang-migrate's typed sentinels into our package's sentinels and to
+// shield callers from migrate.ErrNoChange noise.
+type golangMigrator struct {
+	m *migrate.Migrate
 }
 
-func (m *Migrator) GetCurrentVersion(ctx context.Context) (int, error) {
-	if err := ctx.Err(); err != nil {
-		return 0, fmt.Errorf("context cancelled: %w", err)
-	}
-
-	var version sql.NullInt64 // Use NullInt64 to handle NULL from MAX()
-	err := m.conn.QueryRow(ctx, "SELECT MAX(version) FROM migrations").Scan(&version)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return 0, nil // Table is empty, no migrations applied
-		}
-
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "42P01" {
-			return -1, nil // Table doesn't exist yet; start from migration 0
-		}
-		return 0, fmt.Errorf("failed to get current migration version: %w", err)
-	}
-
-	// If MAX returns NULL (empty table), return 0
-	if !version.Valid {
-		return 0, nil
-	}
-
-	return int(version.Int64), nil
+func (g *golangMigrator) Up(_ context.Context) error {
+	return ignoreNoChange(g.m.Up())
 }
 
-// Up applies all pending migrations in order starting from currentVersion + 1.
-func (m *Migrator) Up(ctx context.Context) error {
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("context cancelled: %w", err)
-	}
-
-	currentVersion, err := m.GetCurrentVersion(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get current version before applying migrations: %w", err)
-	}
-
-	// Apply migrations starting from currentVersion + 1
-	for version := currentVersion + 1; version < len(m.migrations); version++ {
-		migration := m.migrations[version]
-
-		// Check context cancellation before each migration
-		err = ctx.Err()
-		if err != nil {
-			return fmt.Errorf("context cancelled while applying migration %d: %w", version, err)
-		}
-
-		fmt.Printf("Applying migration %d...\n", version)
-		err = m.applyMigration(ctx, migration, true)
-		if err != nil {
-			return fmt.Errorf("failed to apply migration %d: %w", version, err)
-		}
-		fmt.Printf("Migration %d applied successfully\n", version)
-
-		currentVersion = version
-	}
-
-	return nil
+func (g *golangMigrator) Down(_ context.Context) error {
+	// Use Steps(-1) instead of Down(): Down() rolls back ALL migrations,
+	// which is virtually never what you want in production.
+	return ignoreNoChange(g.m.Steps(-1))
 }
 
-// Down rolls back the last migration.
-// Returns an error if there are no migrations to rollback or if the migration doesn't have a down.sql file.
-func (m *Migrator) Down(ctx context.Context) error {
-	// Check context cancellation
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("context cancelled: %w", err)
+func (g *golangMigrator) Steps(_ context.Context, n int) error {
+	if n == 0 {
+		return nil
 	}
-
-	currentVersion, err := m.GetCurrentVersion(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get current version before rolling back: %w", err)
-	}
-
-	if currentVersion == 0 {
-		return errors.New("no migrations to rollback")
-	}
-
-	// Find the migration to rollback
-	var migrationToRollback *Migration
-	for i := len(m.migrations) - 1; i >= 0; i-- {
-		if m.migrations[i].Version == currentVersion {
-			migrationToRollback = &m.migrations[i]
-			break
-		}
-	}
-
-	if migrationToRollback == nil {
-		return fmt.Errorf("migration %d not found in loaded migrations", currentVersion)
-	}
-
-	if strings.TrimSpace(migrationToRollback.DownSQL) == "" {
-		return fmt.Errorf("migration %d does not have a down.sql file or it is empty", currentVersion)
-	}
-
-	fmt.Printf("Rolling back migration %d...\n", currentVersion)
-	err = m.applyMigration(ctx, *migrationToRollback, false)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Migration %d rolled back successfully\n", currentVersion)
-	return nil
+	return ignoreNoChange(g.m.Steps(n))
 }
 
-// applyMigration applies a single migration (up or down) within a transaction.
-// It validates that SQL content is not empty before execution.
-func (m *Migrator) applyMigration(ctx context.Context, migration Migration, up bool) error {
-	// Check context cancellation
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("context cancelled: %w", err)
+func (g *golangMigrator) Version(_ context.Context) (uint, bool, error) {
+	v, dirty, err := g.m.Version()
+	if errors.Is(err, migrate.ErrNilVersion) {
+		return 0, false, ErrNoVersion
 	}
-
-	var postgresql string
-
-	if up {
-		postgresql = migration.UpSQL
-		if strings.TrimSpace(postgresql) == "" {
-			return fmt.Errorf("migration %d has empty up.sql content", migration.Version)
-		}
-	} else {
-		postgresql = migration.DownSQL
-		if strings.TrimSpace(postgresql) == "" {
-			return fmt.Errorf("migration %d has empty down.sql content", migration.Version)
-		}
-	}
-
-	// Start transaction
-	tx, err := m.conn.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to start transaction: %w", err)
+		return 0, false, err
 	}
-	defer tx.Rollback(ctx)
-
-	// Execute migration SQL
-	// PostgreSQL can execute multiple statements in a single Exec call
-	if _, err := tx.Exec(ctx, postgresql); err != nil {
-		return fmt.Errorf("failed to execute migration SQL for version %d: %w", migration.Version, err)
-	}
-
-	// Update migrations table based on direction
-	if up {
-		// Insert the version when applying a migration (idempotent with ON CONFLICT DO NOTHING)
-		if _, err := tx.Exec(ctx,
-			"INSERT INTO migrations (version) VALUES ($1) ON CONFLICT (version) DO NOTHING",
-			migration.Version, // The version being applied
-		); err != nil {
-			return fmt.Errorf("failed to record migration version %d: %w", migration.Version, err)
-		}
-	} else {
-		// Delete the version when rolling back a migration
-		if _, err := tx.Exec(ctx,
-			"DELETE FROM migrations WHERE version = $1",
-			migration.Version, // The version being rolled back (same as currentVersion)
-		); err != nil {
-			return fmt.Errorf("failed to remove migration version %d: %w", migration.Version, err)
-		}
-	}
-
-	// Commit transaction
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	return nil
+	return v, dirty, nil
 }
 
-// Steps applies or rolls back a specific number of migrations.
-// Positive steps apply migrations forward, negative steps roll back migrations.
-func (m *Migrator) Steps(ctx context.Context, steps int) error {
-	// Check context cancellation
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("context cancelled: %w", err)
+func (g *golangMigrator) Close() error {
+	srcErr, dbErr := g.m.Close()
+	if srcErr != nil {
+		return srcErr
 	}
-
-	currentVersion, err := m.GetCurrentVersion(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get current version before executing steps: %w", err)
-	}
-
-	if steps > 0 {
-		// Apply migrations forward starting from currentVersion + 1
-		for i := 0; i < steps && currentVersion+1+i < len(m.migrations); i++ {
-			version := currentVersion + 1 + i
-			migration := m.migrations[version]
-
-			// Check context cancellation before each migration
-			if err := ctx.Err(); err != nil {
-				return fmt.Errorf("context cancelled while applying migration %d: %w", version, err)
-			}
-
-			if err := m.applyMigration(ctx, migration, true); err != nil {
-				return fmt.Errorf("failed to apply migration %d: %w", version, err)
-			}
-
-			currentVersion = version
-		}
-	} else if steps < 0 {
-		// Rollback migrations
-		rollbackCount := -steps
-		for i := 0; i < rollbackCount; i++ {
-			if currentVersion == 0 {
-				return errors.New("no migrations to rollback")
-			}
-
-			// Check context cancellation before each rollback
-			if err := ctx.Err(); err != nil {
-				return fmt.Errorf("context cancelled while rolling back migration %d: %w", currentVersion, err)
-			}
-
-			// Find the migration to rollback
-			var migrationToRollback *Migration
-			for j := len(m.migrations) - 1; j >= 0; j-- {
-				if m.migrations[j].Version == currentVersion {
-					migrationToRollback = &m.migrations[j]
-					break
-				}
-			}
-
-			if migrationToRollback == nil {
-				return fmt.Errorf("migration %d not found in loaded migrations", currentVersion)
-			}
-
-			if strings.TrimSpace(migrationToRollback.DownSQL) == "" {
-				return fmt.Errorf("migration %d does not have a down.sql file or it is empty", currentVersion)
-			}
-
-			if err := m.applyMigration(ctx, *migrationToRollback, false); err != nil {
-				return fmt.Errorf("failed to rollback migration %d: %w", currentVersion, err)
-			}
-
-			// Previous version is currentVersion - 1 (migrations are sequential from 0)
-			currentVersion = migrationToRollback.Version - 1
-		}
-	}
-
-	return nil
+	return dbErr
 }
+
+// ignoreNoChange folds migrate.ErrNoChange into nil — getting "no change" is
+// the desired outcome of an idempotent up/down call, not an error.
+func ignoreNoChange(err error) error {
+	if errors.Is(err, migrate.ErrNoChange) {
+		return nil
+	}
+	return err
+}
+
+// Force the pgx driver to register itself with golang-migrate. Importing it
+// for side effects in the CLI alone wouldn't work because Go doesn't run
+// package init for unused imports.
+var _ = pgxdriver.Postgres{}

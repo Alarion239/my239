@@ -1,0 +1,32 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "queries"
+    schema: "migrations"
+    gen:
+      go:
+        package: "store"
+        out: "internal/store"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_pointers_for_null_types: true
+        emit_interface: true
+        emit_empty_slices: true
+        overrides:
+          # Map TIMESTAMPTZ to time.Time. pgx5 scans/marshals it directly,
+          # so we don't need pgtype.Timestamptz noise at every call site.
+          # Two entries because a single db_type rule applies to either
+          # nullable or non-nullable, not both.
+          - db_type: "timestamptz"
+            nullable: false
+            go_type: "time.Time"
+          - db_type: "timestamptz"
+            nullable: true
+            go_type:
+              import: "time"
+              type: "Time"
+              pointer: true
+          # password_hash never serializes into HTTP responses; the User
+          # struct is shared between auth (needs hash) and API responses.
+          - column: "users.password_hash"
+            go_struct_tag: 'json:"-"'

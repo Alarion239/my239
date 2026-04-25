@@ -1,95 +1,84 @@
+// Package logger provides a small wrapper around log/slog so the rest of the
+// codebase can log without threading a *slog.Logger around and without caring
+// whether Init has been called yet.
 package logger
 
 import (
-	"io"
 	"log/slog"
 	"os"
-	"path/filepath"
+	"strings"
+	"sync"
 )
 
-var Logger *slog.Logger
+var (
+	logger *slog.Logger
+	once   sync.Once
+)
 
-// Init initializes the logger to output to both console and file with JSON format
+// Init initializes the global logger. It's safe to call more than once; only
+// the first call takes effect. If it's never called, LogInfo/LogError/etc.
+// will lazily initialize with defaults on first use.
+//
+// Output is always stdout: in containers this is the Right Thing™ because the
+// orchestrator captures stdout and routes it to the log aggregator. Writing
+// to a file from inside the container fights that.
 func Init() {
-	// Create logs directory if it doesn't exist
-	logDir := "logs"
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		// Fallback to stdout only if we can't create the directory
+	once.Do(func() {
+		level := parseLevel(os.Getenv("LOG_LEVEL"))
 		handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-			Level:     slog.LevelInfo,
-			AddSource: true,
+			Level:     level,
+			AddSource: level <= slog.LevelDebug,
 		})
-		Logger = slog.New(handler)
-		return
-	}
-
-	// Open log file (append mode, create if not exists)
-	logFile, err := os.OpenFile(filepath.Join(logDir, "app.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		// Fallback to stdout only if we can't open the file
-		handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-			Level:     slog.LevelInfo,
-			AddSource: true,
-		})
-		Logger = slog.New(handler)
-		return
-	}
-
-	// Create multi-writer to output to both stdout and file
-	multiWriter := io.MultiWriter(os.Stdout, logFile)
-
-	handler := slog.NewJSONHandler(multiWriter, &slog.HandlerOptions{
-		Level:     slog.LevelInfo,
-		AddSource: true, // Include file and line number in logs
+		logger = slog.New(handler)
 	})
-
-	Logger = slog.New(handler)
 }
 
-// LogError logs an error with a message and optional key-value pairs
+func parseLevel(s string) slog.Level {
+	switch strings.ToLower(s) {
+	case "debug":
+		return slog.LevelDebug
+	case "warn", "warning":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
+}
+
+func ensureInit() {
+	if logger == nil {
+		Init()
+	}
+}
+
+// LogError logs an error with a message and optional key-value pairs.
 func LogError(msg string, err error, args ...any) {
-	if Logger == nil {
-		Init() // Auto-initialize if not done
-	}
-
-	attrs := []any{"error", err}
-	attrs = append(attrs, args...)
-	Logger.Error(msg, attrs...)
+	ensureInit()
+	logger.Error(msg, append([]any{"error", err}, args...)...)
 }
 
-// LogErrorWithContext logs an error with additional context as a map
-func LogErrorWithContext(msg string, err error, context map[string]any) {
-	if Logger == nil {
-		Init()
-	}
-
-	attrs := []any{"error", err}
-	for k, v := range context {
-		attrs = append(attrs, k, v)
-	}
-	Logger.Error(msg, attrs...)
-}
-
-// LogInfo logs an informational message with optional key-value pairs
+// LogInfo logs an informational message with optional key-value pairs.
 func LogInfo(msg string, args ...any) {
-	if Logger == nil {
-		Init()
-	}
-	Logger.Info(msg, args...)
+	ensureInit()
+	logger.Info(msg, args...)
 }
 
-// LogWarn logs a warning message with optional key-value pairs
+// LogWarn logs a warning message with optional key-value pairs.
 func LogWarn(msg string, args ...any) {
-	if Logger == nil {
-		Init()
-	}
-	Logger.Warn(msg, args...)
+	ensureInit()
+	logger.Warn(msg, args...)
 }
 
-// LogDebug logs a debug message with optional key-value pairs
+// LogDebug logs a debug message with optional key-value pairs.
 func LogDebug(msg string, args ...any) {
-	if Logger == nil {
-		Init()
-	}
-	Logger.Debug(msg, args...)
+	ensureInit()
+	logger.Debug(msg, args...)
+}
+
+// Logger returns the underlying *slog.Logger for callers that need it (e.g.
+// to pass to libraries).
+func Logger() *slog.Logger {
+	ensureInit()
+	return logger
 }

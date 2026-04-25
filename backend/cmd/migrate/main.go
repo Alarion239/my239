@@ -1,7 +1,11 @@
+// Package main is the migrate CLI. It applies, rolls back, and reports the
+// status of database migrations defined in backend/migrations and embedded
+// into the binary.
 package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -17,111 +21,92 @@ func main() {
 	}
 
 	command := os.Args[1]
-
-	// Check for help command BEFORE connecting to database
 	if command == "help" || command == "-h" || command == "--help" {
 		printUsage()
-		os.Exit(0)
+		return
 	}
 
-	fmt.Println("Initializing migration tool...")
-	ctx := context.Background()
-
-	connectionString := os.Getenv("DATABASE_URL")
-	if connectionString == "" {
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
 		logger.LogError("DATABASE_URL environment variable is required", nil)
 		os.Exit(1)
 	}
-	fmt.Println("✓ DATABASE_URL ready")
 
-	fmt.Print("Connecting to database...")
-	migrator, err := migrate.NewMigrator(ctx, connectionString)
+	ctx := context.Background()
+
+	m, err := migrate.New(dbURL)
 	if err != nil {
-		logger.LogError("Failed to create migrator", err)
+		logger.LogError("init migrator", err)
 		os.Exit(1)
 	}
-	fmt.Println("✓ Connected to database")
-	defer migrator.Close(ctx)
+	defer func() {
+		if cerr := m.Close(); cerr != nil {
+			logger.LogError("close migrator", cerr)
+		}
+	}()
 
 	switch command {
 	case "up":
-		handleUp(ctx, migrator)
+		if err := m.Up(ctx); err != nil {
+			logger.LogError("apply migrations", err)
+			os.Exit(1)
+		}
+		fmt.Println("✓ all migrations applied")
 	case "down":
-		handleDown(ctx, migrator)
+		if err := m.Down(ctx); err != nil {
+			logger.LogError("rollback migration", err)
+			os.Exit(1)
+		}
+		fmt.Println("✓ migration rolled back")
 	case "steps":
-		handleSteps(ctx, migrator, os.Args[2:])
-	case "version", "status":
-		handleVersion(ctx, migrator)
-	default:
-		_, err := fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
+		if len(os.Args) < 3 {
+			_, _ = fmt.Fprintln(os.Stderr, "Error: 'steps' requires a number")
+			os.Exit(1)
+		}
+		n, err := strconv.Atoi(os.Args[2])
 		if err != nil {
+			logger.LogError("invalid steps argument", err)
+			os.Exit(1)
+		}
+		if err := m.Steps(ctx, n); err != nil {
+			logger.LogError("steps", err)
+			os.Exit(1)
+		}
+		fmt.Printf("✓ %d step(s) applied\n", n)
+	case "version", "status":
+		v, dirty, err := m.Version(ctx)
+		if errors.Is(err, migrate.ErrNoVersion) {
+			fmt.Println("no migrations applied yet")
 			return
 		}
+		if err != nil {
+			logger.LogError("version", err)
+			os.Exit(1)
+		}
+		state := "clean"
+		if dirty {
+			state = "DIRTY (a migration failed mid-way; manual intervention required)"
+		}
+		fmt.Printf("current version: %d (%s)\n", v, state)
+	default:
+		_, _ = fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
 		printUsage()
 		os.Exit(1)
 	}
 }
 
-func handleUp(ctx context.Context, migrator *migrate.Migrator) {
-	fmt.Println("\n=== Applying Migrations ===")
-	if err := migrator.Up(ctx); err != nil {
-		logger.LogError("Failed to apply migrations", err)
-		os.Exit(1)
-	}
-	fmt.Println("\n✓ All migrations applied successfully!")
-}
-
-func handleDown(ctx context.Context, migrator *migrate.Migrator) {
-	fmt.Println("\n=== Rolling Back Migration ===")
-	if err := migrator.Down(ctx); err != nil {
-		logger.LogError("Failed to rollback migration", err)
-		os.Exit(1)
-	}
-	fmt.Println("\n✓ Migration rolled back successfully!")
-}
-
-func handleSteps(ctx context.Context, migrator *migrate.Migrator, args []string) {
-	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Error: 'steps' command requires a number argument\n")
-		os.Exit(1)
-	}
-
-	steps, err := strconv.Atoi(args[0])
-	if err != nil {
-		logger.LogError("Invalid number", err)
-		os.Exit(1)
-	}
-
-	if err := migrator.Steps(ctx, steps); err != nil {
-		logger.LogError("Failed to execute steps", err)
-		os.Exit(1)
-	}
-}
-
-func handleVersion(ctx context.Context, migrator *migrate.Migrator) {
-	fmt.Print("Checking current migration version...")
-	version, err := migrator.GetCurrentVersion(ctx)
-	if err != nil {
-		logger.LogError("Failed to get current version", err)
-		os.Exit(1)
-	}
-
-	fmt.Printf("✓ Current migration version: %d\n", version)
-}
-
 func printUsage() {
-	_, err := fmt.Fprintf(os.Stdout, `Usage: migrate <command>
+	fmt.Print(`Usage: migrate <command>
 
 Commands:
   up                  Apply all pending migrations
-  down                Rollback the last migration
-  steps <number>      Apply or rollback specific number of migrations
-                      (positive for up, negative for down)
-  version, status     Show current migration version
+  down                Roll back the most recently applied migration
+  steps <n>           Apply (positive n) or roll back (negative n) n migrations
+  version, status     Show current migration version and dirty flag
   help                Show this help message
 
-Environment Variables:
-  %s        Database connection URL
+Environment:
+  DATABASE_URL        Postgres connection URL (postgres://, postgresql://, or pgx5://)
 
 Examples:
   migrate up
@@ -129,8 +114,5 @@ Examples:
   migrate steps 2
   migrate steps -1
   migrate version
-`, "DATABASE_URL")
-	if err != nil {
-		return
-	}
+`)
 }

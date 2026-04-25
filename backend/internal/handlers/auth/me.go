@@ -1,11 +1,13 @@
 package auth
 
 import (
-	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/Alarion239/my239/backend/internal/ctxcache"
+	"github.com/Alarion239/my239/backend/internal/httpx"
 	"github.com/Alarion239/my239/backend/pkg/db"
+	"github.com/jackc/pgx/v5"
 )
 
 // Me returns the current authenticated user's information.
@@ -13,15 +15,15 @@ func Me(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, user, err := ctxcache.EnsureUser(database, r.Context())
 		if err != nil {
-			http.Error(w, "Failed to fetch user data", http.StatusInternalServerError)
+			if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, ctxcache.ErrNoUserIDFound) {
+				httpx.WriteAPIError(w, r, http.StatusUnauthorized, httpx.CodeUnauthenticated, "unauthenticated")
+				return
+			}
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to fetch user")
 			return
 		}
-		_ = ctx // context already propagated via r.Context() chain
+		*r = *r.WithContext(ctx)
 
-		w.Header().Set("Content-Type", "application/json")
-		err = json.NewEncoder(w).Encode(user)
-		if err != nil {
-			return
-		}
+		httpx.WriteJSON(w, http.StatusOK, user)
 	}
 }

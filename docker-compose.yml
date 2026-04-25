@@ -1,0 +1,67 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: my239
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    # AOF disabled — rate-limit counters are ephemeral by design; Redis
+    # restarting just resets buckets, which is the safe failure mode.
+    command: [ "redis-server", "--save", "", "--appendonly", "no" ]
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      # Required
+      DATABASE_URL: postgres://postgres:postgres@db:5432/my239?sslmode=disable
+      JWT_SECRET: change-me-in-production-this-must-be-at-least-32-chars
+
+      # Optional (shown with their defaults)
+      PORT: "8080"
+      FRONTEND_URL: http://localhost:3000
+      LOG_LEVEL: info
+      JWT_ISSUER: my239
+      JWT_AUDIENCE: api
+      JWT_ACCESS_TTL_MINUTES: "15"
+      JWT_REFRESH_TTL_DAYS: "30"
+
+      # Rate limiting: when REDIS_URL is set the limiter switches from
+      # in-memory to Redis-backed. Leave empty for the memory fallback.
+      REDIS_URL: redis://redis:6379/0
+
+volumes:
+  pgdata:
+  redisdata:

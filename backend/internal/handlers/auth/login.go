@@ -1,63 +1,76 @@
 package auth
 
 import (
-	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/Alarion239/my239/backend/internal/auth"
-	"github.com/Alarion239/my239/backend/models/common"
+	"github.com/Alarion239/my239/backend/internal/httpx"
+	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/pkg/db"
-	"github.com/go-playground/validator/v10"
+	"github.com/jackc/pgx/v5"
 )
 
 type LoginRequest struct {
 	Username string `json:"username" validate:"required,min=3,max=50"`
-	Password string `json:"password" validate:"required,min=8,max=128"`
+	Password string `json:"password" validate:"required,min=1,max=128"`
 }
 
 type LoginResponse struct {
-	Token string      `json:"token"`
-	User  common.User `json:"user"`
+	AccessToken  string     `json:"access_token"`
+	RefreshToken string     `json:"refresh_token"`
+	TokenType    string     `json:"token_type"`
+	ExpiresIn    int        `json:"expires_in"`
+	User         store.User `json:"user"`
 }
 
-// Login handles user authentication.
-func Login(database *db.DB, jwtSvc *auth.JWTService) http.HandlerFunc {
+// Login authenticates a user by username + password and returns access +
+// refresh tokens.
+//
+// The password min-length validator is intentionally weaker than registration
+// (min=1, not min=8): we must accept whatever the user previously registered
+// with, even if policy has tightened since.
+func Login(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
 		var req LoginRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		if err := httpx.DecodeJSON(r, &req); err != nil {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
 			return
 		}
-
-		validate := validator.New()
 		if err := validate.Struct(req); err != nil {
-			http.Error(w, "Validation failed: "+err.Error(), http.StatusBadRequest)
+			httpx.WriteValidationError(w, r, err)
 			return
 		}
 
-		user, err := common.NewUserRepo(database).GetByUsernameWithHash(ctx, req.Username)
+		user, err := store.New(database.Pool()).GetUserByUsername(ctx, req.Username)
 		if err != nil {
-			http.Error(w, "Invalid username or password", http.StatusUnauthorized)
+			if errors.Is(err, pgx.ErrNoRows) {
+				httpx.WriteAPIError(w, r, http.StatusUnauthorized, httpx.CodeInvalidCredentials, "invalid username or password")
+				return
+			}
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "login failed")
 			return
 		}
 
 		if err := auth.CheckPassword(req.Password, user.PasswordHash); err != nil {
-			http.Error(w, "Invalid username or password", http.StatusUnauthorized)
+			httpx.WriteAPIError(w, r, http.StatusUnauthorized, httpx.CodeInvalidCredentials, "invalid username or password")
 			return
 		}
 
-		token, err := jwtSvc.Generate(user.ID, user.Username)
+		pair, err := tokens.IssuePair(ctx, user.ID, user.Username)
 		if err != nil {
-			http.Error(w, "Failed to generate authentication token", http.StatusInternalServerError)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to issue token")
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		err = json.NewEncoder(w).Encode(LoginResponse{Token: token, User: user.User})
-		if err != nil {
-			return
-		}
+		httpx.WriteJSON(w, http.StatusOK, LoginResponse{
+			AccessToken:  pair.AccessToken,
+			RefreshToken: pair.RefreshToken,
+			TokenType:    "Bearer",
+			ExpiresIn:    pair.AccessExpiresInSeconds,
+			User:         user,
+		})
 	}
 }

@@ -6,13 +6,18 @@ import (
 	"github.com/rs/cors"
 )
 
-// CORSMiddleware creates CORS middleware with appropriate settings
+// CORSMiddleware allows browser requests from the configured frontend origin.
+//
+// AllowCredentials is intentionally false: the API uses Bearer tokens, so
+// cookies don't need to traverse origins. Keeping it false also lets us pin
+// AllowedOrigins to a single host without the wildcard restrictions that come
+// with credentialed CORS.
 func CORSMiddleware(frontendURL string) func(http.Handler) http.Handler {
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{frontendURL},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Authorization", "Content-Type"},
-		AllowCredentials: false, // Not needed for Bearer tokens
+		AllowCredentials: false,
 		MaxAge:           300,
 	})
 
