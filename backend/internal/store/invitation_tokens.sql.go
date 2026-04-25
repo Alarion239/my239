@@ -12,8 +12,7 @@ import (
 
 const createInvitationToken = `-- name: CreateInvitationToken :one
 INSERT INTO invitation_tokens (token, description, max_uses, expires_at)
-VALUES ($1, $2, $3, $4)
-RETURNING id, token, description, max_uses, expires_at, created_at
+VALUES ($1, $2, $3, $4) RETURNING id, token, description, max_uses, expires_at, created_at
 `
 
 type CreateInvitationTokenParams struct {
@@ -43,7 +42,9 @@ func (q *Queries) CreateInvitationToken(ctx context.Context, arg CreateInvitatio
 }
 
 const getInvitationTokenByValue = `-- name: GetInvitationTokenByValue :one
-SELECT id, token, description, max_uses, expires_at, created_at FROM invitation_tokens WHERE token = $1
+SELECT id, token, description, max_uses, expires_at, created_at
+FROM invitation_tokens
+WHERE token = $1
 `
 
 func (q *Queries) GetInvitationTokenByValue(ctx context.Context, token string) (InvitationToken, error) {
@@ -61,7 +62,9 @@ func (q *Queries) GetInvitationTokenByValue(ctx context.Context, token string) (
 }
 
 const getInvitationTokenByValueForUpdate = `-- name: GetInvitationTokenByValueForUpdate :one
-SELECT id, token, description, max_uses, expires_at, created_at FROM invitation_tokens WHERE token = $1 FOR UPDATE
+SELECT id, token, description, max_uses, expires_at, created_at
+FROM invitation_tokens
+WHERE token = $1 FOR UPDATE
 `
 
 func (q *Queries) GetInvitationTokenByValueForUpdate(ctx context.Context, token string) (InvitationToken, error) {
@@ -79,7 +82,9 @@ func (q *Queries) GetInvitationTokenByValueForUpdate(ctx context.Context, token 
 }
 
 const listInvitationTokens = `-- name: ListInvitationTokens :many
-SELECT id, token, description, max_uses, expires_at, created_at FROM invitation_tokens ORDER BY created_at DESC
+SELECT id, token, description, max_uses, expires_at, created_at
+FROM invitation_tokens
+ORDER BY created_at DESC
 `
 
 func (q *Queries) ListInvitationTokens(ctx context.Context) ([]InvitationToken, error) {
@@ -110,7 +115,9 @@ func (q *Queries) ListInvitationTokens(ctx context.Context) ([]InvitationToken, 
 }
 
 const revokeInvitationTokenByID = `-- name: RevokeInvitationTokenByID :execrows
-UPDATE invitation_tokens SET expires_at = NOW() WHERE id = $1
+UPDATE invitation_tokens
+SET expires_at = NOW()
+WHERE id = $1
 `
 
 func (q *Queries) RevokeInvitationTokenByID(ctx context.Context, id int64) (int64, error) {
@@ -122,7 +129,9 @@ func (q *Queries) RevokeInvitationTokenByID(ctx context.Context, id int64) (int6
 }
 
 const revokeInvitationTokenByValue = `-- name: RevokeInvitationTokenByValue :execrows
-UPDATE invitation_tokens SET expires_at = NOW() WHERE token = $1
+UPDATE invitation_tokens
+SET expires_at = NOW()
+WHERE token = $1
 `
 
 func (q *Queries) RevokeInvitationTokenByValue(ctx context.Context, token string) (int64, error) {

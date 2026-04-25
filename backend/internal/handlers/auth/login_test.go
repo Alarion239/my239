@@ -19,7 +19,7 @@ import (
 // generation. Keep aligned with the migration / store/users.sql.go.
 var userColumns = []string{
 	"id", "username", "password_hash", "first_name", "middle_name", "last_name",
-	"invitation_token_id", "created_at", "updated_at",
+	"invitation_token_id", "created_at", "updated_at", "is_admin",
 }
 
 var refreshTokenCols = []string{
@@ -88,7 +88,7 @@ func TestLogin_Success(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM users WHERE username = \$1`).
 		WithArgs("alice").
 		WillReturnRows(mock.NewRows(userColumns).
-			AddRow(int64(1), "alice", fastHash(t, "password123"), "Alice", (*string)(nil), "Doe", int64(1), now, now))
+			AddRow(int64(1), "alice", fastHash(t, "password123"), "Alice", (*string)(nil), "Doe", int64(1), now, now, false))
 	expectRefreshInsert(t, mock, 1)
 
 	body, _ := json.Marshal(map[string]string{"username": "alice", "password": "password123"})
@@ -135,7 +135,7 @@ func TestLogin_PasswordHashIsNotInResponse(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM users WHERE username = \$1`).
 		WithArgs("alice").
 		WillReturnRows(mock.NewRows(userColumns).
-			AddRow(int64(1), "alice", fastHash(t, "password123"), "Alice", (*string)(nil), "Doe", int64(1), now, now))
+			AddRow(int64(1), "alice", fastHash(t, "password123"), "Alice", (*string)(nil), "Doe", int64(1), now, now, false))
 	expectRefreshInsert(t, mock, 1)
 
 	body, _ := json.Marshal(map[string]string{"username": "alice", "password": "password123"})
@@ -161,7 +161,7 @@ func TestLogin_WrongPassword(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM users WHERE username = \$1`).
 		WithArgs("alice").
 		WillReturnRows(mock.NewRows(userColumns).
-			AddRow(int64(1), "alice", fastHash(t, "rightpassword"), "Alice", (*string)(nil), "Doe", int64(1), now, now))
+			AddRow(int64(1), "alice", fastHash(t, "rightpassword"), "Alice", (*string)(nil), "Doe", int64(1), now, now, false))
 
 	body, _ := json.Marshal(map[string]string{"username": "alice", "password": "wrongpassword"})
 	req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewReader(body))

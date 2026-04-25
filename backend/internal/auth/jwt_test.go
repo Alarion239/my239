@@ -44,7 +44,7 @@ func TestNewAccessTokenService_RejectsBadConfig(t *testing.T) {
 
 func TestGenerateAndValidate_Success(t *testing.T) {
 	svc := newTestSvc(t)
-	tok, err := svc.Generate(42, "alice")
+	tok, err := svc.Generate(42, "alice", false)
 	if err != nil {
 		t.Fatalf("generate: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestValidate_WrongSecret(t *testing.T) {
 	b, _ := NewAccessTokenService(AccessTokenConfig{
 		Secret: "different", Issuer: "test-issuer", Audience: "test-audience", Expiration: time.Hour,
 	})
-	tok, _ := a.Generate(1, "x")
+	tok, _ := a.Generate(1, "x", false)
 	if _, err := b.Validate(tok); err == nil {
 		t.Fatal("expected error when validating with different secret")
 	}
@@ -101,7 +101,7 @@ func TestValidate_WrongIssuer(t *testing.T) {
 	b, _ := NewAccessTokenService(AccessTokenConfig{
 		Secret: "test-secret", Issuer: "other-issuer", Audience: "test-audience", Expiration: time.Hour,
 	})
-	tok, _ := a.Generate(1, "x")
+	tok, _ := a.Generate(1, "x", false)
 	if _, err := b.Validate(tok); err == nil {
 		t.Fatal("expected error for wrong issuer")
 	}
@@ -112,7 +112,7 @@ func TestValidate_WrongAudience(t *testing.T) {
 	b, _ := NewAccessTokenService(AccessTokenConfig{
 		Secret: "test-secret", Issuer: "test-issuer", Audience: "other-audience", Expiration: time.Hour,
 	})
-	tok, _ := a.Generate(1, "x")
+	tok, _ := a.Generate(1, "x", false)
 	if _, err := b.Validate(tok); err == nil {
 		t.Fatal("expected error for wrong audience")
 	}
@@ -147,7 +147,7 @@ func TestValidate_Expired(t *testing.T) {
 		Audience:   "test-audience",
 		Expiration: time.Millisecond,
 	})
-	tok, err := svc.Generate(1, "x")
+	tok, err := svc.Generate(1, "x", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestExpirationSeconds(t *testing.T) {
 // base64-url segments. Sanity check that we're really emitting JWTs.
 func TestGenerateProducesJWS(t *testing.T) {
 	svc := newTestSvc(t)
-	tok, err := svc.Generate(1, "x")
+	tok, err := svc.Generate(1, "x", false)
 	if err != nil {
 		t.Fatal(err)
 	}

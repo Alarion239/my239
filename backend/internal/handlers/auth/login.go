@@ -59,7 +59,7 @@ func Login(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 			return
 		}
 
-		pair, err := tokens.IssuePair(ctx, user.ID, user.Username)
+		pair, err := tokens.IssuePair(ctx, user.ID, user.Username, user.IsAdmin)
 		if err != nil {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to issue token")
 			return

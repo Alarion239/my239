@@ -10,7 +10,9 @@ import (
 )
 
 const countUsesOfInvitationToken = `-- name: CountUsesOfInvitationToken :one
-SELECT COUNT(*) FROM users WHERE invitation_token_id = $1
+SELECT COUNT(*)
+FROM users
+WHERE invitation_token_id = $1
 `
 
 func (q *Queries) CountUsesOfInvitationToken(ctx context.Context, invitationTokenID int64) (int64, error) {
@@ -22,8 +24,7 @@ func (q *Queries) CountUsesOfInvitationToken(ctx context.Context, invitationToke
 
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (username, password_hash, first_name, middle_name, last_name, invitation_token_id)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, username, password_hash, first_name, middle_name, last_name, invitation_token_id, created_at, updated_at
+VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, username, password_hash, first_name, middle_name, last_name, invitation_token_id, created_at, updated_at, is_admin
 `
 
 type CreateUserParams struct {
@@ -55,12 +56,15 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.InvitationTokenID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsAdmin,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, password_hash, first_name, middle_name, last_name, invitation_token_id, created_at, updated_at FROM users WHERE id = $1
+SELECT id, username, password_hash, first_name, middle_name, last_name, invitation_token_id, created_at, updated_at, is_admin
+FROM users
+WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
@@ -76,12 +80,15 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 		&i.InvitationTokenID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsAdmin,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password_hash, first_name, middle_name, last_name, invitation_token_id, created_at, updated_at FROM users WHERE username = $1
+SELECT id, username, password_hash, first_name, middle_name, last_name, invitation_token_id, created_at, updated_at, is_admin
+FROM users
+WHERE username = $1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -97,6 +104,61 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.InvitationTokenID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsAdmin,
 	)
 	return i, err
+}
+
+const listUsers = `-- name: ListUsers :many
+SELECT id, username, password_hash, first_name, middle_name, last_name, invitation_token_id, created_at, updated_at, is_admin
+FROM users
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
+	rows, err := q.db.Query(ctx, listUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []User{}
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Username,
+			&i.PasswordHash,
+			&i.FirstName,
+			&i.MiddleName,
+			&i.LastName,
+			&i.InvitationTokenID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.IsAdmin,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setUserAdmin = `-- name: SetUserAdmin :exec
+UPDATE users
+SET is_admin   = $2,
+    updated_at = NOW()
+WHERE id = $1
+`
+
+type SetUserAdminParams struct {
+	ID      int64 `json:"id"`
+	IsAdmin bool  `json:"is_admin"`
+}
+
+func (q *Queries) SetUserAdmin(ctx context.Context, arg SetUserAdminParams) error {
+	_, err := q.db.Exec(ctx, setUserAdmin, arg.ID, arg.IsAdmin)
+	return err
 }

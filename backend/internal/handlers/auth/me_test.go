@@ -66,7 +66,7 @@ func TestMe_CacheMissFetchesUser(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM users WHERE id = \$1`).
 		WithArgs(int64(42)).
 		WillReturnRows(mock.NewRows(userColumns).
-			AddRow(int64(42), "alice", "argon2idhash", "Alice", (*string)(nil), "Doe", int64(1), now, now))
+			AddRow(int64(42), "alice", "argon2idhash", "Alice", (*string)(nil), "Doe", int64(1), now, now, false))
 
 	ctx := context.WithValue(context.Background(), config.CtxKeyUserID, int64(42))
 	req := httptest.NewRequest(http.MethodGet, "/me", nil).WithContext(ctx)

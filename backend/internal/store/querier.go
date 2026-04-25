@@ -19,11 +19,13 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	ListInvitationTokens(ctx context.Context) ([]InvitationToken, error)
+	ListUsers(ctx context.Context) ([]User, error)
 	RevokeAllRefreshTokensForUser(ctx context.Context, userID int64) error
 	RevokeInvitationTokenByID(ctx context.Context, id int64) (int64, error)
 	RevokeInvitationTokenByValue(ctx context.Context, token string) (int64, error)
 	RevokeRefreshTokenByID(ctx context.Context, id int64) error
 	RotateRefreshToken(ctx context.Context, arg RotateRefreshTokenParams) error
+	SetUserAdmin(ctx context.Context, arg SetUserAdminParams) error
 }
 
 var _ Querier = (*Queries)(nil)

@@ -67,8 +67,8 @@ func (s *TokenService) Access() *AccessTokenService { return s.access }
 
 // IssuePair issues a fresh access + refresh pair. Used after successful
 // login / register.
-func (s *TokenService) IssuePair(ctx context.Context, userID int64, username string) (TokenPair, error) {
-	access, err := s.access.Generate(userID, username)
+func (s *TokenService) IssuePair(ctx context.Context, userID int64, username string, isAdmin bool) (TokenPair, error) {
+	access, err := s.access.Generate(userID, username, isAdmin)
 	if err != nil {
 		return TokenPair{}, fmt.Errorf("issue access token: %w", err)
 	}
@@ -83,21 +83,30 @@ func (s *TokenService) IssuePair(ctx context.Context, userID int64, username str
 	}, nil
 }
 
+// RefreshUser carries everything Refresh needs to look up about a user when
+// rotating their token: the username goes into the new access claim, IsAdmin
+// re-evaluates admin status (so a demoted admin loses access on the next
+// rotation rather than the next login).
+type RefreshUser struct {
+	Username string
+	IsAdmin  bool
+}
+
 // Refresh rotates a presented refresh token and mints a new access token for
-// the user. The caller is responsible for fetching the user (we only have
-// the ID at this point — the refresh token doesn't carry the username).
-func (s *TokenService) Refresh(ctx context.Context, presented string, lookupUsername func(ctx context.Context, userID int64) (string, error)) (TokenPair, error) {
+// the user. The caller supplies the lookup function because the refresh token
+// itself only carries the user ID — the rest comes from the database.
+func (s *TokenService) Refresh(ctx context.Context, presented string, lookupUser func(ctx context.Context, userID int64) (RefreshUser, error)) (TokenPair, error) {
 	newRaw, userID, err := s.refresh.Exchange(ctx, presented)
 	if err != nil {
 		return TokenPair{}, err
 	}
 
-	username, err := lookupUsername(ctx, userID)
+	u, err := lookupUser(ctx, userID)
 	if err != nil {
 		return TokenPair{}, fmt.Errorf("look up user during refresh: %w", err)
 	}
 
-	access, err := s.access.Generate(userID, username)
+	access, err := s.access.Generate(userID, u.Username, u.IsAdmin)
 	if err != nil {
 		return TokenPair{}, fmt.Errorf("issue new access token: %w", err)
 	}

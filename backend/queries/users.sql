@@ -16,3 +16,14 @@ VALUES ($1, $2, $3, $4, $5, $6) RETURNING *;
 SELECT COUNT(*)
 FROM users
 WHERE invitation_token_id = $1;
+
+-- name: ListUsers :many
+SELECT *
+FROM users
+ORDER BY created_at DESC;
+
+-- name: SetUserAdmin :exec
+UPDATE users
+SET is_admin   = $2,
+    updated_at = NOW()
+WHERE id = $1;

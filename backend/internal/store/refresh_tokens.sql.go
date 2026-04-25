@@ -12,8 +12,7 @@ import (
 
 const createRefreshToken = `-- name: CreateRefreshToken :one
 INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
-VALUES ($1, $2, $3)
-RETURNING id, user_id, token_hash, expires_at, revoked_at, replaced_by_id, created_at
+VALUES ($1, $2, $3) RETURNING id, user_id, token_hash, expires_at, revoked_at, replaced_by_id, created_at
 `
 
 type CreateRefreshTokenParams struct {
@@ -38,7 +37,9 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 }
 
 const getRefreshTokenByHash = `-- name: GetRefreshTokenByHash :one
-SELECT id, user_id, token_hash, expires_at, revoked_at, replaced_by_id, created_at FROM refresh_tokens WHERE token_hash = $1
+SELECT id, user_id, token_hash, expires_at, revoked_at, replaced_by_id, created_at
+FROM refresh_tokens
+WHERE token_hash = $1
 `
 
 func (q *Queries) GetRefreshTokenByHash(ctx context.Context, tokenHash []byte) (RefreshToken, error) {
@@ -59,7 +60,8 @@ func (q *Queries) GetRefreshTokenByHash(ctx context.Context, tokenHash []byte) (
 const revokeAllRefreshTokensForUser = `-- name: RevokeAllRefreshTokensForUser :exec
 UPDATE refresh_tokens
 SET revoked_at = NOW()
-WHERE user_id = $1 AND revoked_at IS NULL
+WHERE user_id = $1
+  AND revoked_at IS NULL
 `
 
 func (q *Queries) RevokeAllRefreshTokensForUser(ctx context.Context, userID int64) error {
@@ -70,7 +72,8 @@ func (q *Queries) RevokeAllRefreshTokensForUser(ctx context.Context, userID int6
 const revokeRefreshTokenByID = `-- name: RevokeRefreshTokenByID :exec
 UPDATE refresh_tokens
 SET revoked_at = NOW()
-WHERE id = $1 AND revoked_at IS NULL
+WHERE id = $1
+  AND revoked_at IS NULL
 `
 
 func (q *Queries) RevokeRefreshTokenByID(ctx context.Context, id int64) error {
@@ -80,7 +83,8 @@ func (q *Queries) RevokeRefreshTokenByID(ctx context.Context, id int64) error {
 
 const rotateRefreshToken = `-- name: RotateRefreshToken :exec
 UPDATE refresh_tokens
-SET revoked_at = NOW(), replaced_by_id = $2
+SET revoked_at     = NOW(),
+    replaced_by_id = $2
 WHERE id = $1
 `
 

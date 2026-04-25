@@ -38,15 +38,15 @@ func Refresh(database *db.DB, tokens *internalAuth.TokenService) http.HandlerFun
 			return
 		}
 
-		lookupUsername := func(ctx context.Context, userID int64) (string, error) {
+		lookupUser := func(ctx context.Context, userID int64) (internalAuth.RefreshUser, error) {
 			u, err := store.New(database.Pool()).GetUserByID(ctx, userID)
 			if err != nil {
-				return "", err
+				return internalAuth.RefreshUser{}, err
 			}
-			return u.Username, nil
+			return internalAuth.RefreshUser{Username: u.Username, IsAdmin: u.IsAdmin}, nil
 		}
 
-		pair, err := tokens.Refresh(r.Context(), req.RefreshToken, lookupUsername)
+		pair, err := tokens.Refresh(r.Context(), req.RefreshToken, lookupUser)
 		if err != nil {
 			switch {
 			case errors.Is(err, internalAuth.ErrRefreshTokenInvalid):

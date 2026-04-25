@@ -62,6 +62,20 @@ services:
       # in-memory to Redis-backed. Leave empty for the memory fallback.
       REDIS_URL: redis://redis:6379/0
 
+  # The frontend container is nginx-only at runtime: a multi-stage build
+  # compiles the Vite bundle inside a node image and the final image just
+  # serves the static files. nginx also reverse-proxies /api/* to the backend
+  # so the browser sees same-origin requests (no CORS, no API_URL threading).
+  frontend:
+    build:
+      context: ./frontend/web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+
 volumes:
   pgdata:
   redisdata:

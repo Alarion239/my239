@@ -61,7 +61,7 @@ func TestAuthMiddleware_InvalidToken(t *testing.T) {
 
 func TestAuthMiddleware_ValidToken(t *testing.T) {
 	svc := newTestJWTSvc()
-	token, err := svc.Generate(99, "testuser")
+	token, err := svc.Generate(99, "testuser", false)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}

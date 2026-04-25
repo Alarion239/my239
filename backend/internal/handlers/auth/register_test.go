@@ -45,7 +45,7 @@ func TestRegister_Success(t *testing.T) {
 	mock.ExpectQuery(`INSERT INTO users`).
 		WithArgs("newuser", pgxmock.AnyArg(), "New", (*string)(nil), "User", int64(1)).
 		WillReturnRows(mock.NewRows(userColumns).
-			AddRow(int64(42), "newuser", "argon2idhash", "New", (*string)(nil), "User", int64(1), now, now))
+			AddRow(int64(42), "newuser", "argon2idhash", "New", (*string)(nil), "User", int64(1), now, now, false))
 	mock.ExpectCommit()
 	expectRefreshInsert(t, mock, 42)
 

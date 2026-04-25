@@ -37,4 +37,5 @@ type User struct {
 	InvitationTokenID int64     `json:"invitation_token_id"`
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
+	IsAdmin           bool      `json:"is_admin"`
 }

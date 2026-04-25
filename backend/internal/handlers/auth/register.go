@@ -115,7 +115,7 @@ func Register(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 			return
 		}
 
-		pair, err := tokens.IssuePair(ctx, user.ID, user.Username)
+		pair, err := tokens.IssuePair(ctx, user.ID, user.Username, user.IsAdmin)
 		if err != nil {
 			logger.LogError("register: issue token pair", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to issue token")

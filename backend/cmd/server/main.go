@@ -11,6 +11,7 @@ import (
 
 	"github.com/Alarion239/my239/backend/internal/auth"
 	"github.com/Alarion239/my239/backend/internal/config"
+	adminHandlers "github.com/Alarion239/my239/backend/internal/handlers/admin"
 	authHandlers "github.com/Alarion239/my239/backend/internal/handlers/auth"
 	"github.com/Alarion239/my239/backend/internal/handlers/health"
 	"github.com/Alarion239/my239/backend/internal/logger"
@@ -89,6 +90,7 @@ func run() error {
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Mount("/auth", authHandlers.Router(database, tokens, limiter))
+		r.Mount("/admin", adminHandlers.Router(database, tokens))
 	})
 
 	srv := &http.Server{

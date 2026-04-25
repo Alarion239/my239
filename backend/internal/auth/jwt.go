@@ -26,6 +26,7 @@ import (
 type AccessClaims struct {
 	UserID   int64  `json:"user_id"`
 	Username string `json:"username"`
+	IsAdmin  bool   `json:"is_admin"`
 	jwt.RegisteredClaims
 }
 
@@ -73,7 +74,7 @@ func NewAccessTokenService(cfg AccessTokenConfig) (*AccessTokenService, error) {
 }
 
 // Generate signs a JWT for the given user.
-func (s *AccessTokenService) Generate(userID int64, username string) (string, error) {
+func (s *AccessTokenService) Generate(userID int64, username string, isAdmin bool) (string, error) {
 	now := s.now()
 	jti, err := randomHex(16)
 	if err != nil {
@@ -83,6 +84,7 @@ func (s *AccessTokenService) Generate(userID int64, username string) (string, er
 	claims := AccessClaims{
 		UserID:   userID,
 		Username: username,
+		IsAdmin:  isAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    s.issuer,
 			Subject:   fmt.Sprintf("%d", userID),
