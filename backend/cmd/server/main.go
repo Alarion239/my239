@@ -18,6 +18,7 @@ import (
 	"github.com/Alarion239/my239/backend/internal/logger"
 	"github.com/Alarion239/my239/backend/internal/middleware"
 	"github.com/Alarion239/my239/backend/pkg/db"
+	"github.com/Alarion239/my239/backend/pkg/objectstore"
 	"github.com/Alarion239/my239/backend/pkg/ratelimit"
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
@@ -77,6 +78,11 @@ func run() error {
 		return err
 	}
 
+	blobs, err := buildObjectStore(rootCtx, cfg)
+	if err != nil {
+		return err
+	}
+
 	r := chi.NewRouter()
 
 	r.Use(chiMiddleware.RequestID)
@@ -92,7 +98,7 @@ func run() error {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Mount("/auth", authHandlers.Router(database, tokens, limiter))
 		r.Mount("/admin", adminHandlers.Router(database, tokens))
-		r.Mount("/mathcenter", mcHandlers.Router(database, tokens))
+		r.Mount("/mathcenter", mcHandlers.Router(database, tokens, blobs, cfg.S3.DownloadTTL))
 	})
 
 	srv := &http.Server{
@@ -160,4 +166,27 @@ func buildLimiter(ctx context.Context, cfg *config.Config) (ratelimit.Limiter, e
 	}
 	logger.LogInfo("rate limiter: redis", "url", cfg.RedisURL)
 	return ratelimit.NewRedis(client, "ratelimit"), nil
+}
+
+// buildObjectStore picks the S3-backed store when S3_BUCKET is set, otherwise
+// the in-memory one. Mirrors the limiter's "configured → real, otherwise
+// fallback" pattern so local dev needs zero S3 setup.
+func buildObjectStore(ctx context.Context, cfg *config.Config) (objectstore.Store, error) {
+	if cfg.S3.Bucket == "" {
+		logger.LogInfo("object store: in-memory (S3_BUCKET not set)")
+		return objectstore.NewMemory(), nil
+	}
+	store, err := objectstore.NewS3(ctx, objectstore.S3Config{
+		Endpoint:        cfg.S3.Endpoint,
+		Region:          cfg.S3.Region,
+		Bucket:          cfg.S3.Bucket,
+		AccessKeyID:     cfg.S3.AccessKeyID,
+		SecretAccessKey: cfg.S3.SecretAccessKey,
+		UsePathStyle:    cfg.S3.UsePathStyle,
+	})
+	if err != nil {
+		return nil, err
+	}
+	logger.LogInfo("object store: s3", "endpoint", cfg.S3.Endpoint, "bucket", cfg.S3.Bucket)
+	return store, nil
 }

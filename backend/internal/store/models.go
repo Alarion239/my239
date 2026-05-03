@@ -30,10 +30,35 @@ type MathCenterGroup struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
+type MathCenterProblem struct {
+	ID        int64     `json:"id"`
+	SeriesID  int64     `json:"series_id"`
+	Number    int32     `json:"number"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type MathCenterSeries struct {
+	ID           int64      `json:"id"`
+	MathCenterID int64      `json:"math_center_id"`
+	Number       int32      `json:"number"`
+	Name         string     `json:"name"`
+	DueAt        time.Time  `json:"due_at"`
+	PdfObjectKey *string    `json:"pdf_object_key"`
+	PublishedAt  *time.Time `json:"published_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+}
+
 type MathCenterStudent struct {
 	ID        int64     `json:"id"`
 	UserID    int64     `json:"user_id"`
 	GroupID   int64     `json:"group_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type MathCenterSubproblem struct {
+	ID        int64     `json:"id"`
+	ProblemID int64     `json:"problem_id"`
+	Label     string    `json:"label"`
 	CreatedAt time.Time `json:"created_at"`
 }
 

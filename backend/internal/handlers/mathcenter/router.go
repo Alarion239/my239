@@ -2,18 +2,34 @@
 package mathcenter
 
 import (
+	"time"
+
 	internalAuth "github.com/Alarion239/my239/backend/internal/auth"
 	"github.com/Alarion239/my239/backend/internal/middleware"
 	"github.com/Alarion239/my239/backend/pkg/db"
+	"github.com/Alarion239/my239/backend/pkg/objectstore"
 	"github.com/go-chi/chi/v5"
 )
 
 // Router mounts the math center routes. All endpoints require an authenticated
 // user; role-based visibility (teacher vs student) is decided in the handler.
-func Router(database *db.DB, tokens *internalAuth.TokenService) chi.Router {
+// blobs and downloadTTL are needed by the series PDF endpoints.
+func Router(database *db.DB, tokens *internalAuth.TokenService, blobs objectstore.Store, downloadTTL time.Duration) chi.Router {
 	r := chi.NewRouter()
 	r.Use(middleware.AuthMiddleware(tokens.Access()))
 
 	r.Get("/me", Me(database))
+
+	r.Route("/centers/{centerID}/series", func(r chi.Router) {
+		r.Get("/", ListSeriesForCenter(database))
+		r.Post("/", CreateSeries(database))
+	})
+	r.Route("/series/{seriesID}", func(r chi.Router) {
+		r.Get("/", GetSeries(database))
+		r.Put("/", UpdateSeries(database))
+		r.Delete("/", DeleteSeries(database, blobs))
+		r.Post("/pdf", PublishSeries(database, blobs))
+		r.Get("/pdf", DownloadSeriesPDF(database, blobs, downloadTTL))
+	})
 	return r
 }

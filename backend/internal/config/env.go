@@ -14,6 +14,7 @@ type Config struct {
 	FrontendURL string
 
 	JWT JWTConfig
+	S3  S3Config
 }
 
 // JWTConfig groups all JWT-related settings so handler code can pass it
@@ -24,6 +25,19 @@ type JWTConfig struct {
 	Audience   string
 	AccessTTL  time.Duration
 	RefreshTTL time.Duration
+}
+
+// S3Config carries the object storage settings. Bucket empty means: fall back
+// to the in-memory store (handy for local dev/tests). Endpoint defaults to
+// Yandex Object Storage so a Russian deploy only needs to set bucket + creds.
+type S3Config struct {
+	Endpoint        string
+	Region          string
+	Bucket          string
+	AccessKeyID     string
+	SecretAccessKey string
+	UsePathStyle    bool
+	DownloadTTL     time.Duration
 }
 
 // Load reads configuration from environment variables. Returns an error
@@ -76,6 +90,25 @@ func Load() (*Config, error) {
 		}
 	}
 
+	s3Endpoint := envOrDefault("S3_ENDPOINT", "https://storage.yandexcloud.net")
+	s3Region := envOrDefault("S3_REGION", "ru-central1")
+	s3Bucket := os.Getenv("S3_BUCKET")
+	s3KeyID := os.Getenv("S3_ACCESS_KEY_ID")
+	s3Secret := os.Getenv("S3_SECRET_ACCESS_KEY")
+	s3PathStyle := os.Getenv("S3_USE_PATH_STYLE") != "false" // default true; safest for arbitrary bucket names
+	s3TTLMin, err := envInt("S3_DOWNLOAD_TTL_MINUTES", 15)
+	if err != nil {
+		return nil, err
+	}
+	if s3TTLMin <= 0 {
+		return nil, fmt.Errorf("S3_DOWNLOAD_TTL_MINUTES must be positive")
+	}
+	// If a bucket is configured, the credential pair must come along with it.
+	// Empty bucket is a deliberate "use memory store" sentinel.
+	if s3Bucket != "" && (s3KeyID == "" || s3Secret == "") {
+		return nil, fmt.Errorf("S3_BUCKET set but S3_ACCESS_KEY_ID/S3_SECRET_ACCESS_KEY missing")
+	}
+
 	return &Config{
 		DatabaseURL: databaseURL,
 		RedisURL:    redisURL,
@@ -87,6 +120,15 @@ func Load() (*Config, error) {
 			Audience:   jwtAudience,
 			AccessTTL:  time.Duration(accessMin) * time.Minute,
 			RefreshTTL: time.Duration(refreshDays) * 24 * time.Hour,
+		},
+		S3: S3Config{
+			Endpoint:        s3Endpoint,
+			Region:          s3Region,
+			Bucket:          s3Bucket,
+			AccessKeyID:     s3KeyID,
+			SecretAccessKey: s3Secret,
+			UsePathStyle:    s3PathStyle,
+			DownloadTTL:     time.Duration(s3TTLMin) * time.Minute,
 		},
 	}, nil
 }
