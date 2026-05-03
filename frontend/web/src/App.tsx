@@ -7,8 +7,10 @@ import {colors} from './components/ui'
 import LoginPage from './pages/Login'
 import RegisterPage from './pages/Register'
 import ProfilePage from './pages/Profile'
+import MathCenterPage from './pages/MathCenter'
 import AdminUsersPage from './pages/AdminUsers'
 import AdminTokensPage from './pages/AdminTokens'
+import AdminMathCenterPage from './pages/AdminMathCenter'
 
 // App is the route table. RequireAuth gates the authenticated pages, and
 // RequireAdmin layers an extra check on top of it for /admin/*.
@@ -33,6 +35,17 @@ export default function App() {
             />
 
             <Route
+                path="/mathcenter"
+                element={
+                    <RequireAuth>
+                        <Layout>
+                            <MathCenterPage/>
+                        </Layout>
+                    </RequireAuth>
+                }
+            />
+
+            <Route
                 path="/admin/users"
                 element={
                     <RequireAuth>
@@ -51,6 +64,18 @@ export default function App() {
                         <RequireAdmin>
                             <Layout>
                                 <AdminTokensPage/>
+                            </Layout>
+                        </RequireAdmin>
+                    </RequireAuth>
+                }
+            />
+            <Route
+                path="/admin/mathcenter"
+                element={
+                    <RequireAuth>
+                        <RequireAdmin>
+                            <Layout>
+                                <AdminMathCenterPage/>
                             </Layout>
                         </RequireAdmin>
                     </RequireAuth>

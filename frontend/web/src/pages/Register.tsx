@@ -12,6 +12,7 @@ export default function RegisterPage() {
     const [password, setPassword] = useState('')
     const [invitation, setInvitation] = useState('')
     const [firstName, setFirstName] = useState('')
+    const [middleName, setMiddleName] = useState('')
     const [lastName, setLastName] = useState('')
     const [error, setError] = useState<string | null>(null)
     const [fields, setFields] = useState<Record<string, string>>({})
@@ -27,6 +28,7 @@ export default function RegisterPage() {
                 password,
                 invitation_token: invitation,
                 first_name: firstName,
+                middle_name: middleName || undefined,
                 last_name: lastName,
             })
             navigate('/profile')
@@ -35,7 +37,7 @@ export default function RegisterPage() {
                 setError(e.message)
                 setFields(e.fields ?? {})
             } else {
-                setError('Registration failed')
+                setError('Не удалось зарегистрироваться')
             }
         } finally {
             setSubmitting(false)
@@ -45,30 +47,32 @@ export default function RegisterPage() {
     return (
         <View style={s.wrap}>
             <Card style={{width: 420}}>
-                <Heading>Create account</Heading>
-                <Subheading>You'll need an invitation token from an admin</Subheading>
+                <Heading>Регистрация</Heading>
+                <Subheading>Для регистрации нужен пригласительный токен от администратора</Subheading>
                 {error ? <ErrorBanner message={error}/> : null}
                 <Field
-                    label="Invitation token"
+                    label="Пригласительный токен"
                     value={invitation}
                     onChangeText={setInvitation}
-                    placeholder="paste your token"
+                    placeholder="вставьте сюда"
                     error={fields.InvitationToken}
                 />
-                <Field label="Username" value={username} onChangeText={setUsername}
-                       placeholder="alphanumeric, 3–50 chars" error={fields.Username}/>
-                <Field label="Password" value={password} onChangeText={setPassword} placeholder="min 8 characters"
+                <Field label="Логин" value={username} onChangeText={setUsername}
+                       placeholder="латиница и цифры, 3–50 символов" error={fields.Username}/>
+                <Field label="Пароль" value={password} onChangeText={setPassword} placeholder="минимум 8 символов"
                        secureTextEntry error={fields.Password}/>
-                <Field label="First name" value={firstName} onChangeText={setFirstName} autoCapitalize="sentences"
+                <Field label="Имя" value={firstName} onChangeText={setFirstName} autoCapitalize="sentences"
                        error={fields.FirstName}/>
-                <Field label="Last name" value={lastName} onChangeText={setLastName} autoCapitalize="sentences"
+                <Field label="Отчество" value={middleName} onChangeText={setMiddleName} autoCapitalize="sentences"
+                       error={fields.MiddleName}/>
+                <Field label="Фамилия" value={lastName} onChangeText={setLastName} autoCapitalize="sentences"
                        error={fields.LastName}/>
-                <Button title={submitting ? 'Creating account…' : 'Create account'} onPress={onSubmit}
+                <Button title={submitting ? 'Создаём аккаунт…' : 'Создать аккаунт'} onPress={onSubmit}
                         disabled={submitting}/>
                 <View style={{height: 16}}/>
                 <Text style={s.foot}>
-                    Already registered?{' '}
-                    <Link to="/login" style={{color: colors.primary} as any}>Sign in</Link>
+                    Уже зарегистрированы?{' '}
+                    <Link to="/login" style={{color: colors.primary} as any}>Войти</Link>
                 </Text>
             </Card>
         </View>

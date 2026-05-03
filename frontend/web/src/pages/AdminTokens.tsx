@@ -43,7 +43,7 @@ export default function AdminTokensPage() {
             setCopiedId(t.id)
             window.setTimeout(() => setCopiedId((id) => (id === t.id ? null : id)), 2000)
         } catch (e) {
-            setError(e instanceof Error ? `Copy failed: ${e.message}` : 'Copy failed')
+            setError(e instanceof Error ? `Не удалось скопировать: ${e.message}` : 'Не удалось скопировать')
         }
     }
 
@@ -52,7 +52,7 @@ export default function AdminTokensPage() {
             const list = await authedFetch<TokenView[]>('/admin/tokens')
             setTokens(list)
         } catch (e) {
-            setError(e instanceof APIErrorImpl ? e.message : 'Failed to load tokens')
+            setError(e instanceof APIErrorImpl ? e.message : 'Не удалось загрузить токены')
         }
     }, [authedFetch])
 
@@ -66,7 +66,7 @@ export default function AdminTokensPage() {
         try {
             const m = parseInt(maxUses, 10)
             const h = parseInt(expiresHours, 10)
-            if (!m || !h) throw new APIErrorImpl({status: 0, message: 'max_uses and expires_in_hours are required'})
+            if (!m || !h) throw new APIErrorImpl({status: 0, message: 'Заполните «Макс. использований» и «Срок действия»'})
             const created = await authedFetch<TokenView>('/admin/tokens', {
                 body: {description, max_uses: m, expires_in_hours: h},
             })
@@ -74,7 +74,7 @@ export default function AdminTokensPage() {
             setDescription('')
             await load()
         } catch (e) {
-            setError(e instanceof APIErrorImpl ? e.message : 'Create failed')
+            setError(e instanceof APIErrorImpl ? e.message : 'Не удалось создать токен')
         } finally {
             setCreating(false)
         }
@@ -86,41 +86,43 @@ export default function AdminTokensPage() {
             await authedFetch(`/admin/tokens/${t.id}`, {method: 'DELETE'})
             await load()
         } catch (e) {
-            setError(e instanceof APIErrorImpl ? e.message : 'Revoke failed')
+            setError(e instanceof APIErrorImpl ? e.message : 'Не удалось отозвать')
         }
     }
+
+    const statusLabels: Record<string, string> = {active: 'активен', expired: 'истёк', exhausted: 'исчерпан'}
 
     return (
         <View style={{width: 760, gap: 24} as any}>
             <Card>
-                <Heading>Create invitation token</Heading>
-                <Subheading>Share the resulting token with a single person — it expires after use or after the
-                    timeout.</Subheading>
+                <Heading>Создать пригласительный токен</Heading>
+                <Subheading>Поделитесь токеном с приглашаемым — после использования или истечения срока он становится
+                    невалидным.</Subheading>
                 {error ? <ErrorBanner message={error}/> : null}
-                <Field label="Description" value={description} onChangeText={setDescription}
-                       placeholder="e.g. for Alice (PM)" autoCapitalize="sentences"/>
+                <Field label="Описание" value={description} onChangeText={setDescription}
+                       placeholder="например, для Алисы" autoCapitalize="sentences"/>
                 <View style={s.inline}>
                     <View style={{flex: 1}}>
-                        <Field label="Max uses" value={maxUses} onChangeText={setMaxUses} placeholder="1–N"/>
+                        <Field label="Макс. использований" value={maxUses} onChangeText={setMaxUses} placeholder="1–N"/>
                     </View>
                     <View style={{width: 16}}/>
                     <View style={{flex: 1}}>
-                        <Field label="Expires (hours)" value={expiresHours} onChangeText={setExpiresHours}
-                               placeholder="720 = 30d"/>
+                        <Field label="Срок действия (ч)" value={expiresHours} onChangeText={setExpiresHours}
+                               placeholder="720 = 30 дней"/>
                     </View>
                 </View>
-                <Button title={creating ? 'Creating…' : 'Create token'} onPress={createToken} disabled={creating}/>
+                <Button title={creating ? 'Создаём…' : 'Создать токен'} onPress={createToken} disabled={creating}/>
             </Card>
 
             <Card>
-                <Heading>Tokens</Heading>
-                <Subheading>{tokens ? `${tokens.length} total` : 'Loading…'}</Subheading>
+                <Heading>Токены</Heading>
+                <Subheading>{tokens ? `Всего: ${tokens.length}` : 'Загрузка…'}</Subheading>
                 <View style={s.headerRow}>
-                    <Text style={[s.cell, s.cellDesc, s.h]}>Description</Text>
-                    <Text style={[s.cell, s.cellToken, s.h]}>Token</Text>
-                    <Text style={[s.cell, s.cellUses, s.h]}>Uses</Text>
-                    <Text style={[s.cell, s.cellExpiry, s.h]}>Expires</Text>
-                    <Text style={[s.cell, s.cellAction, s.h]}>Action</Text>
+                    <Text style={[s.cell, s.cellDesc, s.h]}>Описание</Text>
+                    <Text style={[s.cell, s.cellToken, s.h]}>Токен</Text>
+                    <Text style={[s.cell, s.cellUses, s.h]}>Исп.</Text>
+                    <Text style={[s.cell, s.cellExpiry, s.h]}>Срок</Text>
+                    <Text style={[s.cell, s.cellAction, s.h]}>Действие</Text>
                 </View>
                 {tokens?.map((t) => {
                     const expired = new Date(t.expires_at).getTime() < Date.now()
@@ -133,25 +135,23 @@ export default function AdminTokensPage() {
                             <Pressable
                                 onPress={() => void copyToken(t)}
                                 style={[s.cell, s.cellToken]}
-                                // title hint shows on hover in browsers; a small affordance
-                                // for users who don't immediately realize the cell is clickable
-                                accessibilityLabel="Copy token to clipboard"
+                                accessibilityLabel="Скопировать токен"
                             >
                                 <Text style={s.tokenText} numberOfLines={1}>
                                     {revealed === t.id ? t.token : maskToken(t.token)}
                                 </Text>
                                 <Text style={s.tokenHint}>
-                                    {copiedId === t.id ? '✓ copied' : 'click to copy'}
+                                    {copiedId === t.id ? '✓ скопировано' : 'нажмите, чтобы скопировать'}
                                 </Text>
                             </Pressable>
                             <Text style={[s.cell, s.cellUses]}>{t.uses}/{t.max_uses}</Text>
                             <View style={[s.cell, s.cellExpiry]}>
-                                <Text style={s.expiryText}>{new Date(t.expires_at).toLocaleString()}</Text>
+                                <Text style={s.expiryText}>{new Date(t.expires_at).toLocaleString('ru-RU')}</Text>
                                 <Text
-                                    style={[s.statusText, status === 'active' ? {color: colors.ok} : {color: colors.danger}]}>{status}</Text>
+                                    style={[s.statusText, status === 'active' ? {color: colors.ok} : {color: colors.danger}]}>{statusLabels[status]}</Text>
                             </View>
                             <View style={[s.cell, s.cellAction]}>
-                                <Button title="Revoke" variant="danger" onPress={() => revoke(t)}
+                                <Button title="Отозвать" variant="danger" onPress={() => revoke(t)}
                                         disabled={status !== 'active'}/>
                             </View>
                         </View>

@@ -15,7 +15,7 @@ export default function AdminUsersPage() {
             const list = await authedFetch<User[]>('/admin/users')
             setUsers(list)
         } catch (e) {
-            setError(e instanceof APIErrorImpl ? e.message : 'Failed to load users')
+            setError(e instanceof APIErrorImpl ? e.message : 'Не удалось загрузить пользователей')
         }
     }, [authedFetch])
 
@@ -33,7 +33,7 @@ export default function AdminUsersPage() {
             })
             await load()
         } catch (e) {
-            setError(e instanceof APIErrorImpl ? e.message : 'Update failed')
+            setError(e instanceof APIErrorImpl ? e.message : 'Не удалось обновить')
         } finally {
             setBusy(null)
         }
@@ -41,15 +41,15 @@ export default function AdminUsersPage() {
 
     return (
         <Card style={{width: 720}}>
-            <Heading>Users</Heading>
-            <Subheading>{users ? `${users.length} total` : 'Loading…'}</Subheading>
+            <Heading>Пользователи</Heading>
+            <Subheading>{users ? `Всего: ${users.length}` : 'Загрузка…'}</Subheading>
             {error ? <ErrorBanner message={error}/> : null}
             <View style={s.headerRow}>
                 <Text style={[s.cell, s.cellId, s.h]}>ID</Text>
-                <Text style={[s.cell, s.cellName, s.h]}>Name</Text>
-                <Text style={[s.cell, s.cellUsername, s.h]}>Username</Text>
-                <Text style={[s.cell, s.cellRole, s.h]}>Role</Text>
-                <Text style={[s.cell, s.cellAction, s.h]}>Action</Text>
+                <Text style={[s.cell, s.cellName, s.h]}>ФИО</Text>
+                <Text style={[s.cell, s.cellUsername, s.h]}>Логин</Text>
+                <Text style={[s.cell, s.cellRole, s.h]}>Роль</Text>
+                <Text style={[s.cell, s.cellAction, s.h]}>Действие</Text>
             </View>
             {users?.map((u) => {
                 const isSelf = me?.id === u.id
@@ -57,14 +57,16 @@ export default function AdminUsersPage() {
                     <View key={u.id} style={s.row}>
                         <Text style={[s.cell, s.cellId]}>{u.id}</Text>
                         <Text
-                            style={[s.cell, s.cellName]}>{[u.first_name, u.last_name].filter(Boolean).join(' ')}</Text>
+                            style={[s.cell, s.cellName]}>
+                            {[u.last_name, u.first_name, u.middle_name].filter(Boolean).join(' ')}
+                        </Text>
                         <Text style={[s.cell, s.cellUsername]}>@{u.username}</Text>
                         <Text style={[s.cell, s.cellRole, u.is_admin && {color: colors.primary, fontWeight: '600'}]}>
-                            {u.is_admin ? 'Admin' : 'Member'}
+                            {u.is_admin ? 'Админ' : 'Участник'}
                         </Text>
                         <View style={[s.cell, s.cellAction]}>
                             <Button
-                                title={u.is_admin ? 'Demote' : 'Promote'}
+                                title={u.is_admin ? 'Снять права' : 'Сделать админом'}
                                 variant="secondary"
                                 onPress={() => toggleAdmin(u)}
                                 disabled={busy === u.id || (isSelf && u.is_admin)}
@@ -97,5 +99,5 @@ const s = StyleSheet.create({
     cellName: {flex: 2},
     cellUsername: {flex: 2},
     cellRole: {flex: 1},
-    cellAction: {width: 110},
+    cellAction: {width: 150},
 })

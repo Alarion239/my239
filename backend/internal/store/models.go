@@ -17,6 +17,34 @@ type InvitationToken struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+type MathCenter struct {
+	ID             int64     `json:"id"`
+	GraduationYear int32     `json:"graduation_year"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+type MathCenterGroup struct {
+	ID           int64     `json:"id"`
+	MathCenterID int64     `json:"math_center_id"`
+	Name         string    `json:"name"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+type MathCenterStudent struct {
+	ID        int64     `json:"id"`
+	UserID    int64     `json:"user_id"`
+	GroupID   int64     `json:"group_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type MathCenterTeacher struct {
+	ID            int64     `json:"id"`
+	UserID        int64     `json:"user_id"`
+	MathCenterID  int64     `json:"math_center_id"`
+	IsHeadTeacher bool      `json:"is_head_teacher"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
 type RefreshToken struct {
 	ID           int64      `json:"id"`
 	UserID       int64      `json:"user_id"`

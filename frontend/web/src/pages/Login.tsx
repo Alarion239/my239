@@ -20,7 +20,7 @@ export default function LoginPage() {
             await login(username, password)
             navigate('/profile')
         } catch (e) {
-            setError(e instanceof APIErrorImpl ? e.message : 'Login failed')
+            setError(e instanceof APIErrorImpl ? e.message : 'Не удалось войти')
         } finally {
             setSubmitting(false)
         }
@@ -29,17 +29,17 @@ export default function LoginPage() {
     return (
         <View style={s.wrap}>
             <Card style={{width: 380}}>
-                <Heading>Sign in</Heading>
-                <Subheading>Welcome back to my239</Subheading>
+                <Heading>Вход</Heading>
+                <Subheading>Добро пожаловать в my239</Subheading>
                 {error ? <ErrorBanner message={error}/> : null}
-                <Field label="Username" value={username} onChangeText={setUsername} placeholder="alice"/>
-                <Field label="Password" value={password} onChangeText={setPassword} placeholder="••••••••"
+                <Field label="Логин" value={username} onChangeText={setUsername} placeholder="alice"/>
+                <Field label="Пароль" value={password} onChangeText={setPassword} placeholder="••••••••"
                        secureTextEntry/>
-                <Button title={submitting ? 'Signing in…' : 'Sign in'} onPress={onSubmit} disabled={submitting}/>
+                <Button title={submitting ? 'Входим…' : 'Войти'} onPress={onSubmit} disabled={submitting}/>
                 <View style={{height: 16}}/>
                 <Text style={s.foot}>
-                    No account?{' '}
-                    <Link to="/register" style={{color: colors.primary} as any}>Register</Link>
+                    Нет аккаунта?{' '}
+                    <Link to="/register" style={{color: colors.primary} as any}>Зарегистрироваться</Link>
                 </Text>
             </Card>
         </View>

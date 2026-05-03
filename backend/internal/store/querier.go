@@ -9,22 +9,40 @@ import (
 )
 
 type Querier interface {
+	AddStudentToGroup(ctx context.Context, arg AddStudentToGroupParams) (MathCenterStudent, error)
+	AddTeacherToCenter(ctx context.Context, arg AddTeacherToCenterParams) (MathCenterTeacher, error)
 	CountUsesOfInvitationToken(ctx context.Context, invitationTokenID int64) (int64, error)
 	CreateInvitationToken(ctx context.Context, arg CreateInvitationTokenParams) (InvitationToken, error)
+	CreateMathCenter(ctx context.Context, graduationYear int32) (MathCenter, error)
+	CreateMathCenterGroup(ctx context.Context, arg CreateMathCenterGroupParams) (MathCenterGroup, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeleteMathCenter(ctx context.Context, id int64) (int64, error)
+	DeleteMathCenterGroup(ctx context.Context, id int64) (int64, error)
+	GetGroup(ctx context.Context, id int64) (MathCenterGroup, error)
 	GetInvitationTokenByValue(ctx context.Context, token string) (InvitationToken, error)
 	GetInvitationTokenByValueForUpdate(ctx context.Context, token string) (InvitationToken, error)
+	GetMathCenter(ctx context.Context, id int64) (MathCenter, error)
 	GetRefreshTokenByHash(ctx context.Context, tokenHash []byte) (RefreshToken, error)
+	GetStudentByUserID(ctx context.Context, userID int64) (GetStudentByUserIDRow, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
+	ListCentersForTeacher(ctx context.Context, userID int64) ([]ListCentersForTeacherRow, error)
+	ListGroupsForCenter(ctx context.Context, mathCenterID int64) ([]MathCenterGroup, error)
+	ListHeadTeachersForCenter(ctx context.Context, mathCenterID int64) ([]ListHeadTeachersForCenterRow, error)
 	ListInvitationTokens(ctx context.Context) ([]InvitationToken, error)
+	ListMathCenters(ctx context.Context) ([]MathCenter, error)
+	ListStudentsForCenter(ctx context.Context, mathCenterID int64) ([]ListStudentsForCenterRow, error)
+	ListTeachersForCenter(ctx context.Context, mathCenterID int64) ([]ListTeachersForCenterRow, error)
 	ListUsers(ctx context.Context) ([]User, error)
+	RemoveStudent(ctx context.Context, id int64) (int64, error)
+	RemoveTeacher(ctx context.Context, id int64) (int64, error)
 	RevokeAllRefreshTokensForUser(ctx context.Context, userID int64) error
 	RevokeInvitationTokenByID(ctx context.Context, id int64) (int64, error)
 	RevokeInvitationTokenByValue(ctx context.Context, token string) (int64, error)
 	RevokeRefreshTokenByID(ctx context.Context, id int64) error
 	RotateRefreshToken(ctx context.Context, arg RotateRefreshTokenParams) error
+	SetTeacherHead(ctx context.Context, arg SetTeacherHeadParams) (int64, error)
 	SetUserAdmin(ctx context.Context, arg SetUserAdminParams) error
 }
 

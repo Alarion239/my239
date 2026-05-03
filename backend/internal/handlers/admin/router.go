@@ -23,5 +23,24 @@ func Router(database *db.DB, tokens *internalAuth.TokenService) chi.Router {
 	r.Post("/tokens", CreateToken(database))
 	r.Delete("/tokens/{id}", RevokeToken(database))
 
+	r.Route("/mathcenter", func(r chi.Router) {
+		r.Get("/", ListMathCenters(database))
+		r.Post("/", CreateMathCenter(database))
+		r.Delete("/{id}", DeleteMathCenter(database))
+
+		r.Get("/{id}/groups", ListGroupsForCenter(database))
+		r.Post("/{id}/groups", CreateGroup(database))
+		r.Delete("/{id}/groups/{groupId}", DeleteGroup(database))
+
+		r.Get("/{id}/students", ListStudentsForCenter(database))
+		r.Post("/students", AddStudent(database))
+		r.Delete("/students/{studentId}", RemoveStudent(database))
+
+		r.Get("/{id}/teachers", ListTeachersForCenter(database))
+		r.Post("/{id}/teachers", AddTeacher(database))
+		r.Patch("/teachers/{teacherId}/head", SetTeacherHead(database))
+		r.Delete("/teachers/{teacherId}", RemoveTeacher(database))
+	})
+
 	return r
 }

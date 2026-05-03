@@ -6,16 +6,17 @@ export default function ProfilePage() {
     const {user} = useAuth()
     if (!user) return null
 
-    const fullName = [user.first_name, user.middle_name, user.last_name].filter(Boolean).join(' ')
+    // ФИО (фамилия, имя, отчество) — пропускаем отсутствующие поля.
+    const fullName = [user.last_name, user.first_name, user.middle_name].filter(Boolean).join(' ')
 
     return (
         <Card style={{width: 480}}>
-            <Heading>Profile</Heading>
-            <Subheading>Signed in as @{user.username}</Subheading>
-            <Row label="Name" value={fullName}/>
-            <Row label="Username" value={user.username}/>
-            <Row label="Role" value={user.is_admin ? 'Administrator' : 'Member'}/>
-            <Row label="Joined" value={new Date(user.created_at).toLocaleString()}/>
+            <Heading>Профиль</Heading>
+            <Subheading>Вы вошли как @{user.username}</Subheading>
+            <Row label="ФИО" value={fullName || '—'}/>
+            <Row label="Логин" value={user.username}/>
+            <Row label="Роль" value={user.is_admin ? 'Администратор' : 'Участник'}/>
+            <Row label="Дата регистрации" value={new Date(user.created_at).toLocaleString('ru-RU')}/>
         </Card>
     )
 }

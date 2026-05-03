@@ -14,6 +14,7 @@ import (
 	adminHandlers "github.com/Alarion239/my239/backend/internal/handlers/admin"
 	authHandlers "github.com/Alarion239/my239/backend/internal/handlers/auth"
 	"github.com/Alarion239/my239/backend/internal/handlers/health"
+	mcHandlers "github.com/Alarion239/my239/backend/internal/handlers/mathcenter"
 	"github.com/Alarion239/my239/backend/internal/logger"
 	"github.com/Alarion239/my239/backend/internal/middleware"
 	"github.com/Alarion239/my239/backend/pkg/db"
@@ -91,6 +92,7 @@ func run() error {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Mount("/auth", authHandlers.Router(database, tokens, limiter))
 		r.Mount("/admin", adminHandlers.Router(database, tokens))
+		r.Mount("/mathcenter", mcHandlers.Router(database, tokens))
 	})
 
 	srv := &http.Server{

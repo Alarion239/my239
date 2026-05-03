@@ -4,8 +4,8 @@ import {Link, useLocation, useNavigate} from 'react-router-dom'
 import {useAuth} from '../auth'
 import {colors} from './ui'
 
-// Layout renders the top nav bar (Profile / Admin / Logout) and a centered
-// content well. Public pages (login/register) skip this and render bare.
+// Layout renders the top nav bar and a centered content well. Public pages
+// (login/register) skip this and render bare.
 export function Layout({children}: { children: ReactNode }) {
     const {user, logout} = useAuth()
     const navigate = useNavigate()
@@ -16,11 +16,13 @@ export function Layout({children}: { children: ReactNode }) {
             <View style={s.nav}>
                 <Text style={s.brand}>my239</Text>
                 <View style={s.navRight}>
-                    <NavLink to="/profile" current={location.pathname}>Profile</NavLink>
+                    <NavLink to="/profile" current={location.pathname}>Профиль</NavLink>
+                    <NavLink to="/mathcenter" current={location.pathname}>Матцентр</NavLink>
                     {user?.is_admin ? (
                         <>
-                            <NavLink to="/admin/users" current={location.pathname}>Users</NavLink>
-                            <NavLink to="/admin/tokens" current={location.pathname}>Tokens</NavLink>
+                            <NavLink to="/admin/users" current={location.pathname}>Пользователи</NavLink>
+                            <NavLink to="/admin/tokens" current={location.pathname}>Токены</NavLink>
+                            <NavLink to="/admin/mathcenter" current={location.pathname}>Управление МЦ</NavLink>
                         </>
                     ) : null}
                     <Pressable
@@ -30,7 +32,7 @@ export function Layout({children}: { children: ReactNode }) {
                         }}
                         style={s.logout}
                     >
-                        <Text style={s.logoutText}>Logout</Text>
+                        <Text style={s.logoutText}>Выйти</Text>
                     </Pressable>
                 </View>
             </View>
