@@ -36,4 +36,13 @@ go.work.sum
 # macOS
 *.DS_Store
 
-frontend/
+# Frontend: track sources, ignore build artifacts and package managers.
+# Earlier the whole tree was excluded which silently blocked tracking the
+# homework UI and the mobile bootstrap — keep the deny list specific now.
+frontend/**/node_modules/
+frontend/**/dist/
+frontend/**/.expo/
+frontend/**/.next/
+frontend/**/build/
+frontend/**/*.tsbuildinfo
+frontend/**/coverage/

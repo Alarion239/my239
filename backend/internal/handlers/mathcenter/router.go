@@ -13,8 +13,10 @@ import (
 
 // Router mounts the math center routes. All endpoints require an authenticated
 // user; role-based visibility (teacher vs student) is decided in the handler.
-// blobs and downloadTTL are needed by the series PDF endpoints.
-func Router(database *db.DB, tokens *internalAuth.TokenService, blobs objectstore.Store, downloadTTL time.Duration) chi.Router {
+// blobs is used by the series PDF endpoints; uploadTTL signs PUT URLs the
+// client uses to upload directly to Yandex; downloadTTL signs GET URLs for
+// the redirect download.
+func Router(database *db.DB, tokens *internalAuth.TokenService, blobs objectstore.Store, uploadTTL, downloadTTL time.Duration) chi.Router {
 	r := chi.NewRouter()
 	r.Use(middleware.AuthMiddleware(tokens.Access()))
 
@@ -28,7 +30,8 @@ func Router(database *db.DB, tokens *internalAuth.TokenService, blobs objectstor
 		r.Get("/", GetSeries(database))
 		r.Put("/", UpdateSeries(database))
 		r.Delete("/", DeleteSeries(database, blobs))
-		r.Post("/pdf", PublishSeries(database, blobs))
+		r.Post("/pdf/upload-url", IssuePDFUploadURL(database, blobs, uploadTTL))
+		r.Post("/pdf/publish", FinalizePDFPublish(database, blobs))
 		r.Get("/pdf", DownloadSeriesPDF(database, blobs, downloadTTL))
 	})
 	return r

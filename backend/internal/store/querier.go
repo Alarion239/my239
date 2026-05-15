@@ -11,6 +11,7 @@ import (
 type Querier interface {
 	AddStudentToGroup(ctx context.Context, arg AddStudentToGroupParams) (MathCenterStudent, error)
 	AddTeacherToCenter(ctx context.Context, arg AddTeacherToCenterParams) (MathCenterTeacher, error)
+	AppendEvent(ctx context.Context, arg AppendEventParams) (HomeworkThreadEvent, error)
 	CountUsesOfInvitationToken(ctx context.Context, invitationTokenID int64) (int64, error)
 	CreateInvitationToken(ctx context.Context, arg CreateInvitationTokenParams) (InvitationToken, error)
 	CreateMathCenter(ctx context.Context, graduationYear int32) (MathCenter, error)
@@ -24,18 +25,44 @@ type Querier interface {
 	DeleteMathCenterGroup(ctx context.Context, id int64) (int64, error)
 	DeleteProblemsForSeries(ctx context.Context, seriesID int64) error
 	DeleteSeries(ctx context.Context, id int64) (int64, error)
+	// INSERT ... ON CONFLICT DO UPDATE always returns a row, regardless of
+	// whether we created it now or matched an existing one. The DO UPDATE bumps
+	// updated_at so we can see activity even on no-op upserts.
+	FindOrCreateThread(ctx context.Context, arg FindOrCreateThreadParams) (HomeworkThread, error)
+	GetEventKind(ctx context.Context, id int64) (string, error)
 	GetGroup(ctx context.Context, id int64) (MathCenterGroup, error)
 	GetInvitationTokenByValue(ctx context.Context, token string) (InvitationToken, error)
 	GetInvitationTokenByValueForUpdate(ctx context.Context, token string) (InvitationToken, error)
 	GetMathCenter(ctx context.Context, id int64) (MathCenter, error)
+	GetMostRecentGradedEvent(ctx context.Context, threadID int64) (HomeworkThreadEvent, error)
 	GetRefreshTokenByHash(ctx context.Context, tokenHash []byte) (RefreshToken, error)
 	GetSeries(ctx context.Context, id int64) (MathCenterSeries, error)
 	GetStudentByUserID(ctx context.Context, userID int64) (GetStudentByUserIDRow, error)
+	// One-shot fetch of "what center/series/problem does this subproblem belong
+	// to", used at the start of every event-creating handler so we don't have to
+	// chain three queries.
+	GetSubproblemContext(ctx context.Context, id int64) (GetSubproblemContextRow, error)
+	GetThread(ctx context.Context, id int64) (HomeworkThread, error)
+	GetThreadByStudentAndSubproblem(ctx context.Context, arg GetThreadByStudentAndSubproblemParams) (HomeworkThread, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
+	// Bulk lookup used by the homework thread view: it needs to translate
+	// every user_id on the page (student, last grader, claim holder, every
+	// event's actor) into a display name. ANY(array) is one round-trip vs
+	// N+1 GetUserByID calls.
+	GetUsersByIDs(ctx context.Context, ids []int64) ([]GetUsersByIDsRow, error)
+	// {pending, my_claimed, my_appeals} for the grader dashboard.
+	GraderStatsForCenter(ctx context.Context, arg GraderStatsForCenterParams) (GraderStatsForCenterRow, error)
+	HeartbeatClaim(ctx context.Context, arg HeartbeatClaimParams) (int64, error)
+	InsertEventPhoto(ctx context.Context, arg InsertEventPhotoParams) error
 	IsStudentInCenter(ctx context.Context, arg IsStudentInCenterParams) (bool, error)
 	IsTeacherInCenter(ctx context.Context, arg IsTeacherInCenterParams) (bool, error)
 	ListCentersForTeacher(ctx context.Context, userID int64) ([]ListCentersForTeacherRow, error)
+	ListEventPhotosForEvents(ctx context.Context, eventIds []int64) ([]HomeworkThreadEventPhoto, error)
+	// Items needing grading: 'submitted' or 'appealed', not locked by someone
+	// else (a stale lock counts as available). mine=true restricts to threads
+	// where the caller was the most recent grader (appeal stickiness).
+	ListGraderQueueForSeries(ctx context.Context, arg ListGraderQueueForSeriesParams) ([]ListGraderQueueForSeriesRow, error)
 	ListGroupsForCenter(ctx context.Context, mathCenterID int64) ([]MathCenterGroup, error)
 	ListHeadTeachersForCenter(ctx context.Context, mathCenterID int64) ([]ListHeadTeachersForCenterRow, error)
 	ListInvitationTokens(ctx context.Context) ([]InvitationToken, error)
@@ -46,11 +73,13 @@ type Querier interface {
 	ListStudentsForCenter(ctx context.Context, mathCenterID int64) ([]ListStudentsForCenterRow, error)
 	ListSubproblemsForSeries(ctx context.Context, seriesID int64) ([]ListSubproblemsForSeriesRow, error)
 	ListTeachersForCenter(ctx context.Context, mathCenterID int64) ([]ListTeachersForCenterRow, error)
+	ListThreadEvents(ctx context.Context, threadID int64) ([]HomeworkThreadEvent, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	// Sets the PDF object key and stamps published_at to NOW(). Used both for
 	// first-time publishing and re-uploads (we just overwrite; the caller is
 	// responsible for deleting the prior key first if needed).
 	PublishSeries(ctx context.Context, arg PublishSeriesParams) (MathCenterSeries, error)
+	ReleaseClaim(ctx context.Context, arg ReleaseClaimParams) (int64, error)
 	RemoveStudent(ctx context.Context, id int64) (int64, error)
 	RemoveTeacher(ctx context.Context, id int64) (int64, error)
 	RevokeAllRefreshTokensForUser(ctx context.Context, userID int64) error
@@ -60,7 +89,40 @@ type Querier interface {
 	RotateRefreshToken(ctx context.Context, arg RotateRefreshTokenParams) error
 	SetTeacherHead(ctx context.Context, arg SetTeacherHeadParams) (int64, error)
 	SetUserAdmin(ctx context.Context, arg SetUserAdminParams) error
+	// One-row summary: accepted / rejected / pending. Pending lumps 'ungraded',
+	// 'submitted', 'appealed' together (anything the student can't yet call done).
+	StudentSeriesCounts(ctx context.Context, arg StudentSeriesCountsParams) (StudentSeriesCountsRow, error)
+	// Per-subproblem status grid for one student in one series. The LEFT JOIN
+	// means subproblems the student hasn't touched still appear, with
+	// status='ungraded'.
+	StudentSeriesRollup(ctx context.Context, arg StudentSeriesRollupParams) ([]StudentSeriesRollupRow, error)
+	// The "all series for this center, every student" matrix used by the
+	// teacher spreadsheet. Same shape as TeacherSeriesGrid but spans every
+	// math_center_series in the center, so the frontend can render one
+	// side-scrolling table across all psets and keep grouping/sort stable.
+	TeacherCenterGrid(ctx context.Context, mathCenterID int64) ([]TeacherCenterGridRow, error)
+	// The full (student × subproblem) matrix for one series. Used by the
+	// teacher spreadsheet view: every student of the series's math center is
+	// crossed with every subproblem of the series, with the LEFT JOIN filling
+	// in thread state where it exists (and 'ungraded' / null FKs where it
+	// doesn't yet). Rows ordered for stable spreadsheet rendering.
+	TeacherSeriesGrid(ctx context.Context, id int64) ([]TeacherSeriesGridRow, error)
+	// Returns the row when the claim is granted (no live holder, or the caller
+	// already holds it). Returns no rows when someone else holds a live claim.
+	TryClaim(ctx context.Context, arg TryClaimParams) (HomeworkThread, error)
 	UpdateSeries(ctx context.Context, arg UpdateSeriesParams) (MathCenterSeries, error)
+	UpdateThreadAfterAppeal(ctx context.Context, arg UpdateThreadAfterAppealParams) error
+	// One statement does all four things atomically: set new status from
+	// verdict, point the cache at the new grade event, record the grader for
+	// appeal stickiness, AND clear the claim. The WHERE re-checks claim
+	// ownership so a slow grader whose lease expired can't overwrite someone
+	// else's claim. Caller inspects affected-row count to detect contention.
+	UpdateThreadAfterGrade(ctx context.Context, arg UpdateThreadAfterGradeParams) (int64, error)
+	// After a retraction the thread reverts to whatever its most recent attempt
+	// event was: 'submitted' for an original submission, 'appealed' for an
+	// appeal. The handler passes that rollback status in $2.
+	UpdateThreadAfterRetract(ctx context.Context, arg UpdateThreadAfterRetractParams) error
+	UpdateThreadAfterSubmit(ctx context.Context, arg UpdateThreadAfterSubmitParams) error
 }
 
 var _ Querier = (*Queries)(nil)

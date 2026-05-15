@@ -35,6 +35,18 @@ type Store interface {
 	// key doesn't exist (where the implementation can detect that cheaply).
 	PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error)
 
+	// PresignPut returns a time-limited URL the client uses to upload bytes
+	// directly to the bucket with HTTP PUT. The client MUST send the same
+	// Content-Type the server signed for — Yandex/S3 verify the header
+	// against the signature and 403 if they differ. ttl must be > 0.
+	PresignPut(ctx context.Context, key, contentType string, ttl time.Duration) (string, error)
+
+	// Stat returns the size and Content-Type of an existing object, or
+	// ErrNotFound if the key is absent. Used by finalize handlers to verify
+	// a client-uploaded object meets the size/type policy before the server
+	// writes a row that points at it.
+	Stat(ctx context.Context, key string) (size int64, contentType string, err error)
+
 	// Delete removes the object. Returns nil if the key didn't exist —
 	// "make sure it's gone" semantics, since callers usually call this
 	// during cleanup and don't want to handle a 404 they don't care about.

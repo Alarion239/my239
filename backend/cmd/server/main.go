@@ -14,6 +14,7 @@ import (
 	adminHandlers "github.com/Alarion239/my239/backend/internal/handlers/admin"
 	authHandlers "github.com/Alarion239/my239/backend/internal/handlers/auth"
 	"github.com/Alarion239/my239/backend/internal/handlers/health"
+	hwHandlers "github.com/Alarion239/my239/backend/internal/handlers/homework"
 	mcHandlers "github.com/Alarion239/my239/backend/internal/handlers/mathcenter"
 	"github.com/Alarion239/my239/backend/internal/logger"
 	"github.com/Alarion239/my239/backend/internal/middleware"
@@ -98,7 +99,8 @@ func run() error {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Mount("/auth", authHandlers.Router(database, tokens, limiter))
 		r.Mount("/admin", adminHandlers.Router(database, tokens))
-		r.Mount("/mathcenter", mcHandlers.Router(database, tokens, blobs, cfg.S3.DownloadTTL))
+		r.Mount("/mathcenter", mcHandlers.Router(database, tokens, blobs, cfg.S3.UploadTTL, cfg.S3.DownloadTTL))
+		r.Mount("/homework", hwHandlers.Router(database, tokens, blobs, cfg.S3.UploadTTL, cfg.S3.DownloadTTL))
 	})
 
 	srv := &http.Server{
@@ -178,6 +180,7 @@ func buildObjectStore(ctx context.Context, cfg *config.Config) (objectstore.Stor
 	}
 	store, err := objectstore.NewS3(ctx, objectstore.S3Config{
 		Endpoint:        cfg.S3.Endpoint,
+		PublicEndpoint:  cfg.S3.PublicEndpoint,
 		Region:          cfg.S3.Region,
 		Bucket:          cfg.S3.Bucket,
 		AccessKeyID:     cfg.S3.AccessKeyID,
@@ -187,6 +190,10 @@ func buildObjectStore(ctx context.Context, cfg *config.Config) (objectstore.Stor
 	if err != nil {
 		return nil, err
 	}
-	logger.LogInfo("object store: s3", "endpoint", cfg.S3.Endpoint, "bucket", cfg.S3.Bucket)
+	logger.LogInfo("object store: s3",
+		"endpoint", cfg.S3.Endpoint,
+		"public_endpoint", cfg.S3.PublicEndpoint,
+		"bucket", cfg.S3.Bucket,
+	)
 	return store, nil
 }

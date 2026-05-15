@@ -58,6 +58,27 @@ func (m *MemoryStore) PresignGet(_ context.Context, key string, ttl time.Duratio
 	return m.urlPrefix + key, nil
 }
 
+// PresignPut returns a deterministic memory:// URL so handlers can serialize
+// something for tests to inspect. The returned URL is not actually fetchable —
+// tests that need an upload to "succeed" should call Put afterwards.
+func (m *MemoryStore) PresignPut(_ context.Context, key, _ string, ttl time.Duration) (string, error) {
+	if ttl <= 0 {
+		return "", fmt.Errorf("memory presign put: ttl must be positive")
+	}
+	return m.urlPrefix + "put/" + key, nil
+}
+
+// Stat returns the stored size and contentType, or ErrNotFound.
+func (m *MemoryStore) Stat(_ context.Context, key string) (int64, string, error) {
+	m.mu.RLock()
+	obj, ok := m.objects[key]
+	m.mu.RUnlock()
+	if !ok {
+		return 0, "", ErrNotFound
+	}
+	return int64(len(obj.body)), obj.contentType, nil
+}
+
 func (m *MemoryStore) Delete(_ context.Context, key string) error {
 	m.mu.Lock()
 	delete(m.objects, key)

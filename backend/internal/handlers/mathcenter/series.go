@@ -1,11 +1,9 @@
 package mathcenter
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -382,10 +380,26 @@ func DeleteSeries(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 	}
 }
 
-// PublishSeries handles a multipart upload of the series PDF. Body must be a
-// single application/pdf part; we cap at MaxPDFBytes and overwrite any
-// previous PDF in place.
-func PublishSeries(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
+// pdfUploadURLResponse is the body of /pdf/upload-url. The client PUTs the
+// PDF bytes to UploadURL with Content-Type: application/pdf, then POSTs
+// ObjectKey to /pdf/publish to commit.
+type pdfUploadURLResponse struct {
+	ObjectKey string `json:"object_key"`
+	UploadURL string `json:"upload_url"`
+}
+
+// pdfPublishRequest is the body of /pdf/publish: the key the client just
+// uploaded to. Server re-validates the key matches the canonical layout, so
+// a malicious caller can't post a key the server didn't sign.
+type pdfPublishRequest struct {
+	ObjectKey string `json:"object_key"`
+}
+
+// IssuePDFUploadURL — teacher-only. Mints a presigned PUT URL the client
+// uses to upload directly to Yandex Object Storage. The series row is not
+// touched here; the publish step does that after Stat-validating the
+// uploaded object.
+func IssuePDFUploadURL(database *db.DB, blobs objectstore.Store, uploadTTL time.Duration) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		userID, ok := requireUser(w, r)
@@ -405,6 +419,56 @@ func PublishSeries(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "series not found")
 				return
 			}
+			logger.LogError("series: get for upload-url", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
+		if !requireTeacher(ctx, w, r, q, userID, series.MathCenterID) {
+			return
+		}
+
+		key := pdfObjectKey(series.ID)
+		url, err := blobs.PresignPut(ctx, key, pdfContentType, uploadTTL)
+		if err != nil {
+			logger.LogError("series: presign put", err)
+			httpx.WriteAPIError(w, r, http.StatusBadGateway, httpx.CodeUnavailable, "object storage unavailable")
+			return
+		}
+		httpx.WriteJSON(w, http.StatusOK, pdfUploadURLResponse{ObjectKey: key, UploadURL: url})
+	}
+}
+
+// FinalizePDFPublish — teacher-only. Stat-validates the just-uploaded
+// object (existence, content-type=application/pdf, size <= MaxPDFBytes),
+// then marks the series published. Rejecting an oversized or wrong-type
+// object before the row is updated keeps the series cache truthful: if
+// /publish returns 200, the bucket really has a PDF at that key.
+func FinalizePDFPublish(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		userID, ok := requireUser(w, r)
+		if !ok {
+			return
+		}
+		seriesID, err := pathInt64(r, "seriesID")
+		if err != nil {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid series id")
+			return
+		}
+
+		var req pdfPublishRequest
+		if err := httpx.DecodeJSON(r, &req); err != nil {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+			return
+		}
+
+		q := store.New(database.Pool())
+		series, err := q.GetSeries(ctx, seriesID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "series not found")
+				return
+			}
 			logger.LogError("series: get for publish", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
@@ -413,62 +477,32 @@ func PublishSeries(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 			return
 		}
 
-		// Cap the body before parsing — MultipartReader respects MaxBytesReader
-		// and surfaces a clean 400 if the cap is hit.
-		r.Body = http.MaxBytesReader(w, r.Body, MaxPDFBytes+4096) // headroom for multipart framing
-		mr, err := r.MultipartReader()
-		if err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "expected multipart/form-data with a 'file' part")
-			return
-		}
-		var (
-			body        []byte
-			contentType string
-		)
-		for {
-			part, err := mr.NextPart()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid multipart body")
-				return
-			}
-			if part.FormName() != "file" {
-				_ = part.Close()
-				continue
-			}
-			ct := part.Header.Get("Content-Type")
-			if ct != pdfContentType {
-				_ = part.Close()
-				httpx.WriteAPIError(w, r, http.StatusUnsupportedMediaType, httpx.CodeBadRequest, "file must be application/pdf")
-				return
-			}
-			body, err = io.ReadAll(io.LimitReader(part, MaxPDFBytes+1))
-			_ = part.Close()
-			if err != nil {
-				httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "failed to read upload")
-				return
-			}
-			if int64(len(body)) > MaxPDFBytes {
-				httpx.WriteAPIError(w, r, http.StatusRequestEntityTooLarge, httpx.CodeBadRequest, "pdf exceeds size limit")
-				return
-			}
-			contentType = ct
-			break
-		}
-		if len(body) == 0 {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "missing 'file' part")
+		expectedKey := pdfObjectKey(series.ID)
+		if req.ObjectKey != expectedKey {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "object_key does not match this series")
 			return
 		}
 
-		key := pdfObjectKey(series.ID)
-		if err := blobs.Put(ctx, key, bytes.NewReader(body), int64(len(body)), contentType); err != nil {
-			logger.LogError("series: put blob", err)
+		size, ct, err := blobs.Stat(ctx, expectedKey)
+		if err != nil {
+			if errors.Is(err, objectstore.ErrNotFound) {
+				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "no pdf uploaded yet")
+				return
+			}
+			logger.LogError("series: stat blob", err)
 			httpx.WriteAPIError(w, r, http.StatusBadGateway, httpx.CodeUnavailable, "object storage unavailable")
 			return
 		}
+		if ct != pdfContentType {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "uploaded object is not application/pdf")
+			return
+		}
+		if size <= 0 || size > MaxPDFBytes {
+			httpx.WriteAPIError(w, r, http.StatusRequestEntityTooLarge, httpx.CodeBadRequest, "pdf exceeds size limit")
+			return
+		}
 
+		key := expectedKey
 		updated, err := q.PublishSeries(ctx, store.PublishSeriesParams{
 			ID:           series.ID,
 			PdfObjectKey: &key,
@@ -638,7 +672,21 @@ func writeProblems(ctx context.Context, q *store.Queries, seriesID int64, specs 
 		if err != nil {
 			return err
 		}
-		for _, label := range mc.SubproblemLabels(p.SubproblemCount) {
+		labels := mc.SubproblemLabels(p.SubproblemCount)
+		// Problems without real subparts still need one row so the
+		// homework feature can FK its threads to a stable subproblem id.
+		// We use label='' as a sentinel; buildSeriesView hides it from
+		// the API response.
+		if len(labels) == 0 {
+			if _, err := q.CreateSubproblem(ctx, store.CreateSubproblemParams{
+				ProblemID: problem.ID,
+				Label:     "",
+			}); err != nil {
+				return err
+			}
+			continue
+		}
+		for _, label := range labels {
 			if _, err := q.CreateSubproblem(ctx, store.CreateSubproblemParams{
 				ProblemID: problem.ID,
 				Label:     label,
@@ -661,6 +709,13 @@ func buildSeriesView(ctx context.Context, q *store.Queries, s store.MathCenterSe
 	}
 	byProblem := make(map[int64][]string, len(problems))
 	for _, sp := range subs {
+		// Hide sentinel labels (homework_thread anchors require every
+		// problem to have at least one subproblem row, but a problem
+		// declared with subproblem_count=0 should still look subpart-less
+		// to clients).
+		if sp.Label == "" {
+			continue
+		}
 		byProblem[sp.ProblemID] = append(byProblem[sp.ProblemID], sp.Label)
 	}
 	pviews := make([]problemView, 0, len(problems))

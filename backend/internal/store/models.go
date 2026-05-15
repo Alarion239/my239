@@ -8,6 +8,43 @@ import (
 	"time"
 )
 
+type HomeworkThread struct {
+	ID                    int64      `json:"id"`
+	StudentUserID         int64      `json:"student_user_id"`
+	SubproblemID          int64      `json:"subproblem_id"`
+	SeriesID              int64      `json:"series_id"`
+	MathCenterID          int64      `json:"math_center_id"`
+	CurrentStatus         string     `json:"current_status"`
+	CurrentAttemptEventID *int64     `json:"current_attempt_event_id"`
+	CurrentGradeEventID   *int64     `json:"current_grade_event_id"`
+	LastGraderUserID      *int64     `json:"last_grader_user_id"`
+	ClaimHolderUserID     *int64     `json:"claim_holder_user_id"`
+	ClaimExpiresAt        *time.Time `json:"claim_expires_at"`
+	CreatedAt             time.Time  `json:"created_at"`
+	UpdatedAt             time.Time  `json:"updated_at"`
+}
+
+type HomeworkThreadEvent struct {
+	ID              int64     `json:"id"`
+	ThreadID        int64     `json:"thread_id"`
+	EventUuid       string    `json:"event_uuid"`
+	Kind            string    `json:"kind"`
+	ActorUserID     int64     `json:"actor_user_id"`
+	Body            string    `json:"body"`
+	Verdict         *string   `json:"verdict"`
+	RefersToEventID *int64    `json:"refers_to_event_id"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+type HomeworkThreadEventPhoto struct {
+	EventID     int64     `json:"event_id"`
+	Idx         int32     `json:"idx"`
+	ObjectKey   string    `json:"object_key"`
+	SizeBytes   int64     `json:"size_bytes"`
+	ContentType string    `json:"content_type"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 type InvitationToken struct {
 	ID          int64     `json:"id"`
 	Token       string    `json:"token"`

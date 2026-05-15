@@ -2,13 +2,12 @@ package mathcenter_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"net/textproto"
 	"strings"
 	"testing"
 	"time"
@@ -81,7 +80,7 @@ func newRouter(t *testing.T, mock pgxmock.PgxPoolIface) (http.Handler, *internal
 		t.Fatalf("token service: %v", err)
 	}
 	blobs := objectstore.NewMemory()
-	return mcHandlers.Router(database, tokens, blobs, time.Minute), access, blobs
+	return mcHandlers.Router(database, tokens, blobs, time.Minute, time.Minute), access, blobs
 }
 
 func TestRouter_RequiresAuth(t *testing.T) {
@@ -98,7 +97,8 @@ func TestRouter_RequiresAuth(t *testing.T) {
 		{http.MethodGet, "/series/1"},
 		{http.MethodPut, "/series/1"},
 		{http.MethodDelete, "/series/1"},
-		{http.MethodPost, "/series/1/pdf"},
+		{http.MethodPost, "/series/1/pdf/upload-url"},
+		{http.MethodPost, "/series/1/pdf/publish"},
 		{http.MethodGet, "/series/1/pdf"},
 	}
 	for _, c := range cases {
@@ -165,11 +165,17 @@ func TestCreateSeries_TeacherSucceeds(t *testing.T) {
 	mock.ExpectQuery(`INSERT INTO math_center_subproblems`).
 		WithArgs(int64(500), "b").
 		WillReturnRows(mock.NewRows([]string{"id", "problem_id", "label", "created_at"}).AddRow(int64(901), int64(500), "b", now))
-	// 4. CreateProblem (number=1, no subproblems)
+	// 4. CreateProblem (number=1, declared with 0 real subparts) plus the
+	//    sentinel subproblem (label='') the handler now creates so future
+	//    homework_thread rows have a stable subproblem FK to anchor to.
 	mock.ExpectQuery(`INSERT INTO math_center_problems`).
 		WithArgs(int64(100), int32(1)).
 		WillReturnRows(mock.NewRows(problemColumns).AddRow(int64(501), int64(100), int32(1), now))
-	// 5. buildSeriesView: list problems + list subproblems
+	mock.ExpectQuery(`INSERT INTO math_center_subproblems`).
+		WithArgs(int64(501), "").
+		WillReturnRows(mock.NewRows([]string{"id", "problem_id", "label", "created_at"}).AddRow(int64(910), int64(501), "", now))
+	// 5. buildSeriesView: list problems + list subproblems. The sentinel
+	//    row is returned by the DB but buildSeriesView strips empty labels.
 	mock.ExpectQuery(`SELECT .* FROM math_center_problems WHERE series_id`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(problemColumns).
@@ -179,7 +185,8 @@ func TestCreateSeries_TeacherSucceeds(t *testing.T) {
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(subproblemRowColumns).
 			AddRow(int64(900), int64(500), "a").
-			AddRow(int64(901), int64(500), "b"))
+			AddRow(int64(901), int64(500), "b").
+			AddRow(int64(910), int64(501), ""))
 
 	body, _ := json.Marshal(map[string]any{
 		"number": 3, "name": "Алгебра", "due_at": due,
@@ -362,7 +369,12 @@ func TestGetSeries_NotFound(t *testing.T) {
 	}
 }
 
-func TestPublishAndDownload(t *testing.T) {
+// TestPDFUploadURLAndPublish exercises the new two-step flow end-to-end:
+// (1) /pdf/upload-url mints a presigned URL and reports the canonical key,
+// (2) we simulate the client uploading by writing into the MemoryStore,
+// (3) /pdf/publish Stat-validates the object and marks the series published,
+// (4) /pdf redirects to a presigned GET URL pointing at the same key.
+func TestPDFUploadURLAndPublish(t *testing.T) {
 	t.Parallel()
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
@@ -370,25 +382,53 @@ func TestPublishAndDownload(t *testing.T) {
 
 	now := time.Now()
 	due := now.Add(time.Hour)
+	key := "mathcenter/series/100.pdf"
 
-	// --- publish step ---
-	// GetSeries
+	// --- step 1: /pdf/upload-url ---
 	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(seriesColumns).
 			AddRow(int64(100), int64(42), int32(1), "S", due, (*string)(nil), (*time.Time)(nil), now))
-	// teacher check
 	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
 		WithArgs(int64(7), int64(42)).
 		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(true))
-	// PublishSeries
-	key := "mathcenter/series/100.pdf"
+
+	req := authedRequest(t, access, 7, http.MethodPost, "/series/100/pdf/upload-url", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("upload-url: got %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	var ur struct {
+		ObjectKey string `json:"object_key"`
+		UploadURL string `json:"upload_url"`
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &ur)
+	if ur.ObjectKey != key {
+		t.Errorf("ObjectKey: got %q, want %q", ur.ObjectKey, key)
+	}
+	if !strings.HasPrefix(ur.UploadURL, "memory://put/") {
+		t.Errorf("UploadURL: got %q, want memory://put/ prefix", ur.UploadURL)
+	}
+
+	// --- simulate client PUT to Yandex by writing directly into the memory store ---
+	if err := blobs.Put(context.Background(), key, strings.NewReader("%PDF-1.4 fake"), 13, "application/pdf"); err != nil {
+		t.Fatalf("seed blob: %v", err)
+	}
+
+	// --- step 2: /pdf/publish ---
+	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(seriesColumns).
+			AddRow(int64(100), int64(42), int32(1), "S", due, (*string)(nil), (*time.Time)(nil), now))
+	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
+		WithArgs(int64(7), int64(42)).
+		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(true))
 	pubAt := now
 	mock.ExpectQuery(`UPDATE math_center_series\s+SET pdf_object_key`).
 		WithArgs(int64(100), &key).
 		WillReturnRows(mock.NewRows(seriesColumns).
 			AddRow(int64(100), int64(42), int32(1), "S", due, &key, &pubAt, now))
-	// buildSeriesView
 	mock.ExpectQuery(`SELECT .* FROM math_center_problems WHERE series_id`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(problemColumns))
@@ -396,19 +436,16 @@ func TestPublishAndDownload(t *testing.T) {
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(subproblemRowColumns))
 
-	body, contentType := buildPDFMultipart(t, "%PDF-1.4 fake")
-	req := authedRequest(t, access, 7, http.MethodPost, "/series/100/pdf", body)
-	req.Header.Set("Content-Type", contentType)
-	rr := httptest.NewRecorder()
-	r.ServeHTTP(rr, req)
-	if rr.Code != http.StatusOK {
-		t.Fatalf("publish: got %d, want 200; body=%s", rr.Code, rr.Body.String())
-	}
-	if ok, _ := blobs.Exists(req.Context(), key); !ok {
-		t.Fatal("publish should have stored the object")
+	pubBody, _ := json.Marshal(map[string]string{"object_key": key})
+	pubReq := authedRequest(t, access, 7, http.MethodPost, "/series/100/pdf/publish", bytes.NewReader(pubBody))
+	pubReq.Header.Set("Content-Type", "application/json")
+	pubRR := httptest.NewRecorder()
+	r.ServeHTTP(pubRR, pubReq)
+	if pubRR.Code != http.StatusOK {
+		t.Fatalf("publish: got %d, want 200; body=%s", pubRR.Code, pubRR.Body.String())
 	}
 
-	// --- download step ---
+	// --- step 3: download still redirects ---
 	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(seriesColumns).
@@ -432,7 +469,9 @@ func TestPublishAndDownload(t *testing.T) {
 	}
 }
 
-func TestPublish_RejectsNonPDF(t *testing.T) {
+// TestPDFPublish_RejectsMissingObject verifies the finalize step refuses to
+// flip a series to published if nothing was actually uploaded.
+func TestPDFPublish_RejectsMissingObject(t *testing.T) {
 	t.Parallel()
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
@@ -447,17 +486,83 @@ func TestPublish_RejectsNonPDF(t *testing.T) {
 		WithArgs(int64(7), int64(42)).
 		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(true))
 
-	body, contentType := buildMultipart(t, "file", "f.txt", "text/plain", []byte("not a pdf"))
-	req := authedRequest(t, access, 7, http.MethodPost, "/series/100/pdf", body)
-	req.Header.Set("Content-Type", contentType)
+	body, _ := json.Marshal(map[string]string{"object_key": "mathcenter/series/100.pdf"})
+	req := authedRequest(t, access, 7, http.MethodPost, "/series/100/pdf/publish", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
-	if rr.Code != http.StatusUnsupportedMediaType {
-		t.Errorf("got %d, want 415", rr.Code)
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("got %d, want 404 (no upload yet); body=%s", rr.Code, rr.Body.String())
 	}
 }
 
-func TestPublish_TooLarge(t *testing.T) {
+// TestPDFPublish_RejectsWrongContentType verifies the finalize step Stat-
+// validates the content type and refuses non-PDF objects, even if the file
+// landed at the right key.
+func TestPDFPublish_RejectsWrongContentType(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, blobs := newRouter(t, mock)
+
+	now := time.Now()
+	key := "mathcenter/series/100.pdf"
+	// Seed an object at the canonical key but with the wrong type.
+	_ = blobs.Put(context.Background(), key, strings.NewReader("not a pdf"), 9, "text/plain")
+
+	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(seriesColumns).
+			AddRow(int64(100), int64(42), int32(1), "S", now.Add(time.Hour), (*string)(nil), (*time.Time)(nil), now))
+	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
+		WithArgs(int64(7), int64(42)).
+		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(true))
+
+	body, _ := json.Marshal(map[string]string{"object_key": key})
+	req := authedRequest(t, access, 7, http.MethodPost, "/series/100/pdf/publish", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("got %d, want 400; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+// TestPDFPublish_RejectsOversize verifies finalize refuses a PDF that
+// exceeds MaxPDFBytes, even after a 'successful' upload to Yandex.
+func TestPDFPublish_RejectsOversize(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, blobs := newRouter(t, mock)
+
+	now := time.Now()
+	key := "mathcenter/series/100.pdf"
+	huge := bytes.Repeat([]byte("A"), int(mcHandlers.MaxPDFBytes)+512)
+	_ = blobs.Put(context.Background(), key, bytes.NewReader(huge), int64(len(huge)), "application/pdf")
+
+	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(seriesColumns).
+			AddRow(int64(100), int64(42), int32(1), "S", now.Add(time.Hour), (*string)(nil), (*time.Time)(nil), now))
+	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
+		WithArgs(int64(7), int64(42)).
+		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(true))
+
+	body, _ := json.Marshal(map[string]string{"object_key": key})
+	req := authedRequest(t, access, 7, http.MethodPost, "/series/100/pdf/publish", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("got %d, want 413; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+// TestPDFPublish_RejectsForeignKey verifies finalize refuses an object_key
+// that doesn't match the canonical layout for this series — defense against
+// a malicious client trying to publish a key the server didn't sign.
+func TestPDFPublish_RejectsForeignKey(t *testing.T) {
 	t.Parallel()
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
@@ -472,16 +577,13 @@ func TestPublish_TooLarge(t *testing.T) {
 		WithArgs(int64(7), int64(42)).
 		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(true))
 
-	huge := bytes.Repeat([]byte("A"), int(mcHandlers.MaxPDFBytes)+512)
-	body, contentType := buildMultipart(t, "file", "x.pdf", "application/pdf", huge)
-	req := authedRequest(t, access, 7, http.MethodPost, "/series/100/pdf", body)
-	req.Header.Set("Content-Type", contentType)
+	body, _ := json.Marshal(map[string]string{"object_key": "mathcenter/series/999.pdf"})
+	req := authedRequest(t, access, 7, http.MethodPost, "/series/100/pdf/publish", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
-	// Either MaxBytesReader cuts the multipart parser early (400) or the
-	// in-handler size check fires (413). Both are correct rejections.
-	if rr.Code != http.StatusRequestEntityTooLarge && rr.Code != http.StatusBadRequest {
-		t.Errorf("got %d, want 413 or 400", rr.Code)
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("got %d, want 400; body=%s", rr.Code, rr.Body.String())
 	}
 }
 
@@ -519,28 +621,3 @@ func TestDelete_TeacherRemovesObject(t *testing.T) {
 	}
 }
 
-// Multipart helpers ----------------------------------------------------------
-
-func buildPDFMultipart(t *testing.T, content string) (*bytes.Buffer, string) {
-	return buildMultipart(t, "file", "series.pdf", "application/pdf", []byte(content))
-}
-
-func buildMultipart(t *testing.T, field, filename, contentType string, content []byte) (*bytes.Buffer, string) {
-	t.Helper()
-	var buf bytes.Buffer
-	w := multipart.NewWriter(&buf)
-	h := make(textproto.MIMEHeader)
-	h.Set("Content-Disposition", fmt.Sprintf(`form-data; name=%q; filename=%q`, field, filename))
-	h.Set("Content-Type", contentType)
-	part, err := w.CreatePart(h)
-	if err != nil {
-		t.Fatalf("CreatePart: %v", err)
-	}
-	if _, err := part.Write(content); err != nil {
-		t.Fatalf("write part: %v", err)
-	}
-	if err := w.Close(); err != nil {
-		t.Fatalf("close writer: %v", err)
-	}
-	return &buf, w.FormDataContentType()
-}

@@ -109,6 +109,48 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 	return i, err
 }
 
+const getUsersByIDs = `-- name: GetUsersByIDs :many
+SELECT id, first_name, middle_name, last_name
+FROM users
+WHERE id = ANY ($1::bigint[])
+`
+
+type GetUsersByIDsRow struct {
+	ID         int64   `json:"id"`
+	FirstName  string  `json:"first_name"`
+	MiddleName *string `json:"middle_name"`
+	LastName   string  `json:"last_name"`
+}
+
+// Bulk lookup used by the homework thread view: it needs to translate
+// every user_id on the page (student, last grader, claim holder, every
+// event's actor) into a display name. ANY(array) is one round-trip vs
+// N+1 GetUserByID calls.
+func (q *Queries) GetUsersByIDs(ctx context.Context, ids []int64) ([]GetUsersByIDsRow, error) {
+	rows, err := q.db.Query(ctx, getUsersByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetUsersByIDsRow{}
+	for rows.Next() {
+		var i GetUsersByIDsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FirstName,
+			&i.MiddleName,
+			&i.LastName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUsers = `-- name: ListUsers :many
 SELECT id, username, password_hash, first_name, middle_name, last_name, invitation_token_id, created_at, updated_at, is_admin
 FROM users

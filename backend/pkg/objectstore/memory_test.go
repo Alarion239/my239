@@ -89,3 +89,53 @@ func TestMemoryStore_DeleteMissingIsNoop(t *testing.T) {
 		t.Errorf("Delete missing key: got %v, want nil", err)
 	}
 }
+
+func TestMemoryStore_PresignPut(t *testing.T) {
+	t.Parallel()
+	store := objectstore.NewMemory()
+	url, err := store.PresignPut(context.Background(), "h/x.jpg", "image/jpeg", time.Minute)
+	if err != nil {
+		t.Fatalf("PresignPut: %v", err)
+	}
+	if !strings.HasPrefix(url, "memory://put/") || !strings.HasSuffix(url, "h/x.jpg") {
+		t.Errorf("PresignPut url %q does not match memory://put/ + key", url)
+	}
+}
+
+func TestMemoryStore_PresignPutZeroTTL(t *testing.T) {
+	t.Parallel()
+	store := objectstore.NewMemory()
+	_, err := store.PresignPut(context.Background(), "k", "image/jpeg", 0)
+	if err == nil {
+		t.Error("PresignPut ttl=0: want error")
+	}
+}
+
+func TestMemoryStore_Stat(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := objectstore.NewMemory()
+	body := strings.NewReader("12345")
+	if err := store.Put(ctx, "k", body, 5, "image/png"); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	size, ct, err := store.Stat(ctx, "k")
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	if size != 5 {
+		t.Errorf("Stat size: got %d, want 5", size)
+	}
+	if ct != "image/png" {
+		t.Errorf("Stat content-type: got %q, want image/png", ct)
+	}
+}
+
+func TestMemoryStore_StatMissing(t *testing.T) {
+	t.Parallel()
+	store := objectstore.NewMemory()
+	_, _, err := store.Stat(context.Background(), "missing")
+	if !errors.Is(err, objectstore.ErrNotFound) {
+		t.Errorf("Stat missing: got %v, want ErrNotFound", err)
+	}
+}

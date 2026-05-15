@@ -1,5 +1,5 @@
 import {createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode} from 'react'
-import {request, APIErrorImpl} from './api'
+import {API_BASE, request, APIErrorImpl} from './api'
 
 // Auth state held in a React context. We persist the token pair in
 // localStorage so a refresh keeps the user signed in; the user record itself
@@ -21,7 +21,7 @@ interface TokenPair {
     refresh: string
 }
 
-interface AuthState {
+export interface AuthState {
     user: User | null
     loading: boolean
 
@@ -32,6 +32,17 @@ interface AuthState {
     logout(): Promise<void>
 
     authedFetch<T>(path: string, opts?: { method?: string; body?: unknown }): Promise<T>
+
+    authedFetchRaw(path: string, opts?: AuthedRawOpts): Promise<Response>
+}
+
+export interface AuthedRawOpts {
+    method?: string
+    body?: BodyInit | null
+    headers?: Record<string, string>
+    // redirect lets the PDF download path opt out of automatic following so
+    // the caller can read the Location header itself; defaults to 'follow'.
+    redirect?: RequestRedirect
 }
 
 export interface RegisterArgs {
@@ -45,7 +56,11 @@ export interface RegisterArgs {
 
 const STORAGE_KEY = 'my239.tokens'
 
-const Ctx = createContext<AuthState | null>(null)
+// AuthContext is exported alongside <AuthProvider> so tests can mount a
+// component tree with a hand-rolled AuthState — the provider itself does too
+// much I/O (localStorage, refresh) to be useful in unit tests.
+export const AuthContext = createContext<AuthState | null>(null)
+const Ctx = AuthContext
 
 function loadTokens(): TokenPair | null {
     try {
@@ -109,6 +124,43 @@ export function AuthProvider({children}: { children: ReactNode }) {
         }
     }, [tryRefresh])
 
+    // authedFetchRaw is the lower-level cousin of authedFetch: it returns the
+    // raw Response so callers can stream blobs (PDF download) or send
+    // non-JSON bodies (multipart upload). Same 401 → refresh → retry policy.
+    const authedFetchRaw = useCallback(async function (
+        path: string,
+        opts: AuthedRawOpts = {},
+    ): Promise<Response> {
+        const doFetch = (token?: string | null) => {
+            const headers: Record<string, string> = {...(opts.headers ?? {})}
+            if (token) headers['Authorization'] = `Bearer ${token}`
+            return fetch(`${API_BASE}${path}`, {
+                method: opts.method ?? 'GET',
+                headers,
+                body: opts.body ?? undefined,
+                redirect: opts.redirect ?? 'follow',
+            })
+        }
+        const current = loadTokens()
+        let res = await doFetch(current?.access)
+        if (res.status === 401) {
+            const fresh = await tryRefresh()
+            if (fresh) res = await doFetch(fresh)
+        }
+        if (!res.ok && res.type !== 'opaqueredirect') {
+            const text = await res.text().catch(() => '')
+            const env = text ? safeParse(text) : null
+            throw new APIErrorImpl({
+                status: res.status,
+                code: env?.code,
+                message: env?.error ?? `request failed (${res.status})`,
+                fields: env?.fields,
+                traceId: env?.trace_id,
+            })
+        }
+        return res
+    }, [tryRefresh])
+
     const fetchMe = useCallback(async () => {
         try {
             const me = await authedFetch<User>('/auth/me')
@@ -162,8 +214,8 @@ export function AuthProvider({children}: { children: ReactNode }) {
     }, [])
 
     const value = useMemo<AuthState>(
-        () => ({user, loading, login, register, logout, authedFetch}),
-        [user, loading, login, register, logout, authedFetch],
+        () => ({user, loading, login, register, logout, authedFetch, authedFetchRaw}),
+        [user, loading, login, register, logout, authedFetch, authedFetchRaw],
     )
 
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>
@@ -173,4 +225,12 @@ export function useAuth(): AuthState {
     const v = useContext(Ctx)
     if (!v) throw new Error('useAuth must be used inside <AuthProvider>')
     return v
+}
+
+function safeParse(s: string): {code?: string; error?: string; fields?: Record<string, string>; trace_id?: string} | null {
+    try {
+        return JSON.parse(s)
+    } catch {
+        return null
+    }
 }

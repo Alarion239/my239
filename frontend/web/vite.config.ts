@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import {defineConfig} from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -28,5 +29,14 @@ export default defineConfig({
         proxy: {
             '/api': 'http://localhost:8080',
         },
+    },
+    test: {
+        environment: 'jsdom',
+        globals: true,
+        setupFiles: ['./src/test/setup.ts'],
+        css: false,
+        // Restrict to source tests; tsc -b emits sibling .js files which would
+        // otherwise be picked up and run as a stale duplicate suite.
+        include: ['src/**/*.test.{ts,tsx}'],
     },
 })

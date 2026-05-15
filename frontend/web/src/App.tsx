@@ -8,6 +8,9 @@ import LoginPage from './pages/Login'
 import RegisterPage from './pages/Register'
 import ProfilePage from './pages/Profile'
 import MathCenterPage from './pages/MathCenter'
+import HomeworkPage from './pages/Homework'
+import HomeworkSeriesPage from './pages/HomeworkSeries'
+import HomeworkThreadPage from './pages/HomeworkThread'
 import AdminUsersPage from './pages/AdminUsers'
 import AdminTokensPage from './pages/AdminTokens'
 import AdminMathCenterPage from './pages/AdminMathCenter'
@@ -40,6 +43,47 @@ export default function App() {
                     <RequireAuth>
                         <Layout>
                             <MathCenterPage/>
+                        </Layout>
+                    </RequireAuth>
+                }
+            />
+
+            <Route
+                path="/homework"
+                element={
+                    <RequireAuth>
+                        <Layout>
+                            <HomeworkPage/>
+                        </Layout>
+                    </RequireAuth>
+                }
+            />
+            <Route
+                path="/homework/series/:seriesID"
+                element={
+                    <RequireAuth>
+                        <Layout>
+                            <HomeworkSeriesPage/>
+                        </Layout>
+                    </RequireAuth>
+                }
+            />
+            <Route
+                path="/homework/threads/:threadID"
+                element={
+                    <RequireAuth>
+                        <Layout>
+                            <HomeworkThreadPage/>
+                        </Layout>
+                    </RequireAuth>
+                }
+            />
+            <Route
+                path="/homework/new/:subproblemID"
+                element={
+                    <RequireAuth>
+                        <Layout>
+                            <HomeworkThreadPage/>
                         </Layout>
                     </RequireAuth>
                 }

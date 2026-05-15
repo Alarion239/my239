@@ -30,14 +30,23 @@ type JWTConfig struct {
 // S3Config carries the object storage settings. Bucket empty means: fall back
 // to the in-memory store (handy for local dev/tests). Endpoint defaults to
 // Yandex Object Storage so a Russian deploy only needs to set bucket + creds.
+//
+// PublicEndpoint is an optional override applied to presigned URLs only —
+// needed in dev where the backend reaches MinIO via http://minio:9000 (Docker
+// network) but the browser must use http://localhost:9000. Leave empty in prod.
 type S3Config struct {
 	Endpoint        string
+	PublicEndpoint  string
 	Region          string
 	Bucket          string
 	AccessKeyID     string
 	SecretAccessKey string
 	UsePathStyle    bool
 	DownloadTTL     time.Duration
+	// UploadTTL is the lifetime of presigned PUT URLs minted for client-direct
+	// uploads (homework photos, series PDFs). Kept short — the client should
+	// hit the URL immediately after receiving it.
+	UploadTTL       time.Duration
 }
 
 // Load reads configuration from environment variables. Returns an error
@@ -91,6 +100,7 @@ func Load() (*Config, error) {
 	}
 
 	s3Endpoint := envOrDefault("S3_ENDPOINT", "https://storage.yandexcloud.net")
+	s3PublicEndpoint := os.Getenv("S3_PUBLIC_ENDPOINT") // optional; only used to rewrite presigned URLs
 	s3Region := envOrDefault("S3_REGION", "ru-central1")
 	s3Bucket := os.Getenv("S3_BUCKET")
 	s3KeyID := os.Getenv("S3_ACCESS_KEY_ID")
@@ -102,6 +112,13 @@ func Load() (*Config, error) {
 	}
 	if s3TTLMin <= 0 {
 		return nil, fmt.Errorf("S3_DOWNLOAD_TTL_MINUTES must be positive")
+	}
+	s3UploadTTLMin, err := envInt("S3_UPLOAD_TTL_MINUTES", 5)
+	if err != nil {
+		return nil, err
+	}
+	if s3UploadTTLMin <= 0 {
+		return nil, fmt.Errorf("S3_UPLOAD_TTL_MINUTES must be positive")
 	}
 	// If a bucket is configured, the credential pair must come along with it.
 	// Empty bucket is a deliberate "use memory store" sentinel.
@@ -123,12 +140,14 @@ func Load() (*Config, error) {
 		},
 		S3: S3Config{
 			Endpoint:        s3Endpoint,
+			PublicEndpoint:  s3PublicEndpoint,
 			Region:          s3Region,
 			Bucket:          s3Bucket,
 			AccessKeyID:     s3KeyID,
 			SecretAccessKey: s3Secret,
 			UsePathStyle:    s3PathStyle,
 			DownloadTTL:     time.Duration(s3TTLMin) * time.Minute,
+			UploadTTL:       time.Duration(s3UploadTTLMin) * time.Minute,
 		},
 	}, nil
 }
