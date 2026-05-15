@@ -1,0 +1,15 @@
+{
+  "name": "my239-frontend",
+  "private": true,
+  "description": "npm workspace root for the my239 frontend monorepo: web (Vite + plain React), mobile (Expo), and a shared TypeScript package consumed by both.",
+  "workspaces": [
+    "shared",
+    "web",
+    "mobile"
+  ],
+  "scripts": {
+    "test:shared": "npm test --workspace=@my239/shared",
+    "test:web": "npm test --workspace=my239-web",
+    "test": "npm run test:shared && npm run test:web"
+  }
+}

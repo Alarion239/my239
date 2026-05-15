@@ -122,8 +122,11 @@ services:
   # so the browser sees same-origin requests (no CORS, no API_URL threading).
   frontend:
     build:
-      context: ./frontend/web
-      dockerfile: Dockerfile
+      # Build context is the frontend/ workspace root (not just web/) so
+      # the multi-stage Dockerfile can install the npm workspace with
+      # shared/ symlinked in alongside web/.
+      context: ./frontend
+      dockerfile: web/Dockerfile
     restart: unless-stopped
     depends_on:
       - backend
