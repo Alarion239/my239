@@ -5,3 +5,4 @@
 export * from './api/http'
 export * from './api/homework'
 export * from './api/series'
+export * from './format/datetime'
