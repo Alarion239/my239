@@ -1,82 +1,213 @@
-// Bootstrap home screen: shows the backend connectivity status so you
-// can confirm the device can reach the API before we build any real
-// screens (login, mathcenter, homework) on top.
+// Mobile landing screen — replaces the connectivity probe with a real
+// first surface: hit /mathcenter/me, render role-appropriate content.
 //
-// Configure the backend URL in app.json → expo.extra.backendURL or via
-// the EXPO_PUBLIC_BACKEND_URL env var. iOS simulator can use
-// http://localhost:8080; a physical iPhone over the same Wi-Fi needs the
-// dev machine's LAN IP.
+// Students see their cohort info + a basic list of published series in
+// their center. Teachers see each center they teach in as a card with
+// "X series" — tapping a series row would deep-link into a future
+// homework detail screen (not built yet).
+//
+// Anything more ambitious (the spreadsheet, the side panel, PDF
+// preview, threading) lives in the web client today; the mobile flows
+// will get their own thumb-friendly designs in subsequent commits.
 
-import {useEffect, useState} from 'react'
-import {StyleSheet} from 'react-native'
+import {useCallback, useEffect, useState} from 'react'
+import {Pressable, RefreshControl, ScrollView, StyleSheet, Text, View} from 'react-native'
+import {APIErrorImpl} from '@my239/shared/api/http'
+import {listSeriesForCenter, type Series} from '@my239/shared/api/series'
+import {formatDateTime} from '@my239/shared/format/datetime'
+import {useAuth} from '@/lib/auth'
 
-import ParallaxScrollView from '@/components/parallax-scroll-view'
-import {ThemedText} from '@/components/themed-text'
-import {ThemedView} from '@/components/themed-view'
-import {BACKEND_URL, pingHealth} from '@/lib/api'
+interface MeResponse {
+    teacher?: TeacherView
+    student?: StudentView
+}
 
-type ConnState = 'checking' | 'ok' | 'fail'
+interface TeacherView {
+    centers: TeacherCenterView[]
+}
+
+interface TeacherCenterView {
+    id: number
+    graduation_year: number
+    grade: number
+    is_head_teacher: boolean
+}
+
+interface StudentView {
+    center: {id: number; graduation_year: number; grade: number}
+    group: {id: number; name: string}
+}
+
+interface CenterBlock {
+    centerID: number
+    label: string
+    role: 'teacher' | 'student'
+    headTeacher?: boolean
+    groupName?: string
+    series: Series[]
+}
 
 export default function HomeScreen() {
-    const [state, setState] = useState<ConnState>('checking')
+    const {user, authedFetch, logout} = useAuth()
+    const [blocks, setBlocks] = useState<CenterBlock[] | null>(null)
+    const [error, setError] = useState<string | null>(null)
+    const [refreshing, setRefreshing] = useState(false)
+
+    const load = useCallback(async () => {
+        try {
+            const me = await authedFetch<MeResponse>('/mathcenter/me')
+            const out: CenterBlock[] = []
+            // Sort series newest-first to match the web client.
+            const byNewest = (xs: Series[]) => xs.slice().sort((a, b) => b.number - a.number)
+            if (me.teacher) {
+                for (const c of me.teacher.centers) {
+                    const series = await listSeriesForCenter(authedFetch, c.id)
+                    out.push({
+                        centerID: c.id,
+                        label: `${c.grade}-й класс — выпуск ${c.graduation_year}`,
+                        role: 'teacher',
+                        headTeacher: c.is_head_teacher,
+                        series: byNewest(series),
+                    })
+                }
+            }
+            if (me.student) {
+                const series = await listSeriesForCenter(authedFetch, me.student.center.id)
+                out.push({
+                    centerID: me.student.center.id,
+                    label: `${me.student.center.grade}-й класс — выпуск ${me.student.center.graduation_year}`,
+                    role: 'student',
+                    groupName: me.student.group.name,
+                    series: byNewest(series.filter(s => s.published)),
+                })
+            }
+            setBlocks(out)
+            setError(null)
+        } catch (e) {
+            setError(e instanceof APIErrorImpl ? e.message : 'Не удалось загрузить')
+        }
+    }, [authedFetch])
 
     useEffect(() => {
-        let cancelled = false
-        pingHealth()
-            .then(ok => {
-                if (!cancelled) setState(ok ? 'ok' : 'fail')
-            })
-            .catch(() => {
-                if (!cancelled) setState('fail')
-            })
-        return () => {
-            cancelled = true
-        }
-    }, [])
+        void load()
+    }, [load])
+
+    async function onRefresh() {
+        setRefreshing(true)
+        await load()
+        setRefreshing(false)
+    }
 
     return (
-        <ParallaxScrollView
-            headerBackgroundColor={{light: '#A1CEDC', dark: '#1D3D47'}}
-            headerImage={<ThemedText type="title" style={styles.headerLabel}>my239</ThemedText>}
+        <ScrollView
+            style={s.root}
+            contentContainerStyle={s.content}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh}/>}
         >
-            <ThemedView style={styles.section}>
-                <ThemedText type="title">Мобильный клиент</ThemedText>
-                <ThemedText>
-                    Это бутстрап-приложение Expo. На iPhone и Android в проде здесь будут логин и страницы матцентра.
-                </ThemedText>
-            </ThemedView>
+            <View style={s.header}>
+                <View style={{flex: 1}}>
+                    <Text style={s.greeting}>Здравствуйте,</Text>
+                    <Text style={s.userName}>{user?.first_name ?? ''}</Text>
+                </View>
+                <Pressable onPress={() => void logout()} style={s.logout}>
+                    <Text style={s.logoutText}>Выйти</Text>
+                </Pressable>
+            </View>
 
-            <ThemedView style={styles.section}>
-                <ThemedText type="subtitle">Backend</ThemedText>
-                <ThemedText style={styles.code}>{BACKEND_URL}</ThemedText>
-                <StatusLine state={state}/>
-            </ThemedView>
+            {error ? (
+                <View style={s.errorBanner}>
+                    <Text style={s.errorBannerText}>{error}</Text>
+                </View>
+            ) : null}
 
-            <ThemedView style={styles.section}>
-                <ThemedText type="subtitle">Что дальше</ThemedText>
-                <ThemedText>1. Поменять backendURL в <ThemedText type="defaultSemiBold">app.json</ThemedText> на IP машины разработки для физического устройства.</ThemedText>
-                <ThemedText>2. Добавить экраны логина и матцентра, повторно используя домены из <ThemedText type="defaultSemiBold">frontend/web/src/api</ThemedText>.</ThemedText>
-                <ThemedText>3. Запустить симулятор: <ThemedText type="defaultSemiBold">npm run ios</ThemedText>.</ThemedText>
-            </ThemedView>
-        </ParallaxScrollView>
+            {!blocks && !error ? (
+                <Text style={s.muted}>Загрузка…</Text>
+            ) : null}
+
+            {blocks && blocks.length === 0 && !error ? (
+                <View style={s.card}>
+                    <Text style={s.cardTitle}>Матцентр</Text>
+                    <Text style={s.muted}>Вы пока не состоите в матцентре. Обратитесь к администратору.</Text>
+                </View>
+            ) : null}
+
+            {blocks?.map(b => (
+                <View key={`${b.role}-${b.centerID}`} style={s.card}>
+                    <Text style={s.cardTitle}>{b.label}</Text>
+                    <Text style={s.muted}>
+                        {b.role === 'teacher'
+                            ? `Преподаватель${b.headTeacher ? ' · старший' : ''}`
+                            : `Ученик · группа ${b.groupName ?? ''}`}
+                    </Text>
+                    <View style={s.section}>
+                        <Text style={s.sectionLabel}>Серии</Text>
+                        {b.series.length === 0 ? (
+                            <Text style={s.muted}>Серий пока нет.</Text>
+                        ) : (
+                            b.series.map(series => (
+                                <SeriesRow key={series.id} series={series}/>
+                            ))
+                        )}
+                    </View>
+                </View>
+            ))}
+        </ScrollView>
     )
 }
 
-function StatusLine({state}: {state: ConnState}) {
-    if (state === 'checking') return <ThemedText style={styles.checking}>Проверяем соединение…</ThemedText>
-    if (state === 'ok') return <ThemedText style={styles.ok}>✓ Соединение с бэкендом установлено</ThemedText>
+function SeriesRow({series}: {series: Series}) {
+    const overdue = !!series.due_at && new Date(series.due_at).getTime() < Date.now()
     return (
-        <ThemedText style={styles.fail}>
-            ✗ Не удалось подключиться. Проверьте, что бэкенд запущен и URL выше доступен с устройства.
-        </ThemedText>
+        <View style={[s.seriesRow, overdue && s.seriesRowOverdue]}>
+            <Text style={s.seriesTitle}>{series.display_name}</Text>
+            <Text style={[s.muted, overdue && {color: '#9ca3af'}]}>
+                Срок: {formatDateTime(series.due_at)}
+            </Text>
+            {!series.published ? (
+                <Text style={s.draftTag}>черновик</Text>
+            ) : null}
+        </View>
     )
 }
 
-const styles = StyleSheet.create({
-    headerLabel: {color: '#fff', position: 'absolute', bottom: 16, left: 16},
-    section: {gap: 8, marginBottom: 12},
-    code: {fontFamily: 'Courier', fontSize: 14, color: '#374151'},
-    checking: {color: '#6b7280'},
-    ok: {color: '#15803d', fontWeight: '600'},
-    fail: {color: '#dc2626', fontWeight: '600'},
+const s = StyleSheet.create({
+    root: {flex: 1, backgroundColor: '#f5f6f8'},
+    content: {padding: 16, gap: 12},
+    header: {flexDirection: 'row', alignItems: 'center', paddingBottom: 4},
+    greeting: {fontSize: 14, color: '#6b7280'},
+    userName: {fontSize: 24, fontWeight: '700', color: '#1f2933', marginTop: 2},
+    logout: {paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, backgroundColor: '#eef2f7'},
+    logoutText: {fontSize: 13, color: '#1f2933', fontWeight: '500'},
+    card: {
+        backgroundColor: '#ffffff',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#e1e4ea',
+        padding: 16,
+        gap: 4,
+    },
+    cardTitle: {fontSize: 18, fontWeight: '700', color: '#1f2933'},
+    section: {marginTop: 12, gap: 6},
+    sectionLabel: {fontSize: 12, fontWeight: '700', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5},
+    seriesRow: {
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#e1e4ea',
+        backgroundColor: '#fff',
+        gap: 2,
+    },
+    seriesRowOverdue: {backgroundColor: '#f3f4f6', borderColor: '#e5e7eb'},
+    seriesTitle: {fontSize: 15, fontWeight: '600', color: '#1f2933'},
+    draftTag: {fontSize: 11, color: '#92400e', textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 2},
+    muted: {fontSize: 13, color: '#6b7280'},
+    errorBanner: {
+        backgroundColor: '#fef2f2',
+        borderColor: '#fecaca',
+        borderWidth: 1,
+        borderRadius: 8,
+        padding: 10,
+    },
+    errorBannerText: {color: '#dc2626', fontSize: 13},
 })
