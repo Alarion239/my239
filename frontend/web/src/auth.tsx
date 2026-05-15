@@ -36,14 +36,12 @@ export interface AuthState {
     authedFetchRaw(path: string, opts?: AuthedRawOpts): Promise<Response>
 }
 
-export interface AuthedRawOpts {
-    method?: string
-    body?: BodyInit | null
-    headers?: Record<string, string>
-    // redirect lets the PDF download path opt out of automatic following so
-    // the caller can read the Location header itself; defaults to 'follow'.
-    redirect?: RequestRedirect
-}
+// AuthedRawOpts is re-exported from @my239/shared so the homework /
+// series clients (now living in shared) can reference one source of
+// truth. Web also re-exports it here so older relative imports
+// (`from './auth'` / `from '../auth'`) keep compiling.
+export type {AuthedRawOpts} from '@my239/shared/api/http'
+import type {AuthedRawOpts} from '@my239/shared/api/http'
 
 export interface RegisterArgs {
     username: string

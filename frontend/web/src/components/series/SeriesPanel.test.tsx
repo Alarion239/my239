@@ -127,8 +127,11 @@ describe('SeriesPanel', () => {
         expect(screen.getByText(/Удалить серию/)).toBeInTheDocument()
         expect(screen.getByText(/Скачать PDF/)).toBeInTheDocument()
         expect(screen.getByText(/Заменить PDF/)).toBeInTheDocument()
-        expect(screen.getByText('Упражнение')).toBeInTheDocument()
-        expect(screen.getByText(/Подзадачи: a, b/)).toBeInTheDocument()
+        // The "Задачи" / "Подзадачи: a, b" list was removed from
+        // SeriesDetail — that information is now visible as columns
+        // in the adjacent teacher spreadsheet, so duplicating it was
+        // pure noise. The series header + status + action buttons are
+        // all the detail view needs.
     })
 
     it('students see no edit/upload affordances and no download until a PDF exists', async () => {
