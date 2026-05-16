@@ -19,8 +19,6 @@ export default defineConfig({
         globals: true,
         setupFiles: ['./src/test/setup.ts'],
         css: false,
-        // Restrict to source tests; tsc -b emits sibling .js files which would
-        // otherwise be picked up and run as a stale duplicate suite.
         include: ['src/**/*.test.{ts,tsx}'],
     },
 })
