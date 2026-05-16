@@ -1,16 +1,15 @@
-// Homework landing page. Lists every series the current user can interact
-// with — published series for students, all series for teachers — across
-// every math center they belong to. One click drills into the per-series
-// homework view, where the page itself decides whether to show a student
-// rollup or a teacher grid.
+// Homework landing page. Lists every series the current user can
+// interact with — published series for students, all series for
+// teachers — across every math center they belong to. One click drills
+// into the per-series homework view, where the page itself decides
+// whether to show a student rollup or a teacher grid.
 
 import {useCallback, useEffect, useState} from 'react'
-import {Pressable, StyleSheet, Text, View} from 'react-native'
 import {useNavigate} from 'react-router-dom'
 import {APIErrorImpl} from '../api'
-import {listSeriesForCenter, Series} from '../api/series'
+import {listSeriesForCenter, type Series} from '../api/series'
 import {useAuth} from '../auth'
-import {Card, colors, ErrorBanner, Heading, Subheading} from '../components/ui'
+import {Card, ErrorBanner, Heading, Subheading} from '../components/ui'
 import {formatDateTime} from '../lib/format'
 
 interface MeResponse {
@@ -30,11 +29,10 @@ interface StudentCenterRef {
     grade: number
 }
 
-// CenterGroup is the grouping we render under: each math center the user
-// belongs to becomes one section with its series list.
+// One section per math center the user belongs to.
 interface CenterGroup {
     centerID: number
-    label: string  // "11-й класс — выпуск 2026"
+    label: string
     role: 'teacher' | 'student'
     series: Series[]
 }
@@ -49,11 +47,8 @@ export default function HomeworkPage() {
         try {
             const me = await authedFetch<MeResponse>('/mathcenter/me')
             const out: CenterGroup[] = []
-            // Teacher centers first — they get to see drafts. Students see
-            // only published series (the backend filters this for us via
-            // the published-only list endpoint).
-            // Newest series at the top — the user nearly always wants the
-            // most recent pset, not the oldest. Sort by series number DESC.
+            // Newest series at the top — the user nearly always wants
+            // the most recent pset, not the oldest.
             const byNewest = (xs: Series[]) => xs.slice().sort((a, b) => b.number - a.number)
             if (me.teacher) {
                 for (const c of me.teacher.centers) {
@@ -87,7 +82,7 @@ export default function HomeworkPage() {
 
     if (error) {
         return (
-            <Card style={{width: 720}}>
+            <Card className="w-[720px]">
                 <Heading>Домашка</Heading>
                 <ErrorBanner message={error}/>
             </Card>
@@ -95,7 +90,7 @@ export default function HomeworkPage() {
     }
     if (!groups) {
         return (
-            <Card style={{width: 720}}>
+            <Card className="w-[720px]">
                 <Heading>Домашка</Heading>
                 <Subheading>Загрузка…</Subheading>
             </Card>
@@ -103,7 +98,7 @@ export default function HomeworkPage() {
     }
     if (groups.length === 0) {
         return (
-            <Card style={{width: 720}}>
+            <Card className="w-[720px]">
                 <Heading>Домашка</Heading>
                 <Subheading>Вы пока не состоите в матцентре.</Subheading>
             </Card>
@@ -111,13 +106,13 @@ export default function HomeworkPage() {
     }
 
     return (
-        <View style={{width: 760, gap: 24} as any}>
+        <div className="w-[760px] flex flex-col gap-6">
             {groups.map(g => (
                 <Card key={`${g.role}-${g.centerID}`}>
                     <Heading>{g.label}</Heading>
                     <Subheading>{g.role === 'teacher' ? 'Преподаватель' : 'Ученик'}</Subheading>
                     {g.series.length === 0 ? (
-                        <Text style={s.empty}>Серий пока нет.</Text>
+                        <p className="py-2 text-[13px] italic text-muted">Серий пока нет.</p>
                     ) : (
                         g.series.map(series => (
                             <SeriesRow
@@ -129,42 +124,28 @@ export default function HomeworkPage() {
                     )}
                 </Card>
             ))}
-        </View>
+        </div>
     )
 }
 
-function SeriesRow({series, onOpen}: { series: Series; onOpen: () => void }) {
+function SeriesRow({series, onOpen}: {series: Series; onOpen: () => void}) {
     const due = formatDateTime(series.due_at)
     const overdue = !!series.due_at && new Date(series.due_at).getTime() < Date.now()
     return (
-        <Pressable onPress={onOpen} style={({pressed}) => [s.row, pressed && {backgroundColor: '#f9fafb'}]}>
-            <View style={{flex: 1}}>
-                <Text style={s.rowTitle}>{series.display_name}</Text>
-                <Text style={s.rowMeta}>
+        <button
+            type="button"
+            onClick={onOpen}
+            className="w-full flex items-center justify-between gap-3 py-3 px-3 border-b border-card-border rounded-md hover:bg-[#f9fafb] text-left"
+        >
+            <div className="flex-1">
+                <p className="text-[15px] font-semibold text-ink mb-1">{series.display_name}</p>
+                <p className="text-[13px] text-muted">
                     Срок: {due}
-                    {overdue ? <Text style={{color: colors.danger}}> · просрочено</Text> : null}
-                    {series.published ? null : <Text style={{color: colors.textMuted}}> · черновик</Text>}
-                </Text>
-            </View>
-            <Text style={s.openArrow}>Открыть →</Text>
-        </Pressable>
+                    {overdue ? <span className="text-danger"> · просрочено</span> : null}
+                    {series.published ? null : <span className="text-muted"> · черновик</span>}
+                </p>
+            </div>
+            <span className="text-sm font-medium text-primary">Открыть →</span>
+        </button>
     )
 }
-
-
-const s = StyleSheet.create({
-    row: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingVertical: 12,
-        paddingHorizontal: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-        borderRadius: 6,
-    },
-    rowTitle: {fontSize: 15, fontWeight: '600', color: colors.text, marginBottom: 4},
-    rowMeta: {fontSize: 13, color: colors.textMuted},
-    openArrow: {fontSize: 14, fontWeight: '500', color: colors.primary, marginLeft: 12},
-    empty: {fontSize: 13, color: colors.textMuted, fontStyle: 'italic', paddingVertical: 8},
-})

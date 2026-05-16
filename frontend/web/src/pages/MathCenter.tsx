@@ -1,10 +1,9 @@
 import {useCallback, useEffect, useState} from 'react'
-import {StyleSheet, Text, View} from 'react-native'
 import {APIErrorImpl} from '../api'
 import {useAuth} from '../auth'
 import {SeriesHomeworkList} from '../components/homework/SeriesHomeworkList'
 import {TeacherCenterView} from '../components/homework/TeacherCenterView'
-import {Card, colors, ErrorBanner, Heading, Subheading} from '../components/ui'
+import {Card, ErrorBanner, Heading, Subheading} from '../components/ui'
 
 interface MeResponse {
     teacher?: TeacherView
@@ -12,10 +11,10 @@ interface MeResponse {
 }
 
 interface TeacherView {
-    centers: TeacherCenterView[]
+    centers: TeacherCenterInfo[]
 }
 
-interface TeacherCenterView {
+interface TeacherCenterInfo {
     id: number
     graduation_year: number
     grade: number
@@ -42,8 +41,8 @@ interface GroupWithStudents {
 }
 
 interface StudentView {
-    center: { id: number; graduation_year: number; grade: number }
-    group: { id: number; name: string }
+    center: {id: number; graduation_year: number; grade: number}
+    group: {id: number; name: string}
     head_teachers: TeacherInfo[]
 }
 
@@ -66,7 +65,7 @@ export default function MathCenterPage() {
 
     if (error) {
         return (
-            <Card style={{width: 720}}>
+            <Card className="w-[720px]">
                 <Heading>Математический центр</Heading>
                 <ErrorBanner message={error}/>
             </Card>
@@ -75,48 +74,37 @@ export default function MathCenterPage() {
 
     if (!data) {
         return (
-            <Card style={{width: 720}}>
+            <Card className="w-[720px]">
                 <Heading>Математический центр</Heading>
                 <Subheading>Загрузка…</Subheading>
             </Card>
         )
     }
 
-    // A user with no math-center role at all sees a friendly empty state
-    // rather than a confusing blank panel.
     if (!data.teacher && !data.student) {
         return (
-            <Card style={{width: 720}}>
+            <Card className="w-[720px]">
                 <Heading>Математический центр</Heading>
                 <Subheading>Вы пока не состоите в матцентре — обратитесь к администратору.</Subheading>
             </Card>
         )
     }
 
-    // The wrapper is wide enough to host the teacher spreadsheet
-    // (many subproblem columns × many students), capped so very wide
-    // monitors don't stretch lines to unreadable length. Students get
-    // the same wrapper but their inner cards/lists self-cap to keep
-    // text readable; the wider outer just stops the page from feeling
-    // squished on a laptop.
+    // The wrapper is wide enough to host the teacher spreadsheet (many
+    // subproblem columns × many students), capped at 1600px so very
+    // wide monitors don't stretch lines to unreadable length.
     return (
-        <View style={{width: 'min(100%, 1600px)', gap: 24} as any}>
+        <div className="w-full max-w-[1600px] flex flex-col gap-6">
             {data.teacher ? <TeacherSection data={data.teacher}/> : null}
             {data.student ? <StudentSection data={data.student}/> : null}
-        </View>
+        </div>
     )
 }
 
-function TeacherSection({data}: { data: TeacherView }) {
-    // The unified teacher hub: one TeacherCenterView per center the
-    // teacher belongs to. Group / student rosters are already visible
-    // inside the spreadsheet (it groups rows by Группа N with student
-    // names down the left), so this section is now just the
-    // class-header + the consolidated view itself — no separate "groups"
-    // / "teachers" / "series" sub-sections.
+function TeacherSection({data}: {data: TeacherView}) {
     return (
-        <View style={{gap: 32} as any}>
-            {data.centers.map((c) => (
+        <div className="flex flex-col gap-8">
+            {data.centers.map(c => (
                 <TeacherCenterView
                     key={c.id}
                     centerID={c.id}
@@ -124,75 +112,36 @@ function TeacherSection({data}: { data: TeacherView }) {
                     graduationYear={c.graduation_year}
                 />
             ))}
-        </View>
+        </div>
     )
 }
 
-function StudentSection({data}: { data: StudentView }) {
-    // The student dashboard merges what used to live behind two tabs
-    // ("Матцентр" + "Домашка"): the cohort info card on top, then the
-    // homework-aware series list (newest first, with inline progress
-    // badges). Clicking a series goes to /homework/series/:id for the
-    // full PDF + problem grid.
+function StudentSection({data}: {data: StudentView}) {
     return (
-        <View style={{gap: 16} as any}>
+        <div className="flex flex-col gap-4">
             <Card>
                 <Heading>Математический центр — {data.center.grade}-й класс</Heading>
                 <Subheading>Выпуск {data.center.graduation_year}</Subheading>
 
-                <View style={s.row}>
-                    <Text style={s.label}>Ваша группа</Text>
-                    <Text style={s.value}>{data.group.name}</Text>
-                </View>
+                <div className="flex items-center justify-between py-2 border-b border-card-border">
+                    <span className="text-[13px] text-muted">Ваша группа</span>
+                    <span className="text-sm font-medium text-ink">{data.group.name}</span>
+                </div>
 
-                <Text style={s.section}>Старшие преподаватели</Text>
+                <p className="mt-4 mb-2 text-xs font-bold uppercase tracking-wide text-muted">
+                    Старшие преподаватели
+                </p>
                 {data.head_teachers.length === 0 ? (
-                    <Text style={s.muted}>Не назначены</Text>
+                    <p className="text-[13px] italic text-muted">Не назначены</p>
                 ) : (
-                    data.head_teachers.map((t) => (
-                        <Text key={t.user_id} style={s.studentLine}>{t.display_name}</Text>
+                    data.head_teachers.map(t => (
+                        <p key={t.user_id} className="text-sm text-ink py-1">{t.display_name}</p>
                     ))
                 )}
             </Card>
 
-            <Text style={s.section}>Серии</Text>
+            <p className="text-xs font-bold uppercase tracking-wide text-muted">Серии</p>
             <SeriesHomeworkList centerID={data.center.id}/>
-        </View>
+        </div>
     )
 }
-
-const s = StyleSheet.create({
-    section: {
-        marginTop: 18,
-        marginBottom: 8,
-        fontSize: 12,
-        fontWeight: '700',
-        color: colors.textMuted,
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-    },
-    row: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 8,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-    name: {fontSize: 14, color: colors.text},
-    label: {fontSize: 13, color: colors.textMuted},
-    value: {fontSize: 14, color: colors.text, fontWeight: '500'},
-    badge: {
-        fontSize: 11,
-        fontWeight: '600',
-        color: colors.primary,
-        backgroundColor: '#eef2ff',
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 999,
-    },
-    group: {marginTop: 12},
-    groupName: {fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: 6},
-    studentLine: {fontSize: 14, color: colors.text, paddingVertical: 4},
-    muted: {fontSize: 13, color: colors.textMuted, fontStyle: 'italic'},
-})
