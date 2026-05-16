@@ -1,17 +1,13 @@
-// TeacherCenterView is the unified teacher hub for a single math center:
-// the all-series spreadsheet on the right (or below, on phones) and a
-// side panel showing the selected series's detail / editor on the left
-// (or top). Clicking a series header in the spreadsheet swaps the side
-// panel to view that series; the "+" column header opens the create
-// form; "Редактировать" on the detail flips to the editor; saving any
-// form refreshes both the spreadsheet and the side panel in place.
-//
-// Replaces what used to live in two separate pages (Матцентр's
-// SeriesPanel + Домашка's TeacherGrid) — teachers now do everything
-// from one screen.
+// TeacherCenterView is the unified teacher hub for a single math
+// center: the all-series spreadsheet on the right (or below, on
+// phones) and a side panel showing the selected series's detail /
+// editor on the left (or top). Clicking a series header in the
+// spreadsheet swaps the side panel to view that series; the "+"
+// column header opens the create form; "Редактировать" on the detail
+// flips to the editor; saving any form refreshes both the spreadsheet
+// and the side panel in place.
 
 import {useCallback, useEffect, useRef, useState} from 'react'
-import {Pressable, StyleSheet, Text, useWindowDimensions, View} from 'react-native'
 import {APIErrorImpl} from '../../api'
 import {
     createSeries,
@@ -26,10 +22,8 @@ import {
 } from '../../api/series'
 import {useAuth} from '../../auth'
 import {SeriesDetail, SeriesEditor} from '../series/SeriesPanel'
-import {Card, colors, ErrorBanner, Heading, Subheading} from '../ui'
+import {Card, ErrorBanner, Heading, Subheading} from '../ui'
 import {TeacherGrid, type TeacherGridHandle} from './TeacherGrid'
-
-const RESPONSIVE_BREAKPOINT = 1000
 
 // Mode is what the side panel is currently showing.
 //   - 'idle'  : nothing selected, "выберите серию" placeholder
@@ -42,26 +36,23 @@ type Mode =
     | {kind: 'edit'; seriesID: number}
     | {kind: 'create'}
 
+const tightCardClass = '!py-3.5 !px-[18px]'
+
 export function TeacherCenterView({centerID, gradeLabel, graduationYear}: {
-    centerID: number;
-    gradeLabel: string;
-    graduationYear: number;
+    centerID: number
+    gradeLabel: string
+    graduationYear: number
 }) {
     const {authedFetch, authedFetchRaw} = useAuth()
-    const {width} = useWindowDimensions()
-    const wide = width >= RESPONSIVE_BREAKPOINT
 
     const [mode, setMode] = useState<Mode>({kind: 'idle'})
-    // active is the loaded series for view/edit modes. Kept as a
-    // separate state from mode so the side panel can render
-    // immediately when mode changes while the fetch is in flight.
+    // `active` is the loaded series for view/edit modes. Kept separate
+    // from `mode` so the side panel can render immediately when mode
+    // changes while the fetch is still in flight.
     const [active, setActive] = useState<Series | null>(null)
     const [error, setError] = useState<string | null>(null)
     const gridRef = useRef<TeacherGridHandle | null>(null)
 
-    // Whenever the mode points at a specific series id, re-fetch the
-    // detail. (Re-fetching on every transition is fine — a series row
-    // is tiny and the response includes the full problems list.)
     useEffect(() => {
         if (mode.kind !== 'view' && mode.kind !== 'edit') {
             setActive(null)
@@ -81,19 +72,15 @@ export function TeacherCenterView({centerID, gradeLabel, graduationYear}: {
         }
     }, [mode, authedFetch])
 
-    // refreshGrid is called after any save/delete so the spreadsheet
-    // mirrors the new state without a hard reload.
     const refreshGrid = useCallback(async () => {
         try {
             await gridRef.current?.reload()
         } catch {
-            /* the grid's own error path surfaces this */
+            /* grid surfaces its own error */
         }
     }, [])
 
     const selectedSeriesID = mode.kind === 'view' || mode.kind === 'edit' ? mode.seriesID : null
-
-    // Action handlers wired into SeriesDetail / SeriesEditor —————————
 
     async function handleCreateSubmit(payload: SeriesPayload) {
         const s = await createSeries(authedFetch, centerID, payload)
@@ -141,22 +128,24 @@ export function TeacherCenterView({centerID, gradeLabel, graduationYear}: {
         return fetchSeriesPDFObjectURL(authedFetchRaw, seriesID)
     }
 
-    // Side panel content driven by mode ——————————————————————————————
-
     function renderSidePanel() {
         if (error) {
             return (
-                <Card style={s.tightCard}>
+                <Card className={tightCardClass}>
                     <ErrorBanner message={error}/>
-                    <Pressable onPress={() => setError(null)} style={{alignSelf: 'flex-start', marginTop: 8}}>
-                        <Text style={{color: colors.primary, fontSize: 13}}>Скрыть</Text>
-                    </Pressable>
+                    <button
+                        type="button"
+                        onClick={() => setError(null)}
+                        className="self-start mt-2 text-[13px] text-primary hover:underline"
+                    >
+                        Скрыть
+                    </button>
                 </Card>
             )
         }
         if (mode.kind === 'idle') {
             return (
-                <Card style={s.tightCard}>
+                <Card className={tightCardClass}>
                     <Heading>Серии</Heading>
                     <Subheading>
                         Нажмите на заголовок серии в таблице справа, чтобы открыть её здесь.
@@ -167,7 +156,7 @@ export function TeacherCenterView({centerID, gradeLabel, graduationYear}: {
         }
         if (mode.kind === 'create') {
             return (
-                <Card style={s.tightCard}>
+                <Card className={tightCardClass}>
                     <SeriesEditor
                         title="Новая серия"
                         initial={null}
@@ -177,12 +166,12 @@ export function TeacherCenterView({centerID, gradeLabel, graduationYear}: {
                 </Card>
             )
         }
-        if (!active || active.id !== (mode.kind === 'view' ? mode.seriesID : mode.seriesID)) {
-            return <Card style={s.tightCard}><Subheading>Загрузка серии…</Subheading></Card>
+        if (!active || active.id !== mode.seriesID) {
+            return <Card className={tightCardClass}><Subheading>Загрузка серии…</Subheading></Card>
         }
         if (mode.kind === 'edit') {
             return (
-                <Card style={s.tightCard}>
+                <Card className={tightCardClass}>
                     <SeriesEditor
                         title={`Редактирование: ${active.display_name}`}
                         initial={active}
@@ -192,9 +181,8 @@ export function TeacherCenterView({centerID, gradeLabel, graduationYear}: {
                 </Card>
             )
         }
-        // mode.kind === 'view'
         return (
-            <Card style={s.tightCard}>
+            <Card className={tightCardClass}>
                 <SeriesDetail
                     series={active}
                     isTeacher
@@ -209,17 +197,21 @@ export function TeacherCenterView({centerID, gradeLabel, graduationYear}: {
         )
     }
 
+    // ~38/62 split: the spreadsheet usually wants more room because of
+    // the many subproblem columns; the side panel needs enough width
+    // for the SeriesEditor's form fields. Tailwind's `lg:` breakpoint
+    // (1024px) is the boundary between stacked and side-by-side.
     return (
-        <View style={{gap: 12} as any}>
-            <Card style={s.tightCard}>
+        <div className="flex flex-col gap-3">
+            <Card className={tightCardClass}>
                 <Heading>{gradeLabel} — выпуск {graduationYear}</Heading>
                 <Subheading>Преподаватель — таблица слева, серия открывается в боковой панели.</Subheading>
             </Card>
-            <View style={[s.split, wide ? s.splitRow : s.splitCol]}>
-                <View style={wide ? s.sideSlotWide : s.sideSlotNarrow}>
+            <div className="flex flex-col lg:flex-row gap-4 items-start">
+                <div className="w-full lg:basis-0 lg:grow-[38] lg:min-w-[320px]">
                     {renderSidePanel()}
-                </View>
-                <View style={wide ? s.gridSlotWide : s.gridSlotNarrow}>
+                </div>
+                <div className="w-full lg:basis-0 lg:grow-[62] lg:min-w-[320px]">
                     <TeacherGrid
                         ref={gridRef}
                         centerID={centerID}
@@ -227,22 +219,8 @@ export function TeacherCenterView({centerID, gradeLabel, graduationYear}: {
                         onSelectSeries={id => setMode({kind: 'view', seriesID: id})}
                         onCreateSeries={() => setMode({kind: 'create'})}
                     />
-                </View>
-            </View>
-        </View>
+                </div>
+            </div>
+        </div>
     )
 }
-
-const s = StyleSheet.create({
-    tightCard: {paddingVertical: 14, paddingHorizontal: 18},
-    split: {gap: 16} as any,
-    splitRow: {flexDirection: 'row', alignItems: 'flex-start'},
-    splitCol: {flexDirection: 'column'},
-    // ~38/62 split: the spreadsheet usually wants more room because of
-    // the many subproblem columns; the side panel needs enough width
-    // for the SeriesEditor's form fields.
-    sideSlotWide: {flexBasis: 0, flexGrow: 38, minWidth: 320},
-    sideSlotNarrow: {width: '100%'},
-    gridSlotWide: {flexBasis: 0, flexGrow: 62, minWidth: 320},
-    gridSlotNarrow: {width: '100%'},
-})

@@ -1,15 +1,15 @@
-// Per-series homework view. Determines the caller's role for the series's
-// math center and renders the appropriate layout:
+// Per-series homework view. Determines the caller's role for the
+// series's math center and renders the appropriate layout:
 //
-//   • student: responsive split — PDF preview pinned on the left (laptop)
-//     or stacked above the problems (phone). The series header card
-//     carries the title on the left and the "Принято / Отклонено / В работе"
-//     badges on the right, so progress is glanceable without a separate card.
+//   • student: responsive split — PDF preview pinned on the left
+//     (laptop) or stacked above the problems (phone). The series
+//     header card carries the title on the left and the progress
+//     badges on the right, so progress is glanceable without a
+//     separate card.
 //
 //   • teacher: full-width spreadsheet (TeacherGrid).
 
 import {useCallback, useEffect, useState} from 'react'
-import {Pressable, StyleSheet, Text, useWindowDimensions, View} from 'react-native'
 import {useNavigate, useParams} from 'react-router-dom'
 import {APIErrorImpl} from '../api'
 import {computeGranularCounts, getMyRollup, isClosed, type MyRollupResponse} from '../api/homework'
@@ -20,7 +20,7 @@ import {PDFPanel} from '../components/homework/PDFPanel'
 import {ProgressBadges} from '../components/homework/ProgressBadges'
 import {StudentProblemList} from '../components/homework/StudentProblemList'
 import {TeacherGrid} from '../components/homework/TeacherGrid'
-import {Card, colors, ErrorBanner, Heading, Subheading} from '../components/ui'
+import {Card, ErrorBanner, Heading, Subheading} from '../components/ui'
 
 interface MeResponse {
     teacher?: {centers: Array<{id: number}>}
@@ -28,8 +28,6 @@ interface MeResponse {
 }
 
 type Role = 'teacher' | 'student' | 'none'
-
-const RESPONSIVE_BREAKPOINT = 980
 
 export default function HomeworkSeriesPage() {
     const {seriesID: rawID} = useParams<{seriesID: string}>()
@@ -58,15 +56,10 @@ export default function HomeworkSeriesPage() {
             else if (studentCenterID === s.math_center_id) r = 'student'
             setSeries(s)
             setRole(r)
-            // For students, kick off the rollup fetch right after we know
-            // their role — it powers both the header badges and the per-
-            // problem grid below the PDF.
             if (r === 'student') {
                 try {
                     setRollup(await getMyRollup(authedFetch, seriesID))
                 } catch (e) {
-                    // Non-fatal — the page can still render with an
-                    // empty problem list and a placeholder header.
                     setError(e instanceof APIErrorImpl ? e.message : 'Не удалось загрузить прогресс')
                 }
             }
@@ -81,7 +74,7 @@ export default function HomeworkSeriesPage() {
 
     if (error && !series) {
         return (
-            <Card style={{width: 720}}>
+            <Card className="w-[720px]">
                 <BackLink onPress={() => navigate('/mathcenter')}/>
                 <Heading>Домашка</Heading>
                 <ErrorBanner message={error}/>
@@ -90,7 +83,7 @@ export default function HomeworkSeriesPage() {
     }
     if (!series || !role) {
         return (
-            <Card style={{width: 720}}>
+            <Card className="w-[720px]">
                 <Heading>Домашка</Heading>
                 <Subheading>Загрузка…</Subheading>
             </Card>
@@ -98,7 +91,7 @@ export default function HomeworkSeriesPage() {
     }
     if (role === 'none') {
         return (
-            <Card style={{width: 720}}>
+            <Card className="w-[720px]">
                 <BackLink onPress={() => navigate('/mathcenter')}/>
                 <Heading>{series.display_name}</Heading>
                 <ErrorBanner message="У вас нет доступа к этой серии."/>
@@ -109,82 +102,66 @@ export default function HomeworkSeriesPage() {
     if (role === 'student') {
         return <StudentSeriesView series={series} rollup={rollup} onBack={() => navigate('/mathcenter')}/>
     }
-    // teacher
     return (
-        <View style={{width: 'min(100%, 1100px)', gap: 12} as any}>
+        <div className="w-full max-w-[1100px] flex flex-col gap-3">
             <BackLink onPress={() => navigate('/homework')}/>
-            <Card style={{paddingVertical: 16, paddingHorizontal: 18}}>
+            <Card className="!py-4 !px-[18px]">
                 <Heading>{series.display_name}</Heading>
                 <Subheading>Срок: {formatDateTime(series.due_at)} · преподаватель</Subheading>
             </Card>
             <TeacherGrid centerID={series.math_center_id} selectedSeriesID={series.id}/>
-        </View>
+        </div>
     )
 }
 
 function StudentSeriesView({series, rollup, onBack}: {
-    series: Series;
-    rollup: MyRollupResponse | null;
-    onBack: () => void;
+    series: Series
+    rollup: MyRollupResponse | null
+    onBack: () => void
 }) {
-    const {width} = useWindowDimensions()
-    const wide = width >= RESPONSIVE_BREAKPOINT
     return (
-        <View style={{width: 'min(100%, 1200px)', gap: 12} as any}>
+        <div className="w-full max-w-[1200px] flex flex-col gap-3">
             <BackLink onPress={onBack}/>
 
-            {/* Unified header: title on the left, due date underneath, and
-                the "Ваш прогресс" badges right-aligned. One card instead of
-                two so the eye doesn't have to bounce between them. */}
-            <Card style={s.headerCard}>
-                <View style={s.headerRow}>
-                    <View style={{flex: 1, minWidth: 0}}>
+            {/* Unified header: title on the left, due date underneath,
+                progress badges right-aligned. One card so the eye
+                doesn't bounce between two. */}
+            <Card className="!py-4 !px-5">
+                <div className="flex items-center justify-between gap-4">
+                    <div className="flex-1 min-w-0">
                         <Heading>{series.display_name}</Heading>
-                        <Text style={s.headerMeta}>Срок: {formatDateTime(series.due_at)}</Text>
-                    </View>
+                        <p className="text-[13px] text-muted mt-0.5">Срок: {formatDateTime(series.due_at)}</p>
+                    </div>
                     {rollup ? <ProgressBadges counts={computeGranularCounts(rollup.problems)}/> : null}
-                </View>
+                </div>
             </Card>
 
-            {/* Body: PDF left, problems right on laptops; stacked on phones.
-                PDF uses position:sticky on wide screens so it stays in view
-                while the student scrolls problem cards. */}
-            <View style={[s.body, wide ? s.bodyRow : s.bodyCol]}>
-                <View style={wide ? s.pdfSlotWide : s.pdfSlotNarrow}>
-                    <PDFPanel seriesID={series.id} hasPDF={series.has_pdf} sticky={wide}/>
-                </View>
-                <View style={wide ? s.problemsSlotWide : s.problemsSlotNarrow}>
+            {/* PDF left, problems right on laptops (lg+); stacked on
+                phones. PDF uses position:sticky on wide screens so it
+                stays in view while the student scrolls problem cards. */}
+            <div className="flex flex-col lg:flex-row gap-4 items-start">
+                <div className="w-full lg:basis-0 lg:grow-[4] lg:min-w-[320px]">
+                    <PDFPanel seriesID={series.id} hasPDF={series.has_pdf} sticky/>
+                </div>
+                <div className="w-full lg:basis-0 lg:grow-[6] lg:min-w-[320px]">
                     <StudentProblemList
                         problems={rollup?.problems ?? []}
                         closed={isClosed(series.due_at)}
                     />
-                </View>
-            </View>
-        </View>
+                </div>
+            </div>
+        </div>
     )
 }
 
 function BackLink({onPress}: {onPress: () => void}) {
     return (
-        <Pressable onPress={onPress} style={s.back}>
-            <Text style={s.backText}>← К списку</Text>
-        </Pressable>
+        <button
+            type="button"
+            onClick={onPress}
+            className="self-start px-2 py-1 rounded-md text-sm font-medium text-primary hover:bg-page"
+        >
+            ← К списку
+        </button>
     )
 }
-
-const s = StyleSheet.create({
-    back: {alignSelf: 'flex-start', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6},
-    backText: {fontSize: 14, fontWeight: '500', color: colors.primary},
-    headerCard: {paddingVertical: 16, paddingHorizontal: 20},
-    headerRow: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16} as any,
-    headerMeta: {fontSize: 13, color: colors.textMuted, marginTop: 2},
-    body: {gap: 16} as any,
-    bodyRow: {flexDirection: 'row', alignItems: 'flex-start'},
-    bodyCol: {flexDirection: 'column'},
-    // 4:6 split lets the PDF show pages at a readable width while the
-    // problem grid uses the remainder. Both sides flex inside the row.
-    pdfSlotWide: {flexBasis: 0, flexGrow: 4, minWidth: 320},
-    pdfSlotNarrow: {width: '100%'},
-    problemsSlotWide: {flexBasis: 0, flexGrow: 6, minWidth: 320},
-    problemsSlotNarrow: {width: '100%'},
-})

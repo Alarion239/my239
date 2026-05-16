@@ -11,12 +11,11 @@
 // for free.
 
 import {useCallback, useEffect, useImperativeHandle, useRef, useState, forwardRef} from 'react'
-import {Text, View} from 'react-native'
 import {useNavigate} from 'react-router-dom'
 import {APIErrorImpl} from '../../api'
 import {
-    CenterGridCell,
-    CenterGridResponse,
+    type CenterGridCell,
+    type CenterGridResponse,
     centerGridCellKey,
     getCenterGrid,
     statusBackgroundColor,
@@ -122,9 +121,9 @@ export const TeacherGrid = forwardRef<TeacherGridHandle, TeacherGridProps>(funct
             <Card>
                 <Subheading>В этом матцентре пока нет учеников.</Subheading>
                 {onCreateSeries ? (
-                    <View style={{marginTop: 8, alignSelf: 'flex-start'} as any}>
+                    <div className="mt-2 self-start">
                         <button onClick={onCreateSeries} style={primaryButtonStyle}>+ Создать серию</button>
-                    </View>
+                    </div>
                 ) : null}
             </Card>
         )
@@ -214,11 +213,9 @@ export const TeacherGrid = forwardRef<TeacherGridHandle, TeacherGridProps>(funct
                     </tbody>
                 </table>
             </div>
-            <View style={{marginTop: 8}}>
-                <Text style={{fontSize: 12, color: colors.textMuted}}>
-                    Кликните по заголовку серии, чтобы открыть её слева. Цветная клетка — задача в работе.
-                </Text>
-            </View>
+            <p className="mt-2 text-xs text-muted">
+                Кликните по заголовку серии, чтобы открыть её слева. Цветная клетка — задача в работе.
+            </p>
         </Card>
     )
 })
