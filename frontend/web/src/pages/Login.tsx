@@ -1,9 +1,8 @@
 import {useState} from 'react'
-import {StyleSheet, Text, View} from 'react-native'
 import {Link, useNavigate} from 'react-router-dom'
 import {APIErrorImpl} from '../api'
 import {useAuth} from '../auth'
-import {Button, Card, colors, ErrorBanner, Field, Heading, Subheading} from '../components/ui'
+import {Button, Card, ErrorBanner, Field, Heading, Subheading} from '../components/ui'
 
 export default function LoginPage() {
     const {login} = useAuth()
@@ -27,33 +26,25 @@ export default function LoginPage() {
     }
 
     return (
-        <View style={s.wrap}>
-            <Card style={{width: 380}}>
+        <div className="min-h-screen flex items-center justify-center p-6 bg-page">
+            <Card className="w-[380px]">
                 <Heading>Вход</Heading>
                 <Subheading>Добро пожаловать в my239</Subheading>
                 {error ? <ErrorBanner message={error}/> : null}
                 <Field label="Логин" value={username} onChangeText={setUsername} placeholder="alice"/>
-                <Field label="Пароль" value={password} onChangeText={setPassword} placeholder="••••••••"
-                       secureTextEntry/>
+                <Field
+                    label="Пароль"
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="••••••••"
+                    secureTextEntry
+                />
                 <Button title={submitting ? 'Входим…' : 'Войти'} onPress={onSubmit} disabled={submitting}/>
-                <View style={{height: 16}}/>
-                <Text style={s.foot}>
+                <p className="mt-4 text-[13px] text-muted text-center">
                     Нет аккаунта?{' '}
-                    <Link to="/register" style={{color: colors.primary} as any}>Зарегистрироваться</Link>
-                </Text>
+                    <Link to="/register" className="text-primary hover:underline">Зарегистрироваться</Link>
+                </p>
             </Card>
-        </View>
+        </div>
     )
 }
-
-const s = StyleSheet.create({
-    wrap: {
-        flex: 1,
-        minHeight: '100vh' as any,
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 24,
-        backgroundColor: colors.bg,
-    },
-    foot: {color: colors.textMuted, fontSize: 13, textAlign: 'center'},
-})

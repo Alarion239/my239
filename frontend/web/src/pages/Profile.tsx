@@ -1,6 +1,5 @@
-import {StyleSheet, Text, View} from 'react-native'
 import {useAuth} from '../auth'
-import {Card, colors, Heading, Subheading} from '../components/ui'
+import {Card, Heading, Subheading} from '../components/ui'
 
 export default function ProfilePage() {
     const {user} = useAuth()
@@ -10,7 +9,7 @@ export default function ProfilePage() {
     const fullName = [user.last_name, user.first_name, user.middle_name].filter(Boolean).join(' ')
 
     return (
-        <Card style={{width: 480}}>
+        <Card className="w-[480px]">
             <Heading>Профиль</Heading>
             <Subheading>Вы вошли как @{user.username}</Subheading>
             <Row label="ФИО" value={fullName || '—'}/>
@@ -21,24 +20,11 @@ export default function ProfilePage() {
     )
 }
 
-function Row({label, value}: { label: string; value: string }) {
+function Row({label, value}: {label: string; value: string}) {
     return (
-        <View style={s.row}>
-            <Text style={s.label}>{label}</Text>
-            <Text style={s.value}>{value}</Text>
-        </View>
+        <div className="flex items-center justify-between py-2.5 border-b border-card-border last:border-b-0">
+            <span className="text-sm text-muted">{label}</span>
+            <span className="text-sm font-medium text-ink">{value}</span>
+        </div>
     )
 }
-
-const s = StyleSheet.create({
-    row: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-    label: {color: colors.textMuted, fontSize: 14},
-    value: {color: colors.text, fontSize: 14, fontWeight: '500'},
-})

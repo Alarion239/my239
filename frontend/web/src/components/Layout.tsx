@@ -1,8 +1,6 @@
-import {ReactNode, useEffect, useState} from 'react'
-import {Pressable, StyleSheet, Text, View} from 'react-native'
+import {type ReactNode, useEffect, useState} from 'react'
 import {Link, useLocation, useNavigate} from 'react-router-dom'
 import {useAuth} from '../auth'
-import {colors} from './ui'
 
 // Module-level cache so we don't refetch /mathcenter/me on every page nav
 // (Layout remounts per route). Keyed by user id so a logout-then-login
@@ -13,32 +11,26 @@ let teacherCheckInflight: Promise<boolean> | null = null
 // Layout renders the top nav bar and a centered content well. Public pages
 // (login/register) skip this and render bare.
 //
-// The Домашка tab is hidden for student-only users — they get the unified
-// homework hub on the Матцентр page. Admins and teachers still see it.
-export function Layout({children}: { children: ReactNode }) {
+// The Домашка tab has been retired — Матцентр is the unified hub for
+// both roles. /homework/* URLs still resolve for direct/deep links.
+export function Layout({children}: {children: ReactNode}) {
     const {user, authedFetch, logout} = useAuth()
     const navigate = useNavigate()
     const location = useLocation()
 
-    const showHomework = useShowHomeworkLink(user, authedFetch)
+    // Kept for backwards-compat — currently always renders nothing in
+    // the nav, but the side-effect (precomputing the role) is useful
+    // since downstream surfaces (HomeworkSeries, MathCenter) also need
+    // to know whether the user teaches anywhere.
+    useShowHomeworkLink(user, authedFetch)
 
     return (
-        <View style={s.root}>
-            <View style={s.nav}>
-                <Text style={s.brand}>my239</Text>
-                <View style={s.navRight}>
+        <div className="min-h-screen bg-page">
+            <nav className="flex items-center justify-between px-6 py-3 bg-card border-b border-card-border">
+                <span className="text-lg font-bold text-ink">my239</span>
+                <div className="flex items-center gap-4">
                     <NavLink to="/profile" current={location.pathname}>Профиль</NavLink>
                     <NavLink to="/mathcenter" current={location.pathname}>Матцентр</NavLink>
-                    {/*
-                      The Домашка tab is gone — Матцентр is now the unified
-                      hub for both roles. Teachers get the spreadsheet +
-                      side-panel editor there; students get series-with-
-                      progress cards there. /homework/* URLs still resolve
-                      for direct/deep links, just not surfaced in the nav.
-                      `showHomework` is still consulted for backwards-compat
-                      with bookmarks-as-tabs, but defaults to off.
-                    */}
-                    {showHomework ? null : null}
                     {user?.is_admin ? (
                         <>
                             <NavLink to="/admin/users" current={location.pathname}>Пользователи</NavLink>
@@ -46,32 +38,35 @@ export function Layout({children}: { children: ReactNode }) {
                             <NavLink to="/admin/mathcenter" current={location.pathname}>Управление МЦ</NavLink>
                         </>
                     ) : null}
-                    <Pressable
-                        onPress={async () => {
+                    <button
+                        type="button"
+                        onClick={async () => {
                             await logout()
                             // Clear the role cache so the next user's nav
-                            // is computed fresh (a teacher logging in
-                            // after a student should immediately see Домашка).
+                            // is computed fresh.
                             teacherCheckCache = null
                             teacherCheckInflight = null
-                            await navigate('/login')
+                            navigate('/login')
                         }}
-                        style={s.logout}
+                        className="px-3 py-1.5 rounded-md bg-[#eef2f7] text-[13px] font-medium text-ink hover:bg-[#e5e9f0]"
                     >
-                        <Text style={s.logoutText}>Выйти</Text>
-                    </Pressable>
-                </View>
-            </View>
-            <View style={s.content}>{children}</View>
-        </View>
+                        Выйти
+                    </button>
+                </div>
+            </nav>
+            <div className="px-8 py-8 flex justify-center">{children}</div>
+        </div>
     )
 }
 
-// useShowHomeworkLink decides whether to show the Домашка tab. Admins
-// always see it; everyone else only if they teach in at least one math
-// center. While the check is in flight we err on the side of HIDDEN so
-// students never see a brief flash of the unwanted link.
-function useShowHomeworkLink(user: ReturnType<typeof useAuth>['user'], authedFetch: ReturnType<typeof useAuth>['authedFetch']): boolean {
+// useShowHomeworkLink — kept as a hook so downstream surfaces can call
+// it later if needed. Returns true when the caller teaches in at least
+// one center (or is admin). Caches the answer in module state across
+// navigations within a single user session.
+function useShowHomeworkLink(
+    user: ReturnType<typeof useAuth>['user'],
+    authedFetch: ReturnType<typeof useAuth>['authedFetch'],
+): boolean {
     const initial = (() => {
         if (!user) return false
         if (user.is_admin) return true
@@ -116,37 +111,14 @@ function useShowHomeworkLink(user: ReturnType<typeof useAuth>['user'], authedFet
     return show
 }
 
-function NavLink({to, current, children}: { to: string; current: string; children: ReactNode }) {
+function NavLink({to, current, children}: {to: string; current: string; children: ReactNode}) {
     const active = current === to || (to !== '/' && current.startsWith(to))
     return (
-        <Link to={to} style={{textDecoration: 'none'} as any}>
-            <Text style={[s.navLink, active && s.navLinkActive]}>{children}</Text>
+        <Link
+            to={to}
+            className={`text-sm font-medium no-underline ${active ? 'text-primary' : 'text-muted hover:text-ink'}`}
+        >
+            {children}
         </Link>
     )
 }
-
-const s = StyleSheet.create({
-    root: {minHeight: '100vh' as any, backgroundColor: colors.bg},
-    nav: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 24,
-        paddingVertical: 12,
-        backgroundColor: colors.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-    brand: {fontSize: 18, fontWeight: '700', color: colors.text},
-    navRight: {flexDirection: 'row', alignItems: 'center', gap: 16} as any,
-    navLink: {fontSize: 14, color: colors.textMuted, fontWeight: '500'},
-    navLinkActive: {color: colors.primary},
-    logout: {
-        paddingVertical: 6,
-        paddingHorizontal: 12,
-        borderRadius: 6,
-        backgroundColor: '#eef2f7',
-    },
-    logoutText: {fontSize: 13, color: colors.text, fontWeight: '500'},
-    content: {padding: 32, alignItems: 'center'},
-})

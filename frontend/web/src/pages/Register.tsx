@@ -1,9 +1,8 @@
 import {useState} from 'react'
-import {StyleSheet, Text, View} from 'react-native'
 import {Link, useNavigate} from 'react-router-dom'
 import {APIErrorImpl} from '../api'
 import {useAuth} from '../auth'
-import {Button, Card, colors, ErrorBanner, Field, Heading, Subheading} from '../components/ui'
+import {Button, Card, ErrorBanner, Field, Heading, Subheading} from '../components/ui'
 
 export default function RegisterPage() {
     const {register} = useAuth()
@@ -45,8 +44,8 @@ export default function RegisterPage() {
     }
 
     return (
-        <View style={s.wrap}>
-            <Card style={{width: 420}}>
+        <div className="min-h-screen flex items-center justify-center p-6 bg-page">
+            <Card className="w-[420px]">
                 <Heading>Регистрация</Heading>
                 <Subheading>Для регистрации нужен пригласительный токен от администратора</Subheading>
                 {error ? <ErrorBanner message={error}/> : null}
@@ -57,36 +56,30 @@ export default function RegisterPage() {
                     placeholder="вставьте сюда"
                     error={fields.InvitationToken}
                 />
-                <Field label="Логин" value={username} onChangeText={setUsername}
-                       placeholder="латиница и цифры, 3–50 символов" error={fields.Username}/>
-                <Field label="Пароль" value={password} onChangeText={setPassword} placeholder="минимум 8 символов"
-                       secureTextEntry error={fields.Password}/>
-                <Field label="Имя" value={firstName} onChangeText={setFirstName} autoCapitalize="sentences"
-                       error={fields.FirstName}/>
-                <Field label="Отчество" value={middleName} onChangeText={setMiddleName} autoCapitalize="sentences"
-                       error={fields.MiddleName}/>
-                <Field label="Фамилия" value={lastName} onChangeText={setLastName} autoCapitalize="sentences"
-                       error={fields.LastName}/>
-                <Button title={submitting ? 'Создаём аккаунт…' : 'Создать аккаунт'} onPress={onSubmit}
-                        disabled={submitting}/>
-                <View style={{height: 16}}/>
-                <Text style={s.foot}>
+                <Field
+                    label="Логин"
+                    value={username}
+                    onChangeText={setUsername}
+                    placeholder="латиница и цифры, 3–50 символов"
+                    error={fields.Username}
+                />
+                <Field
+                    label="Пароль"
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="минимум 8 символов"
+                    secureTextEntry
+                    error={fields.Password}
+                />
+                <Field label="Имя" value={firstName} onChangeText={setFirstName} autoCapitalize="sentences" error={fields.FirstName}/>
+                <Field label="Отчество" value={middleName} onChangeText={setMiddleName} autoCapitalize="sentences" error={fields.MiddleName}/>
+                <Field label="Фамилия" value={lastName} onChangeText={setLastName} autoCapitalize="sentences" error={fields.LastName}/>
+                <Button title={submitting ? 'Создаём аккаунт…' : 'Создать аккаунт'} onPress={onSubmit} disabled={submitting}/>
+                <p className="mt-4 text-[13px] text-muted text-center">
                     Уже зарегистрированы?{' '}
-                    <Link to="/login" style={{color: colors.primary} as any}>Войти</Link>
-                </Text>
+                    <Link to="/login" className="text-primary hover:underline">Войти</Link>
+                </p>
             </Card>
-        </View>
+        </div>
     )
 }
-
-const s = StyleSheet.create({
-    wrap: {
-        flex: 1,
-        minHeight: '100vh' as any,
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 24,
-        backgroundColor: colors.bg,
-    },
-    foot: {color: colors.textMuted, fontSize: 13, textAlign: 'center'},
-})

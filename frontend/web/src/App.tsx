@@ -1,9 +1,7 @@
-import {ReactNode} from 'react'
-import {ActivityIndicator, StyleSheet, Text, View} from 'react-native'
+import {type ReactNode} from 'react'
 import {Navigate, Route, Routes} from 'react-router-dom'
 import {useAuth} from './auth'
 import {Layout} from './components/Layout'
-import {colors} from './components/ui'
 import LoginPage from './pages/Login'
 import RegisterPage from './pages/Register'
 import ProfilePage from './pages/Profile'
@@ -131,34 +129,29 @@ export default function App() {
     )
 }
 
-function RequireAuth({children}: { children: ReactNode }) {
+function RequireAuth({children}: {children: ReactNode}) {
     const {user} = useAuth()
     if (!user) return <Navigate to="/login" replace/>
     return <>{children}</>
 }
 
-function RequireAdmin({children}: { children: ReactNode }) {
+function RequireAdmin({children}: {children: ReactNode}) {
     const {user} = useAuth()
     if (!user?.is_admin) return <Navigate to="/profile" replace/>
     return <>{children}</>
 }
 
+// Splash is the loading state while the auth context hydrates from
+// localStorage on first mount. Pure CSS animation — no react-native
+// ActivityIndicator dependency.
 function Splash() {
     return (
-        <View style={s.splash}>
-            <ActivityIndicator size="large" color={colors.primary}/>
-            <Text style={s.splashText}>Loading…</Text>
-        </View>
+        <div className="min-h-screen flex flex-col items-center justify-center bg-page">
+            <div
+                className="w-10 h-10 rounded-full border-4 border-primary/30 border-t-primary animate-spin"
+                aria-label="loading"
+            />
+            <p className="mt-3 text-sm text-muted">Загрузка…</p>
+        </div>
     )
 }
-
-const s = StyleSheet.create({
-    splash: {
-        flex: 1,
-        minHeight: '100vh' as any,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: colors.bg,
-    },
-    splashText: {marginTop: 12, color: colors.textMuted, fontSize: 14},
-})
