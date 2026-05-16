@@ -1,23 +1,23 @@
 // HomeworkThread shows the timeline of a single (student, subproblem)
-// thread plus a role-appropriate compact action panel. After the series
-// deadline the submit form is hidden entirely — only the history and the
-// inline appeal panel remain available to the student. The backend would
-// 409 a late submit anyway, but the form is removed so the student isn't
-// nudged toward an action they can't actually take.
+// thread plus a role-appropriate compact action panel. After the
+// series deadline the submit form is hidden entirely — only the
+// history and the inline appeal panel remain available to the
+// student. The backend would 409 a late submit anyway, but the form
+// is removed so the student isn't nudged toward an action they can't
+// actually take.
 //
 // The page is also used at /homework/new/:subproblemID for first-time
-// submissions; an outer route wrapper key-remounts the inner component
-// on every URL change so hooks reset cleanly and we don't render with
-// stale state across navigations.
+// submissions; an outer route wrapper key-remounts the inner
+// component on every URL change so hooks reset cleanly and we don't
+// render with stale state across navigations.
 
 import {useCallback, useEffect, useRef, useState} from 'react'
-import {Pressable, StyleSheet, Text, View} from 'react-native'
 import {useNavigate, useParams} from 'react-router-dom'
 import {APIErrorImpl} from '../api'
 import {
-    EventView,
-    SubproblemContext,
-    ThreadView,
+    type EventView,
+    type SubproblemContext,
+    type ThreadView,
     appealGrade,
     claimThread,
     eventKindLabel,
@@ -56,8 +56,10 @@ type Mode =
     | {kind: 'thread'; threadID: number}
     | {kind: 'new'; subproblemID: number}
 
-// Outer route wrapper: re-keys the inner component on every URL change so
-// hooks reset cleanly across thread/new navigations.
+const tightCardClass = '!py-4 !px-[18px]'
+
+// Outer route wrapper: re-keys the inner component on every URL change
+// so hooks reset cleanly across thread/new navigations.
 export default function HomeworkThreadRoute() {
     const params = useParams<{threadID?: string; subproblemID?: string}>()
     const key = params.threadID ? `t:${params.threadID}` : `n:${params.subproblemID ?? ''}`
@@ -74,7 +76,12 @@ function HomeworkThreadPage() {
     const [me, setMe] = useState<MeForCheck | null>(null)
     const [error, setError] = useState<string | null>(null)
 
-    const modeKey = mode?.kind === 'thread' ? `t:${mode.threadID}` : mode?.kind === 'new' ? `n:${mode.subproblemID}` : 'none'
+    const modeKey = mode?.kind === 'thread'
+        ? `t:${mode.threadID}`
+        : mode?.kind === 'new'
+            ? `n:${mode.subproblemID}`
+            : 'none'
+
     const load = useCallback(async () => {
         if (!user) return
         if (!mode) {
@@ -89,11 +96,11 @@ function HomeworkThreadPage() {
             if (mode.kind === 'thread') {
                 const t = await getThread(authedFetch, mode.threadID)
                 setThread(t)
-                setMe({role: resolveRole(user, teacherIDs, studentCenterID, t.math_center_id, t.student_user_id), userID: user.id})
+                setMe({
+                    role: resolveRole(user, teacherIDs, studentCenterID, t.math_center_id, t.student_user_id),
+                    userID: user.id,
+                })
             } else {
-                // New-submission flow: fetch the subproblem context so we
-                // can label the page and (more importantly) decide
-                // whether the series deadline has already passed.
                 const ctx = await getSubproblemContext(authedFetch, mode.subproblemID)
                 setNewCtx(ctx)
                 let role: Role = 'none'
@@ -105,8 +112,6 @@ function HomeworkThreadPage() {
         } catch (e) {
             setError(e instanceof APIErrorImpl ? e.message : 'Не удалось загрузить')
         }
-        // modeKey is the stable serialization of mode; using it in deps
-        // keeps us from re-running on every render of the inline IIFE.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [modeKey, user, authedFetch])
 
@@ -118,14 +123,14 @@ function HomeworkThreadPage() {
 
     if (error) {
         return (
-            <View style={s.wrap}>
+            <div className="w-[760px] flex flex-col gap-3">
                 <BackLink onPress={() => navigate(-1)}/>
                 <Card><ErrorBanner message={error}/></Card>
-            </View>
+            </div>
         )
     }
     if (!mode) {
-        return <Card style={{width: 720}}><ErrorBanner message="Некорректный URL"/></Card>
+        return <Card className="w-[720px]"><ErrorBanner message="Некорректный URL"/></Card>
     }
     if (mode.kind === 'thread' && (!thread || !me)) {
         return <LoadingFrame onBack={() => navigate(-1)}/>
@@ -135,18 +140,28 @@ function HomeworkThreadPage() {
     }
 
     return (
-        <View style={s.wrap}>
+        <div className="w-[760px] flex flex-col gap-3">
             <BackLink onPress={() => navigate(-1)}/>
             {mode.kind === 'thread' && thread && me ? (
-                <ThreadModeBody thread={thread} role={me.role} userID={me.userID} setThread={setThread} setError={setError}/>
+                <ThreadModeBody
+                    thread={thread}
+                    role={me.role}
+                    userID={me.userID}
+                    setThread={setThread}
+                    setError={setError}
+                />
             ) : null}
             {mode.kind === 'new' && newCtx && me ? (
-                <NewModeBody ctx={newCtx} role={me.role} onCreated={t => {
-                    setThread(t)
-                    navigate(`/homework/threads/${t.id}`, {replace: true})
-                }}/>
+                <NewModeBody
+                    ctx={newCtx}
+                    role={me.role}
+                    onCreated={t => {
+                        setThread(t)
+                        navigate(`/homework/threads/${t.id}`, {replace: true})
+                    }}
+                />
             ) : null}
-        </View>
+        </div>
     )
 }
 
@@ -162,8 +177,6 @@ function parseMode(threadID: string | undefined, subproblemID: string | undefine
     return null
 }
 
-// resolveRole maps the auth context to one of the four buckets the page
-// branches on. Admin always wins; otherwise the center ID decides.
 function resolveRole(
     user: {id: number; is_admin: boolean},
     teacherIDs: Set<number>,
@@ -177,10 +190,11 @@ function resolveRole(
     return 'none'
 }
 
-// useClaimHeartbeat keeps the soft TTL claim alive while a grader who
-// holds it is on the page, and releases it on unmount so it doesn't sit
-// locked for the full 15-minute server-side TTL after the grader leaves.
-function useClaimHeartbeat(thread: ThreadView | null, me: MeForCheck | null, authedFetchRaw: ReturnType<typeof useAuth>['authedFetchRaw']) {
+function useClaimHeartbeat(
+    thread: ThreadView | null,
+    me: MeForCheck | null,
+    authedFetchRaw: ReturnType<typeof useAuth>['authedFetchRaw'],
+) {
     const heldByMe = !!thread
         && me?.role === 'teacher'
         && thread.claim_holder_user_id === me.userID
@@ -209,24 +223,21 @@ function useClaimHeartbeat(thread: ThreadView | null, me: MeForCheck | null, aut
     }, [authedFetchRaw])
 }
 
-// LoadingFrame is the holding state shown while load() is in flight.
-// Includes the back link so the user always has an exit even from a slow
-// or stuck load.
 function LoadingFrame({onBack}: {onBack: () => void}) {
     return (
-        <View style={s.wrap}>
+        <div className="w-[760px] flex flex-col gap-3">
             <BackLink onPress={onBack}/>
             <Card><Subheading>Загрузка…</Subheading></Card>
-        </View>
+        </div>
     )
 }
 
 function ThreadModeBody({thread, role, userID, setThread, setError}: {
-    thread: ThreadView;
-    role: Role;
-    userID: number;
-    setThread: (t: ThreadView) => void;
-    setError: (msg: string) => void;
+    thread: ThreadView
+    role: Role
+    userID: number
+    setThread: (t: ThreadView) => void
+    setError: (msg: string) => void
 }) {
     const closed = isClosed(thread.series_due_at)
     return (
@@ -252,21 +263,19 @@ function ThreadModeBody({thread, role, userID, setThread, setError}: {
 }
 
 function NewModeBody({ctx, role, onCreated}: {
-    ctx: SubproblemContext;
-    role: Role;
-    onCreated: (t: ThreadView) => void;
+    ctx: SubproblemContext
+    role: Role
+    onCreated: (t: ThreadView) => void
 }) {
     const closed = isClosed(ctx.series_due_at)
     return (
         <>
-            <Card style={s.tightCard}>
-                <View style={s.headerRow}>
-                    <Text style={s.taskTitle}>{taskLabel(ctx)}</Text>
-                </View>
-                <Text style={s.muted}>Срок: {formatDateTime(ctx.series_due_at)}</Text>
+            <Card className={tightCardClass}>
+                <h3 className="text-lg font-semibold text-ink">{taskLabel(ctx)}</h3>
+                <p className="text-xs text-muted">Срок: {formatDateTime(ctx.series_due_at)}</p>
             </Card>
             {closed ? (
-                <Card style={s.tightCard}>
+                <Card className={tightCardClass}>
                     <Subheading>Серия закрыта — отправка новых решений недоступна.</Subheading>
                 </Card>
             ) : (
@@ -276,8 +285,6 @@ function NewModeBody({ctx, role, onCreated}: {
     )
 }
 
-// taskLabel renders "Задача 3 (а)" / "Задача 3" depending on whether the
-// subproblem has a real letter or is a sentinel.
 function taskLabel(ctx: SubproblemContext): string {
     return ctx.subproblem_label
         ? `${ctx.problem_display} (${ctx.subproblem_label})`
@@ -286,9 +293,13 @@ function taskLabel(ctx: SubproblemContext): string {
 
 function BackLink({onPress}: {onPress: () => void}) {
     return (
-        <Pressable onPress={onPress} style={s.back}>
-            <Text style={s.backText}>← Назад</Text>
-        </Pressable>
+        <button
+            type="button"
+            onClick={onPress}
+            className="self-start px-2 py-1 rounded-md text-sm font-medium text-primary hover:bg-page"
+        >
+            ← Назад
+        </button>
     )
 }
 
@@ -298,51 +309,60 @@ function ThreadHeader({thread, userID}: {thread: ThreadView; userID: number}) {
         && (!thread.claim_expires_at || new Date(thread.claim_expires_at).getTime() > Date.now())
     const claimedByMe = liveClaim && thread.claim_holder_user_id === userID
     const claimedByOther = liveClaim && thread.claim_holder_user_id !== userID
+    const cardClass = claimedByMe
+        ? `${tightCardClass} !border-2 !border-primary !bg-[#eff6ff]`
+        : tightCardClass
     return (
-        <Card style={claimedByMe ? {...s.tightCard, ...s.claimedByMeCard} : s.tightCard}>
-            <View style={s.headerRow}>
-                <View style={s.headerLeft}>
-                    <Text style={s.taskTitle}>Задача</Text>
+        <Card className={cardClass}>
+            <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-semibold text-ink">Задача</h3>
                     {claimedByMe ? (
-                        <View style={s.youCheckBadge}>
-                            <Text style={s.youCheckBadgeText}>На вашей проверке</Text>
-                        </View>
+                        <div className="bg-primary px-2 py-0.5 rounded-full">
+                            <span className="text-[11px] font-bold text-white tracking-wide">На вашей проверке</span>
+                        </div>
                     ) : null}
-                </View>
-                <View style={[s.statusPill, {backgroundColor: statusBackgroundColor(status), borderColor: statusBorderColor(status)}]}>
-                    <Text style={s.statusPillText}>{statusLabel(status)}</Text>
-                </View>
-            </View>
+                </div>
+                <div
+                    className="px-2.5 py-0.5 rounded-full border"
+                    style={{backgroundColor: statusBackgroundColor(status), borderColor: statusBorderColor(status)}}
+                >
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-ink">
+                        {statusLabel(status)}
+                    </span>
+                </div>
+            </div>
             {claimedByMe ? (
-                <Text style={s.muted}>
+                <p className="text-xs text-muted mt-2">
                     Вы проверяете эту задачу
                     {thread.claim_expires_at ? ` — лок до ${formatDateTime(thread.claim_expires_at)}` : null}
-                </Text>
+                </p>
             ) : claimedByOther ? (
-                <Text style={s.muted}>
+                <p className="text-xs text-muted mt-2">
                     Проверяет: {userNameFromThread(thread, thread.claim_holder_user_id)}
                     {thread.claim_expires_at ? ` (до ${formatDateTime(thread.claim_expires_at)})` : null}
-                </Text>
+                </p>
             ) : null}
         </Card>
     )
 }
 
 function Timeline({thread, role, closed, userID, onUpdate}: {
-    thread: ThreadView;
-    role: Role;
-    closed: boolean;
-    userID: number;
-    onUpdate: (t: ThreadView) => void;
+    thread: ThreadView
+    role: Role
+    closed: boolean
+    userID: number
+    onUpdate: (t: ThreadView) => void
 }) {
     const {authedFetch} = useAuth()
     const events = thread.events
     if (events.length === 0) {
-        return <Card style={s.tightCard}><Text style={s.muted}>Пока ничего не отправлено.</Text></Card>
+        return (
+            <Card className={tightCardClass}>
+                <p className="text-xs text-muted">Пока ничего не отправлено.</p>
+            </Card>
+        )
     }
-    // The appeal panel attaches to the most recent rejection event so the
-    // student sees it inline. Appeals stay allowed even after the deadline
-    // — the user can still ask for a re-read of an existing attempt.
     const lastRejectionID = (() => {
         for (let i = events.length - 1; i >= 0; i--) {
             if (events[i].kind === 'graded' && events[i].verdict === 'rejected') return events[i].id
@@ -350,11 +370,12 @@ function Timeline({thread, role, closed, userID, onUpdate}: {
         return -1
     })()
     const canAppeal = role === 'student' && thread.current_status === 'rejected'
+    void closed // informs sibling components; not used here directly.
     return (
-        <Card style={s.tightCard}>
+        <Card className={tightCardClass}>
             <Heading>История</Heading>
             {events.map(ev => (
-                <View key={ev.id}>
+                <div key={ev.id}>
                     <EventCard event={ev} thread={thread} userID={userID}/>
                     {canAppeal && ev.id === lastRejectionID ? (
                         <InlineAppeal
@@ -368,10 +389,8 @@ function Timeline({thread, role, closed, userID, onUpdate}: {
                             }}
                         />
                     ) : null}
-                </View>
+                </div>
             ))}
-            {/* `closed` informs sibling components; not used here directly. */}
-            {void closed}
         </Card>
     )
 }
@@ -386,38 +405,30 @@ function EventCard({event, thread, userID}: {event: EventView; thread: ThreadVie
     const actorIsMe = event.actor_user_id === userID
     const actorName = actorIsMe ? 'Вы' : userNameFromThread(thread, event.actor_user_id)
     return (
-        <View style={[s.event, {borderLeftColor: accent}]}>
-            <View style={s.eventHeader}>
-                <Text style={[s.eventKind, {color: accent}]}>
+        <div className="border-l-[3px] pl-2.5 py-2 mt-2" style={{borderLeftColor: accent}}>
+            <div className="flex justify-between mb-1">
+                <span className="text-[13px] font-bold" style={{color: accent}}>
                     {eventKindLabel(event.kind, event.verdict)}
-                </Text>
-                <Text style={s.eventMeta}>
+                </span>
+                <span className="text-[11px] text-muted">
                     {actorName} · {formatDateTime(event.created_at)}
-                </Text>
-            </View>
-            {event.body ? <Text style={s.eventBody}>{event.body}</Text> : null}
+                </span>
+            </div>
+            {event.body ? <p className="text-sm text-ink mt-1 mb-1">{event.body}</p> : null}
             {event.photos.length > 0 ? (
-                <View style={s.photoRow}>
+                <div className="flex flex-wrap gap-2 mt-1.5">
                     {event.photos.map(p => (
                         <a key={p.object_key} href={p.url} target="_blank" rel="noreferrer">
                             <img
                                 src={p.url}
                                 alt=""
-                                style={{
-                                    width: 96,
-                                    height: 96,
-                                    objectFit: 'cover',
-                                    borderRadius: 6,
-                                    background: '#f3f4f6',
-                                    border: `1px solid ${colors.border}`,
-                                    display: 'block',
-                                }}
+                                className="w-24 h-24 object-cover rounded-md border border-card-border bg-[#f3f4f6] block"
                             />
                         </a>
                     ))}
-                </View>
+                </div>
             ) : null}
-        </View>
+        </div>
     )
 }
 
@@ -426,28 +437,18 @@ function InlineAppeal({onSubmit}: {onSubmit: (body: string) => Promise<void>}) {
     const [busy, setBusy] = useState(false)
     const [error, setError] = useState<string | null>(null)
     return (
-        <View style={s.appealBox}>
+        <div className="ml-3 mt-2 mb-1 flex flex-col gap-2 p-2.5 bg-[#faf5ff] rounded-lg border border-[#e9d5ff]">
             {error ? <ErrorBanner message={error}/> : null}
-            <Text style={s.appealLabel}>Подать апелляцию (без новых фото — это запрос на пересмотр текущей попытки)</Text>
+            <p className="text-xs italic text-muted">
+                Подать апелляцию (без новых фото — это запрос на пересмотр текущей попытки)
+            </p>
             <textarea
                 value={body}
                 onChange={e => setBody(e.target.value)}
                 placeholder="Что нужно перепроверить?"
-                style={{
-                    minHeight: 60,
-                    width: '100%',
-                    border: `1px solid ${colors.border}`,
-                    borderRadius: 6,
-                    padding: 8,
-                    fontSize: 14,
-                    color: colors.text,
-                    backgroundColor: '#fff',
-                    resize: 'vertical',
-                    fontFamily: 'inherit',
-                    boxSizing: 'border-box',
-                }}
+                className="min-h-[60px] w-full rounded-md border border-card-border bg-white p-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y"
             />
-            <View style={{alignSelf: 'flex-start'}}>
+            <div className="self-start">
                 <Button
                     title={busy ? 'Отправляем…' : 'Отправить апелляцию'}
                     disabled={busy || body.trim() === ''}
@@ -464,30 +465,26 @@ function InlineAppeal({onSubmit}: {onSubmit: (body: string) => Promise<void>}) {
                         }
                     }}
                 />
-            </View>
-        </View>
+            </div>
+        </div>
     )
 }
 
 function ActionPanel({thread, role, userID, closed, onUpdate, onError}: {
-    thread: ThreadView;
-    role: Role;
-    userID: number;
-    closed: boolean;
-    onUpdate: (t: ThreadView) => void;
-    onError: (msg: string) => void;
+    thread: ThreadView
+    role: Role
+    userID: number
+    closed: boolean
+    onUpdate: (t: ThreadView) => void
+    onError: (msg: string) => void
 }) {
     const {authedFetch} = useAuth()
 
     if (role === 'student') {
-        // After the deadline the student can still appeal (inline in the
-        // timeline) but they can no longer SEND a new attempt — neither
-        // a first submission for an ungraded problem nor a resubmission
-        // after rejection. The submit form is removed entirely.
         if (closed) return null
         if (thread.current_status === 'rejected' || thread.current_status === 'ungraded') {
             return (
-                <Card style={s.tightCard}>
+                <Card className={tightCardClass}>
                     <Heading>
                         {thread.current_status === 'rejected' ? 'Отправить новое решение' : 'Отправить решение'}
                     </Heading>
@@ -510,7 +507,8 @@ function ActionPanel({thread, role, userID, closed, onUpdate, onError}: {
 
     if (role === 'teacher' || role === 'admin') {
         const claimHolder = thread.claim_holder_user_id
-        const claimLive = claimHolder != null && (!thread.claim_expires_at || new Date(thread.claim_expires_at).getTime() > Date.now())
+        const claimLive = claimHolder != null
+            && (!thread.claim_expires_at || new Date(thread.claim_expires_at).getTime() > Date.now())
         const heldByMe = claimLive && claimHolder === userID
         const canGrade = (thread.current_status === 'submitted' || thread.current_status === 'appealed') && heldByMe
         const canClaim = (thread.current_status === 'submitted' || thread.current_status === 'appealed') && !claimLive
@@ -520,7 +518,7 @@ function ActionPanel({thread, role, userID, closed, onUpdate, onError}: {
         return (
             <>
                 {canClaim ? (
-                    <Card style={s.tightCard}>
+                    <Card className={tightCardClass}>
                         <Button
                             title="Взять в проверку"
                             onPress={async () => {
@@ -532,11 +530,11 @@ function ActionPanel({thread, role, userID, closed, onUpdate, onError}: {
                                 }
                             }}
                         />
-                        <Text style={[s.muted, {marginTop: 6}]}>Лок на 15 минут с автопродлением.</Text>
+                        <p className="text-xs text-muted mt-1.5">Лок на 15 минут с автопродлением.</p>
                     </Card>
                 ) : null}
                 {canGrade ? (
-                    <Card style={s.tightCard}>
+                    <Card className={tightCardClass}>
                         <Heading>Поставить оценку</Heading>
                         <SubmitForm
                             purpose="grade"
@@ -560,18 +558,15 @@ function ActionPanel({thread, role, userID, closed, onUpdate, onError}: {
                     </Card>
                 ) : null}
                 {claimLive && !heldByMe ? (
-                    <Card style={s.tightCard}>
-                        <Text style={s.muted}>
+                    <Card className={tightCardClass}>
+                        <p className="text-xs text-muted">
                             Сейчас задача занята: {userNameFromThread(thread, thread.claim_holder_user_id)}.
-                        </Text>
+                        </p>
                     </Card>
                 ) : null}
                 {canRetract ? (
-                    <Card style={s.tightCard}>
-                        <RetractPanel
-                            threadID={thread.id}
-                            onRetracted={onUpdate}
-                        />
+                    <Card className={tightCardClass}>
+                        <RetractPanel threadID={thread.id} onRetracted={onUpdate}/>
                     </Card>
                 ) : null}
             </>
@@ -587,28 +582,18 @@ function RetractPanel({threadID, onRetracted}: {threadID: number; onRetracted: (
     const [busy, setBusy] = useState(false)
     const [error, setError] = useState<string | null>(null)
     return (
-        <View style={{gap: 8} as any}>
+        <div className="flex flex-col gap-2">
             {error ? <ErrorBanner message={error}/> : null}
-            <Text style={s.appealLabel}>Отозвать оценку (вернёт задачу к предыдущему состоянию)</Text>
+            <p className="text-xs italic text-muted">
+                Отозвать оценку (вернёт задачу к предыдущему состоянию)
+            </p>
             <textarea
                 value={reason}
                 onChange={e => setReason(e.target.value)}
                 placeholder="Причина (необязательно)"
-                style={{
-                    minHeight: 50,
-                    width: '100%',
-                    border: `1px solid ${colors.border}`,
-                    borderRadius: 6,
-                    padding: 8,
-                    fontSize: 14,
-                    color: colors.text,
-                    backgroundColor: '#fff',
-                    resize: 'vertical',
-                    fontFamily: 'inherit',
-                    boxSizing: 'border-box',
-                }}
+                className="min-h-[50px] w-full rounded-md border border-card-border bg-white p-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y"
             />
-            <View style={{alignSelf: 'flex-start'}}>
+            <div className="self-start">
                 <Button
                     title={busy ? 'Отзываем…' : 'Отозвать оценку'}
                     variant="danger"
@@ -627,29 +612,26 @@ function RetractPanel({threadID, onRetracted}: {threadID: number; onRetracted: (
                         }
                     }}
                 />
-            </View>
-        </View>
+            </div>
+        </div>
     )
 }
 
 function NewSubmissionPanel({subproblemID, onCreated, role}: {
-    subproblemID: number;
-    onCreated: (t: ThreadView) => void;
-    role: Role;
+    subproblemID: number
+    onCreated: (t: ThreadView) => void
+    role: Role
 }) {
     const {authedFetch} = useAuth()
-    // Only students get the submit form. Teachers/admins shouldn't be
-    // landing here in practice (their tile clicks go to existing threads),
-    // but if they do we show a neutral message rather than a useless form.
     if (role !== 'student') {
         return (
-            <Card style={s.tightCard}>
+            <Card className={tightCardClass}>
                 <Subheading>Решение может отправить только ученик.</Subheading>
             </Card>
         )
     }
     return (
-        <Card style={s.tightCard}>
+        <Card className={tightCardClass}>
             <Heading>Отправить решение</Heading>
             <SubmitForm
                 purpose="submit"
@@ -665,59 +647,3 @@ function NewSubmissionPanel({subproblemID, onCreated, role}: {
         </Card>
     )
 }
-
-const s = StyleSheet.create({
-    wrap: {width: 760, gap: 12} as any,
-    back: {alignSelf: 'flex-start', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6},
-    backText: {fontSize: 14, fontWeight: '500', color: colors.primary},
-    tightCard: {paddingVertical: 16, paddingHorizontal: 18},
-    headerRow: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12} as any,
-    taskTitle: {fontSize: 18, fontWeight: '600', color: colors.text},
-    headerLeft: {flexDirection: 'row', alignItems: 'center', gap: 8} as any,
-    statusPill: {
-        paddingHorizontal: 10,
-        paddingVertical: 3,
-        borderRadius: 999,
-        borderWidth: 1,
-    },
-    // Visual cue that this is the task the current user is grading.
-    // A bright primary border around the whole card makes it stand out at
-    // a glance against the rest of the (calm) page chrome.
-    claimedByMeCard: {
-        borderColor: colors.primary,
-        borderWidth: 2,
-        backgroundColor: '#eff6ff',
-    },
-    youCheckBadge: {
-        backgroundColor: colors.primary,
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 999,
-    },
-    youCheckBadgeText: {fontSize: 11, fontWeight: '700', color: '#fff', letterSpacing: 0.3},
-    statusPillText: {fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, color: colors.text},
-    muted: {fontSize: 12, color: colors.textMuted},
-    event: {
-        borderLeftWidth: 3,
-        paddingLeft: 10,
-        paddingVertical: 8,
-        marginTop: 8,
-    },
-    eventHeader: {flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4},
-    eventKind: {fontSize: 13, fontWeight: '700'},
-    eventMeta: {fontSize: 11, color: colors.textMuted},
-    eventBody: {fontSize: 14, color: colors.text, marginTop: 4, marginBottom: 4},
-    photoRow: {flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6} as any,
-    appealBox: {
-        marginLeft: 13,
-        marginTop: 8,
-        marginBottom: 4,
-        gap: 8,
-        padding: 10,
-        backgroundColor: '#faf5ff',
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: '#e9d5ff',
-    } as any,
-    appealLabel: {fontSize: 12, color: colors.textMuted, fontStyle: 'italic'},
-})
