@@ -7,19 +7,18 @@
 // so this component just glues file picking → upload → finalize together.
 
 import {useState} from 'react'
-import {Pressable, StyleSheet, Text, TextInput, View} from 'react-native'
 import {APIErrorImpl} from '../../api'
-import {Verdict, uploadPhotos} from '../../api/homework'
+import {type Verdict, uploadPhotos} from '../../api/homework'
 import {useAuth} from '../../auth'
-import {Button, colors, ErrorBanner} from '../ui'
+import {Button, ErrorBanner} from '../ui'
 
 export type SubmitFormPurpose = 'submit' | 'appeal' | 'grade'
 
 interface SubmitFormProps {
     purpose: SubmitFormPurpose
-    // Where to mint upload URLs and which finalize endpoint to call. For
-    // student submit/appeal we pass subproblemID (kind='student'); for
-    // grade we pass threadID (kind='grader').
+    // Where to mint upload URLs and which finalize endpoint to call.
+    // For student submit/appeal we pass subproblemID (kind='student');
+    // for grade we pass threadID (kind='grader').
     presignKind: 'student' | 'grader'
     presignID: number
     // Called when files + body are ready. Returns when the finalize call
@@ -40,9 +39,10 @@ export function SubmitForm(props: SubmitFormProps) {
     const [busy, setBusy] = useState(false)
 
     function pickFiles() {
-        // The native <input type=file> is the only reliable cross-browser
-        // way to open the OS file dialog; React Native Web doesn't expose
-        // an equivalent component.
+        // The native <input type=file> is the simplest cross-browser
+        // way to open the OS file dialog. We programmatically create
+        // one rather than rendering it in JSX so the visible
+        // "Прикрепить фото" button can stay a normal styled <button>.
         const input = document.createElement('input')
         input.type = 'file'
         input.multiple = true
@@ -66,19 +66,15 @@ export function SubmitForm(props: SubmitFormProps) {
         }
         setBusy(true)
         try {
-            // 1. Mint URLs + upload (uploadPhotos handles the no-photos case
-            //    by minting a UUID without a server roundtrip).
             const {event_uuid, object_keys} = await uploadPhotos(
                 authedFetch, props.presignKind, props.presignID, files,
             )
-            // 2. Hand off to the caller, who runs the finalize endpoint.
             await props.onSubmit({
                 event_uuid,
                 body: body.trim(),
                 object_keys,
                 verdict: props.showVerdictControls ? (verdict as Verdict) : undefined,
             })
-            // Reset the form on success so the next attempt starts clean.
             setBody('')
             setFiles([])
             setVerdict('')
@@ -90,95 +86,80 @@ export function SubmitForm(props: SubmitFormProps) {
     }
 
     return (
-        <View style={s.root}>
+        <div className="flex flex-col gap-3">
             {error ? <ErrorBanner message={error}/> : null}
             {props.showVerdictControls ? (
-                <View style={s.verdictRow}>
+                <div className="flex gap-2">
                     <VerdictButton
                         label="Принять"
                         active={verdict === 'accepted'}
-                        accent="#15803d"
-                        onPress={() => setVerdict('accepted')}
+                        accent="ok"
+                        onClick={() => setVerdict('accepted')}
                     />
                     <VerdictButton
                         label="Отклонить"
                         active={verdict === 'rejected'}
-                        accent="#dc2626"
-                        onPress={() => setVerdict('rejected')}
+                        accent="danger"
+                        onClick={() => setVerdict('rejected')}
                     />
-                </View>
+                </div>
             ) : null}
-            <TextInput
-                style={s.textarea}
-                placeholder={props.bodyPlaceholder ?? 'Комментарий…'}
-                placeholderTextColor={colors.textMuted}
-                multiline
+            <textarea
                 value={body}
-                onChangeText={setBody}
+                onChange={e => setBody(e.target.value)}
+                placeholder={props.bodyPlaceholder ?? 'Комментарий…'}
+                className="min-h-[100px] w-full rounded-lg border border-card-border bg-white p-3 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y"
             />
-            <View style={s.fileBar}>
-                <Button title={`Прикрепить фото (${files.length}/10)`} onPress={pickFiles} variant="secondary"/>
+            <div className="flex items-center gap-3">
+                <Button
+                    title={`Прикрепить фото (${files.length}/10)`}
+                    onPress={pickFiles}
+                    variant="secondary"
+                />
                 {files.length > 0 ? (
-                    <Pressable onPress={() => setFiles([])}>
-                        <Text style={s.clearLink}>Очистить</Text>
-                    </Pressable>
+                    <button
+                        type="button"
+                        onClick={() => setFiles([])}
+                        className="text-[13px] font-medium text-danger hover:underline"
+                    >
+                        Очистить
+                    </button>
                 ) : null}
-            </View>
+            </div>
             {files.length > 0 ? (
-                <View style={s.fileList}>
+                <div className="flex flex-col gap-1">
                     {files.map((f, i) => (
-                        <Text key={`${f.name}-${i}`} style={s.fileItem}>{f.name}</Text>
+                        <span key={`${f.name}-${i}`} className="text-xs text-muted">{f.name}</span>
                     ))}
-                </View>
+                </div>
             ) : null}
             <Button
                 title={busy ? 'Отправляем…' : props.submitLabel}
                 onPress={handleSubmit}
                 disabled={busy}
             />
-        </View>
+        </div>
     )
 }
 
-function VerdictButton({label, active, accent, onPress}: {label: string; active: boolean; accent: string; onPress: () => void}) {
+function VerdictButton({label, active, accent, onClick}: {
+    label: string
+    active: boolean
+    accent: 'ok' | 'danger'
+    onClick: () => void
+}) {
+    const activeClasses = accent === 'ok'
+        ? 'bg-ok border-ok text-white'
+        : 'bg-danger border-danger text-white'
     return (
-        <Pressable
-            onPress={onPress}
-            style={({pressed}) => [
-                s.verdictBtn,
-                active && {backgroundColor: accent, borderColor: accent},
-                pressed && {opacity: 0.85},
-            ]}
+        <button
+            type="button"
+            onClick={onClick}
+            className={`rounded-md border border-card-border px-3.5 py-2 text-sm font-semibold transition-colors ${
+                active ? activeClasses : 'text-ink hover:bg-page'
+            }`}
         >
-            <Text style={[s.verdictText, active && {color: '#fff'}]}>{label}</Text>
-        </Pressable>
+            {label}
+        </button>
     )
 }
-
-const s = StyleSheet.create({
-    root: {gap: 12} as any,
-    textarea: {
-        minHeight: 100,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 8,
-        padding: 12,
-        fontSize: 14,
-        color: colors.text,
-        backgroundColor: '#fff',
-        textAlignVertical: 'top',
-    },
-    fileBar: {flexDirection: 'row', alignItems: 'center', gap: 12} as any,
-    clearLink: {fontSize: 13, color: colors.danger, fontWeight: '500'},
-    fileList: {gap: 4} as any,
-    fileItem: {fontSize: 12, color: colors.textMuted},
-    verdictRow: {flexDirection: 'row', gap: 8} as any,
-    verdictBtn: {
-        paddingVertical: 8,
-        paddingHorizontal: 14,
-        borderRadius: 6,
-        borderWidth: 1,
-        borderColor: colors.border,
-    },
-    verdictText: {fontSize: 14, fontWeight: '600', color: colors.text},
-})
