@@ -1,6 +1,7 @@
 /// <reference types="vitest" />
 import {defineConfig} from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 
 // React Native for Web is opted into via two switches:
 //   1. resolve.alias rewrites every `react-native` import to `react-native-web`
@@ -9,8 +10,12 @@ import react from '@vitejs/plugin-react'
 //
 // `define` shims are required because react-native-web reads `__DEV__`
 // (RN-style) and `process.env.NODE_ENV` at module init.
+//
+// Tailwind v4 plugs in via @tailwindcss/vite; the config (theme,
+// content paths) lives in src/index.css via @theme + automatic
+// scanning of the source tree.
 export default defineConfig({
-    plugins: [react()],
+    plugins: [react(), tailwindcss()],
     resolve: {
         alias: {
             'react-native': 'react-native-web',
