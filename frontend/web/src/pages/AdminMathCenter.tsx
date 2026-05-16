@@ -1,9 +1,8 @@
 import {useCallback, useEffect, useMemo, useState} from 'react'
-import {StyleSheet, Text, View} from 'react-native'
 import {APIErrorImpl} from '../api'
 import {useAuth, User} from '../auth'
 import {Autocomplete, AutocompleteItem} from '../components/Autocomplete'
-import {Button, Card, colors, ErrorBanner, Field, Heading, Subheading} from '../components/ui'
+import {Button, Card, ErrorBanner, Field, Heading, Subheading} from '../components/ui'
 
 interface Center {
     id: number
@@ -35,6 +34,10 @@ interface StudentRow {
     middle_name: string | null
     last_name: string
 }
+
+const sectionLabelClass = 'mt-[18px] mb-2 text-xs font-bold uppercase tracking-wide text-muted'
+const rowClass = 'flex items-center justify-between py-2 border-b border-card-border'
+const mutedClass = 'text-[13px] italic text-muted'
 
 export default function AdminMathCenterPage() {
     const {authedFetch} = useAuth()
@@ -95,35 +98,38 @@ export default function AdminMathCenterPage() {
     }
 
     return (
-        <View style={{width: 900, gap: 24} as any}>
+        <div className="w-[900px] flex flex-col gap-6">
             <Card>
                 <Heading>Управление матцентрами</Heading>
                 <Subheading>Создавайте матцентры по году выпуска и наполняйте их группами и участниками.</Subheading>
                 {error ? <ErrorBanner message={error}/> : null}
-                <View style={s.inline}>
-                    <View style={{flex: 1}}>
-                        <Field label="Год выпуска" value={newYear} onChangeText={setNewYear}
-                               placeholder="например, 2027"/>
-                    </View>
-                    <View style={{width: 16}}/>
-                    <View style={{justifyContent: 'flex-end', paddingBottom: 12}}>
+                <div className="flex items-end gap-4">
+                    <div className="flex-1">
+                        <Field
+                            label="Год выпуска"
+                            value={newYear}
+                            onChangeText={setNewYear}
+                            placeholder="например, 2027"
+                        />
+                    </div>
+                    <div className="pb-3">
                         <Button title="Создать матцентр" onPress={createCenter}/>
-                    </View>
-                </View>
-                <Text style={s.section}>Существующие матцентры</Text>
+                    </div>
+                </div>
+                <p className={sectionLabelClass}>Существующие матцентры</p>
                 {centers.length === 0 ? (
-                    <Text style={s.muted}>Пока ничего не создано</Text>
+                    <p className={mutedClass}>Пока ничего не создано</p>
                 ) : (
                     centers.map((c) => (
-                        <View key={c.id} style={s.row}>
-                            <Text style={[s.name, selectedId === c.id && {color: colors.primary, fontWeight: '700'}]}>
+                        <div key={c.id} className={rowClass}>
+                            <p className={`text-sm ${selectedId === c.id ? 'text-primary font-bold' : 'text-ink'}`}>
                                 Выпуск {c.graduation_year}
-                            </Text>
-                            <View style={{flexDirection: 'row', gap: 8} as any}>
+                            </p>
+                            <div className="flex gap-2">
                                 <Button title="Открыть" variant="secondary" onPress={() => setSelectedId(c.id)}/>
                                 <Button title="Удалить" variant="danger" onPress={() => deleteCenter(c)}/>
-                            </View>
-                        </View>
+                            </div>
+                        </div>
                     ))
                 )}
             </Card>
@@ -137,7 +143,7 @@ export default function AdminMathCenterPage() {
                     onError={setError}
                 />
             ) : null}
-        </View>
+        </div>
     )
 }
 
@@ -184,10 +190,6 @@ function CenterDetail(props: {
         return m
     }, [users])
 
-    // userItems is the autocomplete source for "pick a user". Label is the
-    // full ФИО so the admin can search by any part of the name; sublabel
-    // shows the username and also participates in matching (so typing
-    // "@bob" finds Boris just as well).
     const userItems = useMemo<AutocompleteItem[]>(
         () =>
             users.map((u) => ({
@@ -198,7 +200,6 @@ function CenterDetail(props: {
         [users],
     )
 
-    // groupItems lists this center's groups for the student picker.
     const groupItems = useMemo<AutocompleteItem[]>(
         () => groups.map((g) => ({id: g.id, label: 'Группа ' + g.name})),
         [groups],
@@ -295,30 +296,29 @@ function CenterDetail(props: {
             <Heading>Выпуск {center.graduation_year}</Heading>
             <Subheading>Управление группами, учениками и преподавателями</Subheading>
 
-            <Text style={s.section}>Группы</Text>
-            <View style={s.inline}>
-                <View style={{flex: 1}}>
+            <p className={sectionLabelClass}>Группы</p>
+            <div className="flex items-end gap-4">
+                <div className="flex-1">
                     <Field label="Название группы" value={newGroup} onChangeText={setNewGroup} placeholder="A, Б, 1, …"/>
-                </View>
-                <View style={{width: 16}}/>
-                <View style={{justifyContent: 'flex-end', paddingBottom: 12}}>
+                </div>
+                <div className="pb-3">
                     <Button title="Добавить группу" onPress={createGroup}/>
-                </View>
-            </View>
+                </div>
+            </div>
             {groups.length === 0 ? (
-                <Text style={s.muted}>Пока групп нет</Text>
+                <p className={mutedClass}>Пока групп нет</p>
             ) : (
                 groups.map((g) => (
-                    <View key={g.id} style={s.row}>
-                        <Text style={s.name}>Группа {g.name}</Text>
+                    <div key={g.id} className={rowClass}>
+                        <p className="text-sm text-ink">Группа {g.name}</p>
                         <Button title="Удалить" variant="danger" onPress={() => deleteGroup(g)}/>
-                    </View>
+                    </div>
                 ))
             )}
 
-            <Text style={s.section}>Преподаватели</Text>
-            <View style={s.inline}>
-                <View style={{flex: 1, zIndex: 30 as any}}>
+            <p className={sectionLabelClass}>Преподаватели</p>
+            <div className="flex items-end gap-4">
+                <div className="flex-1">
                     <Autocomplete
                         label="Пользователь"
                         placeholder="начните вводить имя или логин"
@@ -326,46 +326,44 @@ function CenterDetail(props: {
                         selected={teacherUser}
                         onSelect={setTeacherUser}
                     />
-                </View>
-                <View style={{width: 16}}/>
-                <View style={{justifyContent: 'flex-end', paddingBottom: 12}}>
+                </div>
+                <div className="pb-3">
                     <Button
                         title={teacherIsHead ? 'Старший: да' : 'Старший: нет'}
                         variant="secondary"
                         onPress={() => setTeacherIsHead((v) => !v)}
                     />
-                </View>
-                <View style={{width: 8}}/>
-                <View style={{justifyContent: 'flex-end', paddingBottom: 12}}>
+                </div>
+                <div className="pb-3">
                     <Button title="Добавить" onPress={addTeacher}/>
-                </View>
-            </View>
+                </div>
+            </div>
             {teachers.length === 0 ? (
-                <Text style={s.muted}>Пока преподавателей нет</Text>
+                <p className={mutedClass}>Пока преподавателей нет</p>
             ) : (
                 teachers.map((t) => {
                     const u = userById.get(t.user_id)
                     const display = teacherDisplay(t.first_name, t.middle_name) +
                         (u ? ` (@${u.username})` : '')
                     return (
-                        <View key={t.id} style={s.row}>
-                            <Text style={s.name}>{display}</Text>
-                            <View style={{flexDirection: 'row', gap: 8} as any}>
+                        <div key={t.id} className={rowClass}>
+                            <p className="text-sm text-ink">{display}</p>
+                            <div className="flex gap-2">
                                 <Button
                                     title={t.is_head_teacher ? 'Снять старшего' : 'Сделать старшим'}
                                     variant="secondary"
                                     onPress={() => toggleHead(t)}
                                 />
                                 <Button title="Убрать" variant="danger" onPress={() => removeTeacher(t)}/>
-                            </View>
-                        </View>
+                            </div>
+                        </div>
                     )
                 })
             )}
 
-            <Text style={s.section}>Ученики</Text>
-            <View style={s.inline}>
-                <View style={{flex: 1, zIndex: 20 as any}}>
+            <p className={sectionLabelClass}>Ученики</p>
+            <div className="flex items-end gap-4">
+                <div className="flex-1">
                     <Autocomplete
                         label="Пользователь"
                         placeholder="начните вводить имя или логин"
@@ -373,9 +371,8 @@ function CenterDetail(props: {
                         selected={studentUser}
                         onSelect={setStudentUser}
                     />
-                </View>
-                <View style={{width: 16}}/>
-                <View style={{flex: 1, zIndex: 20 as any}}>
+                </div>
+                <div className="flex-1">
                     <Autocomplete
                         label="Группа"
                         placeholder="название группы"
@@ -384,24 +381,23 @@ function CenterDetail(props: {
                         onSelect={setStudentGroup}
                         emptyMessage="Сначала создайте хотя бы одну группу"
                     />
-                </View>
-                <View style={{width: 16}}/>
-                <View style={{justifyContent: 'flex-end', paddingBottom: 12}}>
+                </div>
+                <div className="pb-3">
                     <Button title="Добавить" onPress={addStudent}/>
-                </View>
-            </View>
+                </div>
+            </div>
             {students.length === 0 ? (
-                <Text style={s.muted}>Пока учеников нет</Text>
+                <p className={mutedClass}>Пока учеников нет</p>
             ) : (
                 students.map((st) => {
                     const u = userById.get(st.user_id)
                     const display = studentDisplay(st.first_name, st.last_name) +
                         (u ? ` (@${u.username})` : '')
                     return (
-                        <View key={st.id} style={s.row}>
-                            <Text style={s.name}>{display} — группа {st.group_name}</Text>
+                        <div key={st.id} className={rowClass}>
+                            <p className="text-sm text-ink">{display} — группа {st.group_name}</p>
                             <Button title="Убрать" variant="danger" onPress={() => removeStudent(st)}/>
-                        </View>
+                        </div>
                     )
                 })
             )}
@@ -416,26 +412,3 @@ function teacherDisplay(first: string, middle: string | null): string {
 function studentDisplay(first: string, last: string): string {
     return last ? `${first} ${last}` : first
 }
-
-const s = StyleSheet.create({
-    inline: {flexDirection: 'row', alignItems: 'flex-start'},
-    section: {
-        marginTop: 18,
-        marginBottom: 8,
-        fontSize: 12,
-        fontWeight: '700',
-        color: colors.textMuted,
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-    },
-    row: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 8,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-    name: {fontSize: 14, color: colors.text},
-    muted: {fontSize: 13, color: colors.textMuted, fontStyle: 'italic'},
-})

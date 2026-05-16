@@ -1,5 +1,4 @@
 import {useCallback, useEffect, useState} from 'react'
-import {Pressable, StyleSheet, Text, View} from 'react-native'
 import {APIErrorImpl} from '../../api'
 import {
     createSeries,
@@ -16,7 +15,7 @@ import {
 } from '../../api/series'
 import {useAuth} from '../../auth'
 import {formatDateTime} from '../../lib/format'
-import {Button, colors, ErrorBanner, Field} from '../ui'
+import {Button, ErrorBanner, Field} from '../ui'
 
 // SeriesPanel is the per-center series UI: list on the left, an inline editor
 // or detail on the right. It deliberately keeps everything in one component
@@ -34,6 +33,12 @@ type Mode =
     | {kind: 'edit'; id: number}
     | {kind: 'create'}
 
+const sectionClass = 'text-xs font-bold uppercase tracking-wide text-muted'
+const subSectionClass = 'text-base font-semibold text-ink mb-2'
+const subLabelClass = 'mt-3 mb-1.5 text-xs font-bold uppercase tracking-wide text-muted'
+const mutedClass = 'text-[13px] italic text-muted'
+const boxClass = 'mt-4 p-4 border border-card-border rounded-lg bg-[#fafbff]'
+
 export function SeriesPanel({centerID, isTeacher}: Props) {
     const {authedFetch, authedFetchRaw} = useAuth()
     const [list, setList] = useState<Series[]>([])
@@ -43,8 +48,6 @@ export function SeriesPanel({centerID, isTeacher}: Props) {
 
     const reloadList = useCallback(async () => {
         try {
-            // Newest series at the top — matches the student-facing list
-            // and matches how the teacher actually thinks about psets.
             const raw = await listSeriesForCenter(authedFetch, centerID)
             setList(raw.slice().sort((a, b) => b.number - a.number))
         } catch (e) {
@@ -56,8 +59,6 @@ export function SeriesPanel({centerID, isTeacher}: Props) {
         void reloadList()
     }, [reloadList])
 
-    // When mode points at a specific series id, fetch it (so the detail view
-    // can show problems even if the list response someday strips them).
     useEffect(() => {
         if (mode.kind === 'view' || mode.kind === 'edit') {
             const id = mode.id
@@ -70,48 +71,48 @@ export function SeriesPanel({centerID, isTeacher}: Props) {
     }, [mode, authedFetch])
 
     return (
-        <View style={s.wrap}>
-            <View style={s.header}>
-                <Text style={s.section}>Серии</Text>
+        <div className="mt-6">
+            <div className="flex justify-between items-center mb-3">
+                <p className={sectionClass}>Серии</p>
                 {isTeacher ? (
                     <Button title="+ Создать серию" onPress={() => setMode({kind: 'create'})}/>
                 ) : null}
-            </View>
+            </div>
 
             {error ? <ErrorBanner message={error}/> : null}
 
             {list.length === 0 ? (
-                <Text style={s.muted}>Серий пока нет</Text>
+                <p className={mutedClass}>Серий пока нет</p>
             ) : (
-                list.map((row) => (
-                    <Pressable
-                        key={row.id}
-                        // Toggle: a second click on the currently-open series
-                        // (whether being viewed or edited) collapses it back
-                        // to the idle list. Clicking a different row swaps
-                        // the open one.
-                        onPress={() => setMode((prev) => {
-                            if ((prev.kind === 'view' || prev.kind === 'edit') && prev.id === row.id) {
-                                return {kind: 'idle'}
-                            }
-                            return {kind: 'view', id: row.id}
-                        })}
-                        style={({pressed}) => [
-                            s.row,
-                            ((mode.kind === 'view' || mode.kind === 'edit') && mode.id === row.id) && s.rowActive,
-                            pressed && {opacity: 0.7},
-                        ]}
-                    >
-                        <View style={{flex: 1}}>
-                            <Text style={s.rowTitle}>{row.display_name}</Text>
-                            <Text style={s.rowMeta}>
-                                до {formatDateTime(row.due_at)} ·{' '}
-                                {row.published ? 'опубликована' : 'черновик'}
-                                {row.has_pdf ? ' · PDF загружен' : ''}
-                            </Text>
-                        </View>
-                    </Pressable>
-                ))
+                list.map((row) => {
+                    const isActive = (mode.kind === 'view' || mode.kind === 'edit') && mode.id === row.id
+                    return (
+                        <button
+                            type="button"
+                            key={row.id}
+                            onClick={() => setMode((prev) => {
+                                if ((prev.kind === 'view' || prev.kind === 'edit') && prev.id === row.id) {
+                                    return {kind: 'idle'}
+                                }
+                                return {kind: 'view', id: row.id}
+                            })}
+                            className={`w-full flex justify-between items-center py-2.5 px-3 border rounded-lg mb-2 text-left transition-colors ${
+                                isActive
+                                    ? 'border-primary bg-[#eef2ff]'
+                                    : 'border-card-border bg-white hover:bg-page'
+                            }`}
+                        >
+                            <div className="flex-1">
+                                <p className="text-[15px] font-semibold text-ink">{row.display_name}</p>
+                                <p className="text-xs text-muted mt-0.5">
+                                    до {formatDateTime(row.due_at)} ·{' '}
+                                    {row.published ? 'опубликована' : 'черновик'}
+                                    {row.has_pdf ? ' · PDF загружен' : ''}
+                                </p>
+                            </div>
+                        </button>
+                    )
+                })
             )}
 
             {mode.kind === 'create' ? (
@@ -175,7 +176,7 @@ export function SeriesPanel({centerID, isTeacher}: Props) {
                     />
                 )
             ) : null}
-        </View>
+        </div>
     )
 }
 
@@ -264,35 +265,38 @@ export function SeriesEditor(props: {
     }
 
     return (
-        <View style={s.editor}>
-            <Text style={s.subSection}>{title}</Text>
+        <div className={boxClass}>
+            <p className={subSectionClass}>{title}</p>
             {error ? <ErrorBanner message={error}/> : null}
-            <View style={s.editorRow}>
-                <View style={{width: 120}}>
+            <div className="flex items-start gap-4">
+                <div className="w-[120px]">
                     <Field label="Номер" value={number} onChangeText={setNumber} placeholder="1"/>
-                </View>
-                <View style={{width: 16}}/>
-                <View style={{flex: 1}}>
+                </div>
+                <div className="flex-1">
                     <Field label="Название" value={name} onChangeText={setName} placeholder="например, Алгебра"/>
-                </View>
-            </View>
-            <Field label="Срок сдачи (ГГГГ-ММ-ДД ЧЧ:ММ)" value={dueAt} onChangeText={setDueAt} placeholder="2026-05-15 18:00"/>
+                </div>
+            </div>
+            <Field
+                label="Срок сдачи (ГГГГ-ММ-ДД ЧЧ:ММ)"
+                value={dueAt}
+                onChangeText={setDueAt}
+                placeholder="2026-05-15 18:00"
+            />
 
-            <Text style={s.subLabel}>Задачи</Text>
+            <p className={subLabelClass}>Задачи</p>
             {problems.map((p, idx) => (
-                <View key={idx} style={s.problemRow}>
-                    <View style={{width: 80}}>
+                <div key={idx} className="flex items-end gap-3 mb-1.5">
+                    <div className="w-[80px]">
                         <Field
                             label="№"
                             value={String(p.number)}
                             onChangeText={(v) => setProblemAt(idx, {number: parseInt(v, 10) || 0})}
                             placeholder="0"
                         />
-                    </View>
-                    <View style={{width: 12}}/>
-                    <View style={s.stepper}>
-                        <Text style={s.stepperLabel}>Подзадач: {p.subproblem_count}</Text>
-                        <View style={{flexDirection: 'row', gap: 6} as any}>
+                    </div>
+                    <div className="pb-3 flex flex-col items-start">
+                        <p className="text-[13px] text-ink mb-1.5">Подзадач: {p.subproblem_count}</p>
+                        <div className="flex gap-1.5">
                             <Button
                                 title="−"
                                 variant="secondary"
@@ -303,21 +307,23 @@ export function SeriesEditor(props: {
                                 variant="secondary"
                                 onPress={() => setProblemAt(idx, {subproblem_count: Math.min(26, p.subproblem_count + 1)})}
                             />
-                        </View>
-                    </View>
-                    <View style={{flex: 1}}/>
-                    <Button title="Убрать" variant="danger" onPress={() => removeProblem(idx)}/>
-                </View>
+                        </div>
+                    </div>
+                    <div className="flex-1"/>
+                    <div className="pb-3">
+                        <Button title="Убрать" variant="danger" onPress={() => removeProblem(idx)}/>
+                    </div>
+                </div>
             ))}
-            <View style={{marginTop: 8, marginBottom: 16, alignSelf: 'flex-start'} as any}>
+            <div className="mt-2 mb-4">
                 <Button title="+ Добавить задачу" variant="secondary" onPress={addProblem}/>
-            </View>
+            </div>
 
-            <View style={{flexDirection: 'row', gap: 8} as any}>
+            <div className="flex gap-2">
                 <Button title={saving ? 'Сохраняем…' : 'Сохранить'} onPress={submit} disabled={saving}/>
                 <Button title="Отмена" variant="secondary" onPress={onCancel}/>
-            </View>
-        </View>
+            </div>
+        </div>
     )
 }
 
@@ -339,17 +345,14 @@ export function SeriesDetail(props: {
     const [previewURL, setPreviewURL] = useState<string | null>(null)
     const [previewLoading, setPreviewLoading] = useState(false)
 
-    // Object URLs hold the blob in memory until explicitly revoked. The
-    // cleanup runs whenever the URL changes (toggle off, replaced, or unmount
-    // during series switch) so we never leak a closed-but-unrevoked URL.
+    // Object URLs hold the blob in memory until explicitly revoked.
     useEffect(() => {
         return () => {
             if (previewURL) URL.revokeObjectURL(previewURL)
         }
     }, [previewURL])
 
-    // A new upload invalidates any open preview — the bytes the user is
-    // looking at are now stale.
+    // A new upload invalidates any open preview.
     useEffect(() => {
         if (!series.has_pdf && previewURL) {
             URL.revokeObjectURL(previewURL)
@@ -358,9 +361,6 @@ export function SeriesDetail(props: {
     }, [series.has_pdf, previewURL])
 
     function pickAndUpload() {
-        // We bypass <input type=file> in JSX (RN-Web won't render it) and
-        // create a transient one programmatically — same trick used by most
-        // headless file pickers.
         const input = document.createElement('input')
         input.type = 'file'
         input.accept = 'application/pdf'
@@ -370,7 +370,6 @@ export function SeriesDetail(props: {
             setUploading(true)
             try {
                 await onPublish(file)
-                // Drop the now-stale preview so the next "Просмотреть" pulls fresh bytes.
                 if (previewURL) {
                     URL.revokeObjectURL(previewURL)
                     setPreviewURL(null)
@@ -401,9 +400,9 @@ export function SeriesDetail(props: {
 
     function openInNewTab() {
         // Reuse an existing object URL when one is open; otherwise fetch a
-        // fresh one specifically for the new tab. We do NOT revoke the URL
-        // we hand to the new tab — revoking would invalidate it before the
-        // new window loads. Same-document blob URLs auto-clean on unload.
+        // fresh one specifically for the new tab. We do NOT revoke the URL we
+        // hand to the new tab — revoking would invalidate it before the new
+        // window loads. Same-document blob URLs auto-clean on unload.
         if (previewURL) {
             window.open(previewURL, '_blank', 'noopener,noreferrer')
             return
@@ -418,20 +417,15 @@ export function SeriesDetail(props: {
     }
 
     return (
-        <View style={s.detail}>
-            <Text style={s.subSection}>{series.display_name}</Text>
-            <Text style={s.muted}>Срок сдачи: {formatDateTime(series.due_at)}</Text>
-            <Text style={s.muted}>
+        <div className={boxClass}>
+            <p className={subSectionClass}>{series.display_name}</p>
+            <p className={mutedClass}>Срок сдачи: {formatDateTime(series.due_at)}</p>
+            <p className={mutedClass}>
                 Статус: {series.published ? 'опубликована' : 'черновик'}
                 {series.has_pdf ? ' · PDF загружен' : ' · PDF не загружен'}
-            </Text>
+            </p>
 
-            {/* The problems / subproblems list lives in the spreadsheet
-                next to this panel — repeating it here was pure noise.
-                Edit mode (SeriesEditor) is where the list becomes
-                interactive again. */}
-
-            <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16} as any}>
+            <div className="flex flex-wrap gap-2 mt-4">
                 {series.has_pdf ? (
                     <>
                         <Button
@@ -455,28 +449,26 @@ export function SeriesDetail(props: {
                         <Button title="Удалить серию" variant="danger" onPress={onDelete}/>
                     </>
                 ) : null}
-            </View>
+            </div>
 
             {previewURL ? <PDFPreview url={previewURL}/> : null}
-        </View>
+        </div>
     )
 }
 
-// PDFPreview embeds the browser's native PDF viewer via <iframe>. We use a
-// raw HTML iframe (not an RN-Web component) because RNW has no PDF primitive
-// — same pattern as Autocomplete's createPortal trick. Height is fixed-but-
-// generous so the viewer's own toolbar + first page fit without forcing the
-// page to scroll; the viewer paginates internally.
+// PDFPreview embeds the browser's native PDF viewer via <iframe>. Height is
+// fixed-but-generous so the viewer's toolbar + first page fit without
+// forcing the page to scroll; the viewer paginates internally.
 function PDFPreview({url}: {url: string}) {
     return (
-        <View style={s.preview}>
+        <div className="mt-4 h-[720px] border border-card-border rounded-lg overflow-hidden bg-white">
             <iframe
                 src={url}
                 title="Предпросмотр PDF"
-                // eslint-disable-next-line react/forbid-dom-props
-                style={{width: '100%', height: '100%', border: 'none', display: 'block'}}
+                className="w-full h-full block"
+                style={{border: 'none'}}
             />
-        </View>
+        </div>
     )
 }
 
@@ -500,72 +492,3 @@ export function parseDateTimeLocal(s: string): Date | null {
     const dt = new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), se ? Number(se) : 0)
     return Number.isNaN(dt.getTime()) ? null : dt
 }
-
-const s = StyleSheet.create({
-    wrap: {marginTop: 24},
-    header: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12},
-    section: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: colors.textMuted,
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-    },
-    subSection: {fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: 8},
-    subLabel: {
-        marginTop: 12,
-        marginBottom: 6,
-        fontSize: 12,
-        fontWeight: '700',
-        color: colors.textMuted,
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-    },
-    row: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 10,
-        paddingHorizontal: 12,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 8,
-        marginBottom: 8,
-        backgroundColor: '#fff',
-    },
-    rowActive: {borderColor: colors.primary, backgroundColor: '#eef2ff'},
-    rowTitle: {fontSize: 15, fontWeight: '600', color: colors.text},
-    rowMeta: {fontSize: 12, color: colors.textMuted, marginTop: 2},
-    muted: {fontSize: 13, color: colors.textMuted, fontStyle: 'italic'},
-    editor: {
-        marginTop: 16,
-        padding: 16,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 8,
-        backgroundColor: '#fafbff',
-    },
-    editorRow: {flexDirection: 'row', alignItems: 'flex-start'},
-    problemRow: {flexDirection: 'row', alignItems: 'flex-end', gap: 12, marginBottom: 6} as any,
-    stepper: {alignItems: 'flex-start'},
-    stepperLabel: {fontSize: 13, color: colors.text, marginBottom: 6},
-    detail: {
-        marginTop: 16,
-        padding: 16,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 8,
-        backgroundColor: '#fafbff',
-    },
-    problemView: {paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors.border},
-    problemTitle: {fontSize: 14, fontWeight: '600', color: colors.text},
-    preview: {
-        marginTop: 16,
-        height: 720,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 8,
-        overflow: 'hidden',
-        backgroundColor: '#fff',
-    },
-})

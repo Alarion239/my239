@@ -132,7 +132,7 @@ export const TeacherGrid = forwardRef<TeacherGridHandle, TeacherGridProps>(funct
     const userID = user?.id ?? -1
 
     return (
-        <Card style={{paddingVertical: 12, paddingHorizontal: 12}}>
+        <Card className="!py-3 !px-3">
             <div ref={containerRef} style={tableScrollStyle}>
                 <table style={tableStyle}>
                     <thead>

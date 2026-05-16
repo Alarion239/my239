@@ -1,7 +1,6 @@
-// Shared UI primitives — plain React + Tailwind v4. The public API
-// matches what the codebase has always used (onPress/onChangeText/title
-// props) so the move off react-native-web only touches internals, not
-// the dozens of call sites.
+// Shared UI primitives — plain React + Tailwind v4. Keeps backwards
+// compatibility on a few prop names (Button.onPress, Field.onChangeText)
+// so dozens of call sites don't need to be touched.
 //
 // `colors` is kept as a JS export for the few places that still need to
 // reference brand colors from an inline style (e.g., a dynamically-
@@ -26,19 +25,14 @@ export const colors = {
 interface CardProps {
     children: ReactNode
     className?: string
-    // `style` is intentionally permissive during the RN-Web migration —
-    // some callers still pass camelCase RN aliases like paddingVertical
-    // alongside real CSS. React drops unknown keys at runtime, so this
-    // is safe; once every call site has moved to Tailwind classes the
-    // type will tighten back to a strict CSSProperties.
-    style?: CSSProperties & Record<string, unknown>
+    style?: CSSProperties
 }
 
 export function Card({children, className = '', style}: CardProps) {
     return (
         <div
             className={`bg-card rounded-xl border border-card-border p-6 ${className}`}
-            style={style as CSSProperties}
+            style={style}
         >
             {children}
         </div>

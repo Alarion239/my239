@@ -1,8 +1,7 @@
 import {useCallback, useEffect, useState} from 'react'
-import {Pressable, StyleSheet, Text, View} from 'react-native'
 import {APIErrorImpl} from '../api'
 import {useAuth} from '../auth'
-import {Button, Card, colors, ErrorBanner, Field, Heading, Subheading} from '../components/ui'
+import {Button, Card, ErrorBanner, Field, Heading, Subheading} from '../components/ui'
 
 interface TokenView {
     id: number
@@ -93,72 +92,84 @@ export default function AdminTokensPage() {
     const statusLabels: Record<string, string> = {active: 'активен', expired: 'истёк', exhausted: 'исчерпан'}
 
     return (
-        <View style={{width: 760, gap: 24} as any}>
+        <div className="w-[760px] flex flex-col gap-6">
             <Card>
                 <Heading>Создать пригласительный токен</Heading>
-                <Subheading>Поделитесь токеном с приглашаемым — после использования или истечения срока он становится
-                    невалидным.</Subheading>
+                <Subheading>
+                    Поделитесь токеном с приглашаемым — после использования или истечения срока он становится невалидным.
+                </Subheading>
                 {error ? <ErrorBanner message={error}/> : null}
-                <Field label="Описание" value={description} onChangeText={setDescription}
-                       placeholder="например, для Алисы" autoCapitalize="sentences"/>
-                <View style={s.inline}>
-                    <View style={{flex: 1}}>
+                <Field
+                    label="Описание"
+                    value={description}
+                    onChangeText={setDescription}
+                    placeholder="например, для Алисы"
+                    autoCapitalize="sentences"
+                />
+                <div className="flex gap-4">
+                    <div className="flex-1">
                         <Field label="Макс. использований" value={maxUses} onChangeText={setMaxUses} placeholder="1–N"/>
-                    </View>
-                    <View style={{width: 16}}/>
-                    <View style={{flex: 1}}>
-                        <Field label="Срок действия (ч)" value={expiresHours} onChangeText={setExpiresHours}
-                               placeholder="720 = 30 дней"/>
-                    </View>
-                </View>
+                    </div>
+                    <div className="flex-1">
+                        <Field
+                            label="Срок действия (ч)"
+                            value={expiresHours}
+                            onChangeText={setExpiresHours}
+                            placeholder="720 = 30 дней"
+                        />
+                    </div>
+                </div>
                 <Button title={creating ? 'Создаём…' : 'Создать токен'} onPress={createToken} disabled={creating}/>
             </Card>
 
             <Card>
                 <Heading>Токены</Heading>
                 <Subheading>{tokens ? `Всего: ${tokens.length}` : 'Загрузка…'}</Subheading>
-                <View style={s.headerRow}>
-                    <Text style={[s.cell, s.cellDesc, s.h]}>Описание</Text>
-                    <Text style={[s.cell, s.cellToken, s.h]}>Токен</Text>
-                    <Text style={[s.cell, s.cellUses, s.h]}>Исп.</Text>
-                    <Text style={[s.cell, s.cellExpiry, s.h]}>Срок</Text>
-                    <Text style={[s.cell, s.cellAction, s.h]}>Действие</Text>
-                </View>
+                <div className="flex py-2 border-b border-card-border">
+                    <div className="flex-[2] px-1 text-xs font-semibold uppercase text-muted">Описание</div>
+                    <div className="flex-[2] px-1 text-xs font-semibold uppercase text-muted">Токен</div>
+                    <div className="w-[70px] px-1 text-xs font-semibold uppercase text-muted">Исп.</div>
+                    <div className="flex-[2] px-1 text-xs font-semibold uppercase text-muted">Срок</div>
+                    <div className="w-[110px] px-1 text-xs font-semibold uppercase text-muted">Действие</div>
+                </div>
                 {tokens?.map((t) => {
                     const expired = new Date(t.expires_at).getTime() < Date.now()
                     const exhausted = t.uses >= t.max_uses
                     const status = expired ? 'expired' : exhausted ? 'exhausted' : 'active'
                     return (
-                        <View key={t.id} style={s.row}>
-                            <Text style={[s.cell, s.cellDesc]}>{t.description ||
-                                <Text style={{color: colors.textMuted}}>—</Text>}</Text>
-                            <Pressable
-                                onPress={() => void copyToken(t)}
-                                style={[s.cell, s.cellToken]}
-                                accessibilityLabel="Скопировать токен"
+                        <div key={t.id} className="flex items-center py-2.5 border-b border-card-border">
+                            <div className="flex-[2] px-1 text-sm text-ink">
+                                {t.description || <span className="text-muted">—</span>}
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => void copyToken(t)}
+                                aria-label="Скопировать токен"
+                                className="flex-[2] px-1 text-left hover:bg-page rounded"
                             >
-                                <Text style={s.tokenText} numberOfLines={1}>
+                                <p className="text-[13px] font-mono text-ink truncate">
                                     {revealed === t.id ? t.token : maskToken(t.token)}
-                                </Text>
-                                <Text style={s.tokenHint}>
+                                </p>
+                                <p className="text-[10px] text-muted mt-0.5">
                                     {copiedId === t.id ? '✓ скопировано' : 'нажмите, чтобы скопировать'}
-                                </Text>
-                            </Pressable>
-                            <Text style={[s.cell, s.cellUses]}>{t.uses}/{t.max_uses}</Text>
-                            <View style={[s.cell, s.cellExpiry]}>
-                                <Text style={s.expiryText}>{new Date(t.expires_at).toLocaleString('ru-RU')}</Text>
-                                <Text
-                                    style={[s.statusText, status === 'active' ? {color: colors.ok} : {color: colors.danger}]}>{statusLabels[status]}</Text>
-                            </View>
-                            <View style={[s.cell, s.cellAction]}>
+                                </p>
+                            </button>
+                            <div className="w-[70px] px-1 text-sm text-ink">{t.uses}/{t.max_uses}</div>
+                            <div className="flex-[2] px-1">
+                                <p className="text-[13px] text-ink">{new Date(t.expires_at).toLocaleString('ru-RU')}</p>
+                                <p className={`text-[11px] font-semibold uppercase ${status === 'active' ? 'text-ok' : 'text-danger'}`}>
+                                    {statusLabels[status]}
+                                </p>
+                            </div>
+                            <div className="w-[110px] px-1">
                                 <Button title="Отозвать" variant="danger" onPress={() => revoke(t)}
                                         disabled={status !== 'active'}/>
-                            </View>
-                        </View>
+                            </div>
+                        </div>
                     )
                 })}
             </Card>
-        </View>
+        </div>
     )
 }
 
@@ -181,31 +192,3 @@ function legacyCopy(text: string) {
     document.execCommand('copy')
     document.body.removeChild(ta)
 }
-
-const s = StyleSheet.create({
-    inline: {flexDirection: 'row'},
-    headerRow: {
-        flexDirection: 'row',
-        paddingVertical: 8,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-    row: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-    cell: {fontSize: 14, color: colors.text, paddingHorizontal: 4},
-    h: {fontWeight: '600', color: colors.textMuted, fontSize: 12, textTransform: 'uppercase'},
-    cellDesc: {flex: 2},
-    cellToken: {flex: 2},
-    cellUses: {width: 70},
-    cellExpiry: {flex: 2},
-    cellAction: {width: 110},
-    tokenText: {fontFamily: 'monospace', fontSize: 13, color: colors.text},
-    tokenHint: {fontSize: 10, color: colors.textMuted, marginTop: 2},
-    expiryText: {fontSize: 13, color: colors.text},
-    statusText: {fontSize: 11, fontWeight: '600', textTransform: 'uppercase'},
-})

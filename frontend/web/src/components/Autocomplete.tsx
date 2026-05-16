@@ -1,27 +1,18 @@
-import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react'
+import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent} from 'react'
 import {createPortal} from 'react-dom'
-import {Pressable, StyleSheet, Text, TextInput, View} from 'react-native'
-import {colors} from './ui'
 
 // Generic combobox: a text input that filters a known list of items as the
-// user types, with a popup of suggestions below. Follows the WAI-ARIA
-// "combobox with listbox popup" pattern as far as RN-Web allows.
+// user types, with a popup of suggestions below.
 //
 // Two non-obvious implementation choices, both for robustness:
 //
-//   1. The popup is rendered via createPortal into document.body. RN-Web's
-//      stacking contexts are unpredictable when the parent layout has
-//      multiple sibling rows / cards, and we kept hitting cases where the
-//      dropdown rendered behind text below it. A portal sidesteps the
-//      stacking question entirely — the popup is the last thing in the DOM,
-//      so default paint order plus z-index puts it on top of everything.
+//   1. The popup is rendered via createPortal into document.body so it
+//      escapes any parent stacking context and paints on top of everything.
 //
 //   2. The popup closes via the input's onBlur (with a small grace timeout)
-//      rather than a global mousedown listener. The mousedown approach
-//      raced the option click: mousedown fired first, closed the popup,
-//      and the option unmounted before its onPress could run. With onBlur
-//      + timeout, the click on an option fires while the popup is still
-//      mounted; commit() then beats the timeout to setOpen(false).
+//      rather than a global mousedown listener. With onBlur + timeout, the
+//      click on an option fires while the popup is still mounted; commit()
+//      beats the timeout to setOpen(false).
 
 export interface AutocompleteItem {
     id: number
@@ -52,10 +43,9 @@ export function Autocomplete({label, placeholder, items, selected, onSelect, emp
     const [open, setOpen] = useState(false)
     const [highlight, setHighlight] = useState(0)
 
-    // anchorRef points at the input's wrapper View — its DOM rect tells the
-    // portal where to put the popup. RN-Web forwards a View's ref to the
-    // underlying div, so getBoundingClientRect works directly.
-    const anchorRef = useRef<View | null>(null)
+    // anchorRef points at the wrapper div — its DOM rect tells the portal
+    // where to put the popup.
+    const anchorRef = useRef<HTMLDivElement | null>(null)
     const closeTimer = useRef<number | null>(null)
 
     // When the parent changes the selection (e.g. clears it after a successful
@@ -86,7 +76,7 @@ export function Autocomplete({label, placeholder, items, selected, onSelect, emp
 
     const scheduleClose = useCallback(() => {
         cancelClose()
-        // Long enough that an option's onPress fires first, short enough that
+        // Long enough that an option's onClick fires first, short enough that
         // the popup feels responsive to the user clicking elsewhere.
         closeTimer.current = window.setTimeout(() => {
             closeTimer.current = null
@@ -110,82 +100,67 @@ export function Autocomplete({label, placeholder, items, selected, onSelect, emp
         setOpen(true)
     }
 
-    // onKeyPress is the cross-platform React Native key handler — it works on
-    // RN-Web (which forwards key names like 'ArrowDown' / 'Enter' / 'Escape')
-    // and on native iOS/Android (where only printable keys fire, which is fine
-    // because mobile users tap suggestions instead of arrow-keying). Earlier
-    // we tried web-only onKeyDown via prop spreading; RN-Web's TextInput
-    // doesn't pass that through to the underlying input, so it silently did
-    // nothing.
-    function onKeyPress(e: {nativeEvent: {key: string}; preventDefault?: () => void}) {
-        const key = e.nativeEvent?.key
-        const stop = () => e.preventDefault?.()
-        if (key === 'ArrowDown') {
-            stop()
+    function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault()
             setOpen(true)
             setHighlight((h) => (filtered.length === 0 ? 0 : Math.min(h + 1, filtered.length - 1)))
-        } else if (key === 'ArrowUp') {
-            stop()
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
             setHighlight((h) => Math.max(h - 1, 0))
-        } else if (key === 'Enter') {
+        } else if (e.key === 'Enter') {
             if (open && filtered[highlight]) {
-                stop()
+                e.preventDefault()
                 commit(filtered[highlight])
             }
-        } else if (key === 'Escape') {
-            stop()
+        } else if (e.key === 'Escape') {
+            e.preventDefault()
             setOpen(false)
         }
     }
 
-    // onSubmitEditing covers the native-iOS case where onKeyPress doesn't fire
-    // for the return key; it also fires on web when the user presses Enter,
-    // giving us a second chance to commit if onKeyPress somehow missed it.
-    function onSubmit() {
-        if (filtered[highlight]) commit(filtered[highlight])
-    }
-
     return (
-        <View ref={anchorRef} style={s.wrap}>
-            <Text style={s.label}>{label}</Text>
-            <View style={s.inputRow}>
-                <TextInput
-                    style={[s.input, selected ? s.inputSelected : null]}
+        <div ref={anchorRef} className="mb-3">
+            <label className="block text-[13px] font-medium text-ink mb-1.5">{label}</label>
+            <div className="flex items-center relative">
+                <input
+                    type="text"
                     value={query}
                     placeholder={placeholder}
-                    placeholderTextColor={colors.textMuted}
                     onFocus={() => {
                         cancelClose()
                         setOpen(true)
                     }}
                     onBlur={scheduleClose}
-                    onChangeText={(t) => {
-                        setQuery(t)
+                    onChange={(e) => {
+                        setQuery(e.target.value)
                         setOpen(true)
                         // typing implicitly de-selects so the parent doesn't
                         // think the stale id is still chosen.
                         if (selected) onSelect(null)
                     }}
-                    onKeyPress={onKeyPress}
-                    onSubmitEditing={onSubmit}
-                    blurOnSubmit={false}
-                    autoCapitalize="none"
-                    autoCorrect={false}
+                    onKeyDown={onKeyDown}
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    className={`block w-full rounded-lg border bg-white px-3 py-2.5 text-[15px] text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 ${
+                        selected ? 'border-primary' : 'border-card-border'
+                    }`}
                 />
                 {selected || query ? (
                     // onMouseDown preventDefault stops the input blur from
                     // firing — without it, clicking × would trigger close
                     // before clear() runs.
-                    <Pressable
-                        onPress={clear}
-                        style={s.clearBtn}
-                        accessibilityLabel="Очистить"
-                        {...({onMouseDown: (e: React.MouseEvent) => e.preventDefault()} as object)}
+                    <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={clear}
+                        aria-label="Очистить"
+                        className="absolute right-1 w-7 h-7 flex items-center justify-center rounded-full text-muted hover:bg-page"
                     >
-                        <Text style={s.clearText}>×</Text>
-                    </Pressable>
+                        <span className="text-lg leading-none">×</span>
+                    </button>
                 ) : null}
-            </View>
+            </div>
 
             <Popup
                 anchorRef={anchorRef}
@@ -197,15 +172,14 @@ export function Autocomplete({label, placeholder, items, selected, onSelect, emp
                 onCommit={commit}
                 onCancelClose={cancelClose}
             />
-        </View>
+        </div>
     )
 }
 
 // Popup is the listbox itself, mounted on document.body. It positions itself
-// just below the anchor's bounding rect and re-measures on scroll/resize so
-// it tracks the page.
+// just below the anchor's bounding rect and re-measures on scroll/resize.
 function Popup(props: {
-    anchorRef: React.RefObject<View | null>
+    anchorRef: React.RefObject<HTMLDivElement | null>
     open: boolean
     items: AutocompleteItem[]
     highlight: number
@@ -217,17 +191,14 @@ function Popup(props: {
     const {anchorRef, open, items, highlight, emptyMessage, onHover, onCommit, onCancelClose} = props
     const [rect, setRect] = useState<{top: number; left: number; width: number} | null>(null)
 
-    // Re-measure synchronously after the DOM is laid out so the popup never
-    // appears in the wrong spot on the first frame.
+    // Re-measure synchronously after layout so the popup never appears in the
+    // wrong spot on the first frame.
     useLayoutEffect(() => {
         if (!open) return
         function measure() {
-            const node = anchorRef.current as unknown as HTMLElement | null
-            if (!node || typeof node.getBoundingClientRect !== 'function') return
+            const node = anchorRef.current
+            if (!node) return
             const r = node.getBoundingClientRect()
-            // Anchor below the input row. The label sits at the top of the
-            // wrapper, the input row is below — we want the popup just under
-            // the input, which is the bottom of the wrapper.
             setRect({top: r.bottom + 4, left: r.left, width: r.width})
         }
         measure()
@@ -250,38 +221,31 @@ function Popup(props: {
                 e.preventDefault()
                 onCancelClose()
             }}
-            style={{
-                position: 'fixed',
-                top: rect.top,
-                left: rect.left,
-                width: rect.width,
-                zIndex: 9999,
-                background: '#fff',
-                border: `1px solid ${colors.border}`,
-                borderRadius: 8,
-                boxShadow: '0 8px 16px rgba(0,0,0,0.08)',
-                overflow: 'hidden',
-                maxHeight: 280,
-                overflowY: 'auto',
-            }}
+            className="fixed z-[9999] bg-white border border-card-border rounded-lg shadow-lg overflow-hidden max-h-[280px] overflow-y-auto"
+            style={{top: rect.top, left: rect.left, width: rect.width}}
         >
             {items.length === 0 ? (
-                <Text style={s.emptyRow}>{emptyMessage}</Text>
+                <p className="px-3 py-2.5 text-[13px] italic text-muted">{emptyMessage}</p>
             ) : (
                 items.map((item, idx) => {
                     const active = idx === highlight
                     return (
-                        <Pressable
+                        <button
+                            type="button"
                             key={item.id}
-                            onPress={() => onCommit(item)}
-                            onHoverIn={() => onHover(idx)}
-                            style={[s.option, active && s.optionActive]}
+                            onClick={() => onCommit(item)}
+                            onMouseEnter={() => onHover(idx)}
+                            className={`block w-full text-left px-3 py-2 ${
+                                active ? 'bg-primary text-white' : 'bg-white text-ink'
+                            }`}
                         >
-                            <Text style={[s.optionLabel, active && s.optionLabelActive]}>{item.label}</Text>
+                            <span className="block text-sm">{item.label}</span>
                             {item.sublabel ? (
-                                <Text style={[s.optionSub, active && s.optionSubActive]}>{item.sublabel}</Text>
+                                <span className={`block text-xs mt-0.5 ${active ? 'text-blue-100' : 'text-muted'}`}>
+                                    {item.sublabel}
+                                </span>
                             ) : null}
-                        </Pressable>
+                        </button>
                     )
                 })
             )}
@@ -289,42 +253,3 @@ function Popup(props: {
         document.body,
     )
 }
-
-const s = StyleSheet.create({
-    wrap: {marginBottom: 12},
-    label: {fontSize: 13, fontWeight: '500', color: colors.text, marginBottom: 6},
-    inputRow: {flexDirection: 'row', alignItems: 'center'},
-    input: {
-        flex: 1,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 8,
-        paddingVertical: 10,
-        paddingHorizontal: 12,
-        fontSize: 15,
-        color: colors.text,
-        backgroundColor: '#fff',
-    },
-    inputSelected: {borderColor: colors.primary},
-    clearBtn: {
-        marginLeft: -34,
-        width: 28,
-        height: 28,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: 999,
-    },
-    clearText: {fontSize: 18, color: colors.textMuted, lineHeight: 18},
-
-    option: {
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        backgroundColor: '#fff',
-    },
-    optionActive: {backgroundColor: colors.primary},
-    optionLabel: {fontSize: 14, color: colors.text},
-    optionLabelActive: {color: '#fff'},
-    optionSub: {fontSize: 12, color: colors.textMuted, marginTop: 2},
-    optionSubActive: {color: '#dbeafe'},
-    emptyRow: {paddingVertical: 10, paddingHorizontal: 12, fontSize: 13, color: colors.textMuted, fontStyle: 'italic'},
-})

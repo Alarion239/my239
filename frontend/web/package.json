@@ -12,10 +12,8 @@
   },
   "dependencies": {
     "@my239/shared": "*",
-    "css-in-js-utils": "^3.1.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "react-native-web": "^0.21.0",
     "react-router-dom": "^6.27.0"
   },
   "devDependencies": {
@@ -25,7 +23,6 @@
     "@testing-library/user-event": "^14.5.2",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
-    "@types/react-native": "0.72.8",
     "@vitejs/plugin-react": "^4.3.3",
     "jsdom": "^25.0.1",
     "tailwindcss": "^4.3.0",
