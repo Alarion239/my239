@@ -16,8 +16,8 @@ import {computeGranularCounts, getMyRollup, isClosed, type MyRollupResponse} fro
 import {getSeries, type Series} from '../api/series'
 import {formatDateTime} from '../lib/format'
 import {useAuth} from '../auth'
-import {PDFPanel} from '../components/homework/PDFPanel'
 import {ProgressBadges} from '../components/homework/ProgressBadges'
+import {SeriesContentPanel} from '../components/homework/SeriesContentPanel'
 import {StudentProblemList} from '../components/homework/StudentProblemList'
 import {TeacherGrid} from '../components/homework/TeacherGrid'
 import {Card, ErrorBanner, Heading, Subheading} from '../components/ui'
@@ -141,7 +141,7 @@ function StudentSeriesView({series, rollup, onBack}: {
                 stays in view while the student scrolls problem cards. */}
             <div className="flex flex-col lg:flex-row gap-4 items-start">
                 <div className="w-full lg:basis-0 lg:grow-[4] lg:min-w-[320px]">
-                    <PDFPanel seriesID={series.id} hasPDF={series.has_pdf} sticky/>
+                    <SeriesContentPanel series={series} sticky/>
                 </div>
                 <div className="w-full lg:basis-0 lg:grow-[6] lg:min-w-[320px]">
                     <StudentProblemList

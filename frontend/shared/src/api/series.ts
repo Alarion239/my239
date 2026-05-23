@@ -21,6 +21,7 @@ export interface Series {
     published: boolean
     published_at?: string | null
     has_pdf: boolean
+    has_tex: boolean
     problems: SeriesProblem[]
 }
 
@@ -123,3 +124,23 @@ export async function downloadSeriesPDF(authedFetchRaw: AuthedFetchRaw, series: 
     a.remove()
     URL.revokeObjectURL(url)
 }
+
+// getSeriesTex fetches the raw LaTeX source for the series. The frontend
+// feeds it to a LaTeX.js renderer; the server caps the payload at
+// 512 KiB so we don't need streaming.
+export async function getSeriesTex(authedFetch: AuthedFetch, id: number): Promise<string> {
+    const res = await authedFetch<{tex: string}>(`/mathcenter/series/${id}/tex`)
+    return res.tex
+}
+
+// setSeriesTex stores or replaces the LaTeX source. Returns the updated
+// series view so callers can pick up the freshly-flipped published flag
+// (the backend auto-publishes a draft on first save).
+export function setSeriesTex(authedFetch: AuthedFetch, id: number, tex: string): Promise<Series> {
+    return authedFetch<Series>(`/mathcenter/series/${id}/tex`, {method: 'PUT', body: {tex}})
+}
+
+export function deleteSeriesTex(authedFetch: AuthedFetch, id: number): Promise<Series> {
+    return authedFetch<Series>(`/mathcenter/series/${id}/tex`, {method: 'DELETE'})
+}
+

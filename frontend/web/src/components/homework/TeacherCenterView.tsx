@@ -1,226 +1,242 @@
-// TeacherCenterView is the unified teacher hub for a single math
-// center: the all-series spreadsheet on the right (or below, on
-// phones) and a side panel showing the selected series's detail /
-// editor on the left (or top). Clicking a series header in the
-// spreadsheet swaps the side panel to view that series; the "+"
-// column header opens the create form; "Редактировать" on the detail
-// flips to the editor; saving any form refreshes both the spreadsheet
-// and the side panel in place.
+// TeacherCenterView is the teacher hub for a single math center: the
+// all-series spreadsheet on the right and the selected series's
+// rendered content on the left. The side panel is purely a viewer —
+// series control (create/edit/delete) will live on a separate
+// admin-gated page.
+//
+// Content rendering preference: TeX > PDF > "no content" message. The
+// TeX renderer is lazy-loaded, so series that only have a PDF skip the
+// LaTeX.js download entirely.
+//
+// On mount we auto-select the earliest series whose due date is still
+// in the future, so the teacher lands on the pset they're most likely
+// about to grade without an extra click.
 
 import {useCallback, useEffect, useRef, useState} from 'react'
+import {Link} from 'react-router-dom'
 import {APIErrorImpl} from '../../api'
 import {
-    createSeries,
-    deleteSeries,
-    downloadSeriesPDF,
     fetchSeriesPDFObjectURL,
-    getSeries,
-    publishSeries,
+    getSeriesTex,
+    listSeriesForCenter,
     type Series,
-    type SeriesPayload,
-    updateSeries,
 } from '../../api/series'
 import {useAuth} from '../../auth'
-import {SeriesDetail, SeriesEditor} from '../series/SeriesPanel'
-import {Card, ErrorBanner, Heading, Subheading} from '../ui'
+import {formatDateTime} from '../../lib/format'
+import {Card, ErrorBanner, Subheading} from '../ui'
 import {TeacherGrid, type TeacherGridHandle} from './TeacherGrid'
-
-// Mode is what the side panel is currently showing.
-//   - 'idle'  : nothing selected, "выберите серию" placeholder
-//   - 'view'  : read-only detail for a series
-//   - 'edit'  : the SeriesEditor pre-filled with a series's current data
-//   - 'create': the SeriesEditor with empty defaults; saves create a row
-type Mode =
-    | {kind: 'idle'}
-    | {kind: 'view'; seriesID: number}
-    | {kind: 'edit'; seriesID: number}
-    | {kind: 'create'}
+import {TexViewer} from '../series/TexViewer'
 
 const tightCardClass = '!py-3.5 !px-[18px]'
 
-export function TeacherCenterView({centerID, gradeLabel, graduationYear}: {
-    centerID: number
-    gradeLabel: string
-    graduationYear: number
-}) {
-    const {authedFetch, authedFetchRaw} = useAuth()
+export function TeacherCenterView({centerID}: {centerID: number}) {
+    const {user, authedFetch, authedFetchRaw} = useAuth()
 
-    const [mode, setMode] = useState<Mode>({kind: 'idle'})
-    // `active` is the loaded series for view/edit modes. Kept separate
-    // from `mode` so the side panel can render immediately when mode
-    // changes while the fetch is still in flight.
-    const [active, setActive] = useState<Series | null>(null)
+    const [seriesList, setSeriesList] = useState<Series[] | null>(null)
+    const [selectedID, setSelectedID] = useState<number | null>(null)
     const [error, setError] = useState<string | null>(null)
     const gridRef = useRef<TeacherGridHandle | null>(null)
+    const [userPicked, setUserPicked] = useState(false)
+
+    const loadSeries = useCallback(async () => {
+        try {
+            const list = await listSeriesForCenter(authedFetch, centerID)
+            setSeriesList(list)
+        } catch (e) {
+            setError(e instanceof APIErrorImpl ? e.message : 'Не удалось загрузить серии')
+        }
+    }, [authedFetch, centerID])
 
     useEffect(() => {
-        if (mode.kind !== 'view' && mode.kind !== 'edit') {
-            setActive(null)
-            return
-        }
-        const id = mode.seriesID
+        void loadSeries()
+    }, [loadSeries])
+
+    // Auto-select: earliest published series with due_at still in the future.
+    useEffect(() => {
+        if (userPicked || selectedID !== null || !seriesList) return
+        const now = Date.now()
+        const upcoming = seriesList
+            .filter(s => s.published && s.due_at && new Date(s.due_at).getTime() > now)
+            .sort((a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime())
+        if (upcoming.length > 0) setSelectedID(upcoming[0].id)
+    }, [seriesList, selectedID, userPicked])
+
+    const selectedSeries = seriesList?.find(s => s.id === selectedID) ?? null
+
+    return (
+        <div className="flex flex-col lg:flex-row gap-4 items-start">
+            <div className="w-full lg:basis-0 lg:grow-[38] lg:min-w-[320px]">
+                {error ? (
+                    <Card className={tightCardClass}>
+                        <ErrorBanner message={error}/>
+                        <button
+                            type="button"
+                            onClick={() => setError(null)}
+                            className="self-start mt-2 text-[13px] text-primary hover:underline"
+                        >
+                            Скрыть
+                        </button>
+                    </Card>
+                ) : (
+                    <SidePanel
+                        series={selectedSeries}
+                        seriesList={seriesList}
+                        authedFetch={authedFetch}
+                        authedFetchRaw={authedFetchRaw}
+                        isAdmin={!!user?.is_admin}
+                        onError={setError}
+                    />
+                )}
+            </div>
+            <div className="w-full lg:basis-0 lg:grow-[62] lg:min-w-[320px]">
+                <TeacherGrid
+                    ref={gridRef}
+                    centerID={centerID}
+                    selectedSeriesID={selectedID}
+                    onSelectSeries={id => {
+                        setUserPicked(true)
+                        setSelectedID(id)
+                    }}
+                />
+            </div>
+        </div>
+    )
+}
+
+function SidePanel({series, seriesList, authedFetch, authedFetchRaw, isAdmin, onError}: {
+    series: Series | null
+    seriesList: Series[] | null
+    authedFetch: ReturnType<typeof useAuth>['authedFetch']
+    authedFetchRaw: ReturnType<typeof useAuth>['authedFetchRaw']
+    isAdmin: boolean
+    onError: (msg: string) => void
+}) {
+    if (!seriesList) {
+        return <Card className={tightCardClass}><Subheading>Загрузка серий…</Subheading></Card>
+    }
+    if (!series) {
+        return (
+            <Card className={tightCardClass}>
+                <Subheading>
+                    Нажмите на заголовок серии в таблице справа, чтобы открыть её здесь.
+                </Subheading>
+            </Card>
+        )
+    }
+    return (
+        <Card className={tightCardClass}>
+            <div className="flex items-start justify-between gap-3 mb-1">
+                <h3 className="text-base font-semibold text-ink">{series.display_name}</h3>
+                {isAdmin ? (
+                    <Link
+                        to={`/admin/series/${series.id}/tex`}
+                        className="text-[12px] font-medium text-primary hover:underline shrink-0 mt-1"
+                        title="Редактировать TeX"
+                    >
+                        ✎ TeX
+                    </Link>
+                ) : null}
+            </div>
+            <p className="text-[13px] text-muted mb-3">Срок: {formatDateTime(series.due_at)}</p>
+            <SeriesContent
+                series={series}
+                authedFetch={authedFetch}
+                authedFetchRaw={authedFetchRaw}
+                onError={onError}
+            />
+        </Card>
+    )
+}
+
+// SeriesContent picks the right renderer: TeX > PDF > nothing.
+function SeriesContent({series, authedFetch, authedFetchRaw, onError}: {
+    series: Series
+    authedFetch: ReturnType<typeof useAuth>['authedFetch']
+    authedFetchRaw: ReturnType<typeof useAuth>['authedFetchRaw']
+    onError: (msg: string) => void
+}) {
+    if (series.has_tex) {
+        return <TexSourceLoader seriesID={series.id} authedFetch={authedFetch} onError={onError}/>
+    }
+    if (series.has_pdf) {
+        return <PDFViewer seriesID={series.id} authedFetchRaw={authedFetchRaw} onError={onError}/>
+    }
+    return <p className="text-[13px] italic text-muted">Для этой серии не загружены ни TeX, ни PDF.</p>
+}
+
+// TexSourceLoader fetches the raw .tex (small text payload, no presigned
+// dance) and hands it to the lazy-loaded TexViewer.
+function TexSourceLoader({seriesID, authedFetch, onError}: {
+    seriesID: number
+    authedFetch: ReturnType<typeof useAuth>['authedFetch']
+    onError: (msg: string) => void
+}) {
+    const [tex, setTex] = useState<string | null>(null)
+
+    useEffect(() => {
         let cancelled = false
-        getSeries(authedFetch, id)
-            .then(s => {
-                if (!cancelled) setActive(s)
+        setTex(null)
+        getSeriesTex(authedFetch, seriesID)
+            .then(t => {
+                if (!cancelled) setTex(t)
             })
             .catch(e => {
-                if (!cancelled) setError(e instanceof APIErrorImpl ? e.message : 'Не удалось загрузить серию')
+                if (!cancelled) onError(e instanceof APIErrorImpl ? e.message : 'Не удалось загрузить TeX')
             })
         return () => {
             cancelled = true
         }
-    }, [mode, authedFetch])
+    }, [seriesID, authedFetch, onError])
 
-    const refreshGrid = useCallback(async () => {
-        try {
-            await gridRef.current?.reload()
-        } catch {
-            /* grid surfaces its own error */
-        }
-    }, [])
-
-    const selectedSeriesID = mode.kind === 'view' || mode.kind === 'edit' ? mode.seriesID : null
-
-    async function handleCreateSubmit(payload: SeriesPayload) {
-        const s = await createSeries(authedFetch, centerID, payload)
-        setMode({kind: 'view', seriesID: s.id})
-        await refreshGrid()
+    if (tex === null) {
+        return <p className="text-[13px] italic text-muted">Загружаем TeX…</p>
     }
+    return <TexViewer tex={tex} heightPx={720}/>
+}
 
-    async function handleEditSubmit(seriesID: number, payload: SeriesPayload) {
-        const s = await updateSeries(authedFetch, seriesID, payload)
-        setActive(s)
-        setMode({kind: 'view', seriesID: s.id})
-        await refreshGrid()
+// PDFViewer fetches a fresh blob URL whenever the series changes and
+// shows it inline in an <iframe>. Blob URLs are revoked on cleanup so
+// switching between series doesn't leak memory.
+function PDFViewer({seriesID, authedFetchRaw, onError}: {
+    seriesID: number
+    authedFetchRaw: ReturnType<typeof useAuth>['authedFetchRaw']
+    onError: (msg: string) => void
+}) {
+    const [url, setUrl] = useState<string | null>(null)
+
+    useEffect(() => {
+        let cancelled = false
+        let acquired: string | null = null
+        setUrl(null)
+        fetchSeriesPDFObjectURL(authedFetchRaw, seriesID)
+            .then(u => {
+                if (cancelled) {
+                    URL.revokeObjectURL(u)
+                    return
+                }
+                acquired = u
+                setUrl(u)
+            })
+            .catch(e => {
+                if (!cancelled) onError(e instanceof APIErrorImpl ? e.message : 'Не удалось открыть PDF')
+            })
+        return () => {
+            cancelled = true
+            if (acquired) URL.revokeObjectURL(acquired)
+        }
+    }, [seriesID, authedFetchRaw, onError])
+
+    if (!url) {
+        return <p className="text-[13px] italic text-muted">Открываем PDF…</p>
     }
-
-    async function handleDelete(seriesID: number) {
-        if (!confirm('Удалить серию? Это удалит и PDF, если он был загружен.')) return
-        try {
-            await deleteSeries(authedFetch, seriesID)
-            setMode({kind: 'idle'})
-            await refreshGrid()
-        } catch (e) {
-            setError(e instanceof APIErrorImpl ? e.message : 'Не удалось удалить')
-        }
-    }
-
-    async function handlePublish(seriesID: number, file: File) {
-        try {
-            const updated = await publishSeries(authedFetch, seriesID, file)
-            setActive(updated)
-            await refreshGrid()
-        } catch (e) {
-            setError(e instanceof APIErrorImpl ? e.message : 'Не удалось загрузить PDF')
-        }
-    }
-
-    async function handleDownload(series: Series) {
-        try {
-            await downloadSeriesPDF(authedFetchRaw, series)
-        } catch (e) {
-            setError(e instanceof APIErrorImpl ? e.message : 'Не удалось скачать PDF')
-        }
-    }
-
-    function handleFetchPreview(seriesID: number) {
-        return fetchSeriesPDFObjectURL(authedFetchRaw, seriesID)
-    }
-
-    function renderSidePanel() {
-        if (error) {
-            return (
-                <Card className={tightCardClass}>
-                    <ErrorBanner message={error}/>
-                    <button
-                        type="button"
-                        onClick={() => setError(null)}
-                        className="self-start mt-2 text-[13px] text-primary hover:underline"
-                    >
-                        Скрыть
-                    </button>
-                </Card>
-            )
-        }
-        if (mode.kind === 'idle') {
-            return (
-                <Card className={tightCardClass}>
-                    <Heading>Серии</Heading>
-                    <Subheading>
-                        Нажмите на заголовок серии в таблице справа, чтобы открыть её здесь.
-                        Кнопка «+» в конце строки серий создаст новую.
-                    </Subheading>
-                </Card>
-            )
-        }
-        if (mode.kind === 'create') {
-            return (
-                <Card className={tightCardClass}>
-                    <SeriesEditor
-                        title="Новая серия"
-                        initial={null}
-                        onSubmit={handleCreateSubmit}
-                        onCancel={() => setMode({kind: 'idle'})}
-                    />
-                </Card>
-            )
-        }
-        if (!active || active.id !== mode.seriesID) {
-            return <Card className={tightCardClass}><Subheading>Загрузка серии…</Subheading></Card>
-        }
-        if (mode.kind === 'edit') {
-            return (
-                <Card className={tightCardClass}>
-                    <SeriesEditor
-                        title={`Редактирование: ${active.display_name}`}
-                        initial={active}
-                        onSubmit={p => handleEditSubmit(active.id, p)}
-                        onCancel={() => setMode({kind: 'view', seriesID: active.id})}
-                    />
-                </Card>
-            )
-        }
-        return (
-            <Card className={tightCardClass}>
-                <SeriesDetail
-                    series={active}
-                    isTeacher
-                    onEdit={() => setMode({kind: 'edit', seriesID: active.id})}
-                    onDelete={() => handleDelete(active.id)}
-                    onPublish={file => handlePublish(active.id, file)}
-                    onDownload={() => handleDownload(active)}
-                    onFetchPreview={() => handleFetchPreview(active.id)}
-                    onPreviewError={msg => setError(msg)}
-                />
-            </Card>
-        )
-    }
-
-    // ~38/62 split: the spreadsheet usually wants more room because of
-    // the many subproblem columns; the side panel needs enough width
-    // for the SeriesEditor's form fields. Tailwind's `lg:` breakpoint
-    // (1024px) is the boundary between stacked and side-by-side.
     return (
-        <div className="flex flex-col gap-3">
-            <Card className={tightCardClass}>
-                <Heading>{gradeLabel} — выпуск {graduationYear}</Heading>
-                <Subheading>Преподаватель — таблица слева, серия открывается в боковой панели.</Subheading>
-            </Card>
-            <div className="flex flex-col lg:flex-row gap-4 items-start">
-                <div className="w-full lg:basis-0 lg:grow-[38] lg:min-w-[320px]">
-                    {renderSidePanel()}
-                </div>
-                <div className="w-full lg:basis-0 lg:grow-[62] lg:min-w-[320px]">
-                    <TeacherGrid
-                        ref={gridRef}
-                        centerID={centerID}
-                        selectedSeriesID={selectedSeriesID}
-                        onSelectSeries={id => setMode({kind: 'view', seriesID: id})}
-                        onCreateSeries={() => setMode({kind: 'create'})}
-                    />
-                </div>
-            </div>
+        <div className="h-[720px] border border-card-border rounded-lg overflow-hidden bg-white">
+            <iframe
+                src={url}
+                title="PDF серии"
+                className="w-full h-full block"
+                style={{border: 'none'}}
+            />
         </div>
     )
 }

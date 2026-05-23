@@ -12,6 +12,7 @@ import HomeworkThreadPage from './pages/HomeworkThread'
 import AdminUsersPage from './pages/AdminUsers'
 import AdminTokensPage from './pages/AdminTokens'
 import AdminMathCenterPage from './pages/AdminMathCenter'
+import AdminSeriesTexPage from './pages/AdminSeriesTex'
 
 // App is the route table. RequireAuth gates the authenticated pages, and
 // RequireAdmin layers an extra check on top of it for /admin/*.
@@ -118,6 +119,18 @@ export default function App() {
                         <RequireAdmin>
                             <Layout>
                                 <AdminMathCenterPage/>
+                            </Layout>
+                        </RequireAdmin>
+                    </RequireAuth>
+                }
+            />
+            <Route
+                path="/admin/series/:seriesID/tex"
+                element={
+                    <RequireAuth>
+                        <RequireAdmin>
+                            <Layout>
+                                <AdminSeriesTexPage/>
                             </Layout>
                         </RequireAdmin>
                     </RequireAuth>

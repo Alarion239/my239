@@ -18,6 +18,7 @@ function mockSeries(overrides: Partial<Series> = {}): Series {
         published: false,
         published_at: null,
         has_pdf: false,
+        has_tex: false,
         problems: [{id: 500, number: 0, display_name: 'Упражнение', subproblems: ['a', 'b']}],
         ...overrides,
     }
