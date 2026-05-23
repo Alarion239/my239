@@ -83,6 +83,7 @@ type MathCenterSeries struct {
 	PdfObjectKey *string    `json:"pdf_object_key"`
 	PublishedAt  *time.Time `json:"published_at"`
 	CreatedAt    time.Time  `json:"created_at"`
+	TexSource    *string    `json:"tex_source"`
 }
 
 type MathCenterStudent struct {

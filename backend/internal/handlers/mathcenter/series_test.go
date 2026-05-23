@@ -24,7 +24,7 @@ import (
 // seriesColumns matches `SELECT * FROM math_center_series` after sqlc.
 var seriesColumns = []string{
 	"id", "math_center_id", "number", "name", "due_at",
-	"pdf_object_key", "published_at", "created_at",
+	"pdf_object_key", "published_at", "created_at", "tex_source",
 }
 
 var problemColumns = []string{"id", "series_id", "number", "created_at"}
@@ -154,7 +154,7 @@ func TestCreateSeries_TeacherSucceeds(t *testing.T) {
 	mock.ExpectQuery(`INSERT INTO math_center_series`).
 		WithArgs(int64(42), int32(3), "Алгебра", pgxmock.AnyArg()).
 		WillReturnRows(mock.NewRows(seriesColumns).
-			AddRow(int64(100), int64(42), int32(3), "Алгебра", due, (*string)(nil), (*time.Time)(nil), now))
+			AddRow(int64(100), int64(42), int32(3), "Алгебра", due, (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
 	// 3. CreateProblem (number=0 "Упражнение", with 2 subproblems a/b)
 	mock.ExpectQuery(`INSERT INTO math_center_problems`).
 		WithArgs(int64(100), int32(0)).
@@ -278,7 +278,7 @@ func TestListSeries_StudentSeesOnlyPublished(t *testing.T) {
 	mock.ExpectQuery(`FROM math_center_series\s+WHERE math_center_id = \$1\s+AND published_at IS NOT NULL`).
 		WithArgs(int64(42)).
 		WillReturnRows(mock.NewRows(seriesColumns).
-			AddRow(int64(100), int64(42), int32(1), "Опубликованная", now.Add(time.Hour), &key, &pubAt, now))
+			AddRow(int64(100), int64(42), int32(1), "Опубликованная", now.Add(time.Hour), &key, &pubAt, now, (*string)(nil)))
 	// buildSeriesView for the one row.
 	mock.ExpectQuery(`SELECT .* FROM math_center_problems WHERE series_id`).
 		WithArgs(int64(100)).
@@ -335,7 +335,7 @@ func TestGetSeries_StudentDraftHidden(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(seriesColumns).
-			AddRow(int64(100), int64(42), int32(1), "Черновик", now.Add(time.Hour), (*string)(nil), (*time.Time)(nil), now))
+			AddRow(int64(100), int64(42), int32(1), "Черновик", now.Add(time.Hour), (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
 	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
 		WithArgs(int64(7), int64(42)).
 		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(false))
@@ -388,7 +388,7 @@ func TestPDFUploadURLAndPublish(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(seriesColumns).
-			AddRow(int64(100), int64(42), int32(1), "S", due, (*string)(nil), (*time.Time)(nil), now))
+			AddRow(int64(100), int64(42), int32(1), "S", due, (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
 	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
 		WithArgs(int64(7), int64(42)).
 		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(true))
@@ -420,7 +420,7 @@ func TestPDFUploadURLAndPublish(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(seriesColumns).
-			AddRow(int64(100), int64(42), int32(1), "S", due, (*string)(nil), (*time.Time)(nil), now))
+			AddRow(int64(100), int64(42), int32(1), "S", due, (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
 	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
 		WithArgs(int64(7), int64(42)).
 		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(true))
@@ -428,7 +428,7 @@ func TestPDFUploadURLAndPublish(t *testing.T) {
 	mock.ExpectQuery(`UPDATE math_center_series\s+SET pdf_object_key`).
 		WithArgs(int64(100), &key).
 		WillReturnRows(mock.NewRows(seriesColumns).
-			AddRow(int64(100), int64(42), int32(1), "S", due, &key, &pubAt, now))
+			AddRow(int64(100), int64(42), int32(1), "S", due, &key, &pubAt, now, (*string)(nil)))
 	mock.ExpectQuery(`SELECT .* FROM math_center_problems WHERE series_id`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(problemColumns))
@@ -449,7 +449,7 @@ func TestPDFUploadURLAndPublish(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(seriesColumns).
-			AddRow(int64(100), int64(42), int32(1), "S", due, &key, &pubAt, now))
+			AddRow(int64(100), int64(42), int32(1), "S", due, &key, &pubAt, now, (*string)(nil)))
 	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
 		WithArgs(int64(7), int64(42)).
 		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(true))
@@ -481,7 +481,7 @@ func TestPDFPublish_RejectsMissingObject(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(seriesColumns).
-			AddRow(int64(100), int64(42), int32(1), "S", now.Add(time.Hour), (*string)(nil), (*time.Time)(nil), now))
+			AddRow(int64(100), int64(42), int32(1), "S", now.Add(time.Hour), (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
 	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
 		WithArgs(int64(7), int64(42)).
 		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(true))
@@ -513,7 +513,7 @@ func TestPDFPublish_RejectsWrongContentType(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(seriesColumns).
-			AddRow(int64(100), int64(42), int32(1), "S", now.Add(time.Hour), (*string)(nil), (*time.Time)(nil), now))
+			AddRow(int64(100), int64(42), int32(1), "S", now.Add(time.Hour), (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
 	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
 		WithArgs(int64(7), int64(42)).
 		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(true))
@@ -544,7 +544,7 @@ func TestPDFPublish_RejectsOversize(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(seriesColumns).
-			AddRow(int64(100), int64(42), int32(1), "S", now.Add(time.Hour), (*string)(nil), (*time.Time)(nil), now))
+			AddRow(int64(100), int64(42), int32(1), "S", now.Add(time.Hour), (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
 	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
 		WithArgs(int64(7), int64(42)).
 		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(true))
@@ -572,7 +572,7 @@ func TestPDFPublish_RejectsForeignKey(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(seriesColumns).
-			AddRow(int64(100), int64(42), int32(1), "S", now.Add(time.Hour), (*string)(nil), (*time.Time)(nil), now))
+			AddRow(int64(100), int64(42), int32(1), "S", now.Add(time.Hour), (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
 	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
 		WithArgs(int64(7), int64(42)).
 		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(true))
@@ -602,7 +602,7 @@ func TestDelete_TeacherRemovesObject(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(seriesColumns).
-			AddRow(int64(100), int64(42), int32(1), "S", now.Add(time.Hour), &key, &pubAt, now))
+			AddRow(int64(100), int64(42), int32(1), "S", now.Add(time.Hour), &key, &pubAt, now, (*string)(nil)))
 	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
 		WithArgs(int64(7), int64(42)).
 		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(true))
@@ -618,6 +618,214 @@ func TestDelete_TeacherRemovesObject(t *testing.T) {
 	}
 	if ok, _ := blobs.Exists(req.Context(), key); ok {
 		t.Error("delete should have removed the object")
+	}
+}
+
+func TestPutSeriesTex_TeacherSucceeds(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	due := now.Add(time.Hour)
+	tex := "\\documentclass{article}\n\\usepackage[russian]{babel}\n\\begin{document}\nПривет!\n\\end{document}\n"
+	pubAt := now
+
+	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(seriesColumns).
+			AddRow(int64(100), int64(42), int32(1), "S", due, (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
+	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
+		WithArgs(int64(7), int64(42)).
+		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(true))
+	mock.ExpectQuery(`UPDATE math_center_series\s+SET tex_source`).
+		WithArgs(int64(100), &tex).
+		WillReturnRows(mock.NewRows(seriesColumns).
+			AddRow(int64(100), int64(42), int32(1), "S", due, (*string)(nil), &pubAt, now, &tex))
+	mock.ExpectQuery(`SELECT .* FROM math_center_problems WHERE series_id`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(problemColumns))
+	mock.ExpectQuery(`FROM math_center_subproblems s\s+JOIN math_center_problems`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(subproblemRowColumns))
+
+	body, _ := json.Marshal(map[string]string{"tex": tex})
+	req := authedRequest(t, access, 7, http.MethodPut, "/series/100/tex", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	var view struct {
+		HasTex    bool `json:"has_tex"`
+		Published bool `json:"published"`
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &view)
+	if !view.HasTex {
+		t.Error("response should have has_tex=true")
+	}
+	if !view.Published {
+		t.Error("setting tex on a draft should publish it")
+	}
+}
+
+func TestPutSeriesTex_RejectsMalformed(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		tex  string
+	}{
+		{"empty", ""},
+		{"missing begin document", "\\documentclass{article}\nhi\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mock, _ := pgxmock.NewPool()
+			defer mock.Close()
+			r, access, _ := newRouter(t, mock)
+
+			body, _ := json.Marshal(map[string]string{"tex": tc.tex})
+			req := authedRequest(t, access, 7, http.MethodPut, "/series/100/tex", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req)
+			if rr.Code != http.StatusBadRequest {
+				t.Errorf("got %d, want 400; body=%s", rr.Code, rr.Body.String())
+			}
+		})
+	}
+}
+
+func TestPutSeriesTex_RejectsNonTeacher(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	due := now.Add(time.Hour)
+	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(seriesColumns).
+			AddRow(int64(100), int64(42), int32(1), "S", due, (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
+	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
+		WithArgs(int64(7), int64(42)).
+		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(false))
+
+	tex := "\\documentclass{article}\n\\begin{document}\nhi\n\\end{document}\n"
+	body, _ := json.Marshal(map[string]string{"tex": tex})
+	req := authedRequest(t, access, 7, http.MethodPut, "/series/100/tex", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Errorf("got %d, want 403; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestGetSeriesTex_StudentReadsPublished(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	due := now.Add(time.Hour)
+	tex := "\\documentclass{article}\\begin{document}Серия 1\\end{document}"
+	pubAt := now
+
+	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(seriesColumns).
+			AddRow(int64(100), int64(42), int32(1), "S", due, (*string)(nil), &pubAt, now, &tex))
+	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
+		WithArgs(int64(7), int64(42)).
+		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(false))
+	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_students`).
+		WithArgs(int64(7), int64(42)).
+		WillReturnRows(mock.NewRows([]string{"is_student"}).AddRow(true))
+
+	req := authedRequest(t, access, 7, http.MethodGet, "/series/100/tex", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	var resp struct {
+		Tex string `json:"tex"`
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &resp)
+	if resp.Tex != tex {
+		t.Errorf("Tex: got %q, want %q", resp.Tex, tex)
+	}
+}
+
+func TestGetSeriesTex_StudentBlockedOnDraft(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	due := now.Add(time.Hour)
+	tex := "\\documentclass{article}\\begin{document}draft\\end{document}"
+
+	// Draft series with tex but no published_at: students see 404.
+	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(seriesColumns).
+			AddRow(int64(100), int64(42), int32(1), "S", due, (*string)(nil), (*time.Time)(nil), now, &tex))
+	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
+		WithArgs(int64(7), int64(42)).
+		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(false))
+	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_students`).
+		WithArgs(int64(7), int64(42)).
+		WillReturnRows(mock.NewRows([]string{"is_student"}).AddRow(true))
+
+	req := authedRequest(t, access, 7, http.MethodGet, "/series/100/tex", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("got %d, want 404; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestDeleteSeriesTex_TeacherClears(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	due := now.Add(time.Hour)
+	tex := "\\documentclass{article}\\begin{document}x\\end{document}"
+	pubAt := now
+
+	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(seriesColumns).
+			AddRow(int64(100), int64(42), int32(1), "S", due, (*string)(nil), &pubAt, now, &tex))
+	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
+		WithArgs(int64(7), int64(42)).
+		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(true))
+	mock.ExpectQuery(`UPDATE math_center_series\s+SET tex_source = NULL`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(seriesColumns).
+			AddRow(int64(100), int64(42), int32(1), "S", due, (*string)(nil), &pubAt, now, (*string)(nil)))
+	mock.ExpectQuery(`SELECT .* FROM math_center_problems WHERE series_id`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(problemColumns))
+	mock.ExpectQuery(`FROM math_center_subproblems s\s+JOIN math_center_problems`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(subproblemRowColumns))
+
+	req := authedRequest(t, access, 7, http.MethodDelete, "/series/100/tex", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body=%s", rr.Code, rr.Body.String())
 	}
 }
 

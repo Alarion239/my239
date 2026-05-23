@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Alarion239/my239/backend/internal/ctxcache"
 	"github.com/Alarion239/my239/backend/internal/httpx"
@@ -23,6 +25,11 @@ import (
 // are well under this; the cap is there to fail loudly on accidental wrong
 // files (full books, scanned dumps) rather than silently chewing storage.
 const MaxPDFBytes int64 = 1 << 20 // 1 MiB
+
+// MaxTexBytes is the cap on the raw LaTeX source. A typical pset (with
+// Russian babel, math, problem lists) is well under 100 KiB; we leave
+// headroom for embedded base64 images or unusually long write-ups.
+const MaxTexBytes = 512 * 1024
 
 // pdfContentType is the only Content-Type we accept on the publish endpoint.
 const pdfContentType = "application/pdf"
@@ -72,6 +79,7 @@ type seriesView struct {
 	Published      bool          `json:"published"`
 	PublishedAt    *time.Time    `json:"published_at,omitempty"`
 	HasPDF         bool          `json:"has_pdf"`
+	HasTex         bool          `json:"has_tex"`
 	Problems       []problemView `json:"problems"`
 }
 
@@ -584,6 +592,192 @@ func DownloadSeriesPDF(database *db.DB, blobs objectstore.Store, ttl time.Durati
 	}
 }
 
+// TeX source endpoints ------------------------------------------------------
+
+type texPayload struct {
+	Tex string `json:"tex"`
+}
+
+// PutSeriesTex — teacher-only. Stores the raw LaTeX source on the series
+// row. Validates UTF-8, size cap, and the presence of \begin{document}
+// so we reject obviously-malformed input early. Editing the source for
+// an unpublished series flips the series to published (mirrors the PDF
+// publish flow); the column update is idempotent for re-saves.
+func PutSeriesTex(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		userID, ok := requireUser(w, r)
+		if !ok {
+			return
+		}
+		seriesID, err := pathInt64(r, "seriesID")
+		if err != nil {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid series id")
+			return
+		}
+
+		var req texPayload
+		if err := httpx.DecodeJSON(r, &req); err != nil {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+			return
+		}
+		if msg := validateTexSource(req.Tex); msg != "" {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, msg)
+			return
+		}
+
+		q := store.New(database.Pool())
+		series, err := q.GetSeries(ctx, seriesID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "series not found")
+				return
+			}
+			logger.LogError("series: get for tex put", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
+		if !requireTeacher(ctx, w, r, q, userID, series.MathCenterID) {
+			return
+		}
+
+		tex := req.Tex
+		updated, err := q.SetSeriesTex(ctx, store.SetSeriesTexParams{
+			ID:        series.ID,
+			TexSource: &tex,
+		})
+		if err != nil {
+			logger.LogError("series: set tex", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to save tex")
+			return
+		}
+		view, err := buildSeriesView(ctx, q, updated)
+		if err != nil {
+			logger.LogError("series: build view after tex", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
+		httpx.WriteJSON(w, http.StatusOK, view)
+	}
+}
+
+// DeleteSeriesTex — teacher-only. Clears the column. The series remains
+// published if it has a PDF; otherwise students will see no rendered
+// content but the row is preserved (the deletion of the whole series is
+// a separate endpoint).
+func DeleteSeriesTex(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		userID, ok := requireUser(w, r)
+		if !ok {
+			return
+		}
+		seriesID, err := pathInt64(r, "seriesID")
+		if err != nil {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid series id")
+			return
+		}
+
+		q := store.New(database.Pool())
+		series, err := q.GetSeries(ctx, seriesID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "series not found")
+				return
+			}
+			logger.LogError("series: get for tex delete", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
+		if !requireTeacher(ctx, w, r, q, userID, series.MathCenterID) {
+			return
+		}
+
+		updated, err := q.ClearSeriesTex(ctx, series.ID)
+		if err != nil {
+			logger.LogError("series: clear tex", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to clear tex")
+			return
+		}
+		view, err := buildSeriesView(ctx, q, updated)
+		if err != nil {
+			logger.LogError("series: build view after tex clear", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
+		httpx.WriteJSON(w, http.StatusOK, view)
+	}
+}
+
+// GetSeriesTex returns the raw LaTeX source as JSON so the frontend can
+// feed it to LaTeX.js. Teachers always have access; students only if the
+// series is published.
+func GetSeriesTex(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		userID, ok := requireUser(w, r)
+		if !ok {
+			return
+		}
+		seriesID, err := pathInt64(r, "seriesID")
+		if err != nil {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid series id")
+			return
+		}
+
+		q := store.New(database.Pool())
+		series, err := q.GetSeries(ctx, seriesID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "series not found")
+				return
+			}
+			logger.LogError("series: get for tex fetch", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
+
+		isTeacher, isStudent, err := membership(ctx, q, userID, series.MathCenterID)
+		if err != nil {
+			logger.LogError("series: membership for tex", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
+		if !isTeacher && !isStudent {
+			httpx.WriteAPIError(w, r, http.StatusForbidden, httpx.CodeForbidden, "no access to this series")
+			return
+		}
+		if !isTeacher && series.PublishedAt == nil {
+			httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "series not found")
+			return
+		}
+		if series.TexSource == nil {
+			httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "no tex source uploaded yet")
+			return
+		}
+		httpx.WriteJSON(w, http.StatusOK, texPayload{Tex: *series.TexSource})
+	}
+}
+
+// validateTexSource catches obviously-bad inputs before they hit the DB.
+// LaTeX.js will surface its own parse errors at render time; here we
+// only refuse what we'd refuse for *any* tex source.
+func validateTexSource(tex string) string {
+	if tex == "" {
+		return "tex source is required"
+	}
+	if len(tex) > MaxTexBytes {
+		return fmt.Sprintf("tex source exceeds %d bytes", MaxTexBytes)
+	}
+	if !utf8.ValidString(tex) {
+		return "tex source must be valid UTF-8"
+	}
+	if !strings.Contains(tex, "\\begin{document}") {
+		return "tex source must contain \\begin{document}"
+	}
+	return ""
+}
+
 // helpers --------------------------------------------------------------------
 
 func requireUser(w http.ResponseWriter, r *http.Request) (int64, bool) {
@@ -741,6 +935,7 @@ func buildSeriesView(ctx context.Context, q *store.Queries, s store.MathCenterSe
 		Published:    s.PublishedAt != nil,
 		PublishedAt:  s.PublishedAt,
 		HasPDF:       s.PdfObjectKey != nil,
+		HasTex:       s.TexSource != nil,
 		Problems:     pviews,
 	}, nil
 }

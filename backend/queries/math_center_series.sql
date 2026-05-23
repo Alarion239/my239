@@ -44,6 +44,27 @@ DELETE
 FROM math_center_series
 WHERE id = $1;
 
+-- name: SetSeriesTex :one
+-- Stores or replaces the raw LaTeX source. Also stamps published_at if
+-- the series wasn't already published, mirroring the PDF publish flow:
+-- a series with any rendered content is considered visible to students.
+UPDATE math_center_series
+SET tex_source  = $2,
+    published_at = COALESCE(published_at, NOW())
+WHERE id = $1
+RETURNING *;
+
+-- name: ClearSeriesTex :one
+UPDATE math_center_series
+SET tex_source = NULL
+WHERE id = $1
+RETURNING *;
+
+-- name: GetSeriesTex :one
+SELECT tex_source
+FROM math_center_series
+WHERE id = $1;
+
 -- name: CreateProblem :one
 INSERT INTO math_center_problems (series_id, number)
 VALUES ($1, $2)

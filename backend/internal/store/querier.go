@@ -12,6 +12,7 @@ type Querier interface {
 	AddStudentToGroup(ctx context.Context, arg AddStudentToGroupParams) (MathCenterStudent, error)
 	AddTeacherToCenter(ctx context.Context, arg AddTeacherToCenterParams) (MathCenterTeacher, error)
 	AppendEvent(ctx context.Context, arg AppendEventParams) (HomeworkThreadEvent, error)
+	ClearSeriesTex(ctx context.Context, id int64) (MathCenterSeries, error)
 	CountUsesOfInvitationToken(ctx context.Context, invitationTokenID int64) (int64, error)
 	CreateInvitationToken(ctx context.Context, arg CreateInvitationTokenParams) (InvitationToken, error)
 	CreateMathCenter(ctx context.Context, graduationYear int32) (MathCenter, error)
@@ -37,6 +38,7 @@ type Querier interface {
 	GetMostRecentGradedEvent(ctx context.Context, threadID int64) (HomeworkThreadEvent, error)
 	GetRefreshTokenByHash(ctx context.Context, tokenHash []byte) (RefreshToken, error)
 	GetSeries(ctx context.Context, id int64) (MathCenterSeries, error)
+	GetSeriesTex(ctx context.Context, id int64) (*string, error)
 	GetStudentByUserID(ctx context.Context, userID int64) (GetStudentByUserIDRow, error)
 	// One-shot fetch of "what center/series/problem does this subproblem belong
 	// to", used at the start of every event-creating handler so we don't have to
@@ -87,6 +89,10 @@ type Querier interface {
 	RevokeInvitationTokenByValue(ctx context.Context, token string) (int64, error)
 	RevokeRefreshTokenByID(ctx context.Context, id int64) error
 	RotateRefreshToken(ctx context.Context, arg RotateRefreshTokenParams) error
+	// Stores or replaces the raw LaTeX source. Also stamps published_at if
+	// the series wasn't already published, mirroring the PDF publish flow:
+	// a series with any rendered content is considered visible to students.
+	SetSeriesTex(ctx context.Context, arg SetSeriesTexParams) (MathCenterSeries, error)
 	SetTeacherHead(ctx context.Context, arg SetTeacherHeadParams) (int64, error)
 	SetUserAdmin(ctx context.Context, arg SetUserAdminParams) error
 	// One-row summary: accepted / rejected / pending. Pending lumps 'ungraded',

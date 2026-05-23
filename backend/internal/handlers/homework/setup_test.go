@@ -37,7 +37,7 @@ var subproblemCtxColumns = []string{
 
 var seriesColumns = []string{
 	"id", "math_center_id", "number", "name", "due_at",
-	"pdf_object_key", "published_at", "created_at",
+	"pdf_object_key", "published_at", "created_at", "tex_source",
 }
 
 var queueRowColumns = []string{
@@ -136,7 +136,7 @@ func expectGetSeriesForView(mock pgxmock.PgxPoolIface, seriesID, centerID int64,
 	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
 		WithArgs(seriesID).
 		WillReturnRows(mock.NewRows(seriesColumns).
-			AddRow(seriesID, centerID, int32(1), "S", now.Add(time.Hour), (*string)(nil), &pub, now))
+			AddRow(seriesID, centerID, int32(1), "S", now.Add(time.Hour), (*string)(nil), &pub, now, (*string)(nil)))
 }
 
 // expectGetUsersForView adds the bulk-user lookup buildThreadView makes

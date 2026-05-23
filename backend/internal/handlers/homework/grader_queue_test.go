@@ -21,7 +21,7 @@ func TestGraderQueue_HappyPath(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(seriesColumns).
-			AddRow(int64(100), int64(42), int32(1), "S", now.Add(time.Hour), (*string)(nil), (*time.Time)(nil), now))
+			AddRow(int64(100), int64(42), int32(1), "S", now.Add(time.Hour), (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
 	expectTeacherCheck(mock, 3, 42, true)
 
 	mock.ExpectQuery(`FROM homework_thread t\s+JOIN users u`).
@@ -63,7 +63,7 @@ func TestGraderQueue_MineQueryParam(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(seriesColumns).
-			AddRow(int64(100), int64(42), int32(1), "S", now.Add(time.Hour), (*string)(nil), (*time.Time)(nil), now))
+			AddRow(int64(100), int64(42), int32(1), "S", now.Add(time.Hour), (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
 	expectTeacherCheck(mock, 3, 42, true)
 
 	// ?mine=true must reach the SQL with mine_only=true.
@@ -89,7 +89,7 @@ func TestGraderQueue_NonTeacherForbidden(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(seriesColumns).
-			AddRow(int64(100), int64(42), int32(1), "S", now.Add(time.Hour), (*string)(nil), (*time.Time)(nil), now))
+			AddRow(int64(100), int64(42), int32(1), "S", now.Add(time.Hour), (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
 	expectTeacherCheck(mock, 3, 42, false)
 
 	req := authedRequest(t, access, 3, false, http.MethodGet, "/series/100/queue", nil)

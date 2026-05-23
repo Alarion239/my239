@@ -33,6 +33,9 @@ func Router(database *db.DB, tokens *internalAuth.TokenService, blobs objectstor
 		r.Post("/pdf/upload-url", IssuePDFUploadURL(database, blobs, uploadTTL))
 		r.Post("/pdf/publish", FinalizePDFPublish(database, blobs))
 		r.Get("/pdf", DownloadSeriesPDF(database, blobs, downloadTTL))
+		r.Get("/tex", GetSeriesTex(database))
+		r.Put("/tex", PutSeriesTex(database))
+		r.Delete("/tex", DeleteSeriesTex(database))
 	})
 	return r
 }
