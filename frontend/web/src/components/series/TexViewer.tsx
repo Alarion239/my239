@@ -1,27 +1,22 @@
 // TexViewer renders a full LaTeX document (with preamble,
-// `\begin{document}`, `\usepackage[russian]{babel}`, etc.) to HTML using
-// LaTeX.js, then displays it in an isolated iframe. Two reasons for the
-// iframe rather than inlining:
+// `\begin{document}`, `\usepackage[russian]{babel}`, etc.) to HTML
+// using LaTeX.js and paints it directly into our React tree via Shadow
+// DOM. The shadow root keeps LaTeX.js's bare tag selectors (h2, p,
+// body, .body-text, …) from leaking into our app, while still letting
+// the rendered output flow as a normal block in the surrounding card —
+// no iframe, no scrollbar-in-scrollbar, content sizes itself.
 //
-//   • LaTeX.js's CSS uses bare tag selectors (h2, p, body, …) that
-//     would otherwise collide with our app's styles.
-//   • Anything weird in the rendered HTML (mismatched lists, stray
-//     scripts that LaTeX.js may emit) stays sandboxed.
+// The renderer (~500 KiB minified) is lazy-imported so series that
+// only have a PDF never download the LaTeX.js bundle.
 //
-// The renderer itself (~500 KiB minified) is dynamically imported so
-// the main bundle stays slim — students who never open the side panel
-// don't pay for it.
-//
-// Known limitations of LaTeX.js for our context (Russian-babel psets):
-//   • Cyrillic text renders fine via system fonts (no LaTeX-specific
-//     font needed since Computer Modern doesn't ship Cyrillic anyway).
-//   • Math typesetting uses KaTeX; the bundled KaTeX fonts are loaded
-//     via relative `url(...)` in the CSS which the iframe srcdoc can't
-//     resolve. Math glyphs fall back to system fonts and look slightly
-//     off — fix is to bundle the fonts as data URLs, deferred until we
-//     see whether teachers actually hit it.
-//   • Custom .sty packages, TikZ, and any \write18 are unsupported by
-//     design; we surface the parse error inline.
+// Known limitation for Russian-babel psets:
+//   • Math typesetting uses KaTeX whose font files are referenced via
+//     relative `url(...)` in the CSS. Shadow DOM resolves those
+//     relative to the document, which doesn't have them; math glyphs
+//     fall back to system fonts. Cyrillic text renders cleanly via
+//     the system font stack we set on the body.
+//   • Custom .sty packages, TikZ, and \write18 are unsupported by
+//     LaTeX.js; we surface the parse error inline.
 
 import {useEffect, useRef, useState} from 'react'
 
@@ -31,8 +26,6 @@ interface CompiledLatex {
     css: string
 }
 
-// Lazy-load latex.js and its CSS as raw strings so we can inline them
-// in the iframe srcdoc. The `?raw` suffix is a Vite feature.
 let cached: Promise<CompiledLatex> | null = null
 function loadLatex(): Promise<CompiledLatex> {
     if (cached) return cached
@@ -40,27 +33,44 @@ function loadLatex(): Promise<CompiledLatex> {
         import('latex.js'),
         // LaTeX.js's package.json `exports` map doesn't expose the CSS
         // subpaths, so we vendor them under ./latex-css/ and import as
-        // raw strings to inline into the iframe srcdoc.
+        // raw strings.
         import('./latex-css/base.css?raw'),
         import('./latex-css/article.css?raw'),
         import('./latex-css/katex.css?raw'),
     ]).then(([mod, baseCss, articleCss, katexCss]) => ({
         parse: (mod as unknown as CompiledLatex).parse,
         HtmlGenerator: (mod as unknown as CompiledLatex).HtmlGenerator,
-        css: `${baseCss.default}\n${articleCss.default}\n${katexCss.default}`,
+        // Wrapping our padding + font stack in `:host` keeps it scoped
+        // to the shadow root. We override LaTeX.js's `.latex` /
+        // `.body-text` font-family so Cyrillic doesn't fall through to
+        // a last-resort font (Computer Modern has no Cyrillic glyphs).
+        css: `${baseCss.default}\n${articleCss.default}\n${katexCss.default}
+:host {
+    display: block;
+    padding: 4px 2px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Roboto, "Noto Sans", sans-serif;
+    color: #1f2933;
+    line-height: 1.45;
+}
+.latex, .body-text, p, li, h1, h2, h3, h4 {
+    font-family: inherit !important;
+}
+`,
     }))
     return cached
 }
 
 export interface TexViewerProps {
     tex: string
-    // Optional fixed height; defaults to 720px which matches our PDF
-    // panel so the page layout doesn't jump when toggling.
-    heightPx?: number
+    // Optional CSS class applied to the host element. The host is a
+    // plain block; let callers control height/overflow from the
+    // outside (e.g., `max-h-[720px] overflow-auto` for a scrollable
+    // panel).
+    className?: string
 }
 
-export function TexViewer({tex, heightPx = 720}: TexViewerProps) {
-    const iframeRef = useRef<HTMLIFrameElement | null>(null)
+export function TexViewer({tex, className}: TexViewerProps) {
+    const hostRef = useRef<HTMLDivElement | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
@@ -71,34 +81,35 @@ export function TexViewer({tex, heightPx = 720}: TexViewerProps) {
         loadLatex()
             .then(({parse, HtmlGenerator, css}) => {
                 if (cancelled) return
-                let bodyHTML: string
+                const host = hostRef.current
+                if (!host) return
+                // Attach (or reuse) the shadow root. `mode: 'open'`
+                // lets the inspector see it; behavioral isolation
+                // doesn't depend on the mode.
+                const shadow = host.shadowRoot ?? host.attachShadow({mode: 'open'})
+
+                let fragment: DocumentFragment
                 try {
                     const generator = new HtmlGenerator({hyphenate: false})
                     const doc = parse(tex, {generator})
-                    // Wrap the fragment in a host node so we can serialize
-                    // it back to a string for srcdoc.
-                    const host = document.createElement('div')
-                    host.appendChild(doc.domFragment())
-                    bodyHTML = host.innerHTML
+                    fragment = doc.domFragment()
                 } catch (e) {
                     setLoading(false)
                     setError(e instanceof Error ? e.message : 'Не удалось разобрать LaTeX')
+                    // Clear any stale render so the error isn't shown
+                    // alongside outdated output.
+                    while (shadow.firstChild) shadow.removeChild(shadow.firstChild)
                     return
                 }
-                // The extra body style overrides LaTeX.js's Computer-Modern
-                // family with a Cyrillic-capable system stack. Without it
-                // the .latex font-family kicks in and Cyrillic falls back
-                // to the browser's last-resort font, which is jarring.
-                const html = `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><style>${css}
-body {
-  padding: 24px;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Roboto, "Noto Sans", sans-serif;
-}
-.latex, .body-text, p, li {
-  font-family: inherit;
-}
-</style></head><body>${bodyHTML}</body></html>`
-                if (iframeRef.current) iframeRef.current.srcdoc = html
+
+                // Replace the whole shadow content atomically: <style>
+                // first so the rendered nodes paint with the right
+                // typography on first frame.
+                while (shadow.firstChild) shadow.removeChild(shadow.firstChild)
+                const styleEl = document.createElement('style')
+                styleEl.textContent = css
+                shadow.appendChild(styleEl)
+                shadow.appendChild(fragment)
                 setLoading(false)
             })
             .catch(e => {
@@ -112,19 +123,14 @@ body {
     }, [tex])
 
     return (
-        <div className="w-full">
+        <div className={className}>
             {loading ? <p className="text-[13px] italic text-muted mb-2">Рендерим LaTeX…</p> : null}
             {error ? (
-                <pre className="text-[12px] text-danger bg-red-50 border border-red-200 rounded-lg p-3 whitespace-pre-wrap">
+                <pre className="text-[12px] text-danger bg-red-50 border border-red-200 rounded-lg p-3 whitespace-pre-wrap mb-2">
                     {error}
                 </pre>
             ) : null}
-            <iframe
-                ref={iframeRef}
-                title="LaTeX preview"
-                className="w-full rounded-lg bg-white"
-                style={{border: '1px solid #e1e4ea', height: heightPx}}
-            />
+            <div ref={hostRef}/>
         </div>
     )
 }

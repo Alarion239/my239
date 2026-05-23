@@ -70,12 +70,11 @@ function TexPanel({seriesID}: {seriesID: number}) {
 
     if (error) return <Placeholder tone="danger">{error}</Placeholder>
     if (tex === null) return <Placeholder>Загружаем TeX…</Placeholder>
-    // The TexViewer iframe already has its own border; let it fill our
-    // flex container instead of imposing a fixed pixel height so it
-    // honors the responsive outer class.
+    // The outer wrapper from the caller (sticky vs flow) already sets
+    // the height; we just claim the available space and scroll inside.
     return (
-        <div className="flex-1 overflow-auto rounded-lg bg-white">
-            <TexViewer tex={tex} heightPx={Math.max(480, Math.floor(window.innerHeight - 140))}/>
+        <div className="flex-1 overflow-auto rounded-lg border border-card-border bg-white px-4">
+            <TexViewer tex={tex}/>
         </div>
     )
 }

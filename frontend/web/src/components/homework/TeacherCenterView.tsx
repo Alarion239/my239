@@ -191,7 +191,9 @@ function TexSourceLoader({seriesID, authedFetch, onError}: {
     if (tex === null) {
         return <p className="text-[13px] italic text-muted">Загружаем TeX…</p>
     }
-    return <TexViewer tex={tex} heightPx={720}/>
+    // Cap the side-panel render to a viewport-bound scroll area so a
+    // very long pset doesn't push the spreadsheet off the page.
+    return <TexViewer tex={tex} className="max-h-[720px] overflow-auto pr-1"/>
 }
 
 // PDFViewer fetches a fresh blob URL whenever the series changes and

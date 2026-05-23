@@ -162,7 +162,7 @@ export default function AdminSeriesTexPage() {
                 <div className="w-full lg:basis-0 lg:grow lg:min-w-[320px]">
                     <Card className="!py-3 !px-3">
                         {previewSource ? (
-                            <TexViewer tex={previewSource} heightPx={720}/>
+                            <TexViewer tex={previewSource} className="h-[720px] overflow-auto pr-1"/>
                         ) : (
                             <p className="text-[13px] italic text-muted">Введите TeX слева, чтобы увидеть предпросмотр.</p>
                         )}
