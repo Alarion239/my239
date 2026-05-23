@@ -2,32 +2,36 @@ import {type ReactNode, useEffect, useState} from 'react'
 import {Link, useLocation, useNavigate} from 'react-router-dom'
 import {useAuth} from '../auth'
 
-// Module-level cache so we don't refetch /mathcenter/me on every page nav
-// (Layout remounts per route). Keyed by user id so a logout-then-login
-// with a different user invalidates correctly.
-let teacherCheckCache: {userID: number; isTeacher: boolean} | null = null
-let teacherCheckInflight: Promise<boolean> | null = null
+// /mathcenter/me is the source of truth for the user's center membership.
+// Cache its grade(s) so the nav bar doesn't refetch on every route change.
+interface CenterRoles {
+    grades: number[]   // every grade the user is in (student + every teacher center)
+}
+let centerCache: {userID: number; roles: CenterRoles} | null = null
+let centerInflight: Promise<CenterRoles> | null = null
 
-// Layout renders the top nav bar and a centered content well. Public pages
-// (login/register) skip this and render bare.
-//
-// The Домашка tab has been retired — Матцентр is the unified hub for
-// both roles. /homework/* URLs still resolve for direct/deep links.
+interface MathCenterMe {
+    teacher?: {centers: Array<{grade: number}>}
+    student?: {center: {grade: number}}
+}
+
+function deriveRoles(me: MathCenterMe): CenterRoles {
+    const grades = new Set<number>()
+    for (const c of me.teacher?.centers ?? []) grades.add(c.grade)
+    if (me.student) grades.add(me.student.center.grade)
+    return {grades: Array.from(grades).sort((a, b) => a - b)}
+}
+
 export function Layout({children}: {children: ReactNode}) {
     const {user, authedFetch, logout} = useAuth()
     const navigate = useNavigate()
     const location = useLocation()
-
-    // Kept for backwards-compat — currently always renders nothing in
-    // the nav, but the side-effect (precomputing the role) is useful
-    // since downstream surfaces (HomeworkSeries, MathCenter) also need
-    // to know whether the user teaches anywhere.
-    useShowHomeworkLink(user, authedFetch)
+    const brand = useBrand(user, authedFetch)
 
     return (
         <div className="min-h-screen bg-page">
             <nav className="flex items-center justify-between px-6 py-3 bg-card border-b border-card-border">
-                <span className="text-lg font-bold text-ink">my239</span>
+                <span className="text-lg font-bold text-ink">{brand}</span>
                 <div className="flex items-center gap-4">
                     <NavLink to="/profile" current={location.pathname}>Профиль</NavLink>
                     <NavLink to="/mathcenter" current={location.pathname}>Матцентр</NavLink>
@@ -42,10 +46,8 @@ export function Layout({children}: {children: ReactNode}) {
                         type="button"
                         onClick={async () => {
                             await logout()
-                            // Clear the role cache so the next user's nav
-                            // is computed fresh.
-                            teacherCheckCache = null
-                            teacherCheckInflight = null
+                            centerCache = null
+                            centerInflight = null
                             navigate('/login')
                         }}
                         className="px-3 py-1.5 rounded-md bg-[#eef2f7] text-[13px] font-medium text-ink hover:bg-[#e5e9f0]"
@@ -59,56 +61,57 @@ export function Layout({children}: {children: ReactNode}) {
     )
 }
 
-// useShowHomeworkLink — kept as a hook so downstream surfaces can call
-// it later if needed. Returns true when the caller teaches in at least
-// one center (or is admin). Caches the answer in module state across
-// navigations within a single user session.
-function useShowHomeworkLink(
+// useBrand resolves the nav-bar brand label. When the user is in exactly
+// one grade (student, or teacher of a single center), it surfaces that
+// grade — "Матцентр 10 класс" — so the per-page header can drop its
+// redundant "10-й класс — выпуск …" tile.
+function useBrand(
     user: ReturnType<typeof useAuth>['user'],
     authedFetch: ReturnType<typeof useAuth>['authedFetch'],
-): boolean {
+): string {
+    function label(roles: CenterRoles | null): string {
+        if (!roles || roles.grades.length === 0) return 'Матцентр'
+        if (roles.grades.length === 1) return `Матцентр ${roles.grades[0]} класс`
+        return 'Матцентр'
+    }
+
     const initial = (() => {
-        if (!user) return false
-        if (user.is_admin) return true
-        if (teacherCheckCache && teacherCheckCache.userID === user.id) return teacherCheckCache.isTeacher
-        return false
+        if (!user) return 'Матцентр'
+        if (centerCache && centerCache.userID === user.id) return label(centerCache.roles)
+        return 'Матцентр'
     })()
-    const [show, setShow] = useState<boolean>(initial)
+    const [brand, setBrand] = useState<string>(initial)
 
     useEffect(() => {
         if (!user) {
-            setShow(false)
+            setBrand('Матцентр')
             return
         }
-        if (user.is_admin) {
-            setShow(true)
-            return
-        }
-        if (teacherCheckCache && teacherCheckCache.userID === user.id) {
-            setShow(teacherCheckCache.isTeacher)
+        if (centerCache && centerCache.userID === user.id) {
+            setBrand(label(centerCache.roles))
             return
         }
         let cancelled = false
-        if (!teacherCheckInflight) {
+        if (!centerInflight) {
             const uid = user.id
-            teacherCheckInflight = authedFetch<{teacher?: {centers: Array<unknown>}}>('/mathcenter/me')
-                .then(me => (me.teacher?.centers ?? []).length > 0)
-                .catch(() => false)
-                .then(t => {
-                    teacherCheckCache = {userID: uid, isTeacher: t}
-                    teacherCheckInflight = null
-                    return t
+            centerInflight = authedFetch<MathCenterMe>('/mathcenter/me')
+                .then(deriveRoles)
+                .catch(() => ({grades: []}))
+                .then(roles => {
+                    centerCache = {userID: uid, roles}
+                    centerInflight = null
+                    return roles
                 })
         }
-        teacherCheckInflight.then(t => {
-            if (!cancelled) setShow(t)
+        centerInflight.then(roles => {
+            if (!cancelled) setBrand(label(roles))
         })
         return () => {
             cancelled = true
         }
     }, [user, authedFetch])
 
-    return show
+    return brand
 }
 
 function NavLink({to, current, children}: {to: string; current: string; children: ReactNode}) {

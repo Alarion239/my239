@@ -105,12 +105,7 @@ function TeacherSection({data}: {data: TeacherView}) {
     return (
         <div className="flex flex-col gap-8">
             {data.centers.map(c => (
-                <TeacherCenterView
-                    key={c.id}
-                    centerID={c.id}
-                    gradeLabel={`${c.grade}-й класс`}
-                    graduationYear={c.graduation_year}
-                />
+                <TeacherCenterView key={c.id} centerID={c.id}/>
             ))}
         </div>
     )
