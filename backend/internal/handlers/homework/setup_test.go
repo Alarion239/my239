@@ -82,7 +82,7 @@ func authedRequest(t *testing.T, access *internalAuth.AccessTokenService, userID
 // helper mints from, so middleware and helper agree on the secret.
 func newRouter(t *testing.T, mock pgxmock.PgxPoolIface) (http.Handler, *internalAuth.AccessTokenService, *objectstore.MemoryStore) {
 	t.Helper()
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	access := newAccess(t)
 	refresh, err := internalAuth.NewRefreshTokenService(internalAuth.RefreshTokenConfig{
 		DB:         database,
@@ -158,12 +158,12 @@ func expectGetUsersForView(mock pgxmock.PgxPoolIface) {
 func emptyThreadRow(threadID, studentID, subID, seriesID, centerID int64, now time.Time) []any {
 	return []any{
 		threadID, studentID, subID, seriesID, centerID,
-		"ungraded",                  // current_status
-		(*int64)(nil),               // current_attempt_event_id
-		(*int64)(nil),               // current_grade_event_id
-		(*int64)(nil),               // last_grader_user_id
-		(*int64)(nil),               // claim_holder_user_id
-		(*time.Time)(nil),           // claim_expires_at
+		"ungraded",        // current_status
+		(*int64)(nil),     // current_attempt_event_id
+		(*int64)(nil),     // current_grade_event_id
+		(*int64)(nil),     // last_grader_user_id
+		(*int64)(nil),     // claim_holder_user_id
+		(*time.Time)(nil), // claim_expires_at
 		now, now,
 	}
 }
@@ -171,12 +171,12 @@ func emptyThreadRow(threadID, studentID, subID, seriesID, centerID int64, now ti
 // threadRow returns a homework_thread row with custom status/grade/claim
 // fields for tests that need a non-pristine starting state.
 type threadRowOpts struct {
-	Status          string
-	AttemptEventID  *int64
-	GradeEventID    *int64
-	LastGraderID    *int64
-	ClaimHolderID   *int64
-	ClaimExpiresAt  *time.Time
+	Status         string
+	AttemptEventID *int64
+	GradeEventID   *int64
+	LastGraderID   *int64
+	ClaimHolderID  *int64
+	ClaimExpiresAt *time.Time
 }
 
 func threadRow(threadID, studentID, subID, seriesID, centerID int64, opts threadRowOpts, now time.Time) []any {

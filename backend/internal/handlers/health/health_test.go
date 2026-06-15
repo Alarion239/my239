@@ -35,7 +35,7 @@ func TestReady_DBUp(t *testing.T) {
 
 	mock.ExpectPing()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 	rr := httptest.NewRecorder()
@@ -58,7 +58,7 @@ func TestReady_DBDown(t *testing.T) {
 
 	mock.ExpectPing().WillReturnError(errors.New("db unreachable"))
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 	rr := httptest.NewRecorder()

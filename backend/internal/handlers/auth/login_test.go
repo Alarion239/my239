@@ -100,7 +100,7 @@ func TestLogin_Success(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	authHandlers.Login(database, newTokens(t, database))(rr, req)
 
 	if rr.Code != http.StatusOK {
@@ -147,7 +147,7 @@ func TestLogin_PasswordHashIsNotInResponse(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	authHandlers.Login(database, newTokens(t, database))(rr, req)
 
 	// The User struct contains password_hash but is tagged json:"-" via
@@ -172,7 +172,7 @@ func TestLogin_WrongPassword(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	authHandlers.Login(database, newTokens(t, database))(rr, req)
 
 	if rr.Code != http.StatusUnauthorized {
@@ -194,7 +194,7 @@ func TestLogin_UserNotFound(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	authHandlers.Login(database, newTokens(t, database))(rr, req)
 
 	if rr.Code != http.StatusUnauthorized {
@@ -211,7 +211,7 @@ func TestLogin_BadJSON(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	authHandlers.Login(database, newTokens(t, database))(rr, req)
 
 	if rr.Code != http.StatusBadRequest {
@@ -229,7 +229,7 @@ func TestLogin_ValidationFailure(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	authHandlers.Login(database, newTokens(t, database))(rr, req)
 
 	if rr.Code != http.StatusBadRequest {

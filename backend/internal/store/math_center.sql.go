@@ -256,6 +256,38 @@ func (q *Queries) ListGroupsForCenter(ctx context.Context, mathCenterID int64) (
 	return items, nil
 }
 
+const listGroupsForCenters = `-- name: ListGroupsForCenters :many
+SELECT id, math_center_id, name, created_at
+FROM math_center_groups
+WHERE math_center_id = ANY($1::bigint[])
+ORDER BY math_center_id ASC, name ASC
+`
+
+func (q *Queries) ListGroupsForCenters(ctx context.Context, centerIds []int64) ([]MathCenterGroup, error) {
+	rows, err := q.db.Query(ctx, listGroupsForCenters, centerIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MathCenterGroup{}
+	for rows.Next() {
+		var i MathCenterGroup
+		if err := rows.Scan(
+			&i.ID,
+			&i.MathCenterID,
+			&i.Name,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listHeadTeachersForCenter = `-- name: ListHeadTeachersForCenter :many
 SELECT t.id          AS id,
        t.user_id     AS user_id,
@@ -382,6 +414,62 @@ func (q *Queries) ListStudentsForCenter(ctx context.Context, mathCenterID int64)
 	return items, nil
 }
 
+const listStudentsForCenters = `-- name: ListStudentsForCenters :many
+SELECT s.id            AS id,
+       s.user_id       AS user_id,
+       s.group_id      AS group_id,
+       g.name          AS group_name,
+       g.math_center_id AS math_center_id,
+       u.first_name    AS first_name,
+       u.middle_name   AS middle_name,
+       u.last_name     AS last_name
+FROM math_center_students s
+         JOIN math_center_groups g ON g.id = s.group_id
+         JOIN users u ON u.id = s.user_id
+WHERE g.math_center_id = ANY($1::bigint[])
+ORDER BY g.math_center_id ASC, g.name ASC, u.last_name ASC, u.first_name ASC
+`
+
+type ListStudentsForCentersRow struct {
+	ID           int64   `json:"id"`
+	UserID       int64   `json:"user_id"`
+	GroupID      int64   `json:"group_id"`
+	GroupName    string  `json:"group_name"`
+	MathCenterID int64   `json:"math_center_id"`
+	FirstName    string  `json:"first_name"`
+	MiddleName   *string `json:"middle_name"`
+	LastName     string  `json:"last_name"`
+}
+
+func (q *Queries) ListStudentsForCenters(ctx context.Context, centerIds []int64) ([]ListStudentsForCentersRow, error) {
+	rows, err := q.db.Query(ctx, listStudentsForCenters, centerIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListStudentsForCentersRow{}
+	for rows.Next() {
+		var i ListStudentsForCentersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.GroupID,
+			&i.GroupName,
+			&i.MathCenterID,
+			&i.FirstName,
+			&i.MiddleName,
+			&i.LastName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTeachersForCenter = `-- name: ListTeachersForCenter :many
 SELECT t.id              AS id,
        t.user_id         AS user_id,
@@ -415,6 +503,58 @@ func (q *Queries) ListTeachersForCenter(ctx context.Context, mathCenterID int64)
 	items := []ListTeachersForCenterRow{}
 	for rows.Next() {
 		var i ListTeachersForCenterRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.MathCenterID,
+			&i.IsHeadTeacher,
+			&i.FirstName,
+			&i.MiddleName,
+			&i.LastName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTeachersForCenters = `-- name: ListTeachersForCenters :many
+SELECT t.id              AS id,
+       t.user_id         AS user_id,
+       t.math_center_id  AS math_center_id,
+       t.is_head_teacher AS is_head_teacher,
+       u.first_name      AS first_name,
+       u.middle_name     AS middle_name,
+       u.last_name       AS last_name
+FROM math_center_teachers t
+         JOIN users u ON u.id = t.user_id
+WHERE t.math_center_id = ANY($1::bigint[])
+ORDER BY t.math_center_id ASC, t.is_head_teacher DESC, u.last_name ASC, u.first_name ASC
+`
+
+type ListTeachersForCentersRow struct {
+	ID            int64   `json:"id"`
+	UserID        int64   `json:"user_id"`
+	MathCenterID  int64   `json:"math_center_id"`
+	IsHeadTeacher bool    `json:"is_head_teacher"`
+	FirstName     string  `json:"first_name"`
+	MiddleName    *string `json:"middle_name"`
+	LastName      string  `json:"last_name"`
+}
+
+func (q *Queries) ListTeachersForCenters(ctx context.Context, centerIds []int64) ([]ListTeachersForCentersRow, error) {
+	rows, err := q.db.Query(ctx, listTeachersForCenters, centerIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTeachersForCentersRow{}
+	for rows.Next() {
+		var i ListTeachersForCentersRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.UserID,

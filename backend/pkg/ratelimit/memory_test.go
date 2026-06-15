@@ -100,15 +100,6 @@ func TestMemory_Middleware_ReturnsRetryAfter(t *testing.T) {
 	}
 }
 
-func TestItoa(t *testing.T) {
-	cases := map[int]string{0: "0", 1: "1", 42: "42", -7: "-7", 12345: "12345"}
-	for in, want := range cases {
-		if got := itoa(in); got != want {
-			t.Errorf("itoa(%d): got %q, want %q", in, got, want)
-		}
-	}
-}
-
 func TestClientIP_StripsPort(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.RemoteAddr = "203.0.113.5:54321"

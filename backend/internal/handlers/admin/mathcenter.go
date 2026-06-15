@@ -24,7 +24,7 @@ func ListMathCenters(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		centers, err := store.New(database.Pool()).ListMathCenters(r.Context())
 		if err != nil {
-			logger.LogError("admin/mc: list centers", err)
+			logger.LogErrorContext(r.Context(), "admin/mc: list centers", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to list centers")
 			return
 		}
@@ -35,8 +35,7 @@ func ListMathCenters(database *db.DB) http.HandlerFunc {
 func CreateMathCenter(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req createCenterRequest
-		if err := httpx.DecodeJSON(r, &req); err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		if !httpx.DecodeJSONBody(w, r, &req) {
 			return
 		}
 		if req.GraduationYear < 1900 || req.GraduationYear > 2100 {
@@ -50,7 +49,7 @@ func CreateMathCenter(database *db.DB) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "math center for that graduation year already exists")
 				return
 			}
-			logger.LogError("admin/mc: create center", err)
+			logger.LogErrorContext(r.Context(), "admin/mc: create center", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to create center")
 			return
 		}
@@ -67,7 +66,7 @@ func DeleteMathCenter(database *db.DB) http.HandlerFunc {
 		}
 		n, err := store.New(database.Pool()).DeleteMathCenter(r.Context(), id)
 		if err != nil {
-			logger.LogError("admin/mc: delete center", err)
+			logger.LogErrorContext(r.Context(), "admin/mc: delete center", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to delete center")
 			return
 		}
@@ -94,7 +93,7 @@ func ListGroupsForCenter(database *db.DB) http.HandlerFunc {
 		}
 		groups, err := store.New(database.Pool()).ListGroupsForCenter(r.Context(), centerID)
 		if err != nil {
-			logger.LogError("admin/mc: list groups", err)
+			logger.LogErrorContext(r.Context(), "admin/mc: list groups", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to list groups")
 			return
 		}
@@ -110,8 +109,7 @@ func CreateGroup(database *db.DB) http.HandlerFunc {
 			return
 		}
 		var req createGroupRequest
-		if err := httpx.DecodeJSON(r, &req); err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		if !httpx.DecodeJSONBody(w, r, &req) {
 			return
 		}
 		if req.Name == "" || len(req.Name) > 50 {
@@ -128,7 +126,7 @@ func CreateGroup(database *db.DB) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "group with that name already exists in this center")
 				return
 			}
-			logger.LogError("admin/mc: create group", err)
+			logger.LogErrorContext(r.Context(), "admin/mc: create group", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to create group")
 			return
 		}
@@ -145,7 +143,7 @@ func DeleteGroup(database *db.DB) http.HandlerFunc {
 		}
 		n, err := store.New(database.Pool()).DeleteMathCenterGroup(r.Context(), id)
 		if err != nil {
-			logger.LogError("admin/mc: delete group", err)
+			logger.LogErrorContext(r.Context(), "admin/mc: delete group", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to delete group")
 			return
 		}
@@ -173,7 +171,7 @@ func ListStudentsForCenter(database *db.DB) http.HandlerFunc {
 		}
 		students, err := store.New(database.Pool()).ListStudentsForCenter(r.Context(), centerID)
 		if err != nil {
-			logger.LogError("admin/mc: list students", err)
+			logger.LogErrorContext(r.Context(), "admin/mc: list students", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to list students")
 			return
 		}
@@ -184,8 +182,7 @@ func ListStudentsForCenter(database *db.DB) http.HandlerFunc {
 func AddStudent(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req addStudentRequest
-		if err := httpx.DecodeJSON(r, &req); err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		if !httpx.DecodeJSONBody(w, r, &req) {
 			return
 		}
 		if req.UserID == 0 || req.GroupID == 0 {
@@ -206,7 +203,7 @@ func AddStudent(database *db.DB) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "user or group does not exist")
 				return
 			}
-			logger.LogError("admin/mc: add student", err)
+			logger.LogErrorContext(r.Context(), "admin/mc: add student", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to add student")
 			return
 		}
@@ -223,7 +220,7 @@ func RemoveStudent(database *db.DB) http.HandlerFunc {
 		}
 		n, err := store.New(database.Pool()).RemoveStudent(r.Context(), id)
 		if err != nil {
-			logger.LogError("admin/mc: remove student", err)
+			logger.LogErrorContext(r.Context(), "admin/mc: remove student", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to remove student")
 			return
 		}
@@ -255,7 +252,7 @@ func ListTeachersForCenter(database *db.DB) http.HandlerFunc {
 		}
 		teachers, err := store.New(database.Pool()).ListTeachersForCenter(r.Context(), centerID)
 		if err != nil {
-			logger.LogError("admin/mc: list teachers", err)
+			logger.LogErrorContext(r.Context(), "admin/mc: list teachers", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to list teachers")
 			return
 		}
@@ -271,8 +268,7 @@ func AddTeacher(database *db.DB) http.HandlerFunc {
 			return
 		}
 		var req addTeacherRequest
-		if err := httpx.DecodeJSON(r, &req); err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		if !httpx.DecodeJSONBody(w, r, &req) {
 			return
 		}
 		if req.UserID == 0 {
@@ -294,7 +290,7 @@ func AddTeacher(database *db.DB) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "user or center does not exist")
 				return
 			}
-			logger.LogError("admin/mc: add teacher", err)
+			logger.LogErrorContext(r.Context(), "admin/mc: add teacher", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to add teacher")
 			return
 		}
@@ -310,8 +306,7 @@ func SetTeacherHead(database *db.DB) http.HandlerFunc {
 			return
 		}
 		var req setHeadRequest
-		if err := httpx.DecodeJSON(r, &req); err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		if !httpx.DecodeJSONBody(w, r, &req) {
 			return
 		}
 		n, err := store.New(database.Pool()).SetTeacherHead(r.Context(), store.SetTeacherHeadParams{
@@ -319,7 +314,7 @@ func SetTeacherHead(database *db.DB) http.HandlerFunc {
 			IsHeadTeacher: req.IsHeadTeacher,
 		})
 		if err != nil {
-			logger.LogError("admin/mc: set head", err)
+			logger.LogErrorContext(r.Context(), "admin/mc: set head", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to update teacher")
 			return
 		}
@@ -340,7 +335,7 @@ func RemoveTeacher(database *db.DB) http.HandlerFunc {
 		}
 		n, err := store.New(database.Pool()).RemoveTeacher(r.Context(), id)
 		if err != nil {
-			logger.LogError("admin/mc: remove teacher", err)
+			logger.LogErrorContext(r.Context(), "admin/mc: remove teacher", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to remove teacher")
 			return
 		}
@@ -380,8 +375,7 @@ func CreateMathCenterAccount(database *db.DB) http.HandlerFunc {
 		}
 
 		var req createMathCenterAccountRequest
-		if err := httpx.DecodeJSON(r, &req); err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		if !httpx.DecodeJSONBody(w, r, &req) {
 			return
 		}
 		if len(req.Username) < 3 || len(req.Username) > 50 {
@@ -405,7 +399,7 @@ func CreateMathCenterAccount(database *db.DB) http.HandlerFunc {
 
 		tx, err := database.Pool().Begin(ctx)
 		if err != nil {
-			logger.LogError("admin/mc: begin account tx", err)
+			logger.LogErrorContext(r.Context(), "admin/mc: begin account tx", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -425,7 +419,7 @@ func CreateMathCenterAccount(database *db.DB) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "username already taken")
 				return
 			}
-			logger.LogError("admin/mc: create account", err)
+			logger.LogErrorContext(r.Context(), "admin/mc: create account", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to create account")
 			return
 		}
@@ -439,13 +433,13 @@ func CreateMathCenterAccount(database *db.DB) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "center does not exist")
 				return
 			}
-			logger.LogError("admin/mc: enroll account", err)
+			logger.LogErrorContext(r.Context(), "admin/mc: enroll account", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to create account")
 			return
 		}
 
 		if err := tx.Commit(ctx); err != nil {
-			logger.LogError("admin/mc: commit account tx", err)
+			logger.LogErrorContext(r.Context(), "admin/mc: commit account tx", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}

@@ -2,14 +2,17 @@ package middleware
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/Alarion239/my239/backend/internal/logger"
-	chiMiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/Alarion239/my239/backend/internal/metrics"
+	"github.com/go-chi/chi/v5"
 )
 
-// LoggerMiddleware logs HTTP requests with the chi request ID so entries can
-// be correlated across the stack.
+// LoggerMiddleware logs each HTTP request with the chi request ID (so entries
+// correlate across the stack) and records request count + latency metrics
+// keyed by the matched route pattern.
 func LoggerMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -18,13 +21,25 @@ func LoggerMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(rw, r)
 
-		logger.LogInfo("http request",
-			"request_id", chiMiddleware.GetReqID(r.Context()),
+		duration := time.Since(start)
+
+		// Route pattern is only known after routing. Fall back to a constant
+		// for unmatched paths so 404 scans can't inflate label cardinality.
+		route := chi.RouteContext(r.Context()).RoutePattern()
+		if route == "" {
+			route = "unmatched"
+		}
+		status := strconv.Itoa(rw.statusCode)
+		metrics.RequestDuration.WithLabelValues(r.Method, route, status).Observe(duration.Seconds())
+		metrics.RequestsTotal.WithLabelValues(r.Method, route, status).Inc()
+
+		logger.LogInfoContext(r.Context(), "http request",
 			"method", r.Method,
 			"path", r.URL.Path,
+			"route", route,
 			"status", rw.statusCode,
 			"bytes", rw.bytes,
-			"duration_ms", time.Since(start).Milliseconds(),
+			"duration_ms", duration.Milliseconds(),
 			"remote_addr", r.RemoteAddr,
 		)
 	})

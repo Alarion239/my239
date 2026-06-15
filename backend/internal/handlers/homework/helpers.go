@@ -45,7 +45,7 @@ func requireTeacher(ctx context.Context, w http.ResponseWriter, r *http.Request,
 		UserID: userID, MathCenterID: centerID,
 	})
 	if err != nil {
-		logger.LogError("homework: teacher check", err)
+		logger.LogErrorContext(ctx, "homework: teacher check", err)
 		httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 		return false
 	}
@@ -63,7 +63,7 @@ func requireStudent(ctx context.Context, w http.ResponseWriter, r *http.Request,
 		UserID: userID, MathCenterID: centerID,
 	})
 	if err != nil {
-		logger.LogError("homework: student check", err)
+		logger.LogErrorContext(ctx, "homework: student check", err)
 		httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 		return false
 	}
@@ -73,4 +73,3 @@ func requireStudent(ctx context.Context, w http.ResponseWriter, r *http.Request,
 	}
 	return true
 }
-

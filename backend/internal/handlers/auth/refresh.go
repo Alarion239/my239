@@ -29,8 +29,7 @@ type RefreshResponse struct {
 func Refresh(database *db.DB, tokens *internalAuth.TokenService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req RefreshRequest
-		if err := httpx.DecodeJSON(r, &req); err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		if !httpx.DecodeJSONBody(w, r, &req) {
 			return
 		}
 		if err := validate.Struct(req); err != nil {
@@ -56,7 +55,7 @@ func Refresh(database *db.DB, tokens *internalAuth.TokenService) http.HandlerFun
 			case errors.Is(err, internalAuth.ErrRefreshTokenRevoked):
 				httpx.WriteAPIError(w, r, http.StatusUnauthorized, httpx.CodeTokenInvalid, "refresh token revoked")
 			default:
-				logger.LogError("refresh: exchange", err)
+				logger.LogErrorContext(r.Context(), "refresh: exchange", err)
 				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			}
 			return

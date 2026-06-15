@@ -3,6 +3,7 @@ package homework
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -85,13 +86,13 @@ func GetThread(database *db.DB, blobs objectstore.Store, downloadTTL time.Durati
 				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "thread not found")
 				return
 			}
-			logger.LogError("homework: get thread", err)
+			logger.LogErrorContext(ctx, "homework: get thread", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
 		allowed, err := canViewThread(ctx, r, q, userID, thread)
 		if err != nil {
-			logger.LogError("homework: thread auth", err)
+			logger.LogErrorContext(ctx, "homework: thread auth", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -102,7 +103,7 @@ func GetThread(database *db.DB, blobs objectstore.Store, downloadTTL time.Durati
 
 		view, err := buildThreadView(ctx, q, blobs, thread, downloadTTL)
 		if err != nil {
-			logger.LogError("homework: build thread view", err)
+			logger.LogErrorContext(ctx, "homework: build thread view", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -132,15 +133,15 @@ func canViewThread(ctx context.Context, r *http.Request, q *store.Queries, userI
 func buildThreadView(ctx context.Context, q *store.Queries, blobs objectstore.Store, thread store.HomeworkThread, downloadTTL time.Duration) (*threadView, error) {
 	series, err := q.GetSeries(ctx, thread.SeriesID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get series: %w", err)
 	}
 	events, err := q.ListThreadEvents(ctx, thread.ID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list thread events: %w", err)
 	}
 	users, err := loadUserNames(ctx, q, thread, events)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load user names: %w", err)
 	}
 	eventIDs := make([]int64, 0, len(events))
 	for _, e := range events {
@@ -150,7 +151,7 @@ func buildThreadView(ctx context.Context, q *store.Queries, blobs objectstore.St
 	if len(eventIDs) > 0 {
 		rows, err := q.ListEventPhotosForEvents(ctx, eventIDs)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("list event photos: %w", err)
 		}
 		for _, p := range rows {
 			url, err := blobs.PresignGet(ctx, p.ObjectKey, downloadTTL)
@@ -230,7 +231,7 @@ func loadUserNames(ctx context.Context, q *store.Queries, thread store.HomeworkT
 	}
 	rows, err := q.GetUsersByIDs(ctx, ids)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get users by ids: %w", err)
 	}
 	out := make(map[string]string, len(rows))
 	for _, u := range rows {
@@ -252,7 +253,7 @@ func writeThreadView(ctx context.Context, w http.ResponseWriter, r *http.Request
 	q := store.New(database.Pool())
 	thread, err := q.GetThread(ctx, threadID)
 	if err != nil {
-		logger.LogError("homework: get thread post-mutate", err)
+		logger.LogErrorContext(ctx, "homework: get thread post-mutate", err)
 		httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 		return
 	}
@@ -260,7 +261,7 @@ func writeThreadView(ctx context.Context, w http.ResponseWriter, r *http.Request
 	// re-fetch via GetThread for fresh URLs if the user lingers.
 	view, err := buildThreadView(ctx, q, blobs, thread, time.Minute)
 	if err != nil {
-		logger.LogError("homework: build thread view post-mutate", err)
+		logger.LogErrorContext(ctx, "homework: build thread view post-mutate", err)
 		httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 		return
 	}

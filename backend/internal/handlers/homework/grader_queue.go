@@ -57,7 +57,7 @@ func GraderQueue(database *db.DB) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "series not found")
 				return
 			}
-			logger.LogError("homework: get series for queue", err)
+			logger.LogErrorContext(ctx, "homework: get series for queue", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -71,7 +71,7 @@ func GraderQueue(database *db.DB) http.HandlerFunc {
 			MineOnly:     mine,
 		})
 		if err != nil {
-			logger.LogError("homework: list grader queue", err)
+			logger.LogErrorContext(ctx, "homework: list grader queue", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}

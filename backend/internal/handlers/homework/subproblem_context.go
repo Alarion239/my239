@@ -1,6 +1,7 @@
 package homework
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"time"
@@ -30,12 +31,12 @@ type subproblemContextResponse struct {
 	SeriesPublishedAt *time.Time `json:"series_published_at,omitempty"`
 }
 
-// GetSubproblemContextHandler — any teacher OR student of the center can
-// read. We auth-gate to avoid leaking series structure to unrelated users;
-// the metadata itself is low-sensitivity (it's already visible via the
+// SubproblemContext — any teacher OR student of the center can read. We
+// auth-gate to avoid leaking series structure to unrelated users; the
+// metadata itself is low-sensitivity (it's already visible via the
 // /mathcenter/series endpoints) but keeping the auth model consistent
 // across homework endpoints makes the rules easier to reason about.
-func GetSubproblemContextHandler(database *db.DB) http.HandlerFunc {
+func SubproblemContext(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		userID, ok := requireUser(w, r)
@@ -55,7 +56,7 @@ func GetSubproblemContextHandler(database *db.DB) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "subproblem not found")
 				return
 			}
-			logger.LogError("homework: subproblem ctx", err)
+			logger.LogErrorContext(ctx, "homework: subproblem ctx", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -63,7 +64,7 @@ func GetSubproblemContextHandler(database *db.DB) http.HandlerFunc {
 		// Either-role check: every center membership type can read this.
 		isTeacher, isStudent, err := membership(ctx, q, userID, spCtx.MathCenterID)
 		if err != nil {
-			logger.LogError("homework: subproblem ctx membership", err)
+			logger.LogErrorContext(ctx, "homework: subproblem ctx membership", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -89,7 +90,7 @@ func GetSubproblemContextHandler(database *db.DB) http.HandlerFunc {
 // membership is a tiny helper used by the subproblem-context handler. The
 // existing handler helpers (`requireTeacher`, `requireStudent`) each only
 // gate one role; this returns both flags in one call.
-func membership(ctx contextLike, q *store.Queries, userID, centerID int64) (teacher, student bool, err error) {
+func membership(ctx context.Context, q *store.Queries, userID, centerID int64) (teacher, student bool, err error) {
 	teacher, err = q.IsTeacherInCenter(ctx, store.IsTeacherInCenterParams{UserID: userID, MathCenterID: centerID})
 	if err != nil {
 		return false, false, err
@@ -99,14 +100,4 @@ func membership(ctx contextLike, q *store.Queries, userID, centerID int64) (teac
 		return false, false, err
 	}
 	return teacher, student, nil
-}
-
-// contextLike is the minimal context surface needed by sqlc-generated
-// methods. Using an alias keeps this file's signature short while staying
-// compatible with context.Context.
-type contextLike = interface {
-	Deadline() (time.Time, bool)
-	Done() <-chan struct{}
-	Err() error
-	Value(key any) any
 }

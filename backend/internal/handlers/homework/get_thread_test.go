@@ -126,4 +126,3 @@ func TestGetThread_OutsiderForbidden(t *testing.T) {
 		t.Errorf("got %d, want 403", rr.Code)
 	}
 }
-

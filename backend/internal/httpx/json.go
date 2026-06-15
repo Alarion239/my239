@@ -88,12 +88,17 @@ func WriteValidationError(w http.ResponseWriter, r *http.Request, err error) {
 
 // DecodeJSON reads a bounded JSON body into dst and rejects unknown fields to
 // catch typos in client payloads. The body is always limited by MaxBodyBytes
-// regardless of what the client claims in Content-Length.
-func DecodeJSON(r *http.Request, dst any) error {
+// regardless of what the client claims in Content-Length. w is passed to
+// MaxBytesReader so the server can manage the connection when the limit is
+// hit; it may be nil in tests.
+//
+// Most handlers should call DecodeJSONBody, which also writes the error
+// response; DecodeJSON is exposed for callers that need the raw error.
+func DecodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 	if ct := r.Header.Get("Content-Type"); ct != "" && !strings.HasPrefix(ct, "application/json") {
 		return fmt.Errorf("unsupported content type %q", ct)
 	}
-	r.Body = http.MaxBytesReader(nil, r.Body, MaxBodyBytes)
+	r.Body = http.MaxBytesReader(w, r.Body, MaxBodyBytes)
 
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
@@ -104,4 +109,16 @@ func DecodeJSON(r *http.Request, dst any) error {
 		return errors.New("body must contain a single JSON object")
 	}
 	return nil
+}
+
+// DecodeJSONBody decodes the request body into dst with the same rules as
+// DecodeJSON. On failure it writes a 400 error envelope with a generic
+// message — JSON parser internals must not leak to the client — and returns
+// false; the caller should simply return.
+func DecodeJSONBody(w http.ResponseWriter, r *http.Request, dst any) bool {
+	if err := DecodeJSON(w, r, dst); err != nil {
+		WriteAPIError(w, r, http.StatusBadRequest, CodeBadRequest, "invalid request body")
+		return false
+	}
+	return true
 }

@@ -35,8 +35,7 @@ func Login(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 		ctx := r.Context()
 
 		var req LoginRequest
-		if err := httpx.DecodeJSON(r, &req); err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		if !httpx.DecodeJSONBody(w, r, &req) {
 			return
 		}
 		if err := validate.Struct(req); err != nil {

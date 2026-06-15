@@ -111,7 +111,7 @@ func TestDecodeJSON_Success(t *testing.T) {
 		Name string `json:"name"`
 		Age  int    `json:"age"`
 	}
-	if err := DecodeJSON(req, &dst); err != nil {
+	if err := DecodeJSON(nil, req, &dst); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if dst.Name != "sasha" || dst.Age != 28 {
@@ -127,7 +127,7 @@ func TestDecodeJSON_UnknownField(t *testing.T) {
 	var dst struct {
 		Name string `json:"name"`
 	}
-	if err := DecodeJSON(req, &dst); err == nil {
+	if err := DecodeJSON(nil, req, &dst); err == nil {
 		t.Fatal("expected error for unknown field")
 	}
 }
@@ -138,7 +138,7 @@ func TestDecodeJSON_RejectsNonJSONContentType(t *testing.T) {
 	req.Header.Set("Content-Type", "text/plain")
 
 	var dst struct{}
-	if err := DecodeJSON(req, &dst); err == nil {
+	if err := DecodeJSON(nil, req, &dst); err == nil {
 		t.Fatal("expected error for non-JSON content type")
 	}
 }
@@ -152,7 +152,7 @@ func TestDecodeJSON_OverSizeLimit(t *testing.T) {
 	var dst struct {
 		Name string `json:"name"`
 	}
-	if err := DecodeJSON(req, &dst); err == nil {
+	if err := DecodeJSON(nil, req, &dst); err == nil {
 		t.Fatal("expected error when body exceeds MaxBodyBytes")
 	}
 }
@@ -165,7 +165,7 @@ func TestDecodeJSON_MultipleObjects(t *testing.T) {
 	var dst struct {
 		Name string `json:"name"`
 	}
-	if err := DecodeJSON(req, &dst); err == nil {
+	if err := DecodeJSON(nil, req, &dst); err == nil {
 		t.Fatal("expected error for multiple JSON objects in body")
 	}
 }

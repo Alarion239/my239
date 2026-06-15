@@ -251,6 +251,38 @@ func (q *Queries) ListProblemsForSeries(ctx context.Context, seriesID int64) ([]
 	return items, nil
 }
 
+const listProblemsForSeriesIDs = `-- name: ListProblemsForSeriesIDs :many
+SELECT id, series_id, number, created_at
+FROM math_center_problems
+WHERE series_id = ANY($1::bigint[])
+ORDER BY series_id ASC, number ASC
+`
+
+func (q *Queries) ListProblemsForSeriesIDs(ctx context.Context, seriesIds []int64) ([]MathCenterProblem, error) {
+	rows, err := q.db.Query(ctx, listProblemsForSeriesIDs, seriesIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MathCenterProblem{}
+	for rows.Next() {
+		var i MathCenterProblem
+		if err := rows.Scan(
+			&i.ID,
+			&i.SeriesID,
+			&i.Number,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPublishedSeriesForCenter = `-- name: ListPublishedSeriesForCenter :many
 SELECT id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source
 FROM math_center_series
@@ -351,6 +383,42 @@ func (q *Queries) ListSubproblemsForSeries(ctx context.Context, seriesID int64) 
 	items := []ListSubproblemsForSeriesRow{}
 	for rows.Next() {
 		var i ListSubproblemsForSeriesRow
+		if err := rows.Scan(&i.ID, &i.ProblemID, &i.Label); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSubproblemsForSeriesIDs = `-- name: ListSubproblemsForSeriesIDs :many
+SELECT s.id         AS id,
+       s.problem_id AS problem_id,
+       s.label      AS label
+FROM math_center_subproblems s
+         JOIN math_center_problems p ON p.id = s.problem_id
+WHERE p.series_id = ANY($1::bigint[])
+ORDER BY p.number ASC, s.label ASC
+`
+
+type ListSubproblemsForSeriesIDsRow struct {
+	ID        int64  `json:"id"`
+	ProblemID int64  `json:"problem_id"`
+	Label     string `json:"label"`
+}
+
+func (q *Queries) ListSubproblemsForSeriesIDs(ctx context.Context, seriesIds []int64) ([]ListSubproblemsForSeriesIDsRow, error) {
+	rows, err := q.db.Query(ctx, listSubproblemsForSeriesIDs, seriesIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSubproblemsForSeriesIDsRow{}
+	for rows.Next() {
+		var i ListSubproblemsForSeriesIDsRow
 		if err := rows.Scan(&i.ID, &i.ProblemID, &i.Label); err != nil {
 			return nil, err
 		}

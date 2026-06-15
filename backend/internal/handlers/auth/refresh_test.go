@@ -43,7 +43,7 @@ func TestRefresh_Success(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	authHandlers.Refresh(database, newTokens(t, database))(rr, req)
 
 	if rr.Code != http.StatusOK {
@@ -80,7 +80,7 @@ func TestRefresh_TokenInvalid(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	authHandlers.Refresh(database, newTokens(t, database))(rr, req)
 
 	if rr.Code != http.StatusUnauthorized {
@@ -106,7 +106,7 @@ func TestRefresh_TokenExpired(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	authHandlers.Refresh(database, newTokens(t, database))(rr, req)
 
 	if rr.Code != http.StatusUnauthorized {
@@ -124,7 +124,7 @@ func TestRefresh_ValidationFailure(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	authHandlers.Refresh(database, newTokens(t, database))(rr, req)
 
 	if rr.Code != http.StatusBadRequest {

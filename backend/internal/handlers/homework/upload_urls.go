@@ -60,8 +60,7 @@ func IssueStudentUploadURLs(database *db.DB, blobs objectstore.Store, uploadTTL 
 		}
 
 		var req uploadURLsRequest
-		if err := httpx.DecodeJSON(r, &req); err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		if !httpx.DecodeJSONBody(w, r, &req) {
 			return
 		}
 		if err := homework.ValidatePhotoBatch(req.ContentTypes); err != nil {
@@ -76,7 +75,7 @@ func IssueStudentUploadURLs(database *db.DB, blobs objectstore.Store, uploadTTL 
 				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "subproblem not found")
 				return
 			}
-			logger.LogError("homework: subproblem ctx", err)
+			logger.LogErrorContext(ctx, "homework: subproblem ctx", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -91,14 +90,14 @@ func IssueStudentUploadURLs(database *db.DB, blobs objectstore.Store, uploadTTL 
 			MathCenterID:  spCtx.MathCenterID,
 		})
 		if err != nil {
-			logger.LogError("homework: find-or-create thread", err)
+			logger.LogErrorContext(ctx, "homework: find-or-create thread", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
 
 		slots, eventUUID, err := mintSlots(ctx, blobs, thread.ID, req.ContentTypes, uploadTTL)
 		if err != nil {
-			logger.LogError("homework: presign put", err)
+			logger.LogErrorContext(ctx, "homework: presign put", err)
 			httpx.WriteAPIError(w, r, http.StatusBadGateway, httpx.CodeUnavailable, "object storage unavailable")
 			return
 		}
@@ -123,8 +122,7 @@ func IssueGraderUploadURLs(database *db.DB, blobs objectstore.Store, uploadTTL t
 		}
 
 		var req uploadURLsRequest
-		if err := httpx.DecodeJSON(r, &req); err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		if !httpx.DecodeJSONBody(w, r, &req) {
 			return
 		}
 		if err := homework.ValidatePhotoBatch(req.ContentTypes); err != nil {
@@ -139,7 +137,7 @@ func IssueGraderUploadURLs(database *db.DB, blobs objectstore.Store, uploadTTL t
 				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "thread not found")
 				return
 			}
-			logger.LogError("homework: get thread", err)
+			logger.LogErrorContext(ctx, "homework: get thread", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -149,7 +147,7 @@ func IssueGraderUploadURLs(database *db.DB, blobs objectstore.Store, uploadTTL t
 
 		slots, eventUUID, err := mintSlots(ctx, blobs, thread.ID, req.ContentTypes, uploadTTL)
 		if err != nil {
-			logger.LogError("homework: presign put", err)
+			logger.LogErrorContext(ctx, "homework: presign put", err)
 			httpx.WriteAPIError(w, r, http.StatusBadGateway, httpx.CodeUnavailable, "object storage unavailable")
 			return
 		}

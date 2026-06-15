@@ -1,3 +1,5 @@
+// Package auth contains the HTTP handlers for the authentication endpoints:
+// register, login, logout, token refresh, and the current-user lookup.
 package auth
 
 import (

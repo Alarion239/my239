@@ -13,7 +13,7 @@ import (
 // Me returns the current authenticated user's information.
 func Me(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ctx, user, err := ctxcache.EnsureUser(database, r.Context())
+		ctx, user, err := ctxcache.EnsureUser(r.Context(), database)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, ctxcache.ErrNoUserIDFound) {
 				httpx.WriteAPIError(w, r, http.StatusUnauthorized, httpx.CodeUnauthenticated, "unauthenticated")

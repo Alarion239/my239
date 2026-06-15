@@ -32,7 +32,7 @@ func TestRefreshTokenService_BadConfig(t *testing.T) {
 	if _, err := internalAuth.NewRefreshTokenService(internalAuth.RefreshTokenConfig{Expiration: time.Hour}); err == nil {
 		t.Fatal("expected error when DB is nil")
 	}
-	if _, err := internalAuth.NewRefreshTokenService(internalAuth.RefreshTokenConfig{DB: db.NewDBWithPool(nil)}); err == nil {
+	if _, err := internalAuth.NewRefreshTokenService(internalAuth.RefreshTokenConfig{DB: db.NewWithPool(nil)}); err == nil {
 		t.Fatal("expected error when expiration is zero")
 	}
 }
@@ -47,7 +47,7 @@ func TestRefreshTokenService_Issue(t *testing.T) {
 		WillReturnRows(mock.NewRows(refreshTokenColumns).
 			AddRow(int64(1), int64(7), []byte("hash"), now.Add(time.Hour), (*time.Time)(nil), (*int64)(nil), now))
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	svc := newRefreshSvc(t, database)
 
 	raw, err := svc.Issue(context.Background(), 7)
@@ -82,7 +82,7 @@ func TestRefreshTokenService_Exchange_Success(t *testing.T) {
 		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 	mock.ExpectCommit()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	svc := newRefreshSvc(t, database)
 
 	newRaw, userID, err := svc.Exchange(context.Background(), "old-raw")
@@ -110,7 +110,7 @@ func TestRefreshTokenService_Exchange_NotFound(t *testing.T) {
 		WillReturnRows(mock.NewRows(refreshTokenColumns))
 	mock.ExpectRollback()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	svc := newRefreshSvc(t, database)
 
 	_, _, err := svc.Exchange(context.Background(), "nope")
@@ -132,7 +132,7 @@ func TestRefreshTokenService_Exchange_AlreadyRevoked(t *testing.T) {
 			AddRow(int64(1), int64(7), []byte("hash"), now.Add(time.Hour), &revokedAt, (*int64)(nil), now))
 	mock.ExpectRollback()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	svc := newRefreshSvc(t, database)
 
 	_, _, err := svc.Exchange(context.Background(), "raw")
@@ -153,7 +153,7 @@ func TestRefreshTokenService_Exchange_Expired(t *testing.T) {
 			AddRow(int64(1), int64(7), []byte("hash"), now.Add(-time.Hour), (*time.Time)(nil), (*int64)(nil), now))
 	mock.ExpectRollback()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	svc := newRefreshSvc(t, database)
 
 	_, _, err := svc.Exchange(context.Background(), "raw")
@@ -170,7 +170,7 @@ func TestRefreshTokenService_Revoke_Idempotent(t *testing.T) {
 		WithArgs(pgxmock.AnyArg()).
 		WillReturnRows(mock.NewRows(refreshTokenColumns))
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	svc := newRefreshSvc(t, database)
 
 	if err := svc.Revoke(context.Background(), "unknown"); err != nil {

@@ -3,6 +3,7 @@ package mathcenter
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -87,7 +88,7 @@ func Me(database *db.DB) http.HandlerFunc {
 		resp := MeResponse{}
 
 		if tv, err := buildTeacherView(ctx, q, userID, now); err != nil {
-			logger.LogError("mathcenter: build teacher view", err)
+			logger.LogErrorContext(ctx, "mathcenter: build teacher view", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		} else if tv != nil {
@@ -95,7 +96,7 @@ func Me(database *db.DB) http.HandlerFunc {
 		}
 
 		if sv, err := buildStudentView(ctx, q, userID, now); err != nil {
-			logger.LogError("mathcenter: build student view", err)
+			logger.LogErrorContext(ctx, "mathcenter: build student view", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		} else if sv != nil {
@@ -109,52 +110,59 @@ func Me(database *db.DB) http.HandlerFunc {
 func buildTeacherView(ctx context.Context, q *store.Queries, userID int64, now time.Time) (*TeacherView, error) {
 	centers, err := q.ListCentersForTeacher(ctx, userID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list centers for teacher: %w", err)
 	}
 	if len(centers) == 0 {
 		return nil, nil
 	}
 
+	// Fetch all members of all centers in three queries (instead of 3N), then
+	// bucket by center id in Go.
+	centerIDs := make([]int64, len(centers))
+	for i, c := range centers {
+		centerIDs[i] = c.ID
+	}
+	teachers, err := q.ListTeachersForCenters(ctx, centerIDs)
+	if err != nil {
+		return nil, fmt.Errorf("list teachers for centers: %w", err)
+	}
+	groups, err := q.ListGroupsForCenters(ctx, centerIDs)
+	if err != nil {
+		return nil, fmt.Errorf("list groups for centers: %w", err)
+	}
+	students, err := q.ListStudentsForCenters(ctx, centerIDs)
+	if err != nil {
+		return nil, fmt.Errorf("list students for centers: %w", err)
+	}
+
+	teachersByCenter := make(map[int64][]TeacherInfo, len(centers))
+	for _, t := range teachers {
+		teachersByCenter[t.MathCenterID] = append(teachersByCenter[t.MathCenterID], TeacherInfo{
+			UserID:        t.UserID,
+			DisplayName:   mc.TeacherDisplayName(t.FirstName, t.MiddleName),
+			IsHeadTeacher: t.IsHeadTeacher,
+		})
+	}
+	groupsByCenter := make(map[int64][]store.MathCenterGroup, len(centers))
+	for _, g := range groups {
+		groupsByCenter[g.MathCenterID] = append(groupsByCenter[g.MathCenterID], g)
+	}
+	studentsByGroup := make(map[int64][]StudentInfo, len(groups))
+	for _, s := range students {
+		studentsByGroup[s.GroupID] = append(studentsByGroup[s.GroupID], StudentInfo{
+			UserID:      s.UserID,
+			DisplayName: mc.StudentDisplayName(s.FirstName, s.LastName),
+		})
+	}
+
 	out := &TeacherView{Centers: make([]TeacherCenterView, 0, len(centers))}
 	for _, c := range centers {
-		teachers, err := q.ListTeachersForCenter(ctx, c.ID)
-		if err != nil {
-			return nil, err
-		}
-		groups, err := q.ListGroupsForCenter(ctx, c.ID)
-		if err != nil {
-			return nil, err
-		}
-		students, err := q.ListStudentsForCenter(ctx, c.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		// Bucket students by group id so the response keeps the
-		// natural "group → roster" shape.
-		byGroup := make(map[int64][]StudentInfo, len(groups))
-		for _, s := range students {
-			byGroup[s.GroupID] = append(byGroup[s.GroupID], StudentInfo{
-				UserID:      s.UserID,
-				DisplayName: mc.StudentDisplayName(s.FirstName, s.LastName),
-			})
-		}
-
-		groupViews := make([]GroupWithStudents, 0, len(groups))
-		for _, g := range groups {
+		groupViews := make([]GroupWithStudents, 0, len(groupsByCenter[c.ID]))
+		for _, g := range groupsByCenter[c.ID] {
 			groupViews = append(groupViews, GroupWithStudents{
 				ID:       g.ID,
 				Name:     g.Name,
-				Students: nilToEmpty(byGroup[g.ID]),
-			})
-		}
-
-		teacherInfos := make([]TeacherInfo, 0, len(teachers))
-		for _, t := range teachers {
-			teacherInfos = append(teacherInfos, TeacherInfo{
-				UserID:        t.UserID,
-				DisplayName:   mc.TeacherDisplayName(t.FirstName, t.MiddleName),
-				IsHeadTeacher: t.IsHeadTeacher,
+				Students: nilToEmpty(studentsByGroup[g.ID]),
 			})
 		}
 
@@ -163,7 +171,7 @@ func buildTeacherView(ctx context.Context, q *store.Queries, userID int64, now t
 			GraduationYear: int(c.GraduationYear),
 			Grade:          mc.Grade(int(c.GraduationYear), now),
 			IsHeadTeacher:  c.IsHeadTeacher,
-			Teachers:       teacherInfos,
+			Teachers:       teachersByCenter[c.ID],
 			Groups:         groupViews,
 		})
 	}
@@ -176,12 +184,12 @@ func buildStudentView(ctx context.Context, q *store.Queries, userID int64, now t
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("get student by user id: %w", err)
 	}
 
 	heads, err := q.ListHeadTeachersForCenter(ctx, row.MathCenterID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list head teachers for center: %w", err)
 	}
 	headInfos := make([]TeacherInfo, 0, len(heads))
 	for _, h := range heads {

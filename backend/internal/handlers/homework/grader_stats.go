@@ -43,7 +43,7 @@ func GraderStats(database *db.DB) http.HandlerFunc {
 			CallerUserID: userID,
 		})
 		if err != nil {
-			logger.LogError("homework: grader stats", err)
+			logger.LogErrorContext(ctx, "homework: grader stats", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}

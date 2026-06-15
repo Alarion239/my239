@@ -37,7 +37,7 @@ func Claim(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "thread not found")
 				return
 			}
-			logger.LogError("homework: get thread for claim", err)
+			logger.LogErrorContext(ctx, "homework: get thread for claim", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -53,7 +53,7 @@ func Claim(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "thread is currently claimed by another grader")
 				return
 			}
-			logger.LogError("homework: try claim", err)
+			logger.LogErrorContext(ctx, "homework: try claim", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -87,7 +87,7 @@ func Heartbeat(database *db.DB) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "thread not found")
 				return
 			}
-			logger.LogError("homework: get thread for heartbeat", err)
+			logger.LogErrorContext(ctx, "homework: get thread for heartbeat", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -100,7 +100,7 @@ func Heartbeat(database *db.DB) http.HandlerFunc {
 			GraderUserID: userID,
 		})
 		if err != nil {
-			logger.LogError("homework: heartbeat claim", err)
+			logger.LogErrorContext(ctx, "homework: heartbeat claim", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -134,7 +134,7 @@ func Release(database *db.DB) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "thread not found")
 				return
 			}
-			logger.LogError("homework: get thread for release", err)
+			logger.LogErrorContext(ctx, "homework: get thread for release", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -146,7 +146,7 @@ func Release(database *db.DB) http.HandlerFunc {
 			ID:           threadID,
 			GraderUserID: userID,
 		}); err != nil {
-			logger.LogError("homework: release claim", err)
+			logger.LogErrorContext(ctx, "homework: release claim", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}

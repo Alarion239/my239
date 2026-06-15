@@ -68,7 +68,7 @@ func MySeriesRollup(database *db.DB) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "series not found")
 				return
 			}
-			logger.LogError("homework: get series for rollup", err)
+			logger.LogErrorContext(ctx, "homework: get series for rollup", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -85,7 +85,7 @@ func MySeriesRollup(database *db.DB) http.HandlerFunc {
 			StudentUserID: userID,
 		})
 		if err != nil {
-			logger.LogError("homework: student rollup", err)
+			logger.LogErrorContext(ctx, "homework: student rollup", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -94,7 +94,7 @@ func MySeriesRollup(database *db.DB) http.HandlerFunc {
 			StudentUserID: userID,
 		})
 		if err != nil {
-			logger.LogError("homework: student counts", err)
+			logger.LogErrorContext(ctx, "homework: student counts", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}

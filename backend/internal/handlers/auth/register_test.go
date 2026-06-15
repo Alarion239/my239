@@ -53,7 +53,7 @@ func TestRegister_Success(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	authHandlers.Register(database, newTokens(t, database))(rr, req)
 
 	if rr.Code != http.StatusCreated {
@@ -93,7 +93,7 @@ func TestRegister_TokenNotFound(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	authHandlers.Register(database, newTokens(t, database))(rr, req)
 
 	if rr.Code != http.StatusUnauthorized {
@@ -118,7 +118,7 @@ func TestRegister_TokenExpired(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	authHandlers.Register(database, newTokens(t, database))(rr, req)
 
 	if rr.Code != http.StatusUnauthorized {
@@ -146,7 +146,7 @@ func TestRegister_TokenExhausted(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	authHandlers.Register(database, newTokens(t, database))(rr, req)
 
 	if rr.Code != http.StatusUnauthorized {
@@ -177,7 +177,7 @@ func TestRegister_UsernameTaken(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	authHandlers.Register(database, newTokens(t, database))(rr, req)
 
 	if rr.Code != http.StatusConflict {
@@ -200,7 +200,7 @@ func TestRegister_ValidationFailure(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	authHandlers.Register(database, newTokens(t, database))(rr, req)
 
 	if rr.Code != http.StatusBadRequest {

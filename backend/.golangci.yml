@@ -1,0 +1,57 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - errorlint
+    - gocritic
+    - misspell
+    - nilerr
+    - nolintlint
+    - paralleltest
+    - revive
+    - sqlclosecheck
+    - testifylint
+    - thelper
+    - unconvert
+    - usestdlibvars
+    - wastedassign
+  settings:
+    revive:
+      rules:
+        - name: package-comments
+        - name: exported
+        - name: context-as-argument
+        - name: error-strings
+        - name: error-return
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+  exclusions:
+    generated: lax
+    rules:
+      # Generated sqlc output: don't style-check it.
+      - path: internal/store/
+        linters:
+          - revive
+          - gocritic
+          - unconvert
+      # Tests may use dot-imports and skip a few strictnesses.
+      - path: _test\.go
+        linters:
+          - bodyclose
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/Alarion239/my239/backend
+  exclusions:
+    generated: lax

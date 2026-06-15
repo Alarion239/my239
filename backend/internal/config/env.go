@@ -1,6 +1,10 @@
+// Package config loads and validates runtime configuration from environment
+// variables, and defines the request-context keys shared across middleware
+// and handlers.
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -46,7 +50,7 @@ type S3Config struct {
 	// UploadTTL is the lifetime of presigned PUT URLs minted for client-direct
 	// uploads (homework photos, series PDFs). Kept short — the client should
 	// hit the URL immediately after receiving it.
-	UploadTTL       time.Duration
+	UploadTTL time.Duration
 }
 
 // Load reads configuration from environment variables. Returns an error
@@ -55,12 +59,12 @@ type S3Config struct {
 func Load() (*Config, error) {
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
-		return nil, fmt.Errorf("DATABASE_URL environment variable is required")
+		return nil, errors.New("DATABASE_URL environment variable is required")
 	}
 
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
-		return nil, fmt.Errorf("JWT_SECRET environment variable is required")
+		return nil, errors.New("JWT_SECRET environment variable is required")
 	}
 
 	port := envOrDefault("PORT", "8080")
@@ -75,7 +79,7 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	if accessMin <= 0 {
-		return nil, fmt.Errorf("JWT_ACCESS_TTL_MINUTES must be positive")
+		return nil, errors.New("JWT_ACCESS_TTL_MINUTES must be positive")
 	}
 
 	refreshDays, err := envInt("JWT_REFRESH_TTL_DAYS", 30)
@@ -83,7 +87,7 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	if refreshDays <= 0 {
-		return nil, fmt.Errorf("JWT_REFRESH_TTL_DAYS must be positive")
+		return nil, errors.New("JWT_REFRESH_TTL_DAYS must be positive")
 	}
 
 	// Backwards-compat: old deploys set JWT_EXPIRATION_HOURS for the (single)
@@ -111,19 +115,19 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	if s3TTLMin <= 0 {
-		return nil, fmt.Errorf("S3_DOWNLOAD_TTL_MINUTES must be positive")
+		return nil, errors.New("S3_DOWNLOAD_TTL_MINUTES must be positive")
 	}
 	s3UploadTTLMin, err := envInt("S3_UPLOAD_TTL_MINUTES", 5)
 	if err != nil {
 		return nil, err
 	}
 	if s3UploadTTLMin <= 0 {
-		return nil, fmt.Errorf("S3_UPLOAD_TTL_MINUTES must be positive")
+		return nil, errors.New("S3_UPLOAD_TTL_MINUTES must be positive")
 	}
 	// If a bucket is configured, the credential pair must come along with it.
 	// Empty bucket is a deliberate "use memory store" sentinel.
 	if s3Bucket != "" && (s3KeyID == "" || s3Secret == "") {
-		return nil, fmt.Errorf("S3_BUCKET set but S3_ACCESS_KEY_ID/S3_SECRET_ACCESS_KEY missing")
+		return nil, errors.New("S3_BUCKET set but S3_ACCESS_KEY_ID/S3_SECRET_ACCESS_KEY missing")
 	}
 
 	return &Config{

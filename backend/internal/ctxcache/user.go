@@ -33,7 +33,7 @@ func UserID(ctx context.Context) (int64, error) {
 
 // EnsureUser returns the user for the current request, loading it from the
 // database on cache miss and caching it on the returned context.
-func EnsureUser(database *db.DB, ctx context.Context) (context.Context, *store.User, error) {
+func EnsureUser(ctx context.Context, database *db.DB) (context.Context, *store.User, error) {
 	if user, ok := User(ctx); ok {
 		return ctx, user, nil
 	}

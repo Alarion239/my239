@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -38,6 +39,8 @@ type Redis struct {
 // NewRedis builds a Redis-backed limiter. prefix is prepended to every key so
 // you can share a Redis with other services without collisions; pass "" for
 // the default ("ratelimit").
+var _ Limiter = (*Redis)(nil)
+
 func NewRedis(client redis.Cmdable, prefix string) *Redis {
 	if prefix == "" {
 		prefix = "ratelimit"
@@ -78,9 +81,10 @@ func (rl *Redis) Middleware(key string, limit int, windowSeconds int) func(http.
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ok, retryAfter, err := rl.Allow(r, key, limit, windowSeconds)
 			if err != nil {
-				// Fail open: a Redis blip should not bring the API down.
-				// We log via the standard slog logger from the middleware
-				// chain, but keep the request flowing.
+				// Fail open: a Redis blip should not bring the API down. Log a
+				// warning (a silent fail-open disables rate limiting exactly
+				// when you'd want an alert) but keep the request flowing.
+				slog.Warn("ratelimit: redis unavailable, failing open", "error", err, "key", key)
 				next.ServeHTTP(w, r)
 				return
 			}

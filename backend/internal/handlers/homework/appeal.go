@@ -35,8 +35,7 @@ func AppealGrade(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 		}
 
 		var req submitRequest
-		if err := httpx.DecodeJSON(r, &req); err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		if !httpx.DecodeJSONBody(w, r, &req) {
 			return
 		}
 		body, vErr := validateSubmitInput(req)
@@ -52,7 +51,7 @@ func AppealGrade(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "subproblem not found")
 				return
 			}
-			logger.LogError("homework: subproblem ctx", err)
+			logger.LogErrorContext(ctx, "homework: subproblem ctx", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -69,7 +68,7 @@ func AppealGrade(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "no submission to appeal")
 				return
 			}
-			logger.LogError("homework: get thread for appeal", err)
+			logger.LogErrorContext(ctx, "homework: get thread for appeal", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -85,7 +84,7 @@ func AppealGrade(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 		}
 
 		if err := writeAttempt(ctx, database, thread.ID, req.EventUUID, homework.KindAppealed, userID, body, photos, thread.CurrentGradeEventID); err != nil {
-			logger.LogError("homework: appeal tx", err)
+			logger.LogErrorContext(ctx, "homework: appeal tx", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to record appeal")
 			return
 		}

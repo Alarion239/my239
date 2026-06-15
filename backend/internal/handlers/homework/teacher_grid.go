@@ -85,7 +85,7 @@ func TeacherGrid(database *db.DB) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "series not found")
 				return
 			}
-			logger.LogError("homework: get series for grid", err)
+			logger.LogErrorContext(ctx, "homework: get series for grid", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -95,7 +95,7 @@ func TeacherGrid(database *db.DB) http.HandlerFunc {
 
 		rows, err := q.TeacherSeriesGrid(ctx, seriesID)
 		if err != nil {
-			logger.LogError("homework: teacher grid", err)
+			logger.LogErrorContext(ctx, "homework: teacher grid", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}

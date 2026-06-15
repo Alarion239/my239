@@ -44,6 +44,8 @@ type S3Store struct {
 	bucket    string
 }
 
+var _ Store = (*S3Store)(nil)
+
 // NewS3 builds an S3Store from cfg. The constructor does not make network
 // calls; first failure surfaces on the first Put / Presign / Delete.
 func NewS3(ctx context.Context, cfg S3Config) (*S3Store, error) {

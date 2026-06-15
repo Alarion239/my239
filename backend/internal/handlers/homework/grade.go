@@ -45,8 +45,7 @@ func Grade(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 		}
 
 		var req gradeRequest
-		if err := httpx.DecodeJSON(r, &req); err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		if !httpx.DecodeJSONBody(w, r, &req) {
 			return
 		}
 		verdict, body, vErr := validateGradeInput(req)
@@ -62,7 +61,7 @@ func Grade(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "thread not found")
 				return
 			}
-			logger.LogError("homework: get thread for grade", err)
+			logger.LogErrorContext(ctx, "homework: get thread for grade", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -97,7 +96,7 @@ func Grade(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "claim expired or held by another grader")
 				return
 			}
-			logger.LogError("homework: grade tx", err)
+			logger.LogErrorContext(ctx, "homework: grade tx", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to record grade")
 			return
 		}

@@ -17,6 +17,7 @@ import (
 	hwHandlers "github.com/Alarion239/my239/backend/internal/handlers/homework"
 	mcHandlers "github.com/Alarion239/my239/backend/internal/handlers/mathcenter"
 	"github.com/Alarion239/my239/backend/internal/logger"
+	"github.com/Alarion239/my239/backend/internal/metrics"
 	"github.com/Alarion239/my239/backend/internal/middleware"
 	"github.com/Alarion239/my239/backend/pkg/db"
 	"github.com/Alarion239/my239/backend/pkg/objectstore"
@@ -52,7 +53,7 @@ func run() error {
 		return err
 	}
 
-	database, err := db.NewDB(rootCtx, cfg.DatabaseURL)
+	database, err := db.New(rootCtx, cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}
@@ -95,6 +96,7 @@ func run() error {
 
 	r.Get("/healthz", health.Live())
 	r.Get("/readyz", health.Ready(database))
+	r.Handle("/metrics", metrics.Handler())
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Mount("/auth", authHandlers.Router(database, tokens, limiter))

@@ -12,16 +12,16 @@ import (
 	"github.com/Alarion239/my239/backend/pkg/db"
 )
 
-// TestNewDBWithPool verifies that a DB can be constructed from an arbitrary Pool
+// TestNewWithPool verifies that a DB can be constructed from an arbitrary Pool
 // implementation, which is the primary entry-point for test doubles.
-func TestNewDBWithPool(t *testing.T) {
+func TestNewWithPool(t *testing.T) {
 	mock, err := pgxmock.NewPool()
 	if err != nil {
 		t.Fatalf("pgxmock.NewPool: %v", err)
 	}
 	defer mock.Close()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	if database == nil {
 		t.Fatal("expected non-nil *DB")
 	}
@@ -38,7 +38,7 @@ func TestDB_Pool_IsTheSameMock(t *testing.T) {
 	}
 	defer mock.Close()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	if database.Pool() != mock {
 		t.Error("DB.Pool() did not return the injected mock")
 	}
@@ -54,7 +54,7 @@ func TestDB_Close(t *testing.T) {
 
 	mock.ExpectClose()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	database.Close()
 
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -73,7 +73,7 @@ func TestDB_Pool_Ping(t *testing.T) {
 
 	mock.ExpectPing()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	if err := database.Pool().Ping(context.Background()); err != nil {
 		t.Errorf("unexpected Ping error: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestDB_Pool_Ping_Error(t *testing.T) {
 	pingErr := errors.New("connection refused")
 	mock.ExpectPing().WillReturnError(pingErr)
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	if err := database.Pool().Ping(context.Background()); !errors.Is(err, pingErr) {
 		t.Errorf("expected ping error %q, got %v", pingErr, err)
 	}
@@ -121,7 +121,7 @@ func TestDB_Pool_QueryRow(t *testing.T) {
 		WithArgs(wantID).
 		WillReturnRows(rows)
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 
 	var gotID int64
 	var gotUsername string
@@ -158,7 +158,7 @@ func TestDB_Pool_Query(t *testing.T) {
 	mock.ExpectQuery(`SELECT id, description, max_uses, expires_at, created_at FROM authorize\.invitation_tokens`).
 		WillReturnRows(rows)
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 
 	pgxRows, err := database.Pool().Query(
 		context.Background(),
@@ -208,7 +208,7 @@ func TestDB_Pool_Exec_RowsAffected(t *testing.T) {
 		WithArgs(int64(7)).
 		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 
 	tag, err := database.Pool().Exec(
 		context.Background(),
@@ -240,7 +240,7 @@ func TestDB_Pool_Exec_Error(t *testing.T) {
 		WithArgs("duplicate_user").
 		WillReturnError(dbErr)
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 
 	_, err = database.Pool().Exec(
 		context.Background(),
@@ -273,7 +273,7 @@ func TestDB_Pool_Begin(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectRollback()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 
 	tx, err := database.Pool().Begin(context.Background())
 	if err != nil {
@@ -289,13 +289,13 @@ func TestDB_Pool_Begin(t *testing.T) {
 	}
 }
 
-// TestNewDB_CancelledContext confirms that NewDB returns an error immediately
+// TestNew_CancelledContext confirms that New returns an error immediately
 // when a cancelled context is provided, without attempting a connection.
-func TestNewDB_CancelledContext(t *testing.T) {
+func TestNew_CancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // pre-cancel
 
-	_, err := db.NewDB(ctx, "postgres://localhost/test")
+	_, err := db.New(ctx, "postgres://localhost/test")
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
 	}

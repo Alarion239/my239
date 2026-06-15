@@ -1,3 +1,5 @@
+// Package middleware holds the HTTP middleware chain: authentication,
+// admin gating, CORS, security headers, and request logging.
 package middleware
 
 import (
