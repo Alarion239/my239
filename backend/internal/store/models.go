@@ -125,8 +125,9 @@ type User struct {
 	FirstName         string    `json:"first_name"`
 	MiddleName        *string   `json:"middle_name"`
 	LastName          string    `json:"last_name"`
-	InvitationTokenID int64     `json:"invitation_token_id"`
+	InvitationTokenID *int64    `json:"invitation_token_id"`
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
 	IsAdmin           bool      `json:"is_admin"`
+	IsMathCenter      bool      `json:"is_math_center"`
 }

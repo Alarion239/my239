@@ -19,8 +19,12 @@ import (
 // generation. Keep aligned with the migration / store/users.sql.go.
 var userColumns = []string{
 	"id", "username", "password_hash", "first_name", "middle_name", "last_name",
-	"invitation_token_id", "created_at", "updated_at", "is_admin",
+	"invitation_token_id", "created_at", "updated_at", "is_admin", "is_math_center",
 }
+
+// ptrInt64 returns a pointer to v, for the now-nullable invitation_token_id
+// column in user-row fixtures.
+func ptrInt64(v int64) *int64 { return &v }
 
 var refreshTokenCols = []string{
 	"id", "user_id", "token_hash", "expires_at", "revoked_at", "replaced_by_id", "created_at",
@@ -88,7 +92,7 @@ func TestLogin_Success(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM users WHERE username = \$1`).
 		WithArgs("alice").
 		WillReturnRows(mock.NewRows(userColumns).
-			AddRow(int64(1), "alice", fastHash(t, "password123"), "Alice", (*string)(nil), "Doe", int64(1), now, now, false))
+			AddRow(int64(1), "alice", fastHash(t, "password123"), "Alice", (*string)(nil), "Doe", ptrInt64(1), now, now, false, false))
 	expectRefreshInsert(t, mock, 1)
 
 	body, _ := json.Marshal(map[string]string{"username": "alice", "password": "password123"})
@@ -135,7 +139,7 @@ func TestLogin_PasswordHashIsNotInResponse(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM users WHERE username = \$1`).
 		WithArgs("alice").
 		WillReturnRows(mock.NewRows(userColumns).
-			AddRow(int64(1), "alice", fastHash(t, "password123"), "Alice", (*string)(nil), "Doe", int64(1), now, now, false))
+			AddRow(int64(1), "alice", fastHash(t, "password123"), "Alice", (*string)(nil), "Doe", ptrInt64(1), now, now, false, false))
 	expectRefreshInsert(t, mock, 1)
 
 	body, _ := json.Marshal(map[string]string{"username": "alice", "password": "password123"})
@@ -161,7 +165,7 @@ func TestLogin_WrongPassword(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM users WHERE username = \$1`).
 		WithArgs("alice").
 		WillReturnRows(mock.NewRows(userColumns).
-			AddRow(int64(1), "alice", fastHash(t, "rightpassword"), "Alice", (*string)(nil), "Doe", int64(1), now, now, false))
+			AddRow(int64(1), "alice", fastHash(t, "rightpassword"), "Alice", (*string)(nil), "Doe", ptrInt64(1), now, now, false, false))
 
 	body, _ := json.Marshal(map[string]string{"username": "alice", "password": "wrongpassword"})
 	req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewReader(body))

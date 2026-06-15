@@ -21,10 +21,21 @@ WHERE username = $1;
 INSERT INTO users (username, password_hash, first_name, middle_name, last_name, invitation_token_id)
 VALUES ($1, $2, $3, $4, $5, $6) RETURNING *;
 
+-- name: CreateMathCenterAccount :one
+-- Creates a shared, admin-provisioned MathCenter login. These accounts carry no
+-- invitation lineage (invitation_token_id stays NULL) and are flagged so the UI
+-- can distinguish them. The caller enrolls the returned user as a head teacher
+-- of the target center in the same transaction.
+INSERT INTO users (username, password_hash, first_name, middle_name, last_name, is_math_center)
+VALUES ($1, $2, $3, $4, $5, TRUE) RETURNING *;
+
 -- name: CountUsesOfInvitationToken :one
+-- The cast keeps the parameter a plain int64: invitation_token_id is nullable
+-- on the column (MathCenter accounts have none), but callers always count a
+-- concrete token here.
 SELECT COUNT(*)
 FROM users
-WHERE invitation_token_id = $1;
+WHERE invitation_token_id = sqlc.arg(token_id)::bigint;
 
 -- name: ListUsers :many
 SELECT *

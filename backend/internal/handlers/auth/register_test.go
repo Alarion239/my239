@@ -43,9 +43,9 @@ func TestRegister_Success(t *testing.T) {
 		WithArgs(int64(1)).
 		WillReturnRows(mock.NewRows([]string{"count"}).AddRow(int64(0)))
 	mock.ExpectQuery(`INSERT INTO users`).
-		WithArgs("newuser", pgxmock.AnyArg(), "New", (*string)(nil), "User", int64(1)).
+		WithArgs("newuser", pgxmock.AnyArg(), "New", (*string)(nil), "User", ptrInt64(1)).
 		WillReturnRows(mock.NewRows(userColumns).
-			AddRow(int64(42), "newuser", "argon2idhash", "New", (*string)(nil), "User", int64(1), now, now, false))
+			AddRow(int64(42), "newuser", "argon2idhash", "New", (*string)(nil), "User", ptrInt64(1), now, now, false, false))
 	mock.ExpectCommit()
 	expectRefreshInsert(t, mock, 42)
 
@@ -169,7 +169,7 @@ func TestRegister_UsernameTaken(t *testing.T) {
 		WithArgs(int64(1)).
 		WillReturnRows(mock.NewRows([]string{"count"}).AddRow(int64(0)))
 	mock.ExpectQuery(`INSERT INTO users`).
-		WithArgs("newuser", pgxmock.AnyArg(), "New", (*string)(nil), "User", int64(1)).
+		WithArgs("newuser", pgxmock.AnyArg(), "New", (*string)(nil), "User", ptrInt64(1)).
 		WillReturnError(&pgconn.PgError{Code: "23505", Message: "duplicate"})
 	mock.ExpectRollback()
 

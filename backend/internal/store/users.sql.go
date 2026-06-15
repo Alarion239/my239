@@ -12,19 +12,64 @@ import (
 const countUsesOfInvitationToken = `-- name: CountUsesOfInvitationToken :one
 SELECT COUNT(*)
 FROM users
-WHERE invitation_token_id = $1
+WHERE invitation_token_id = $1::bigint
 `
 
-func (q *Queries) CountUsesOfInvitationToken(ctx context.Context, invitationTokenID int64) (int64, error) {
-	row := q.db.QueryRow(ctx, countUsesOfInvitationToken, invitationTokenID)
+// The cast keeps the parameter a plain int64: invitation_token_id is nullable
+// on the column (MathCenter accounts have none), but callers always count a
+// concrete token here.
+func (q *Queries) CountUsesOfInvitationToken(ctx context.Context, tokenID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countUsesOfInvitationToken, tokenID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
+const createMathCenterAccount = `-- name: CreateMathCenterAccount :one
+INSERT INTO users (username, password_hash, first_name, middle_name, last_name, is_math_center)
+VALUES ($1, $2, $3, $4, $5, TRUE) RETURNING id, username, password_hash, first_name, middle_name, last_name, invitation_token_id, created_at, updated_at, is_admin, is_math_center
+`
+
+type CreateMathCenterAccountParams struct {
+	Username     string  `json:"username"`
+	PasswordHash string  `json:"-"`
+	FirstName    string  `json:"first_name"`
+	MiddleName   *string `json:"middle_name"`
+	LastName     string  `json:"last_name"`
+}
+
+// Creates a shared, admin-provisioned MathCenter login. These accounts carry no
+// invitation lineage (invitation_token_id stays NULL) and are flagged so the UI
+// can distinguish them. The caller enrolls the returned user as a head teacher
+// of the target center in the same transaction.
+func (q *Queries) CreateMathCenterAccount(ctx context.Context, arg CreateMathCenterAccountParams) (User, error) {
+	row := q.db.QueryRow(ctx, createMathCenterAccount,
+		arg.Username,
+		arg.PasswordHash,
+		arg.FirstName,
+		arg.MiddleName,
+		arg.LastName,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.PasswordHash,
+		&i.FirstName,
+		&i.MiddleName,
+		&i.LastName,
+		&i.InvitationTokenID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.IsAdmin,
+		&i.IsMathCenter,
+	)
+	return i, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (username, password_hash, first_name, middle_name, last_name, invitation_token_id)
-VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, username, password_hash, first_name, middle_name, last_name, invitation_token_id, created_at, updated_at, is_admin
+VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, username, password_hash, first_name, middle_name, last_name, invitation_token_id, created_at, updated_at, is_admin, is_math_center
 `
 
 type CreateUserParams struct {
@@ -33,7 +78,7 @@ type CreateUserParams struct {
 	FirstName         string  `json:"first_name"`
 	MiddleName        *string `json:"middle_name"`
 	LastName          string  `json:"last_name"`
-	InvitationTokenID int64   `json:"invitation_token_id"`
+	InvitationTokenID *int64  `json:"invitation_token_id"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
@@ -57,12 +102,13 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.IsAdmin,
+		&i.IsMathCenter,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, password_hash, first_name, middle_name, last_name, invitation_token_id, created_at, updated_at, is_admin
+SELECT id, username, password_hash, first_name, middle_name, last_name, invitation_token_id, created_at, updated_at, is_admin, is_math_center
 FROM users
 WHERE id = $1
 `
@@ -81,12 +127,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.IsAdmin,
+		&i.IsMathCenter,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password_hash, first_name, middle_name, last_name, invitation_token_id, created_at, updated_at, is_admin
+SELECT id, username, password_hash, first_name, middle_name, last_name, invitation_token_id, created_at, updated_at, is_admin, is_math_center
 FROM users
 WHERE username = $1
 `
@@ -105,6 +152,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.IsAdmin,
+		&i.IsMathCenter,
 	)
 	return i, err
 }
@@ -152,7 +200,7 @@ func (q *Queries) GetUsersByIDs(ctx context.Context, ids []int64) ([]GetUsersByI
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, password_hash, first_name, middle_name, last_name, invitation_token_id, created_at, updated_at, is_admin
+SELECT id, username, password_hash, first_name, middle_name, last_name, invitation_token_id, created_at, updated_at, is_admin, is_math_center
 FROM users
 ORDER BY created_at DESC
 `
@@ -177,6 +225,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.IsAdmin,
+			&i.IsMathCenter,
 		); err != nil {
 			return nil, err
 		}

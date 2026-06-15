@@ -97,7 +97,7 @@ func Register(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 			FirstName:         req.FirstName,
 			MiddleName:        req.MiddleName,
 			LastName:          req.LastName,
-			InvitationTokenID: invitation.ID,
+			InvitationTokenID: &invitation.ID,
 		})
 		if err != nil {
 			if isUniqueViolation(err) {

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/Alarion239/my239/backend/internal/auth"
 	"github.com/Alarion239/my239/backend/internal/httpx"
 	"github.com/Alarion239/my239/backend/internal/logger"
 	"github.com/Alarion239/my239/backend/internal/store"
@@ -348,6 +349,108 @@ func RemoveTeacher(database *db.DB) http.HandlerFunc {
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// MathCenter accounts --------------------------------------------------------
+
+type createMathCenterAccountRequest struct {
+	Username   string  `json:"username"`
+	Password   string  `json:"password"`
+	FirstName  string  `json:"first_name"`
+	MiddleName *string `json:"middle_name"`
+	LastName   string  `json:"last_name"`
+}
+
+// CreateMathCenterAccount provisions a shared "MathCenter" login for a single
+// center: a classroom computer signs in with it to monitor progress and run
+// general control during a session. Functionally the account is a head teacher
+// of {id} — its rights come from the math_center_teachers row created here —
+// and it is flagged is_math_center so the UI can tell it apart from a personal
+// teacher account. The user row and the head-teacher enrollment are created in
+// one transaction so a half-provisioned account can never linger.
+func CreateMathCenterAccount(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		centerID, err := pathInt64(r, "id")
+		if err != nil {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid id")
+			return
+		}
+
+		var req createMathCenterAccountRequest
+		if err := httpx.DecodeJSON(r, &req); err != nil {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+			return
+		}
+		if len(req.Username) < 3 || len(req.Username) > 50 {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "username must be 3–50 chars")
+			return
+		}
+		if len(req.Password) < 8 || len(req.Password) > 128 {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "password must be 8–128 chars")
+			return
+		}
+		if req.FirstName == "" || len(req.FirstName) > 255 {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "first_name must be 1–255 chars")
+			return
+		}
+
+		passwordHash, err := auth.HashPassword(req.Password)
+		if err != nil {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+			return
+		}
+
+		tx, err := database.Pool().Begin(ctx)
+		if err != nil {
+			logger.LogError("admin/mc: begin account tx", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+
+		q := store.New(tx)
+
+		user, err := q.CreateMathCenterAccount(ctx, store.CreateMathCenterAccountParams{
+			Username:     req.Username,
+			PasswordHash: passwordHash,
+			FirstName:    req.FirstName,
+			MiddleName:   req.MiddleName,
+			LastName:     req.LastName,
+		})
+		if err != nil {
+			if isUniqueViolation(err) {
+				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "username already taken")
+				return
+			}
+			logger.LogError("admin/mc: create account", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to create account")
+			return
+		}
+
+		if _, err := q.AddTeacherToCenter(ctx, store.AddTeacherToCenterParams{
+			UserID:        user.ID,
+			MathCenterID:  centerID,
+			IsHeadTeacher: true,
+		}); err != nil {
+			if isFKViolation(err) {
+				httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "center does not exist")
+				return
+			}
+			logger.LogError("admin/mc: enroll account", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to create account")
+			return
+		}
+
+		if err := tx.Commit(ctx); err != nil {
+			logger.LogError("admin/mc: commit account tx", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
+
+		httpx.WriteJSON(w, http.StatusCreated, user)
 	}
 }
 

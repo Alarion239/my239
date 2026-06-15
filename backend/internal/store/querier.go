@@ -13,9 +13,17 @@ type Querier interface {
 	AddTeacherToCenter(ctx context.Context, arg AddTeacherToCenterParams) (MathCenterTeacher, error)
 	AppendEvent(ctx context.Context, arg AppendEventParams) (HomeworkThreadEvent, error)
 	ClearSeriesTex(ctx context.Context, id int64) (MathCenterSeries, error)
-	CountUsesOfInvitationToken(ctx context.Context, invitationTokenID int64) (int64, error)
+	// The cast keeps the parameter a plain int64: invitation_token_id is nullable
+	// on the column (MathCenter accounts have none), but callers always count a
+	// concrete token here.
+	CountUsesOfInvitationToken(ctx context.Context, tokenID int64) (int64, error)
 	CreateInvitationToken(ctx context.Context, arg CreateInvitationTokenParams) (InvitationToken, error)
 	CreateMathCenter(ctx context.Context, graduationYear int32) (MathCenter, error)
+	// Creates a shared, admin-provisioned MathCenter login. These accounts carry no
+	// invitation lineage (invitation_token_id stays NULL) and are flagged so the UI
+	// can distinguish them. The caller enrolls the returned user as a head teacher
+	// of the target center in the same transaction.
+	CreateMathCenterAccount(ctx context.Context, arg CreateMathCenterAccountParams) (User, error)
 	CreateMathCenterGroup(ctx context.Context, arg CreateMathCenterGroupParams) (MathCenterGroup, error)
 	CreateProblem(ctx context.Context, arg CreateProblemParams) (MathCenterProblem, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)

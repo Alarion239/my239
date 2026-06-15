@@ -96,10 +96,11 @@ func TestEnsureUser_CacheMissFetchesAndCaches(t *testing.T) {
 	defer mock.Close()
 
 	now := time.Now()
+	tokenID := int64(1)
 	rows := mock.NewRows([]string{
 		"id", "username", "password_hash", "first_name", "middle_name", "last_name",
-		"invitation_token_id", "created_at", "updated_at", "is_admin",
-	}).AddRow(int64(7), "bob", "argon2idhash", "Bob", (*string)(nil), "Smith", int64(1), now, now, false)
+		"invitation_token_id", "created_at", "updated_at", "is_admin", "is_math_center",
+	}).AddRow(int64(7), "bob", "argon2idhash", "Bob", (*string)(nil), "Smith", &tokenID, now, now, false, false)
 	mock.ExpectQuery(`SELECT .* FROM users WHERE id = \$1`).
 		WithArgs(int64(7)).
 		WillReturnRows(rows)

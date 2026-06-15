@@ -40,6 +40,10 @@ func Router(database *db.DB, tokens *internalAuth.TokenService) chi.Router {
 		r.Post("/{id}/teachers", AddTeacher(database))
 		r.Patch("/teachers/{teacherId}/head", SetTeacherHead(database))
 		r.Delete("/teachers/{teacherId}", RemoveTeacher(database))
+
+		// Shared "MathCenter" classroom login, provisioned as a head teacher
+		// of {id}. See CreateMathCenterAccount.
+		r.Post("/{id}/accounts", CreateMathCenterAccount(database))
 	})
 
 	return r

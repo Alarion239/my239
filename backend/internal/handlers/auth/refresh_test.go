@@ -36,7 +36,7 @@ func TestRefresh_Success(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM users WHERE id = \$1`).
 		WithArgs(int64(7)).
 		WillReturnRows(mock.NewRows(userColumns).
-			AddRow(int64(7), "alice", "argon2idhash", "Alice", (*string)(nil), "Doe", int64(1), now, now, false))
+			AddRow(int64(7), "alice", "argon2idhash", "Alice", (*string)(nil), "Doe", ptrInt64(1), now, now, false, false))
 
 	body, _ := json.Marshal(map[string]string{"refresh_token": "old-raw"})
 	req := httptest.NewRequest(http.MethodPost, "/refresh", bytes.NewReader(body))
