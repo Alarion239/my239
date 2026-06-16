@@ -1,0 +1,31 @@
+{
+  "name": "@my239/shared",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Platform-agnostic domain layer shared by the web and (future) React Native clients: API client, types, TanStack Query hooks, zod validation, and pure domain/formatting helpers. No DOM (window/document/localStorage), no web- or RN-specific imports. See README.md for the reuse contract.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.59.0",
+    "zod": "^3.23.8"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.0",
+    "react": "^19.1.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  }
+}

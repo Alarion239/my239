@@ -1,0 +1,17 @@
+// @my239/shared — barrel for the platform-agnostic domain layer.
+//
+// Nothing here imports the DOM (window/document/localStorage), Vite, Tailwind,
+// Radix, or any React Native module. Platform capabilities enter through the
+// ports/ interfaces. See ./README.md for the full web <-> native reuse
+// contract.
+
+export * from './types'
+export * from './api/http'
+export * from './api/client'
+export * from './ports/token-store'
+export * from './domain/user'
+export * from './format/datetime'
+export * from './validation/auth'
+export * from './queries/keys'
+export * from './queries/context'
+export * from './queries/auth'
