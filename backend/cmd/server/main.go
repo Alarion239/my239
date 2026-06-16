@@ -1,3 +1,6 @@
+// Package main is the API server entrypoint: it loads config, wires the
+// dependency graph (db, auth, rate limiter, object store), mounts the chi
+// router and middleware, and runs the HTTP server with graceful shutdown.
 package main
 
 import (
@@ -8,6 +11,10 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/go-chi/chi/v5"
+	chiMiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/Alarion239/my239/backend/internal/auth"
 	"github.com/Alarion239/my239/backend/internal/config"
@@ -22,9 +29,6 @@ import (
 	"github.com/Alarion239/my239/backend/pkg/db"
 	"github.com/Alarion239/my239/backend/pkg/objectstore"
 	"github.com/Alarion239/my239/backend/pkg/ratelimit"
-	"github.com/go-chi/chi/v5"
-	chiMiddleware "github.com/go-chi/chi/v5/middleware"
-	"github.com/redis/go-redis/v9"
 )
 
 const (

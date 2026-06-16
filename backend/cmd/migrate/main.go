@@ -15,21 +15,27 @@ import (
 )
 
 func main() {
+	os.Exit(run())
+}
+
+// run does the work and returns the process exit code, so the deferred
+// migrator Close runs before the process exits — os.Exit in main would skip it.
+func run() int {
 	if len(os.Args) < 2 {
 		printUsage()
-		os.Exit(1)
+		return 1
 	}
 
 	command := os.Args[1]
 	if command == "help" || command == "-h" || command == "--help" {
 		printUsage()
-		return
+		return 0
 	}
 
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
 		logger.LogError("DATABASE_URL environment variable is required", nil)
-		os.Exit(1)
+		return 1
 	}
 
 	ctx := context.Background()
@@ -37,7 +43,7 @@ func main() {
 	m, err := migrate.New(dbURL)
 	if err != nil {
 		logger.LogError("init migrator", err)
-		os.Exit(1)
+		return 1
 	}
 	defer func() {
 		if cerr := m.Close(); cerr != nil {
@@ -49,39 +55,39 @@ func main() {
 	case "up":
 		if err := m.Up(ctx); err != nil {
 			logger.LogError("apply migrations", err)
-			os.Exit(1)
+			return 1
 		}
 		fmt.Println("✓ all migrations applied")
 	case "down":
 		if err := m.Down(ctx); err != nil {
 			logger.LogError("rollback migration", err)
-			os.Exit(1)
+			return 1
 		}
 		fmt.Println("✓ migration rolled back")
 	case "steps":
 		if len(os.Args) < 3 {
 			_, _ = fmt.Fprintln(os.Stderr, "Error: 'steps' requires a number")
-			os.Exit(1)
+			return 1
 		}
 		n, err := strconv.Atoi(os.Args[2])
 		if err != nil {
 			logger.LogError("invalid steps argument", err)
-			os.Exit(1)
+			return 1
 		}
 		if err := m.Steps(ctx, n); err != nil {
 			logger.LogError("steps", err)
-			os.Exit(1)
+			return 1
 		}
 		fmt.Printf("✓ %d step(s) applied\n", n)
 	case "version", "status":
 		v, dirty, err := m.Version(ctx)
 		if errors.Is(err, migrate.ErrNoVersion) {
 			fmt.Println("no migrations applied yet")
-			return
+			return 0
 		}
 		if err != nil {
 			logger.LogError("version", err)
-			os.Exit(1)
+			return 1
 		}
 		state := "clean"
 		if dirty {
@@ -91,8 +97,9 @@ func main() {
 	default:
 		_, _ = fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
 		printUsage()
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
 func printUsage() {

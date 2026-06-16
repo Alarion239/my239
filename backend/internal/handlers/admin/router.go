@@ -4,10 +4,11 @@
 package admin
 
 import (
+	"github.com/go-chi/chi/v5"
+
 	internalAuth "github.com/Alarion239/my239/backend/internal/auth"
 	"github.com/Alarion239/my239/backend/internal/middleware"
 	"github.com/Alarion239/my239/backend/pkg/db"
-	"github.com/go-chi/chi/v5"
 )
 
 // Router wires up admin endpoints. Mount at /api/v1/admin in the main router.

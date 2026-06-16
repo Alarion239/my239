@@ -5,9 +5,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/Alarion239/my239/backend/internal/logger"
 	"github.com/Alarion239/my239/backend/internal/metrics"
-	"github.com/go-chi/chi/v5"
 )
 
 // LoggerMiddleware logs each HTTP request with the chi request ID (so entries

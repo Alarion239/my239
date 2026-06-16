@@ -27,8 +27,10 @@ var seriesColumns = []string{
 	"pdf_object_key", "published_at", "created_at", "tex_source",
 }
 
-var problemColumns = []string{"id", "series_id", "number", "created_at"}
-var subproblemRowColumns = []string{"id", "problem_id", "label"}
+var (
+	problemColumns       = []string{"id", "series_id", "number", "created_at"}
+	subproblemRowColumns = []string{"id", "problem_id", "label"}
+)
 
 // newAccess builds a tiny AccessTokenService for tests; matching pattern in
 // the auth handler tests.
@@ -375,10 +377,14 @@ func TestCreateSeries_ValidationErrors(t *testing.T) {
 	}{
 		{"empty name", map[string]any{"number": 1, "name": "", "due_at": time.Now(), "problems": []map[string]int{{"number": 1}}}},
 		{"no problems", map[string]any{"number": 1, "name": "x", "due_at": time.Now(), "problems": []map[string]int{}}},
-		{"duplicate problem number", map[string]any{"number": 1, "name": "x", "due_at": time.Now(),
-			"problems": []map[string]int{{"number": 1}, {"number": 1}}}},
-		{"too many subproblems", map[string]any{"number": 1, "name": "x", "due_at": time.Now(),
-			"problems": []map[string]int{{"number": 1, "subproblem_count": 999}}}},
+		{"duplicate problem number", map[string]any{
+			"number": 1, "name": "x", "due_at": time.Now(),
+			"problems": []map[string]int{{"number": 1}, {"number": 1}},
+		}},
+		{"too many subproblems", map[string]any{
+			"number": 1, "name": "x", "due_at": time.Now(),
+			"problems": []map[string]int{{"number": 1, "subproblem_count": 999}},
+		}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

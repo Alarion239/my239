@@ -10,9 +10,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Alarion239/my239/backend/internal/logger"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-playground/validator/v10"
+
+	"github.com/Alarion239/my239/backend/internal/logger"
 )
 
 // MaxBodyBytes is the default cap for JSON request bodies. 1 MiB is generous

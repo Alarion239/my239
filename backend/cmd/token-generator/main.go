@@ -14,27 +14,36 @@ import (
 	"os"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/pkg/db"
-	"github.com/jackc/pgx/v5"
 )
 
 func main() {
+	os.Exit(run())
+}
+
+// run does the work and returns the process exit code, so deferred cleanup
+// (closing the pool) runs before the process exits — os.Exit in main would
+// skip it.
+func run() int {
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		log.Fatal("DATABASE_URL environment variable is required")
+		log.Print("DATABASE_URL environment variable is required")
+		return 1
+	}
+	if len(os.Args) < 2 {
+		printUsage()
+		return 1
 	}
 
 	database, err := db.New(context.Background(), dbURL)
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		log.Printf("Failed to initialize database: %v", err)
+		return 1
 	}
 	defer database.Close()
-
-	if len(os.Args) < 2 {
-		printUsage()
-		os.Exit(1)
-	}
 
 	q := store.New(database.Pool())
 	ctx := context.Background()
@@ -49,8 +58,9 @@ func main() {
 	default:
 		fmt.Printf("Unknown command: %s\n", os.Args[1])
 		printUsage()
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
 func printUsage() {

@@ -38,7 +38,7 @@ func TestMemory_AllowsUpToLimit(t *testing.T) {
 func TestMemory_PerIPIsolation(t *testing.T) {
 	m := NewMemory()
 	for range 3 {
-		m.Allow(reqFromIP("1.1.1.1"), "k", 3, 60)
+		_, _, _ = m.Allow(reqFromIP("1.1.1.1"), "k", 3, 60)
 	}
 	allowed, _, _ := m.Allow(reqFromIP("2.2.2.2"), "k", 3, 60)
 	if !allowed {
@@ -49,7 +49,7 @@ func TestMemory_PerIPIsolation(t *testing.T) {
 func TestMemory_PerKeyIsolation(t *testing.T) {
 	m := NewMemory()
 	for range 3 {
-		m.Allow(reqFromIP("1.1.1.1"), "login", 3, 60)
+		_, _, _ = m.Allow(reqFromIP("1.1.1.1"), "login", 3, 60)
 	}
 	allowed, _, _ := m.Allow(reqFromIP("1.1.1.1"), "register", 3, 60)
 	if !allowed {
@@ -63,7 +63,7 @@ func TestMemory_WindowResets(t *testing.T) {
 	m.now = func() time.Time { return t0 }
 
 	for range 3 {
-		m.Allow(reqFromIP("1.1.1.1"), "k", 3, 60)
+		_, _, _ = m.Allow(reqFromIP("1.1.1.1"), "k", 3, 60)
 	}
 	allowed, _, _ := m.Allow(reqFromIP("1.1.1.1"), "k", 3, 60)
 	if allowed {

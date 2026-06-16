@@ -12,7 +12,6 @@ linters:
     - misspell
     - nilerr
     - nolintlint
-    - paralleltest
     - revive
     - sqlclosecheck
     - testifylint
@@ -22,9 +21,13 @@ linters:
     - wastedassign
   settings:
     revive:
+      # `exported` (doc-comment-on-every-exported-symbol) and `paralleltest`
+      # are intentionally omitted: they flood this existing codebase with
+      # ~100 stylistic findings and, for paralleltest, blindly parallelizing
+      # tests that share mock state would be unsafe. Keep the high-signal
+      # rules below.
       rules:
         - name: package-comments
-        - name: exported
         - name: context-as-argument
         - name: error-strings
         - name: error-return

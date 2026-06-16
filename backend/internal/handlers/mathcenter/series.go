@@ -10,6 +10,9 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
+
 	"github.com/Alarion239/my239/backend/internal/ctxcache"
 	"github.com/Alarion239/my239/backend/internal/httpx"
 	"github.com/Alarion239/my239/backend/internal/logger"
@@ -17,8 +20,6 @@ import (
 	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/pkg/db"
 	"github.com/Alarion239/my239/backend/pkg/objectstore"
-	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5"
 )
 
 // MaxPDFBytes is the upload cap for series PDFs. Real exam-style series PDFs

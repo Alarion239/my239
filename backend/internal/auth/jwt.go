@@ -133,8 +133,10 @@ func (s *AccessTokenService) ExpirationSeconds() int {
 // tests. They name the same things as AccessTokenService / AccessClaims; the
 // shorter names make the call sites — particularly the middleware constructor
 // signature — read better.
-type JWTService = AccessTokenService
-type Claims = AccessClaims
+type (
+	JWTService = AccessTokenService
+	Claims     = AccessClaims
+)
 
 // MustNewJWTService is a convenience constructor used by tests and bootstrap
 // scripts. It applies the project-default issuer/audience and expresses

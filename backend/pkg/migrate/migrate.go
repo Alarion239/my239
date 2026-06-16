@@ -15,10 +15,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Alarion239/my239/backend/migrations"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5" // register the pgx/v5 migrate driver
 	"github.com/golang-migrate/migrate/v4/source/iofs"
+
+	"github.com/Alarion239/my239/backend/migrations"
 )
 
 // Migrator is the user-facing interface. Implemented by *golangMigrator (real)
