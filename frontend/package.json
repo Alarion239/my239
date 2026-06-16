@@ -1,0 +1,30 @@
+{
+  "name": "my239-frontend",
+  "private": true,
+  "type": "module",
+  "description": "npm workspace root for the my239 frontend monorepo: web (Vite + React) and a platform-agnostic shared TypeScript package consumed by both web and a future React Native (Expo) app.",
+  "workspaces": [
+    "shared",
+    "web"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=my239-web",
+    "build": "npm run build --workspace=my239-web",
+    "typecheck": "npm run typecheck --workspace=@my239/shared && npm run typecheck --workspace=my239-web",
+    "lint": "eslint .",
+    "test:shared": "npm test --workspace=@my239/shared",
+    "test:web": "npm test --workspace=my239-web",
+    "test": "npm run test:shared && npm run test:web"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "eslint": "^9.13.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-react-refresh": "^0.4.14",
+    "globals": "^15.11.0",
+    "typescript-eslint": "^8.11.0"
+  },
+  "allowScripts": {
+    "esbuild@0.21.5": true
+  }
+}

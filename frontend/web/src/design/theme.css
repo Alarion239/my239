@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+/* Class-based dark mode: toggled by <html class="dark"> from ThemeProvider. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Design tokens -> Tailwind utilities (bg-paper, text-ink, border-line, ...). */
+@theme {
+  --font-display: "Spectral", Georgia, "Times New Roman", serif;
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+}
+
+/* Scholarly warm — paper light theme. */
+:root {
+  --paper: #faf7f0;
+  --surface: #fffdf8;
+  --surface-muted: #f2ede1;
+  --ink: #211d17;
+  --muted: #6c6557;
+  --faint: #948c7b;
+  --line: #e7e0cf;
+  --line-strong: #d7cdb6;
+  --accent: #0f6e56;
+  --accent-strong: #0b5743;
+  --accent-soft: #e3f0ea;
+  --accent-ink: #0b4636;
+  --danger: #a3331f;
+  --danger-soft: #f7e7e2;
+  --success: #2f7a4f;
+  --warning: #97670f;
+  color-scheme: light;
+}
+
+/* Warm charcoal dark theme — parchment text, brighter teal. */
+.dark {
+  --paper: #14120d;
+  --surface: #1c1a13;
+  --surface-muted: #262218;
+  --ink: #ece5d6;
+  --muted: #a79e8c;
+  --faint: #7d7564;
+  --line: #322d21;
+  --line-strong: #433c2c;
+  --accent: #3cc39d;
+  --accent-strong: #57d3b0;
+  --accent-soft: #143329;
+  --accent-ink: #bdeadf;
+  --danger: #e8826f;
+  --danger-soft: #2e1a16;
+  --success: #5fbd86;
+  --warning: #d8a44a;
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background-color: var(--paper);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* One restrained page-load reveal; stagger via inline animation-delay. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-rise {
+  animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise {
+    animation: none;
+  }
+}
