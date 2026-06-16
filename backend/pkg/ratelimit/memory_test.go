@@ -38,7 +38,7 @@ func TestMemory_AllowsUpToLimit(t *testing.T) {
 func TestMemory_PerIPIsolation(t *testing.T) {
 	m := NewMemory()
 	for range 3 {
-		m.Allow(reqFromIP("1.1.1.1"), "k", 3, 60)
+		_, _, _ = m.Allow(reqFromIP("1.1.1.1"), "k", 3, 60)
 	}
 	allowed, _, _ := m.Allow(reqFromIP("2.2.2.2"), "k", 3, 60)
 	if !allowed {
@@ -49,7 +49,7 @@ func TestMemory_PerIPIsolation(t *testing.T) {
 func TestMemory_PerKeyIsolation(t *testing.T) {
 	m := NewMemory()
 	for range 3 {
-		m.Allow(reqFromIP("1.1.1.1"), "login", 3, 60)
+		_, _, _ = m.Allow(reqFromIP("1.1.1.1"), "login", 3, 60)
 	}
 	allowed, _, _ := m.Allow(reqFromIP("1.1.1.1"), "register", 3, 60)
 	if !allowed {
@@ -63,7 +63,7 @@ func TestMemory_WindowResets(t *testing.T) {
 	m.now = func() time.Time { return t0 }
 
 	for range 3 {
-		m.Allow(reqFromIP("1.1.1.1"), "k", 3, 60)
+		_, _, _ = m.Allow(reqFromIP("1.1.1.1"), "k", 3, 60)
 	}
 	allowed, _, _ := m.Allow(reqFromIP("1.1.1.1"), "k", 3, 60)
 	if allowed {
@@ -97,15 +97,6 @@ func TestMemory_Middleware_ReturnsRetryAfter(t *testing.T) {
 	}
 	if rr2.Header().Get("Retry-After") == "" {
 		t.Error("Retry-After header should be set")
-	}
-}
-
-func TestItoa(t *testing.T) {
-	cases := map[int]string{0: "0", 1: "1", 42: "42", -7: "-7", 12345: "12345"}
-	for in, want := range cases {
-		if got := itoa(in); got != want {
-			t.Errorf("itoa(%d): got %q, want %q", in, got, want)
-		}
 	}
 }
 

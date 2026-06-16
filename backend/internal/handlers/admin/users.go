@@ -4,12 +4,13 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/Alarion239/my239/backend/internal/ctxcache"
 	"github.com/Alarion239/my239/backend/internal/httpx"
 	"github.com/Alarion239/my239/backend/internal/logger"
 	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/pkg/db"
-	"github.com/go-chi/chi/v5"
 )
 
 // ListUsers returns every user in the system.
@@ -17,7 +18,7 @@ func ListUsers(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		users, err := store.New(database.Pool()).ListUsers(r.Context())
 		if err != nil {
-			logger.LogError("admin: list users", err)
+			logger.LogErrorContext(r.Context(), "admin: list users", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to list users")
 			return
 		}
@@ -42,8 +43,7 @@ func SetUserAdmin(database *db.DB) http.HandlerFunc {
 		}
 
 		var req setAdminRequest
-		if err := httpx.DecodeJSON(r, &req); err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		if !httpx.DecodeJSONBody(w, r, &req) {
 			return
 		}
 
@@ -55,7 +55,7 @@ func SetUserAdmin(database *db.DB) http.HandlerFunc {
 
 		q := store.New(database.Pool())
 		if err := q.SetUserAdmin(r.Context(), store.SetUserAdminParams{ID: id, IsAdmin: req.IsAdmin}); err != nil {
-			logger.LogError("admin: set user admin", err)
+			logger.LogErrorContext(r.Context(), "admin: set user admin", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to update user")
 			return
 		}

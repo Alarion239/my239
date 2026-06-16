@@ -15,10 +15,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Alarion239/my239/backend/migrations"
 	"github.com/golang-migrate/migrate/v4"
-	pgxdriver "github.com/golang-migrate/migrate/v4/database/pgx/v5"
+	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5" // register the pgx/v5 migrate driver
 	"github.com/golang-migrate/migrate/v4/source/iofs"
+
+	"github.com/Alarion239/my239/backend/migrations"
 )
 
 // Migrator is the user-facing interface. Implemented by *golangMigrator (real)
@@ -86,6 +87,8 @@ func toPgxURL(dbURL string) (string, error) {
 // golangMigrator is the real Migrator. It exists only to translate
 // golang-migrate's typed sentinels into our package's sentinels and to
 // shield callers from migrate.ErrNoChange noise.
+var _ Migrator = (*golangMigrator)(nil)
+
 type golangMigrator struct {
 	m *migrate.Migrate
 }
@@ -134,8 +137,3 @@ func ignoreNoChange(err error) error {
 	}
 	return err
 }
-
-// Force the pgx driver to register itself with golang-migrate. Importing it
-// for side effects in the CLI alone wouldn't work because Go doesn't run
-// package init for unused imports.
-var _ = pgxdriver.Postgres{}

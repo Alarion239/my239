@@ -12,7 +12,7 @@ import (
 )
 
 func newTestJWTSvc() *auth.JWTService {
-	return auth.NewJWTService("test-secret", 24)
+	return auth.MustNewJWTService("test-secret", 24)
 }
 
 func okHandler(w http.ResponseWriter, r *http.Request) {

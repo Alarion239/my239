@@ -4,11 +4,12 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/Alarion239/my239/backend/internal/auth"
 	"github.com/Alarion239/my239/backend/internal/httpx"
 	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/pkg/db"
-	"github.com/jackc/pgx/v5"
 )
 
 type LoginRequest struct {
@@ -35,8 +36,7 @@ func Login(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 		ctx := r.Context()
 
 		var req LoginRequest
-		if err := httpx.DecodeJSON(r, &req); err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		if !httpx.DecodeJSONBody(w, r, &req) {
 			return
 		}
 		if err := validate.Struct(req); err != nil {

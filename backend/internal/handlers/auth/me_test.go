@@ -23,7 +23,7 @@ func TestMe_Unauthenticated(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/me", nil)
 	rr := httptest.NewRecorder()
 
-	authHandlers.Me(db.NewDBWithPool(mock))(rr, req)
+	authHandlers.Me(db.NewWithPool(mock))(rr, req)
 
 	if rr.Code != http.StatusUnauthorized {
 		t.Errorf("status: got %d, want 401", rr.Code)
@@ -40,7 +40,7 @@ func TestMe_CacheHit(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/me", nil).WithContext(ctx)
 	rr := httptest.NewRecorder()
 
-	authHandlers.Me(db.NewDBWithPool(mock))(rr, req)
+	authHandlers.Me(db.NewWithPool(mock))(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status: got %d, body=%s", rr.Code, rr.Body.String())
@@ -72,7 +72,7 @@ func TestMe_CacheMissFetchesUser(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/me", nil).WithContext(ctx)
 	rr := httptest.NewRecorder()
 
-	authHandlers.Me(db.NewDBWithPool(mock))(rr, req)
+	authHandlers.Me(db.NewWithPool(mock))(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status: got %d, body=%s", rr.Code, rr.Body.String())

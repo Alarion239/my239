@@ -111,3 +111,18 @@ SELECT EXISTS (
     WHERE s.user_id = $1
       AND g.math_center_id = $2
 ) AS is_student;
+
+-- name: ListProblemsForSeriesIDs :many
+SELECT *
+FROM math_center_problems
+WHERE series_id = ANY(@series_ids::bigint[])
+ORDER BY series_id ASC, number ASC;
+
+-- name: ListSubproblemsForSeriesIDs :many
+SELECT s.id         AS id,
+       s.problem_id AS problem_id,
+       s.label      AS label
+FROM math_center_subproblems s
+         JOIN math_center_problems p ON p.id = s.problem_id
+WHERE p.series_id = ANY(@series_ids::bigint[])
+ORDER BY p.number ASC, s.label ASC;

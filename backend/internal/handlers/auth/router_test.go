@@ -16,7 +16,7 @@ func TestRouter_MeRequiresAuth(t *testing.T) {
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	r := authHandlers.Router(database, newTokens(t, database), ratelimit.NewMemory())
 
 	req := httptest.NewRequest(http.MethodGet, "/me", nil)
@@ -33,7 +33,7 @@ func TestRouter_PublicEndpointsDoNotRequireAuth(t *testing.T) {
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	r := authHandlers.Router(database, newTokens(t, database), ratelimit.NewMemory())
 
 	req := httptest.NewRequest(http.MethodPost, "/login", nil)

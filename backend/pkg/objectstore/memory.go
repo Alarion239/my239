@@ -26,6 +26,8 @@ type memoryObject struct {
 	contentType string
 }
 
+var _ Store = (*MemoryStore)(nil)
+
 // NewMemory returns an empty MemoryStore.
 func NewMemory() *MemoryStore {
 	return &MemoryStore{

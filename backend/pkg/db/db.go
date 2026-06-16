@@ -1,12 +1,28 @@
+// Package db wraps a pgx connection pool behind small Querier/Pool interfaces
+// so repositories can run against either the pool or a transaction, and tests
+// can inject a mock pool.
 package db
 
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// Pool tuning defaults. They are applied unless the connection string already
+// overrides them (pgx reads pool_max_conns, pool_min_conns, etc. from the URL),
+// so a deployment can size MaxConns to its Postgres connection budget via
+// DATABASE_URL query params without code changes.
+const (
+	defaultMaxConns        = 10
+	defaultMinConns        = 2
+	defaultMaxConnLifetime = 30 * time.Minute
+	defaultMaxConnIdleTime = 5 * time.Minute
+	defaultHealthCheck     = time.Minute
 )
 
 // Querier is the minimal read/write surface used by repositories. It is
@@ -27,18 +43,44 @@ type Pool interface {
 	Close()
 }
 
-// DB represents a database connection pool and must be initialized using NewDB.
+// DB represents a database connection pool and must be initialized using New.
 type DB struct {
 	pool Pool
 }
 
-// NewDB creates and initializes a new DB instance with a connection pool.
-func NewDB(ctx context.Context, connectionString string) (*DB, error) {
+// New creates and initializes a new DB instance with a tuned connection pool.
+//
+// The pool gets explicit lifetime, idle-timeout and health-check settings
+// (pgx leaves these at zero by default, which never recycles connections —
+// a problem behind PgBouncer or managed Postgres that drops idle backends).
+// MaxConns/MinConns fall back to sane defaults but defer to anything the
+// connection string already specifies.
+func New(ctx context.Context, connectionString string) (*DB, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("context cancelled: %w", err)
 	}
 
-	pool, err := pgxpool.New(ctx, connectionString)
+	cfg, err := pgxpool.ParseConfig(connectionString)
+	if err != nil {
+		return nil, fmt.Errorf("parse connection string: %w", err)
+	}
+	if cfg.MaxConns == 0 {
+		cfg.MaxConns = defaultMaxConns
+	}
+	if cfg.MinConns == 0 {
+		cfg.MinConns = defaultMinConns
+	}
+	if cfg.MaxConnLifetime == 0 {
+		cfg.MaxConnLifetime = defaultMaxConnLifetime
+	}
+	if cfg.MaxConnIdleTime == 0 {
+		cfg.MaxConnIdleTime = defaultMaxConnIdleTime
+	}
+	if cfg.HealthCheckPeriod == 0 {
+		cfg.HealthCheckPeriod = defaultHealthCheck
+	}
+
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create connection pool: %w", err)
 	}
@@ -51,9 +93,9 @@ func NewDB(ctx context.Context, connectionString string) (*DB, error) {
 	return &DB{pool: pool}, nil
 }
 
-// NewDBWithPool creates a DB from an existing Pool implementation.
+// NewWithPool creates a DB from an existing Pool implementation.
 // This is primarily useful for injecting mock pools during testing.
-func NewDBWithPool(pool Pool) *DB {
+func NewWithPool(pool Pool) *DB {
 	return &DB{pool: pool}
 }
 

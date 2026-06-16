@@ -51,7 +51,7 @@ func TestRedis_PerIPIsolation(t *testing.T) {
 	rl := NewRedis(client, "test")
 
 	for range 3 {
-		rl.Allow(reqFromIP("1.1.1.1"), "k", 3, 60)
+		_, _, _ = rl.Allow(reqFromIP("1.1.1.1"), "k", 3, 60)
 	}
 	allowed, _, _ := rl.Allow(reqFromIP("2.2.2.2"), "k", 3, 60)
 	if !allowed {
@@ -63,7 +63,7 @@ func TestRedis_TTLApplied(t *testing.T) {
 	mr, client := newMini(t)
 	rl := NewRedis(client, "test")
 
-	rl.Allow(reqFromIP("1.1.1.1"), "k", 3, 60)
+	_, _, _ = rl.Allow(reqFromIP("1.1.1.1"), "k", 3, 60)
 
 	// Walk Redis keys; expect exactly one matching our prefix and a TTL set.
 	keys := mr.Keys()

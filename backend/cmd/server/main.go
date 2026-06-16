@@ -1,3 +1,6 @@
+// Package main is the API server entrypoint: it loads config, wires the
+// dependency graph (db, auth, rate limiter, object store), mounts the chi
+// router and middleware, and runs the HTTP server with graceful shutdown.
 package main
 
 import (
@@ -9,6 +12,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	chiMiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/redis/go-redis/v9"
+
 	"github.com/Alarion239/my239/backend/internal/auth"
 	"github.com/Alarion239/my239/backend/internal/config"
 	adminHandlers "github.com/Alarion239/my239/backend/internal/handlers/admin"
@@ -17,13 +24,11 @@ import (
 	hwHandlers "github.com/Alarion239/my239/backend/internal/handlers/homework"
 	mcHandlers "github.com/Alarion239/my239/backend/internal/handlers/mathcenter"
 	"github.com/Alarion239/my239/backend/internal/logger"
+	"github.com/Alarion239/my239/backend/internal/metrics"
 	"github.com/Alarion239/my239/backend/internal/middleware"
 	"github.com/Alarion239/my239/backend/pkg/db"
 	"github.com/Alarion239/my239/backend/pkg/objectstore"
 	"github.com/Alarion239/my239/backend/pkg/ratelimit"
-	"github.com/go-chi/chi/v5"
-	chiMiddleware "github.com/go-chi/chi/v5/middleware"
-	"github.com/redis/go-redis/v9"
 )
 
 const (
@@ -52,7 +57,7 @@ func run() error {
 		return err
 	}
 
-	database, err := db.NewDB(rootCtx, cfg.DatabaseURL)
+	database, err := db.New(rootCtx, cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}
@@ -95,6 +100,7 @@ func run() error {
 
 	r.Get("/healthz", health.Live())
 	r.Get("/readyz", health.Ready(database))
+	r.Handle("/metrics", metrics.Handler())
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Mount("/auth", authHandlers.Router(database, tokens, limiter))

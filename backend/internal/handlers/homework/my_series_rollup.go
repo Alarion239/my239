@@ -4,12 +4,13 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/Alarion239/my239/backend/internal/httpx"
 	"github.com/Alarion239/my239/backend/internal/logger"
 	mc "github.com/Alarion239/my239/backend/internal/mathcenter"
 	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/pkg/db"
-	"github.com/jackc/pgx/v5"
 )
 
 // rollupSubproblem is the per-subpart cell in the student's status grid.
@@ -68,7 +69,7 @@ func MySeriesRollup(database *db.DB) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "series not found")
 				return
 			}
-			logger.LogError("homework: get series for rollup", err)
+			logger.LogErrorContext(ctx, "homework: get series for rollup", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -85,7 +86,7 @@ func MySeriesRollup(database *db.DB) http.HandlerFunc {
 			StudentUserID: userID,
 		})
 		if err != nil {
-			logger.LogError("homework: student rollup", err)
+			logger.LogErrorContext(ctx, "homework: student rollup", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -94,7 +95,7 @@ func MySeriesRollup(database *db.DB) http.HandlerFunc {
 			StudentUserID: userID,
 		})
 		if err != nil {
-			logger.LogError("homework: student counts", err)
+			logger.LogErrorContext(ctx, "homework: student counts", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}

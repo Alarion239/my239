@@ -7,12 +7,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/Alarion239/my239/backend/internal/httpx"
 	"github.com/Alarion239/my239/backend/internal/logger"
 	mc "github.com/Alarion239/my239/backend/internal/mathcenter"
 	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/pkg/db"
-	"github.com/jackc/pgx/v5"
 )
 
 // centerGridResponse is the everything-at-once shape the teacher
@@ -22,9 +23,9 @@ import (
 // frontend looks up each cell via that key as it iterates rows × columns,
 // which avoids any cross-product duplication of cells in the payload.
 type centerGridResponse struct {
-	Groups []centerGridGroup           `json:"groups"`
-	Series []centerGridSeries          `json:"series"`
-	Cells  map[string]centerGridCell   `json:"cells"`
+	Groups []centerGridGroup         `json:"groups"`
+	Series []centerGridSeries        `json:"series"`
+	Cells  map[string]centerGridCell `json:"cells"`
 }
 
 type centerGridGroup struct {
@@ -39,12 +40,12 @@ type centerGridStudentEntry struct {
 }
 
 type centerGridSeries struct {
-	SeriesID    int64                  `json:"series_id"`
-	Number      int                    `json:"number"`
-	Name        string                 `json:"name"`
-	DisplayName string                 `json:"display_name"`
-	DueAt       time.Time              `json:"due_at"`
-	Columns     []centerGridColumn     `json:"columns"`
+	SeriesID    int64              `json:"series_id"`
+	Number      int                `json:"number"`
+	Name        string             `json:"name"`
+	DisplayName string             `json:"display_name"`
+	DueAt       time.Time          `json:"due_at"`
+	Columns     []centerGridColumn `json:"columns"`
 }
 
 type centerGridColumn struct {
@@ -98,7 +99,7 @@ func GetCenterGrid(database *db.DB) http.HandlerFunc {
 				httpx.WriteJSON(w, http.StatusOK, centerGridResponse{Cells: map[string]centerGridCell{}})
 				return
 			}
-			logger.LogError("homework: center grid", err)
+			logger.LogErrorContext(ctx, "homework: center grid", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -172,8 +173,8 @@ func columnLabel(problemNumber int, subproblemLabel string) string {
 
 // groupBuilder accumulates groups in first-seen order with deduped students.
 type groupBuilder struct {
-	byID  map[int64]int
-	out   []centerGridGroup
+	byID       map[int64]int
+	out        []centerGridGroup
 	stuByGroup map[int64]map[int64]bool
 }
 
@@ -210,8 +211,8 @@ func (b *groupBuilder) build() []centerGridGroup {
 
 // seriesBuilder accumulates series in first-seen order with deduped columns.
 type seriesBuilder struct {
-	byID    map[int64]int
-	out     []centerGridSeries
+	byID         map[int64]int
+	out          []centerGridSeries
 	colsBySeries map[int64]map[int64]bool
 }
 

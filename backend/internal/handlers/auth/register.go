@@ -5,13 +5,14 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"github.com/Alarion239/my239/backend/internal/auth"
 	"github.com/Alarion239/my239/backend/internal/httpx"
 	"github.com/Alarion239/my239/backend/internal/logger"
 	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/pkg/db"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type RegisterRequest struct {
@@ -39,8 +40,7 @@ func Register(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 		ctx := r.Context()
 
 		var req RegisterRequest
-		if err := httpx.DecodeJSON(r, &req); err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		if !httpx.DecodeJSONBody(w, r, &req) {
 			return
 		}
 		if err := validate.Struct(req); err != nil {
@@ -56,7 +56,7 @@ func Register(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 
 		tx, err := database.Pool().Begin(ctx)
 		if err != nil {
-			logger.LogError("register: begin tx", err)
+			logger.LogErrorContext(ctx, "register: begin tx", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -70,7 +70,7 @@ func Register(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusUnauthorized, httpx.CodeTokenInvalid, "invalid invitation token")
 				return
 			}
-			logger.LogError("register: fetch token", err)
+			logger.LogErrorContext(ctx, "register: fetch token", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -82,7 +82,7 @@ func Register(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 
 		uses, err := q.CountUsesOfInvitationToken(ctx, invitation.ID)
 		if err != nil {
-			logger.LogError("register: count token uses", err)
+			logger.LogErrorContext(ctx, "register: count token uses", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -104,20 +104,20 @@ func Register(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "username already taken")
 				return
 			}
-			logger.LogError("register: create user", err)
+			logger.LogErrorContext(ctx, "register: create user", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
 
 		if err := tx.Commit(ctx); err != nil {
-			logger.LogError("register: commit tx", err)
+			logger.LogErrorContext(ctx, "register: commit tx", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
 
 		pair, err := tokens.IssuePair(ctx, user.ID, user.Username, user.IsAdmin)
 		if err != nil {
-			logger.LogError("register: issue token pair", err)
+			logger.LogErrorContext(ctx, "register: issue token pair", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to issue token")
 			return
 		}

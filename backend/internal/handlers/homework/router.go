@@ -7,11 +7,12 @@ package homework
 import (
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	internalAuth "github.com/Alarion239/my239/backend/internal/auth"
 	"github.com/Alarion239/my239/backend/internal/middleware"
 	"github.com/Alarion239/my239/backend/pkg/db"
 	"github.com/Alarion239/my239/backend/pkg/objectstore"
-	"github.com/go-chi/chi/v5"
 )
 
 // Router mounts the homework routes. All endpoints require an authenticated
@@ -46,7 +47,7 @@ func Router(database *db.DB, tokens *internalAuth.TokenService, blobs objectstor
 
 	// Subproblem metadata — used by the new-submission page (when no
 	// thread exists yet) to find the series due-date.
-	r.Get("/subproblems/{subproblemID}", GetSubproblemContextHandler(database))
+	r.Get("/subproblems/{subproblemID}", SubproblemContext(database))
 
 	// Series-scoped views.
 	r.Get("/series/{seriesID}/my", MySeriesRollup(database))

@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/Alarion239/my239/backend/internal/homework"
 	"github.com/Alarion239/my239/backend/internal/httpx"
 	"github.com/Alarion239/my239/backend/internal/logger"
 	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/pkg/db"
 	"github.com/Alarion239/my239/backend/pkg/objectstore"
-	"github.com/jackc/pgx/v5"
 )
 
 // retractRequest is the body of /retract. Body is an optional reason
@@ -39,8 +40,7 @@ func Retract(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 		}
 
 		var req retractRequest
-		if err := httpx.DecodeJSON(r, &req); err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		if !httpx.DecodeJSONBody(w, r, &req) {
 			return
 		}
 		body, err := homework.ValidateBody(req.Body)
@@ -56,7 +56,7 @@ func Retract(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "thread not found")
 				return
 			}
-			logger.LogError("homework: get thread for retract", err)
+			logger.LogErrorContext(ctx, "homework: get thread for retract", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -84,26 +84,26 @@ func Retract(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "no graded event to retract")
 				return
 			}
-			logger.LogError("homework: get most recent grade", err)
+			logger.LogErrorContext(ctx, "homework: get most recent grade", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
 
 		rollback, err := rollbackStatus(ctx, q, thread)
 		if err != nil {
-			logger.LogError("homework: rollback status", err)
+			logger.LogErrorContext(ctx, "homework: rollback status", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
 
 		eventUUID, err := homework.NewEventUUID()
 		if err != nil {
-			logger.LogError("homework: gen retract uuid", err)
+			logger.LogErrorContext(ctx, "homework: gen retract uuid", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
 		if err := writeRetract(ctx, database, thread.ID, eventUUID, userID, body, gradedEvent.ID, rollback); err != nil {
-			logger.LogError("homework: retract tx", err)
+			logger.LogErrorContext(ctx, "homework: retract tx", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to retract")
 			return
 		}

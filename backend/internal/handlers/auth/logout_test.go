@@ -32,7 +32,7 @@ func TestLogout_Success(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	authHandlers.Logout(newTokens(t, database))(rr, req)
 
 	if rr.Code != http.StatusNoContent {
@@ -56,7 +56,7 @@ func TestLogout_UnknownTokenIsNoOp(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	authHandlers.Logout(newTokens(t, database))(rr, req)
 
 	if rr.Code != http.StatusNoContent {
@@ -73,7 +73,7 @@ func TestLogout_ValidationFailure(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	authHandlers.Logout(newTokens(t, database))(rr, req)
 
 	if rr.Code != http.StatusBadRequest {

@@ -7,11 +7,12 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/Alarion239/my239/backend/internal/httpx"
 	"github.com/Alarion239/my239/backend/internal/logger"
 	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/pkg/db"
-	"github.com/go-chi/chi/v5"
 )
 
 // TokenView is the wire representation of an invitation token. It mirrors the
@@ -37,7 +38,7 @@ func ListTokens(database *db.DB) http.HandlerFunc {
 
 		tokens, err := q.ListInvitationTokens(ctx)
 		if err != nil {
-			logger.LogError("admin: list tokens", err)
+			logger.LogErrorContext(r.Context(), "admin: list tokens", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to list tokens")
 			return
 		}
@@ -46,7 +47,7 @@ func ListTokens(database *db.DB) http.HandlerFunc {
 		for _, t := range tokens {
 			uses, err := q.CountUsesOfInvitationToken(ctx, t.ID)
 			if err != nil {
-				logger.LogError("admin: count token uses", err, "token_id", t.ID)
+				logger.LogErrorContext(r.Context(), "admin: count token uses", err, "token_id", t.ID)
 				uses = 0
 			}
 			out = append(out, TokenView{
@@ -75,8 +76,7 @@ type createTokenRequest struct {
 func CreateToken(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req createTokenRequest
-		if err := httpx.DecodeJSON(r, &req); err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		if !httpx.DecodeJSONBody(w, r, &req) {
 			return
 		}
 		if req.MaxUses <= 0 {
@@ -94,7 +94,7 @@ func CreateToken(database *db.DB) http.HandlerFunc {
 
 		raw, err := randomHex(32)
 		if err != nil {
-			logger.LogError("admin: random token", err)
+			logger.LogErrorContext(r.Context(), "admin: random token", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to generate token")
 			return
 		}
@@ -106,7 +106,7 @@ func CreateToken(database *db.DB) http.HandlerFunc {
 			ExpiresAt:   time.Now().Add(time.Duration(req.ExpiresInHours) * time.Hour),
 		})
 		if err != nil {
-			logger.LogError("admin: create token", err)
+			logger.LogErrorContext(r.Context(), "admin: create token", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to create token")
 			return
 		}
@@ -136,7 +136,7 @@ func RevokeToken(database *db.DB) http.HandlerFunc {
 
 		n, err := store.New(database.Pool()).RevokeInvitationTokenByID(r.Context(), id)
 		if err != nil {
-			logger.LogError("admin: revoke token", err)
+			logger.LogErrorContext(r.Context(), "admin: revoke token", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to revoke token")
 			return
 		}

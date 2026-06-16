@@ -21,8 +21,7 @@ type LogoutRequest struct {
 func Logout(tokens *internalAuth.TokenService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req LogoutRequest
-		if err := httpx.DecodeJSON(r, &req); err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		if !httpx.DecodeJSONBody(w, r, &req) {
 			return
 		}
 		if err := validate.Struct(req); err != nil {
@@ -31,7 +30,7 @@ func Logout(tokens *internalAuth.TokenService) http.HandlerFunc {
 		}
 
 		if err := tokens.Revoke(r.Context(), req.RefreshToken); err != nil {
-			logger.LogError("logout: revoke", err)
+			logger.LogErrorContext(r.Context(), "logout: revoke", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}

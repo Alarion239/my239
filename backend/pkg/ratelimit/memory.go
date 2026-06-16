@@ -28,6 +28,8 @@ type memBucket struct {
 	expiresAt time.Time
 }
 
+var _ Limiter = (*Memory)(nil)
+
 // NewMemory constructs a Memory limiter.
 func NewMemory() *Memory {
 	return &Memory{

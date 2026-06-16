@@ -1,0 +1,29 @@
+name: backend-lint
+
+on:
+  push:
+    branches: [main]
+    paths: ["backend/**", ".github/workflows/backend-lint.yml"]
+  pull_request:
+    paths: ["backend/**", ".github/workflows/backend-lint.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          # Pin to the toolchain golangci-lint v2.6.0 was built against. With
+          # "stable" (now go1.26) its type-checker panics on 1.26 stdlib files
+          # ("file requires newer Go version"). Bump both together on upgrade.
+          go-version: "1.25"
+          cache-dependency-path: backend/go.sum
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.6.0
+          working-directory: backend

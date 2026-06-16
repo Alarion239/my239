@@ -5,12 +5,13 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/Alarion239/my239/backend/internal/httpx"
 	"github.com/Alarion239/my239/backend/internal/logger"
 	mc "github.com/Alarion239/my239/backend/internal/mathcenter"
 	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/pkg/db"
-	"github.com/jackc/pgx/v5"
 )
 
 // gridStudent is one row in the teacher spreadsheet — a student of the
@@ -85,7 +86,7 @@ func TeacherGrid(database *db.DB) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "series not found")
 				return
 			}
-			logger.LogError("homework: get series for grid", err)
+			logger.LogErrorContext(ctx, "homework: get series for grid", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -95,7 +96,7 @@ func TeacherGrid(database *db.DB) http.HandlerFunc {
 
 		rows, err := q.TeacherSeriesGrid(ctx, seriesID)
 		if err != nil {
-			logger.LogError("homework: teacher grid", err)
+			logger.LogErrorContext(ctx, "homework: teacher grid", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}

@@ -19,7 +19,7 @@ const (
 	MaxBodyChars      = 4000
 )
 
-// AllowedContentTypes maps each accepted image MIME type to the file
+// allowedContentTypes maps each accepted image MIME type to the file
 // extension we store in the object key. Lowercase for case-insensitive
 // matching.
 var allowedContentTypes = map[string]string{

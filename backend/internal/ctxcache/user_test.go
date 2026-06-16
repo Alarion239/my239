@@ -57,11 +57,11 @@ func TestEnsureUser_CacheHit(t *testing.T) {
 	}
 	defer mock.Close()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	want := &store.User{ID: 5, Username: "cached"}
 	ctx := context.WithValue(context.Background(), config.CtxKeyUser, want)
 
-	_, got, err := ctxcache.EnsureUser(database, ctx)
+	_, got, err := ctxcache.EnsureUser(ctx, database)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -80,9 +80,9 @@ func TestEnsureUser_NoID(t *testing.T) {
 	}
 	defer mock.Close()
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 
-	_, _, err = ctxcache.EnsureUser(database, context.Background())
+	_, _, err = ctxcache.EnsureUser(context.Background(), database)
 	if !errors.Is(err, ctxcache.ErrNoUserIDFound) {
 		t.Errorf("expected ErrNoUserIDFound, got %v", err)
 	}
@@ -105,10 +105,10 @@ func TestEnsureUser_CacheMissFetchesAndCaches(t *testing.T) {
 		WithArgs(int64(7)).
 		WillReturnRows(rows)
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	ctx := context.WithValue(context.Background(), config.CtxKeyUserID, int64(7))
 
-	newCtx, got, err := ctxcache.EnsureUser(database, ctx)
+	newCtx, got, err := ctxcache.EnsureUser(ctx, database)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestEnsureUser_CacheMissFetchesAndCaches(t *testing.T) {
 	}
 
 	// Second call should hit cache (no new query expected).
-	_, got2, err := ctxcache.EnsureUser(database, newCtx)
+	_, got2, err := ctxcache.EnsureUser(newCtx, database)
 	if err != nil {
 		t.Fatalf("unexpected error on cached call: %v", err)
 	}
@@ -140,10 +140,10 @@ func TestEnsureUser_NotFoundReturnsRowsError(t *testing.T) {
 		WithArgs(int64(99)).
 		WillReturnError(pgx.ErrNoRows)
 
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	ctx := context.WithValue(context.Background(), config.CtxKeyUserID, int64(99))
 
-	_, _, err = ctxcache.EnsureUser(database, ctx)
+	_, _, err = ctxcache.EnsureUser(ctx, database)
 	if !errors.Is(err, pgx.ErrNoRows) {
 		t.Errorf("expected pgx.ErrNoRows, got %v", err)
 	}

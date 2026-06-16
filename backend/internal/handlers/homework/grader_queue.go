@@ -6,12 +6,13 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/Alarion239/my239/backend/internal/httpx"
 	"github.com/Alarion239/my239/backend/internal/logger"
 	mc "github.com/Alarion239/my239/backend/internal/mathcenter"
 	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/pkg/db"
-	"github.com/jackc/pgx/v5"
 )
 
 // queueItem is one row in the grader queue: enough info to render a list
@@ -57,7 +58,7 @@ func GraderQueue(database *db.DB) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "series not found")
 				return
 			}
-			logger.LogError("homework: get series for queue", err)
+			logger.LogErrorContext(ctx, "homework: get series for queue", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -71,7 +72,7 @@ func GraderQueue(database *db.DB) http.HandlerFunc {
 			MineOnly:     mine,
 		})
 		if err != nil {
-			logger.LogError("homework: list grader queue", err)
+			logger.LogErrorContext(ctx, "homework: list grader queue", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}

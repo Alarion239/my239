@@ -3,7 +3,6 @@ package admin_test
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -34,7 +33,7 @@ var teacherColumns = []string{"id", "user_id", "math_center_id", "is_head_teache
 // in the router and the test agree on the signing key).
 func newAdminRouter(t *testing.T, mock pgxmock.PgxPoolIface) (http.Handler, *internalAuth.AccessTokenService) {
 	t.Helper()
-	database := db.NewDBWithPool(mock)
+	database := db.NewWithPool(mock)
 	access, err := internalAuth.NewAccessTokenService(internalAuth.AccessTokenConfig{
 		Secret:     "test-secret",
 		Issuer:     "test-issuer",
@@ -285,6 +284,6 @@ func assertCode(t *testing.T, body []byte, want string) {
 		t.Fatalf("decode error envelope: %v (body=%s)", err, body)
 	}
 	if env.Code != want {
-		t.Errorf("error code: got %q, want %q (body=%s)", env.Code, want, fmt.Sprintf("%s", body))
+		t.Errorf("error code: got %q, want %q (body=%s)", env.Code, want, string(body))
 	}
 }

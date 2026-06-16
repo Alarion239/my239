@@ -123,3 +123,37 @@ FROM math_center_teachers t
 WHERE t.math_center_id = $1
   AND t.is_head_teacher = TRUE
 ORDER BY u.last_name ASC, u.first_name ASC;
+
+-- name: ListTeachersForCenters :many
+SELECT t.id              AS id,
+       t.user_id         AS user_id,
+       t.math_center_id  AS math_center_id,
+       t.is_head_teacher AS is_head_teacher,
+       u.first_name      AS first_name,
+       u.middle_name     AS middle_name,
+       u.last_name       AS last_name
+FROM math_center_teachers t
+         JOIN users u ON u.id = t.user_id
+WHERE t.math_center_id = ANY(@center_ids::bigint[])
+ORDER BY t.math_center_id ASC, t.is_head_teacher DESC, u.last_name ASC, u.first_name ASC;
+
+-- name: ListGroupsForCenters :many
+SELECT *
+FROM math_center_groups
+WHERE math_center_id = ANY(@center_ids::bigint[])
+ORDER BY math_center_id ASC, name ASC;
+
+-- name: ListStudentsForCenters :many
+SELECT s.id            AS id,
+       s.user_id       AS user_id,
+       s.group_id      AS group_id,
+       g.name          AS group_name,
+       g.math_center_id AS math_center_id,
+       u.first_name    AS first_name,
+       u.middle_name   AS middle_name,
+       u.last_name     AS last_name
+FROM math_center_students s
+         JOIN math_center_groups g ON g.id = s.group_id
+         JOIN users u ON u.id = s.user_id
+WHERE g.math_center_id = ANY(@center_ids::bigint[])
+ORDER BY g.math_center_id ASC, g.name ASC, u.last_name ASC, u.first_name ASC;

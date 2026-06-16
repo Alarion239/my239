@@ -20,6 +20,7 @@ package ratelimit
 import (
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/Alarion239/my239/backend/internal/httpx"
@@ -55,31 +56,8 @@ func clientIP(r *http.Request) string {
 // rejectOverLimit writes the canonical 429 response.
 func rejectOverLimit(w http.ResponseWriter, r *http.Request, retryAfter int) {
 	if retryAfter > 0 {
-		w.Header().Set("Retry-After", itoa(retryAfter))
+		w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
 	}
 	httpx.WriteAPIError(w, r, http.StatusTooManyRequests, httpx.CodeRateLimited,
 		"too many requests, please slow down")
-}
-
-// itoa avoids importing strconv just for one call.
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	negative := n < 0
-	if negative {
-		n = -n
-	}
-	var buf [20]byte
-	i := len(buf)
-	for n > 0 {
-		i--
-		buf[i] = byte('0' + n%10)
-		n /= 10
-	}
-	if negative {
-		i--
-		buf[i] = '-'
-	}
-	return string(buf[i:])
 }

@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/Alarion239/my239/backend/internal/homework"
 	"github.com/Alarion239/my239/backend/internal/httpx"
 	"github.com/Alarion239/my239/backend/internal/logger"
 	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/pkg/db"
 	"github.com/Alarion239/my239/backend/pkg/objectstore"
-	"github.com/jackc/pgx/v5"
 )
 
 // gradeRequest is the body of /grade. Verdict is "accepted" or "rejected".
@@ -45,8 +46,7 @@ func Grade(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 		}
 
 		var req gradeRequest
-		if err := httpx.DecodeJSON(r, &req); err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		if !httpx.DecodeJSONBody(w, r, &req) {
 			return
 		}
 		verdict, body, vErr := validateGradeInput(req)
@@ -62,7 +62,7 @@ func Grade(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "thread not found")
 				return
 			}
-			logger.LogError("homework: get thread for grade", err)
+			logger.LogErrorContext(ctx, "homework: get thread for grade", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -97,7 +97,7 @@ func Grade(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "claim expired or held by another grader")
 				return
 			}
-			logger.LogError("homework: grade tx", err)
+			logger.LogErrorContext(ctx, "homework: grade tx", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to record grade")
 			return
 		}

@@ -8,13 +8,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/Alarion239/my239/backend/internal/homework"
 	"github.com/Alarion239/my239/backend/internal/httpx"
 	"github.com/Alarion239/my239/backend/internal/logger"
 	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/pkg/db"
 	"github.com/Alarion239/my239/backend/pkg/objectstore"
-	"github.com/jackc/pgx/v5"
 )
 
 // submitRequest is the body of /submit and /appeal. EventUUID is the UUID
@@ -44,8 +45,7 @@ func SubmitAttempt(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 		}
 
 		var req submitRequest
-		if err := httpx.DecodeJSON(r, &req); err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		if !httpx.DecodeJSONBody(w, r, &req) {
 			return
 		}
 		body, vErr := validateSubmitInput(req)
@@ -61,7 +61,7 @@ func SubmitAttempt(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "subproblem not found")
 				return
 			}
-			logger.LogError("homework: subproblem ctx", err)
+			logger.LogErrorContext(ctx, "homework: subproblem ctx", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -83,7 +83,7 @@ func SubmitAttempt(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 			MathCenterID:  spCtx.MathCenterID,
 		})
 		if err != nil {
-			logger.LogError("homework: find-or-create thread", err)
+			logger.LogErrorContext(ctx, "homework: find-or-create thread", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -105,7 +105,7 @@ func SubmitAttempt(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 		}
 
 		if err := writeAttempt(ctx, database, thread.ID, req.EventUUID, homework.KindSubmitted, userID, body, photos, nil); err != nil {
-			logger.LogError("homework: submit tx", err)
+			logger.LogErrorContext(ctx, "homework: submit tx", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to save submission")
 			return
 		}

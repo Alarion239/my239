@@ -107,6 +107,7 @@ func (s *AccessTokenService) Validate(tokenString string) (*AccessClaims, error)
 		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
 		jwt.WithIssuer(s.issuer),
 		jwt.WithAudience(s.audience),
+		jwt.WithExpirationRequired(), // reject tokens that omit exp
 	)
 
 	token, err := parser.ParseWithClaims(tokenString, &AccessClaims{}, func(token *jwt.Token) (any, error) {
@@ -132,21 +133,27 @@ func (s *AccessTokenService) ExpirationSeconds() int {
 // tests. They name the same things as AccessTokenService / AccessClaims; the
 // shorter names make the call sites — particularly the middleware constructor
 // signature — read better.
-type JWTService = AccessTokenService
-type Claims = AccessClaims
+type (
+	JWTService = AccessTokenService
+	Claims     = AccessClaims
+)
 
-// NewJWTService is a convenience constructor used by tests and bootstrap
+// MustNewJWTService is a convenience constructor used by tests and bootstrap
 // scripts. It applies the project-default issuer/audience and expresses
 // expiration in whole hours; the production server path uses
 // NewAccessTokenService directly so it can pass through the configured TTL
-// from env.
-func NewJWTService(secret string, expirationHours int) *JWTService {
-	svc, _ := NewAccessTokenService(AccessTokenConfig{
+// from env. It panics on invalid config — the Must prefix signals that, and
+// keeps callers from silently receiving a nil service.
+func MustNewJWTService(secret string, expirationHours int) *JWTService {
+	svc, err := NewAccessTokenService(AccessTokenConfig{
 		Secret:     secret,
 		Issuer:     "my239",
 		Audience:   "api",
 		Expiration: time.Duration(expirationHours) * time.Hour,
 	})
+	if err != nil {
+		panic(fmt.Sprintf("auth: MustNewJWTService: %v", err))
+	}
 	return svc
 }
 
