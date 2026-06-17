@@ -23,6 +23,9 @@ import (
 func Router(database *db.DB, tokens *internalAuth.TokenService, blobs objectstore.Store, uploadTTL, downloadTTL time.Duration) chi.Router {
 	r := chi.NewRouter()
 	r.Use(middleware.AuthMiddleware(tokens.Access()))
+	// Act-as impersonation runs right after auth: an admin may carry the
+	// X-Act-As-User-Id header to operate (read AND write) as any user.
+	r.Use(middleware.ImpersonationMiddleware(database))
 
 	// Student-target routes use the subproblem id (the thread doesn't
 	// necessarily exist yet on first submit). The handlers find-or-create

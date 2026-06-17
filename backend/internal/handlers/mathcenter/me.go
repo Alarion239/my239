@@ -17,9 +17,13 @@ import (
 	"github.com/Alarion239/my239/backend/pkg/db"
 )
 
-// MeResponse is the union view for the calling user. Exactly one of Teacher /
-// Student may be populated; both nil means the user is not enrolled in any
-// math center role.
+// MeResponse is the view for the calling user. For a non-admin, Teacher and
+// Student may BOTH be populated — a user can teach one center and study at
+// another. Per-center exclusivity guarantees they are never both for the SAME
+// center, but the two roles can coexist across different centers. Both nil
+// means the user is not enrolled in any math center role. Admins don't rely on
+// enrollment: they act via capability (teacher superset) and act-as
+// impersonation, so this view reflects whoever the effective CtxKeyUserID is.
 type MeResponse struct {
 	Teacher *TeacherView `json:"teacher,omitempty"`
 	Student *StudentView `json:"student,omitempty"`

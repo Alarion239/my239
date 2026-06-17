@@ -20,6 +20,9 @@ import (
 func Router(database *db.DB, tokens *internalAuth.TokenService, blobs objectstore.Store, uploadTTL, downloadTTL time.Duration) chi.Router {
 	r := chi.NewRouter()
 	r.Use(middleware.AuthMiddleware(tokens.Access()))
+	// Act-as impersonation runs right after auth: an admin may carry the
+	// X-Act-As-User-Id header to view/operate as any user (including /me here).
+	r.Use(middleware.ImpersonationMiddleware(database))
 
 	r.Get("/me", Me(database))
 

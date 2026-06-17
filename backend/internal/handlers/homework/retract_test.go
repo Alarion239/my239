@@ -164,7 +164,8 @@ func TestRetract_AdminCanRetract(t *testing.T) {
 		WillReturnRows(mock.NewRows(threadColumns).AddRow(threadRow(1, 7, 900, 100, 42, threadRowOpts{
 			Status: "rejected", AttemptEventID: &attemptID, GradeEventID: &gradeID, LastGraderID: &originalGrader,
 		}, now)...))
-	expectTeacherCheck(mock, 4, 42, true)
+	// Admin is a teacher superset: requireTeacher short-circuits without an
+	// IsTeacherInCenter query, so we deliberately do not expect one here.
 	verdict := "rejected"
 	mock.ExpectQuery(`SELECT .* FROM homework_thread_event\s+WHERE thread_id = \$1\s+AND kind\s+= 'graded'`).
 		WithArgs(int64(1)).

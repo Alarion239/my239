@@ -79,6 +79,38 @@ func TestGraderQueue_MineQueryParam(t *testing.T) {
 	}
 }
 
+// TestGraderQueue_AdminNotEnrolledAllowed proves requireTeacher treats an
+// admin as a teacher superset: no IsTeacherInCenter query runs (the admin
+// short-circuits it) yet the request succeeds for a center the admin is not
+// enrolled in.
+func TestGraderQueue_AdminNotEnrolledAllowed(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(seriesColumns).
+			AddRow(int64(100), int64(42), int32(1), "S", now.Add(time.Hour), (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
+	// NOTE: deliberately no expectTeacherCheck — an admin must not trigger it.
+	mock.ExpectQuery(`FROM homework_thread t\s+JOIN users u`).
+		WithArgs(int64(100), int64(99), false).
+		WillReturnRows(mock.NewRows(queueRowColumns))
+
+	// userID 99 is an admin (isAdmin=true) but enrolled in no center.
+	req := authedRequest(t, access, 99, true, http.MethodGet, "/series/100/queue", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations (admin should not run a teacher check): %v", err)
+	}
+}
+
 func TestGraderQueue_NonTeacherForbidden(t *testing.T) {
 	t.Parallel()
 	mock, _ := pgxmock.NewPool()

@@ -6,6 +6,7 @@ import {
   roleLabel,
 } from '@my239/shared'
 import { useAuth } from '../../auth/auth-context'
+import { useCapabilities } from '../../auth/use-capabilities'
 import { Avatar, Badge, Card, CardContent } from '../../design/ui'
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -19,6 +20,7 @@ function Row({ label, value }: { label: string; value: string }) {
 
 export function ProfilePage() {
   const { user } = useAuth()
+  const { isAdmin, isTeacher, isStudent } = useCapabilities()
   if (!user) return null
 
   return (
@@ -40,6 +42,9 @@ export function ProfilePage() {
           <div className="mb-5 flex flex-wrap gap-2">
             <Badge variant="accent">{roleLabel(primaryRole(user))}</Badge>
             {user.is_math_center ? <Badge variant="neutral">Аккаунт матцентра</Badge> : null}
+            {isAdmin ? <Badge variant="neutral">Администратор</Badge> : null}
+            {isTeacher ? <Badge variant="neutral">Преподаватель</Badge> : null}
+            {isStudent ? <Badge variant="neutral">Ученик</Badge> : null}
           </div>
 
           <div>

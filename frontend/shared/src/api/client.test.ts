@@ -112,3 +112,55 @@ describe('ApiClient.login', () => {
     expect(await store.getRefreshToken()).toBe('r')
   })
 })
+
+describe('ApiClient act-as header', () => {
+  function headersOf(call: unknown[]): Record<string, string> {
+    return (call[1] as RequestInit).headers as Record<string, string>
+  }
+
+  it('sends X-Act-As-User-Id on domain requests after setActingAs', async () => {
+    const client = new ApiClient({ baseURL: BASE, tokenStore: memoryStore(null) })
+    client.setActingAs(42)
+
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(jsonResponse(200, { id: 42, username: 'pupil' }))
+
+    await client.me()
+
+    expect(headersOf(fetchMock.mock.calls[0])['X-Act-As-User-Id']).toBe('42')
+  })
+
+  it('stops sending the header after setActingAs(null)', async () => {
+    const client = new ApiClient({ baseURL: BASE, tokenStore: memoryStore(null) })
+    client.setActingAs(42)
+    client.setActingAs(null)
+
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(jsonResponse(200, { id: 1, username: 'ivan' }))
+
+    await client.me()
+
+    expect(headersOf(fetchMock.mock.calls[0])['X-Act-As-User-Id']).toBeUndefined()
+  })
+
+  it('never sends the header on auth endpoints (login)', async () => {
+    const client = new ApiClient({ baseURL: BASE, tokenStore: memoryStore(null) })
+    client.setActingAs(42)
+
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      jsonResponse(200, {
+        access_token: 'a',
+        refresh_token: 'r',
+        token_type: 'Bearer',
+        expires_in: 900,
+        user: { id: 7, username: 'masha' },
+      }),
+    )
+
+    await client.login({ username: 'masha', password: 'secret123' })
+
+    expect(headersOf(fetchMock.mock.calls[0])['X-Act-As-User-Id']).toBeUndefined()
+  })
+})
