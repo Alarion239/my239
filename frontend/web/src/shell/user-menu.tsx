@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { LogOut, ShieldCheck, User as UserIcon } from 'lucide-react'
+import { Eye, LogOut, ShieldCheck, User as UserIcon } from 'lucide-react'
 import { fullName, initials, useLogout, type User } from '@my239/shared'
 import {
   Avatar,
@@ -10,10 +11,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../design/ui'
+import { useCapabilities } from '../auth/use-capabilities'
+import { ImpersonationPicker } from './impersonation-picker'
 
 export function UserMenu({ user }: { user: User }) {
   const navigate = useNavigate()
   const logout = useLogout()
+  const { canImpersonate } = useCapabilities()
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   const handleLogout = () => {
     logout.mutate(undefined, {
@@ -51,12 +56,21 @@ export function UserMenu({ user }: { user: User }) {
             </Link>
           </DropdownMenuItem>
         ) : null}
+        {canImpersonate ? (
+          <DropdownMenuItem onSelect={() => setPickerOpen(true)}>
+            <Eye className="h-4 w-4" aria-hidden />
+            Просмотр от имени…
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem destructive onSelect={handleLogout}>
           <LogOut className="h-4 w-4" aria-hidden />
           Выйти
         </DropdownMenuItem>
       </DropdownMenuContent>
+      {canImpersonate ? (
+        <ImpersonationPicker open={pickerOpen} onOpenChange={setPickerOpen} />
+      ) : null}
     </DropdownMenu>
   )
 }

@@ -15,3 +15,12 @@ export {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from './dropdown-menu'
+export {
+  Dialog,
+  DialogTrigger,
+  DialogClose,
+  DialogOverlay,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from './dialog'

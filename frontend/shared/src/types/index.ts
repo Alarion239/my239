@@ -54,3 +54,60 @@ export interface ErrorEnvelope {
   fields?: Record<string, string>
   trace_id?: string
 }
+
+// --- Math center "me" view ---------------------------------------------------
+// Mirrors backend/internal/handlers/mathcenter/me.go. The response is a union:
+// exactly one of teacher / student may be populated; both absent means the user
+// holds no math-center role.
+
+export interface CenterInfo {
+  id: number
+  graduation_year: number
+  grade: number
+}
+
+export interface GroupInfo {
+  id: number
+  name: string
+}
+
+export interface TeacherInfo {
+  user_id: number
+  display_name: string
+  is_head_teacher: boolean
+}
+
+export interface StudentInfo {
+  user_id: number
+  display_name: string
+}
+
+export interface GroupWithStudents {
+  id: number
+  name: string
+  students: StudentInfo[]
+}
+
+export interface TeacherCenterView {
+  id: number
+  graduation_year: number
+  grade: number
+  is_head_teacher: boolean
+  teachers: TeacherInfo[]
+  groups: GroupWithStudents[]
+}
+
+export interface TeacherView {
+  centers: TeacherCenterView[]
+}
+
+export interface StudentView {
+  center: CenterInfo
+  group: GroupInfo
+  head_teachers: TeacherInfo[]
+}
+
+export interface MeResponse {
+  teacher?: TeacherView | null
+  student?: StudentView | null
+}

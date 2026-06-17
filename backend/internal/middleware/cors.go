@@ -16,7 +16,7 @@ func CORSMiddleware(frontendURL string) func(http.Handler) http.Handler {
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{frontendURL},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Authorization", "Content-Type"},
+		AllowedHeaders:   []string{"Authorization", "Content-Type", "X-Act-As-User-Id"},
 		AllowCredentials: false,
 		MaxAge:           300,
 	})

@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/Alarion239/my239/backend/internal/auth"
@@ -180,8 +181,16 @@ func ListStudentsForCenter(database *db.DB) http.HandlerFunc {
 	}
 }
 
+// AddStudent enrolls a user as a student of a group. Roles are mutually
+// exclusive per center: a user may teach center A and study at center B, but
+// never both teach and study the SAME center. We resolve the group's center,
+// reject the request if the user already teaches it, then insert — all in one
+// transaction so a concurrent AddTeacher can't slip in between the check and
+// the insert (TOCTOU).
 func AddStudent(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
 		var req addStudentRequest
 		if !httpx.DecodeJSONBody(w, r, &req) {
 			return
@@ -191,7 +200,43 @@ func AddStudent(database *db.DB) http.HandlerFunc {
 			return
 		}
 
-		s, err := store.New(database.Pool()).AddStudentToGroup(r.Context(), store.AddStudentToGroupParams{
+		tx, err := database.Pool().Begin(ctx)
+		if err != nil {
+			logger.LogErrorContext(ctx, "admin/mc: begin add-student tx", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+
+		q := store.New(tx)
+
+		// Resolve the group's center so we can enforce per-center exclusivity.
+		group, err := q.GetGroup(ctx, req.GroupID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "user or group does not exist")
+				return
+			}
+			logger.LogErrorContext(ctx, "admin/mc: get group", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to add student")
+			return
+		}
+
+		isTeacher, err := q.IsTeacherInCenter(ctx, store.IsTeacherInCenterParams{
+			UserID:       req.UserID,
+			MathCenterID: group.MathCenterID,
+		})
+		if err != nil {
+			logger.LogErrorContext(ctx, "admin/mc: add-student teacher check", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to add student")
+			return
+		}
+		if isTeacher {
+			httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "user is a teacher of this center and cannot also be a student there")
+			return
+		}
+
+		s, err := q.AddStudentToGroup(ctx, store.AddStudentToGroupParams{
 			UserID:  req.UserID,
 			GroupID: req.GroupID,
 		})
@@ -204,10 +249,17 @@ func AddStudent(database *db.DB) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "user or group does not exist")
 				return
 			}
-			logger.LogErrorContext(r.Context(), "admin/mc: add student", err)
+			logger.LogErrorContext(ctx, "admin/mc: add student", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to add student")
 			return
 		}
+
+		if err := tx.Commit(ctx); err != nil {
+			logger.LogErrorContext(ctx, "admin/mc: commit add-student tx", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
+
 		httpx.WriteJSON(w, http.StatusCreated, s)
 	}
 }
@@ -261,8 +313,14 @@ func ListTeachersForCenter(database *db.DB) http.HandlerFunc {
 	}
 }
 
+// AddTeacher enrolls a user as a teacher of a center. Roles are mutually
+// exclusive per center (see AddStudent): reject the request if the user is
+// already a student of this center, then insert — both in one transaction to
+// close the TOCTOU window against a concurrent AddStudent.
 func AddTeacher(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
 		centerID, err := pathInt64(r, "id")
 		if err != nil {
 			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid id")
@@ -277,7 +335,31 @@ func AddTeacher(database *db.DB) http.HandlerFunc {
 			return
 		}
 
-		t, err := store.New(database.Pool()).AddTeacherToCenter(r.Context(), store.AddTeacherToCenterParams{
+		tx, err := database.Pool().Begin(ctx)
+		if err != nil {
+			logger.LogErrorContext(ctx, "admin/mc: begin add-teacher tx", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+
+		q := store.New(tx)
+
+		isStudent, err := q.IsStudentInCenter(ctx, store.IsStudentInCenterParams{
+			UserID:       req.UserID,
+			MathCenterID: centerID,
+		})
+		if err != nil {
+			logger.LogErrorContext(ctx, "admin/mc: add-teacher student check", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to add teacher")
+			return
+		}
+		if isStudent {
+			httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "user is a student of this center and cannot also teach it")
+			return
+		}
+
+		t, err := q.AddTeacherToCenter(ctx, store.AddTeacherToCenterParams{
 			UserID:        req.UserID,
 			MathCenterID:  centerID,
 			IsHeadTeacher: req.IsHeadTeacher,
@@ -291,10 +373,17 @@ func AddTeacher(database *db.DB) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "user or center does not exist")
 				return
 			}
-			logger.LogErrorContext(r.Context(), "admin/mc: add teacher", err)
+			logger.LogErrorContext(ctx, "admin/mc: add teacher", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to add teacher")
 			return
 		}
+
+		if err := tx.Commit(ctx); err != nil {
+			logger.LogErrorContext(ctx, "admin/mc: commit add-teacher tx", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
+
 		httpx.WriteJSON(w, http.StatusCreated, t)
 	}
 }

@@ -197,7 +197,8 @@ func TestGrade_AdminCanOverrideAppealStickiness(t *testing.T) {
 		WillReturnRows(mock.NewRows(threadColumns).AddRow(threadRow(1, 7, 900, 100, 42, threadRowOpts{
 			Status: "appealed", AttemptEventID: &attemptID, LastGraderID: &originalGrader,
 		}, now)...))
-	expectTeacherCheck(mock, 4, 42, true)
+	// Admin is a teacher superset: requireTeacher short-circuits without an
+	// IsTeacherInCenter query, so we deliberately do not expect one here.
 
 	verdict := "accepted"
 	mock.ExpectBegin()

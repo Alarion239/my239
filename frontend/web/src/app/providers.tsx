@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react'
 import { apiClient } from '../lib/api'
 import { ThemeProvider } from '../design/theme-provider'
 import { AuthProvider } from '../auth/auth-context'
+import { ImpersonationProvider } from '../auth/impersonation-context'
 
 // AppProviders wires the whole context stack: theme, the React Query cache, the
 // shared ApiClient, and the derived auth session.
@@ -24,7 +25,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
         <ApiClientProvider client={apiClient}>
-          <AuthProvider>{children}</AuthProvider>
+          <ImpersonationProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </ImpersonationProvider>
         </ApiClientProvider>
       </QueryClientProvider>
     </ThemeProvider>

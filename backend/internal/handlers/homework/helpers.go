@@ -41,7 +41,15 @@ func callerIsAdmin(r *http.Request) bool {
 
 // requireTeacher enforces "caller teaches this center"; returns false and
 // emits an error envelope if not. Used by every grader-facing handler.
+//
+// Admin is a true superset of teacher: an admin grades/retracts/manages ANY
+// center without being enrolled in it. callerIsAdmin reads the EFFECTIVE
+// is_admin from context, so when an admin impersonates a non-admin (see
+// middleware.ImpersonationMiddleware) the bypass correctly does not apply.
 func requireTeacher(ctx context.Context, w http.ResponseWriter, r *http.Request, q *store.Queries, userID, centerID int64) bool {
+	if callerIsAdmin(r) {
+		return true
+	}
 	isTeacher, err := q.IsTeacherInCenter(ctx, store.IsTeacherInCenterParams{
 		UserID: userID, MathCenterID: centerID,
 	})

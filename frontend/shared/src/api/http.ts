@@ -35,6 +35,9 @@ export interface RequestOptions {
   method?: string
   body?: unknown
   token?: string | null
+  // Extra headers merged on top of the built ones (Content-Type, Authorization).
+  // Used for cross-cutting headers like admin act-as impersonation.
+  headers?: Record<string, string>
 }
 
 // request performs a JSON HTTP call against `${baseURL}${path}`, attaches a
@@ -49,6 +52,7 @@ export async function request<T>(
   const headers: Record<string, string> = {}
   if (opts.body !== undefined) headers['Content-Type'] = 'application/json'
   if (opts.token) headers['Authorization'] = `Bearer ${opts.token}`
+  if (opts.headers) Object.assign(headers, opts.headers)
 
   const res = await fetch(`${baseURL}${path}`, {
     method: opts.method ?? (opts.body !== undefined ? 'POST' : 'GET'),

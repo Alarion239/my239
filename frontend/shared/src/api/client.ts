@@ -26,6 +26,10 @@ export class ApiClient {
   private readonly baseURL: string
   private readonly tokenStore: TokenStore
   private accessToken: string | null = null
+  // Admin impersonation: when set, every domain request carries
+  // X-Act-As-User-Id so the backend resolves the acted-as user. Auth endpoints
+  // (login/register/refresh/logout) intentionally never carry it.
+  private actingAsUserId: number | null = null
   // Single-flight guard: concurrent requests that all 401 share one refresh
   // instead of stampeding /auth/refresh (which would rotate the token N times
   // and invalidate every in-flight attempt but the first).
@@ -36,19 +40,33 @@ export class ApiClient {
     this.tokenStore = opts.tokenStore
   }
 
+  // setActingAs toggles admin impersonation. Pass a user id to act as that
+  // user on subsequent domain requests, or null to act as oneself again.
+  setActingAs(userId: number | null): void {
+    this.actingAsUserId = userId
+  }
+
+  // actingAsHeaders returns the impersonation header when active, else nothing.
+  private actingAsHeaders(): Record<string, string> | undefined {
+    if (this.actingAsUserId === null) return undefined
+    return { 'X-Act-As-User-Id': String(this.actingAsUserId) }
+  }
+
   // request is the JSON workhorse: try with the current access token, and on a
-  // 401 refresh once and retry. A second 401 propagates to the caller.
+  // 401 refresh once and retry. A second 401 propagates to the caller. The
+  // act-as header (when set) rides along on every call routed through here.
   async request<T>(
     path: string,
     opts: { method?: string; body?: unknown } = {},
   ): Promise<T> {
+    const headers = this.actingAsHeaders()
     try {
-      return await request<T>(this.baseURL, path, { ...opts, token: this.accessToken })
+      return await request<T>(this.baseURL, path, { ...opts, token: this.accessToken, headers })
     } catch (e) {
       if (e instanceof APIErrorImpl && e.status === 401) {
         const fresh = await this.refresh()
         if (fresh) {
-          return await request<T>(this.baseURL, path, { ...opts, token: fresh })
+          return await request<T>(this.baseURL, path, { ...opts, token: fresh, headers })
         }
       }
       throw e
