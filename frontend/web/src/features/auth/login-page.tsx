@@ -21,6 +21,10 @@ export function LoginPage() {
     defaultValues: { username: '', password: '' },
   })
 
+  // Usernames are lowercase-only (the backend lowercases on store). Mirror that
+  // in the field so the user sees and submits the normalised value.
+  const usernameField = register('username')
+
   const onSubmit = handleSubmit((values) => {
     setFormError(null)
     return new Promise<void>((resolve) => {
@@ -66,7 +70,11 @@ export function LoginPage() {
               invalid={invalid}
               autoComplete="username"
               autoFocus
-              {...register('username')}
+              {...usernameField}
+              onChange={(e) => {
+                e.target.value = e.target.value.toLowerCase()
+                return usernameField.onChange(e)
+              }}
             />
           )}
         </Field>

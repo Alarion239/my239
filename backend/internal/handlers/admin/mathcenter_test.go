@@ -143,6 +143,44 @@ func TestCreateMathCenterAccount_Success(t *testing.T) {
 	}
 }
 
+// TestCreateMathCenterAccount_UsernameLowercased verifies a mixed-case
+// username on the admin-provisioned shared account is normalized to lowercase
+// before insert, consistent with the rest of the platform.
+func TestCreateMathCenterAccount_UsernameLowercased(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access := newAdminRouter(t, mock)
+
+	now := time.Now()
+	mock.ExpectBegin()
+	// The mock only matches if CreateMathCenterAccount receives the lowercased
+	// username.
+	mock.ExpectQuery(`INSERT INTO users`).
+		WithArgs("mc-room-1", pgxmock.AnyArg(), "Room", (*string)(nil), "101").
+		WillReturnRows(mock.NewRows(userColumns).
+			AddRow(int64(42), "mc-room-1", "argon2idhash", "Room", (*string)(nil), "101", (*int64)(nil), now, now, false, true))
+	mock.ExpectQuery(`INSERT INTO math_center_teachers`).
+		WithArgs(int64(42), int64(9), true).
+		WillReturnRows(mock.NewRows(teacherColumns).
+			AddRow(int64(5), int64(42), int64(9), true, now))
+	mock.ExpectCommit()
+
+	body := accountBody(t, map[string]any{
+		"username": "MC-Room-1", "password": "classpass1", "first_name": "Room", "last_name": "101",
+	})
+	req := adminRequest(t, access, true, http.MethodPost, "/mathcenter/9/accounts", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("status: got %d, body=%s", rr.Code, rr.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
 func TestCreateMathCenterAccount_UsernameTaken(t *testing.T) {
 	t.Parallel()
 	mock, _ := pgxmock.NewPool()

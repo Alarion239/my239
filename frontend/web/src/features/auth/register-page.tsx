@@ -33,6 +33,10 @@ export function RegisterPage() {
     },
   })
 
+  // Usernames are lowercase-only (the backend lowercases on store). Mirror that
+  // in the field so the user sees and submits the normalised value.
+  const usernameField = register('username')
+
   const onSubmit = handleSubmit((values) => {
     setFormError(null)
     // Normalise an empty optional middle name to undefined for the backend.
@@ -101,7 +105,16 @@ export function RegisterPage() {
 
         <Field label="Имя пользователя" error={errors.username?.message}>
           {({ id, invalid }) => (
-            <Input id={id} invalid={invalid} autoComplete="username" {...register('username')} />
+            <Input
+              id={id}
+              invalid={invalid}
+              autoComplete="username"
+              {...usernameField}
+              onChange={(e) => {
+                e.target.value = e.target.value.toLowerCase()
+                return usernameField.onChange(e)
+              }}
+            />
           )}
         </Field>
 

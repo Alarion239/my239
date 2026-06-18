@@ -13,6 +13,7 @@ type Querier interface {
 	AddTeacherToCenter(ctx context.Context, arg AddTeacherToCenterParams) (MathCenterTeacher, error)
 	AppendEvent(ctx context.Context, arg AppendEventParams) (HomeworkThreadEvent, error)
 	ClearSeriesTex(ctx context.Context, id int64) (MathCenterSeries, error)
+	CountUsers(ctx context.Context) (int64, error)
 	// The cast keeps the parameter a plain int64: invitation_token_id is nullable
 	// on the column (MathCenter accounts have none), but callers always count a
 	// concrete token here.

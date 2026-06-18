@@ -3,6 +3,7 @@ package auth
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -44,7 +45,11 @@ func Login(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 			return
 		}
 
-		user, err := store.New(database.Pool()).GetUserByUsername(ctx, req.Username)
+		// Usernames are stored lowercase (see register), so normalize the
+		// lookup key to match regardless of how the user typed it.
+		username := strings.ToLower(strings.TrimSpace(req.Username))
+
+		user, err := store.New(database.Pool()).GetUserByUsername(ctx, username)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				httpx.WriteAPIError(w, r, http.StatusUnauthorized, httpx.CodeInvalidCredentials, "invalid username or password")

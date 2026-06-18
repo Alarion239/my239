@@ -17,6 +17,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/Alarion239/my239/backend/internal/auth"
+	"github.com/Alarion239/my239/backend/internal/bootstrap"
 	"github.com/Alarion239/my239/backend/internal/config"
 	adminHandlers "github.com/Alarion239/my239/backend/internal/handlers/admin"
 	authHandlers "github.com/Alarion239/my239/backend/internal/handlers/auth"
@@ -26,6 +27,7 @@ import (
 	"github.com/Alarion239/my239/backend/internal/logger"
 	"github.com/Alarion239/my239/backend/internal/metrics"
 	"github.com/Alarion239/my239/backend/internal/middleware"
+	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/pkg/db"
 	"github.com/Alarion239/my239/backend/pkg/objectstore"
 	"github.com/Alarion239/my239/backend/pkg/ratelimit"
@@ -62,6 +64,13 @@ func run() error {
 		return err
 	}
 	defer database.Close()
+
+	// On a fresh deployment (zero users) mint a single-use invitation token so
+	// the operator can register the first admin. Non-fatal: the users table may
+	// not exist yet if migrations haven't run, and that must not stop serving.
+	if err := bootstrap.EnsureAdminInviteToken(rootCtx, store.New(database.Pool())); err != nil {
+		logger.LogError("bootstrap admin token", err)
+	}
 
 	tokens, err := auth.NewTokenService(auth.TokenServiceConfig{
 		AccessConfig: &auth.AccessTokenConfig{

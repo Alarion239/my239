@@ -131,6 +131,37 @@ func TestLogin_Success(t *testing.T) {
 	}
 }
 
+// TestLogin_UsernameLowercased verifies a mixed-case login username is
+// normalized to lowercase before GetUserByUsername, matching how usernames are
+// stored.
+func TestLogin_UsernameLowercased(t *testing.T) {
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+
+	now := time.Now()
+	// The mock only matches if the query is issued with the lowercased value.
+	mock.ExpectQuery(`SELECT .* FROM users WHERE username = \$1`).
+		WithArgs("alice").
+		WillReturnRows(mock.NewRows(userColumns).
+			AddRow(int64(1), "alice", fastHash(t, "password123"), "Alice", (*string)(nil), "Doe", ptrInt64(1), now, now, false, false))
+	expectRefreshInsert(t, mock, 1)
+
+	body, _ := json.Marshal(map[string]string{"username": "ALICE", "password": "password123"})
+	req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	database := db.NewWithPool(mock)
+	authHandlers.Login(database, newTokens(t, database))(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status: got %d, body=%s", rr.Code, rr.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled: %v", err)
+	}
+}
+
 func TestLogin_PasswordHashIsNotInResponse(t *testing.T) {
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()

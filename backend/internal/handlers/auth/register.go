@@ -3,6 +3,7 @@ package auth
 import (
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -91,8 +92,13 @@ func Register(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 			return
 		}
 
+		// Usernames are stored and looked up case-insensitively: normalize to
+		// lowercase here so registration, login and the DB CHECK constraint all
+		// agree (validation above already guaranteed it is alphanumeric).
+		username := strings.ToLower(strings.TrimSpace(req.Username))
+
 		user, err := q.CreateUser(ctx, store.CreateUserParams{
-			Username:          req.Username,
+			Username:          username,
 			PasswordHash:      passwordHash,
 			FirstName:         req.FirstName,
 			MiddleName:        req.MiddleName,

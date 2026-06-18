@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -497,8 +498,12 @@ func CreateMathCenterAccount(database *db.DB) http.HandlerFunc {
 
 		q := store.New(tx)
 
+		// Usernames are stored lowercase platform-wide (see auth/register), so
+		// the shared MathCenter login is normalized the same way before insert.
+		username := strings.ToLower(strings.TrimSpace(req.Username))
+
 		user, err := q.CreateMathCenterAccount(ctx, store.CreateMathCenterAccountParams{
-			Username:     req.Username,
+			Username:     username,
 			PasswordHash: passwordHash,
 			FirstName:    req.FirstName,
 			MiddleName:   req.MiddleName,
