@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/Alarion239/my239/backend/internal/config"
 	"github.com/Alarion239/my239/backend/internal/ctxcache"
 	"github.com/Alarion239/my239/backend/internal/httpx"
 	"github.com/Alarion239/my239/backend/internal/logger"
@@ -112,16 +113,7 @@ func CreateSeries(database *db.DB) http.HandlerFunc {
 		}
 
 		q := store.New(database.Pool())
-		isTeacher, err := q.IsTeacherInCenter(ctx, store.IsTeacherInCenterParams{
-			UserID: userID, MathCenterID: centerID,
-		})
-		if err != nil {
-			logger.LogErrorContext(ctx, "series: teacher check", err)
-			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
-			return
-		}
-		if !isTeacher {
-			httpx.WriteAPIError(w, r, http.StatusForbidden, httpx.CodeForbidden, "not a teacher of this center")
+		if !requireTeacher(ctx, w, r, q, userID, centerID) {
 			return
 		}
 
@@ -191,7 +183,7 @@ func ListSeriesForCenter(database *db.DB) http.HandlerFunc {
 		}
 
 		q := store.New(database.Pool())
-		isTeacher, isStudent, err := membership(ctx, q, userID, centerID)
+		isTeacher, isStudent, err := membership(ctx, r, q, userID, centerID)
 		if err != nil {
 			logger.LogErrorContext(ctx, "series: membership", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
@@ -251,7 +243,7 @@ func GetSeries(database *db.DB) http.HandlerFunc {
 			return
 		}
 
-		isTeacher, isStudent, err := membership(ctx, q, userID, series.MathCenterID)
+		isTeacher, isStudent, err := membership(ctx, r, q, userID, series.MathCenterID)
 		if err != nil {
 			logger.LogErrorContext(ctx, "series: membership", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
@@ -588,7 +580,7 @@ func DownloadSeriesPDF(database *db.DB, blobs objectstore.Store, ttl time.Durati
 			return
 		}
 
-		isTeacher, isStudent, err := membership(ctx, q, userID, series.MathCenterID)
+		isTeacher, isStudent, err := membership(ctx, r, q, userID, series.MathCenterID)
 		if err != nil {
 			logger.LogErrorContext(ctx, "series: membership", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
@@ -765,7 +757,7 @@ func GetSeriesTex(database *db.DB) http.HandlerFunc {
 			return
 		}
 
-		isTeacher, isStudent, err := membership(ctx, q, userID, series.MathCenterID)
+		isTeacher, isStudent, err := membership(ctx, r, q, userID, series.MathCenterID)
 		if err != nil {
 			logger.LogErrorContext(ctx, "series: membership for tex", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
@@ -821,7 +813,26 @@ func pathInt64(r *http.Request, key string) (int64, error) {
 	return strconv.ParseInt(chi.URLParam(r, key), 10, 64)
 }
 
-func membership(ctx context.Context, q *store.Queries, userID, centerID int64) (teacher, student bool, err error) {
+// callerIsAdmin reads the is_admin flag set by AuthMiddleware (and, under
+// act-as, overwritten by ImpersonationMiddleware with the impersonated user's
+// flag). We trust the JWT here — the 15-min access TTL is short enough that a
+// demoted admin loses access quickly. Mirrors homework/helpers.go.
+func callerIsAdmin(r *http.Request) bool {
+	v, _ := r.Context().Value(config.CtxKeyIsAdmin).(bool)
+	return v
+}
+
+// membership reports whether the caller teaches and/or studies at the center.
+//
+// Admin is a true superset of teacher: an admin manages ANY center without
+// being enrolled, so we report teacher=true (and skip the DB lookups). Student
+// stays false — an admin acts with teacher powers, not student powers, which is
+// the broader visibility anyway. callerIsAdmin reads the EFFECTIVE is_admin, so
+// when an admin impersonates a non-admin the bypass correctly does not apply.
+func membership(ctx context.Context, r *http.Request, q *store.Queries, userID, centerID int64) (teacher, student bool, err error) {
+	if callerIsAdmin(r) {
+		return true, false, nil
+	}
 	teacher, err = q.IsTeacherInCenter(ctx, store.IsTeacherInCenterParams{
 		UserID: userID, MathCenterID: centerID,
 	})
@@ -840,7 +851,16 @@ func membership(ctx context.Context, q *store.Queries, userID, centerID int64) (
 // requireTeacher gates teacher-only routes. Returns true if the request can
 // continue; otherwise it has already written a 403/500 and the caller should
 // just return.
+//
+// Admin is a true superset of teacher: an admin creates/edits/deletes series
+// and uploads PDF/TeX for ANY center without being enrolled as a teacher of it.
+// callerIsAdmin reads the EFFECTIVE is_admin from context, so when an admin
+// impersonates a non-admin (see middleware.ImpersonationMiddleware) the bypass
+// correctly does not apply. Mirrors homework/helpers.go requireTeacher.
 func requireTeacher(ctx context.Context, w http.ResponseWriter, r *http.Request, q *store.Queries, userID, centerID int64) bool {
+	if callerIsAdmin(r) {
+		return true
+	}
 	isTeacher, err := q.IsTeacherInCenter(ctx, store.IsTeacherInCenterParams{
 		UserID: userID, MathCenterID: centerID,
 	})

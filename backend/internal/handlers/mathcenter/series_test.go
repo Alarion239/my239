@@ -52,8 +52,21 @@ func newAccess(t *testing.T) *internalAuth.AccessTokenService {
 // user id, so AuthMiddleware accepts it and ctxcache.UserID returns userID.
 func authedRequest(t *testing.T, access *internalAuth.AccessTokenService, userID int64, method, path string, body io.Reader) *http.Request {
 	t.Helper()
+	return tokenRequest(t, access, userID, false, method, path, body)
+}
+
+// authedAdminRequest is like authedRequest but mints a token whose is_admin
+// claim is true, so callerIsAdmin (config.CtxKeyIsAdmin) reports true and the
+// admin teacher-superset bypass applies.
+func authedAdminRequest(t *testing.T, access *internalAuth.AccessTokenService, userID int64, method, path string, body io.Reader) *http.Request {
+	t.Helper()
+	return tokenRequest(t, access, userID, true, method, path, body)
+}
+
+func tokenRequest(t *testing.T, access *internalAuth.AccessTokenService, userID int64, isAdmin bool, method, path string, body io.Reader) *http.Request {
+	t.Helper()
 	req := httptest.NewRequest(method, path, body)
-	tok, err := access.Generate(userID, fmt.Sprintf("user%d", userID), false)
+	tok, err := access.Generate(userID, fmt.Sprintf("user%d", userID), isAdmin)
 	if err != nil {
 		t.Fatalf("generate token: %v", err)
 	}
@@ -228,6 +241,94 @@ func TestCreateSeries_TeacherSucceeds(t *testing.T) {
 	subs := first["subproblems"].([]any)
 	if len(subs) != 2 || subs[0] != "a" || subs[1] != "b" {
 		t.Errorf("subproblems: got %v", subs)
+	}
+}
+
+// TestCreateSeries_AdminBypassesEnrollment proves the admin teacher-superset:
+// an admin (is_admin via JWT) who is NOT enrolled as a teacher of the center
+// can still create a series. The proof is in the expectations — NO
+// math_center_teachers lookup is set up, so requireTeacher MUST short-circuit
+// on callerIsAdmin or the test fails on an unexpected query.
+func TestCreateSeries_AdminBypassesEnrollment(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	due := now.Add(48 * time.Hour)
+
+	// No teacher check is expected: the admin bypass skips it entirely.
+	mock.ExpectBegin()
+	mock.ExpectQuery(`INSERT INTO math_center_series`).
+		WithArgs(int64(42), int32(1), "Админ-серия", pgxmock.AnyArg()).
+		WillReturnRows(mock.NewRows(seriesColumns).
+			AddRow(int64(100), int64(42), int32(1), "Админ-серия", due, (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
+	// One problem declared with 0 real subparts -> sentinel subproblem (label='').
+	mock.ExpectQuery(`INSERT INTO math_center_problems`).
+		WithArgs(int64(100), int32(1)).
+		WillReturnRows(mock.NewRows(problemColumns).AddRow(int64(500), int64(100), int32(1), now))
+	mock.ExpectQuery(`INSERT INTO math_center_subproblems`).
+		WithArgs(int64(500), "").
+		WillReturnRows(mock.NewRows([]string{"id", "problem_id", "label", "created_at"}).AddRow(int64(900), int64(500), "", now))
+	mock.ExpectCommit()
+	mock.ExpectQuery(`SELECT .* FROM math_center_problems WHERE series_id`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(problemColumns).AddRow(int64(500), int64(100), int32(1), now))
+	mock.ExpectQuery(`FROM math_center_subproblems s\s+JOIN math_center_problems`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(subproblemRowColumns).AddRow(int64(900), int64(500), ""))
+
+	body, _ := json.Marshal(map[string]any{
+		"number": 1, "name": "Админ-серия", "due_at": due,
+		"problems": []map[string]int{{"number": 1, "subproblem_count": 0}},
+	})
+	// user 9 is an admin but is NOT enrolled as a teacher of center 42.
+	req := authedAdminRequest(t, access, 9, http.MethodPost, "/centers/42/series", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("got %d, want 201; body=%s", rr.Code, rr.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+// TestGetSeries_AdminSeesDraft proves the read side of the superset: an
+// unenrolled admin gets teacher-level visibility, so a draft series (no
+// published_at) returns 200 rather than the 404 a student would get. No
+// membership lookups are expected — membership() short-circuits on admin.
+func TestGetSeries_AdminSeesDraft(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(seriesColumns).
+			AddRow(int64(100), int64(42), int32(1), "Черновик", now.Add(time.Hour), (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
+	// buildSeriesView reads problems + subproblems for the single series.
+	mock.ExpectQuery(`SELECT .* FROM math_center_problems WHERE series_id`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(problemColumns))
+	mock.ExpectQuery(`FROM math_center_subproblems s\s+JOIN math_center_problems`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(subproblemRowColumns))
+
+	req := authedAdminRequest(t, access, 9, http.MethodGet, "/series/100", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("admin should see draft: got %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }
 
