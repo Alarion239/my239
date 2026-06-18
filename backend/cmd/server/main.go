@@ -101,7 +101,7 @@ func run() error {
 	r := chi.NewRouter()
 
 	r.Use(chiMiddleware.RequestID)
-	r.Use(chiMiddleware.RealIP)
+	r.Use(middleware.RealIPMiddleware)
 	r.Use(chiMiddleware.Recoverer)
 	r.Use(middleware.LoggerMiddleware)
 	r.Use(middleware.SecurityHeadersMiddleware)
