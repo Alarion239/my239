@@ -2,7 +2,7 @@
 // run unchanged on web and React Native — UI and routing stay platform-specific.
 
 import { useQuery } from '@tanstack/react-query'
-import type { MeResponse, User } from '../types'
+import type { MeResponse } from '../types'
 import { useApiClient } from './context'
 import { queryKeys } from './keys'
 
@@ -15,15 +15,5 @@ export function useMathCenterMe() {
     queryKey: queryKeys.mathCenterMe,
     queryFn: () => client.request<MeResponse>('/mathcenter/me'),
     staleTime: 60_000,
-  })
-}
-
-// useAdminUsers backs the web "View as" picker: the full user list an admin can
-// impersonate. Admin-gated server-side; non-admins get a 401/403.
-export function useAdminUsers() {
-  const client = useApiClient()
-  return useQuery<User[]>({
-    queryKey: queryKeys.adminUsers,
-    queryFn: () => client.request<User[]>('/admin/users'),
   })
 }

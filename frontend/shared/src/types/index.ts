@@ -111,3 +111,34 @@ export interface MeResponse {
   teacher?: TeacherView | null
   student?: StudentView | null
 }
+
+// --- Admin -------------------------------------------------------------------
+// Wire types for the admin endpoints (all under /admin, admin-gated). Keep in
+// sync with backend/internal/handlers/admin.
+
+// InvitationToken mirrors the admin TokenView: a registration invite with a
+// usage quota and an expiry. The raw token string is only exposed to admins.
+export interface InvitationToken {
+  id: number
+  token: string
+  description: string
+  max_uses: number
+  uses: number
+  expires_at: string
+  created_at: string
+}
+
+// MathCenter is a cohort grouped by graduation year.
+export interface MathCenter {
+  id: number
+  graduation_year: number
+  created_at: string
+}
+
+// MathCenterGroup is a named group within a math center.
+export interface MathCenterGroup {
+  id: number
+  math_center_id: number
+  name: string
+  created_at: string
+}
