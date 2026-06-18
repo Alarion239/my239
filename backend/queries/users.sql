@@ -37,6 +37,9 @@ SELECT COUNT(*)
 FROM users
 WHERE invitation_token_id = sqlc.arg(token_id)::bigint;
 
+-- name: CountUsers :one
+SELECT count(*) FROM users;
+
 -- name: ListUsers :many
 SELECT *
 FROM users

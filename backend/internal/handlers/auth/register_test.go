@@ -79,6 +79,53 @@ func TestRegister_Success(t *testing.T) {
 	}
 }
 
+// TestRegister_UsernameLowercased verifies the handler normalizes a mixed-case
+// username to lowercase before it reaches CreateUser, so the stored value and
+// the users_username_lowercase CHECK constraint agree.
+func TestRegister_UsernameLowercased(t *testing.T) {
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+
+	now := time.Now()
+	mock.ExpectBegin()
+	mock.ExpectQuery(`FOR UPDATE`).
+		WithArgs("invite-abc").
+		WillReturnRows(mock.NewRows(invitationTokenColumns).
+			AddRow(int64(1), "invite-abc", "test invite", int32(5), now.Add(24*time.Hour), now))
+	mock.ExpectQuery(`SELECT COUNT`).
+		WithArgs(int64(1)).
+		WillReturnRows(mock.NewRows([]string{"count"}).AddRow(int64(0)))
+	// The mock only matches if CreateUser receives the lowercased username.
+	mock.ExpectQuery(`INSERT INTO users`).
+		WithArgs("mixedcase", pgxmock.AnyArg(), "New", (*string)(nil), "User", ptrInt64(1)).
+		WillReturnRows(mock.NewRows(userColumns).
+			AddRow(int64(42), "mixedcase", "argon2idhash", "New", (*string)(nil), "User", ptrInt64(1), now, now, false, false))
+	mock.ExpectCommit()
+	expectRefreshInsert(t, mock, 42)
+
+	body, _ := json.Marshal(map[string]any{
+		"username":         "MixedCase",
+		"password":         "password123",
+		"invitation_token": "invite-abc",
+		"first_name":       "New",
+		"middle_name":      nil,
+		"last_name":        "User",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	database := db.NewWithPool(mock)
+	authHandlers.Register(database, newTokens(t, database))(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("status: got %d, body=%s", rr.Code, rr.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled: %v", err)
+	}
+}
+
 func TestRegister_TokenNotFound(t *testing.T) {
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()

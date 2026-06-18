@@ -38,6 +38,16 @@ describe('LoginPage', () => {
     expect(await screen.findByText('Введите пароль')).toBeInTheDocument()
   })
 
+  it('lowercases the username as the user types', async () => {
+    const user = userEvent.setup()
+    renderLogin()
+
+    const username = screen.getByLabelText('Имя пользователя') as HTMLInputElement
+    await user.type(username, 'IVAN')
+
+    expect(username.value).toBe('ivan')
+  })
+
   it('renders the link to registration', () => {
     renderLogin()
     expect(screen.getByRole('link', { name: 'Зарегистрироваться' })).toHaveAttribute(
