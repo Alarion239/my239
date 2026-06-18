@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -58,6 +59,9 @@ func EnsureAdminInviteToken(ctx context.Context, q *store.Queries) error {
 		Description: bootstrapTokenDescription,
 		MaxUses:     1,
 		ExpiresAt:   expiresAt,
+		// Empty preset: the first registrant is promoted to admin by the
+		// ensure_first_user_is_admin DB trigger, not by a preset grant.
+		Preset: json.RawMessage(`{}`),
 	})
 	if err != nil {
 		return fmt.Errorf("creating bootstrap token: %w", err)

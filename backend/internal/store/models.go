@@ -5,6 +5,7 @@
 package store
 
 import (
+	"encoding/json"
 	"time"
 )
 
@@ -46,12 +47,13 @@ type HomeworkThreadEventPhoto struct {
 }
 
 type InvitationToken struct {
-	ID          int64     `json:"id"`
-	Token       string    `json:"token"`
-	Description string    `json:"description"`
-	MaxUses     int32     `json:"max_uses"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID          int64           `json:"id"`
+	Token       string          `json:"token"`
+	Description string          `json:"description"`
+	MaxUses     int32           `json:"max_uses"`
+	ExpiresAt   time.Time       `json:"expires_at"`
+	CreatedAt   time.Time       `json:"created_at"`
+	Preset      json.RawMessage `json:"preset"`
 }
 
 type MathCenter struct {
