@@ -56,6 +56,7 @@ func Router(database *db.DB, tokens *internalAuth.TokenService, blobs objectstor
 	r.Get("/series/{seriesID}/my", MySeriesRollup(database))
 	r.Get("/series/{seriesID}/queue", GraderQueue(database))
 	r.Get("/series/{seriesID}/grid", TeacherGrid(database))
+	r.Get("/series/{seriesID}/problem-stats", ProblemStats(database))
 
 	// Center-scoped dashboards.
 	r.Get("/centers/{centerID}/grader-stats", GraderStats(database))

@@ -5,7 +5,8 @@ import { LoginPage } from '../features/auth/login-page'
 import { RegisterPage } from '../features/auth/register-page'
 import { HomePage } from '../features/home/home-page'
 import { ProfilePage } from '../features/profile/profile-page'
-import { MathCenterPage } from '../features/mathcenter/mathcenter-page'
+import { SeriesPage } from '../features/mathcenter/series-page'
+import { SubmissionPlaceholder } from '../features/mathcenter/submission-placeholder'
 import { UsersPage } from '../features/admin/users-page'
 import { MathCentersPage } from '../features/admin/math-centers-page'
 
@@ -25,7 +26,11 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <HomePage /> },
           { path: 'profile', element: <ProfilePage /> },
-          { path: 'mathcenter', element: <MathCenterPage /> },
+          { path: 'mathcenter', element: <SeriesPage /> },
+          {
+            path: 'mathcenter/series/:seriesId/submit/:subproblemId',
+            element: <SubmissionPlaceholder />,
+          },
           {
             element: <RequireRole roles={['admin']} />,
             children: [

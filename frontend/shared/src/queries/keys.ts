@@ -8,4 +8,11 @@ export const queryKeys = {
   adminCenters: ['admin', 'mathcenters'] as const,
   centerGroups: (centerId: number) =>
     ['admin', 'mathcenters', centerId, 'groups'] as const,
+  seriesList: (centerId: number) =>
+    ['mathcenter', 'centers', centerId, 'series'] as const,
+  series: (id: number) => ['mathcenter', 'series', id] as const,
+  seriesTex: (id: number) => ['mathcenter', 'series', id, 'tex'] as const,
+  myRollup: (id: number) => ['homework', 'series', id, 'my'] as const,
+  problemStats: (id: number) =>
+    ['homework', 'series', id, 'problem-stats'] as const,
 }

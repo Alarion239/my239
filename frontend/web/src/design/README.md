@@ -89,6 +89,22 @@ Pairing rule: text on a tinted fill uses the matching `*-ink`/semantic token,
 never plain black/grey — e.g. `bg-accent-soft text-accent-ink`,
 `bg-danger-soft text-danger`.
 
+### Homework status colours
+
+Math Center homework has five grading states. Each maps to an abstract `tone`
+(from `homeworkStatusMeta(status)` in `@my239/shared`) which the web layer
+resolves to a warm, scholarly token pair: a `status-x` ink colour and a
+`status-x-soft` fill, so `bg-status-x-soft text-status-x` reads correctly in
+both themes. Used by [`StatusTile` / `StatusLegend`](./ui/status-tile.tsx).
+
+| Tone | Token | Soft fill | Meaning (RU) |
+| --- | --- | --- | --- |
+| `accepted` | `status-accepted` (warm green) | `status-accepted-soft` | Принято |
+| `checking` | `status-checking` (amber) | `status-checking-soft` | Проверяется |
+| `rejected` | `status-rejected` (oxblood) | `status-rejected-soft` | Отклонено |
+| `appeal` | `status-appeal` (warm plum) | `status-appeal-soft` | Апелляция |
+| `unsolved` | `status-unsolved` (neutral) | `status-unsolved-soft` | Не решено |
+
 ---
 
 ## Theming (light / dark)

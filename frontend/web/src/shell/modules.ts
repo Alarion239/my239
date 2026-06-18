@@ -35,7 +35,8 @@ export const modules: ModuleDef[] = [
     path: '/mathcenter',
     icon: FunctionSquare,
     status: 'active',
-    pages: [{ label: 'Обзор', path: '/mathcenter', end: true }],
+    // The "Проверка" (grading) tab is added in a later workflow.
+    pages: [{ label: 'Серии', path: '/mathcenter', end: true }],
   },
   {
     id: 'admin',

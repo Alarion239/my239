@@ -510,6 +510,65 @@ func (q *Queries) ReleaseClaim(ctx context.Context, arg ReleaseClaimParams) (int
 	return result.RowsAffected(), nil
 }
 
+const seriesProblemStats = `-- name: SeriesProblemStats :many
+SELECT
+    mcs.user_id                            AS student_user_id,
+    p.id                                   AS problem_id,
+    p.number                               AS problem_number,
+    sp.id                                  AS subproblem_id,
+    COALESCE(t.current_status, 'ungraded') AS current_status
+FROM math_center_students mcs
+         JOIN math_center_groups g ON g.id = mcs.group_id
+         CROSS JOIN math_center_subproblems sp
+         JOIN math_center_problems p ON p.id = sp.problem_id
+         LEFT JOIN homework_thread t
+                   ON t.student_user_id = mcs.user_id
+                  AND t.subproblem_id   = sp.id
+WHERE g.math_center_id = (SELECT s.math_center_id FROM math_center_series s WHERE s.id = $1)
+  AND p.series_id = $1
+ORDER BY p.number ASC, p.id ASC, mcs.user_id ASC, sp.label ASC
+`
+
+type SeriesProblemStatsRow struct {
+	StudentUserID int64  `json:"student_user_id"`
+	ProblemID     int64  `json:"problem_id"`
+	ProblemNumber int32  `json:"problem_number"`
+	SubproblemID  int64  `json:"subproblem_id"`
+	CurrentStatus string `json:"current_status"`
+}
+
+// One row per (student × subproblem) for a whole series: the center roster
+// crossed with the series's subproblems, LEFT JOINed to that student's thread
+// so untouched subproblems still appear with status='ungraded'. The handler
+// folds these into per-(student,problem) precedence and per-problem counts.
+// Roster scoping mirrors TeacherSeriesGrid: every student of a group in the
+// series's math center.
+func (q *Queries) SeriesProblemStats(ctx context.Context, id int64) ([]SeriesProblemStatsRow, error) {
+	rows, err := q.db.Query(ctx, seriesProblemStats, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SeriesProblemStatsRow{}
+	for rows.Next() {
+		var i SeriesProblemStatsRow
+		if err := rows.Scan(
+			&i.StudentUserID,
+			&i.ProblemID,
+			&i.ProblemNumber,
+			&i.SubproblemID,
+			&i.CurrentStatus,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const studentSeriesCounts = `-- name: StudentSeriesCounts :one
 SELECT
     COUNT(*) FILTER (

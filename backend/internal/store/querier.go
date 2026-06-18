@@ -103,6 +103,13 @@ type Querier interface {
 	RevokeInvitationTokenByValue(ctx context.Context, token string) (int64, error)
 	RevokeRefreshTokenByID(ctx context.Context, id int64) error
 	RotateRefreshToken(ctx context.Context, arg RotateRefreshTokenParams) error
+	// One row per (student × subproblem) for a whole series: the center roster
+	// crossed with the series's subproblems, LEFT JOINed to that student's thread
+	// so untouched subproblems still appear with status='ungraded'. The handler
+	// folds these into per-(student,problem) precedence and per-problem counts.
+	// Roster scoping mirrors TeacherSeriesGrid: every student of a group in the
+	// series's math center.
+	SeriesProblemStats(ctx context.Context, id int64) ([]SeriesProblemStatsRow, error)
 	// Stores or replaces the raw LaTeX source. Also stamps published_at if
 	// the series wasn't already published, mirroring the PDF publish flow:
 	// a series with any rendered content is considered visible to students.
