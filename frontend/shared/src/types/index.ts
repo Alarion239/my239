@@ -143,6 +143,57 @@ export interface MathCenterGroup {
   created_at: string
 }
 
+// MathCenterTeacher mirrors store.MathCenterTeacher — the join row returned when
+// an admin enrolls a user as a teacher of a center.
+export interface MathCenterTeacher {
+  id: number
+  user_id: number
+  math_center_id: number
+  is_head_teacher: boolean
+  created_at: string
+}
+
+// MathCenterStudent mirrors store.MathCenterStudent — the join row returned when
+// an admin enrolls a user as a student of a group.
+export interface MathCenterStudent {
+  id: number
+  user_id: number
+  group_id: number
+  created_at: string
+}
+
+// --- Admin user management ---------------------------------------------------
+// Wire types for the admin "manage a single user" view: a user's teaching and
+// student enrollments across math centers. Keep in sync with
+// backend/internal/handlers/admin (GET /admin/users/{id}/enrollments).
+
+// TeacherEnrollment is one center a user teaches in, flattened for display.
+export interface TeacherEnrollment {
+  teacher_id: number
+  center_id: number
+  graduation_year: number
+  grade: number
+  is_head_teacher: boolean
+}
+
+// StudentEnrollment is the single group/center a user studies in (a user is a
+// student of at most one group), flattened for display.
+export interface StudentEnrollment {
+  student_id: number
+  center_id: number
+  group_id: number
+  group_name: string
+  graduation_year: number
+  grade: number
+}
+
+// UserEnrollments is the union of a user's roles: any number of teaching rows,
+// and at most one student row (null when the user is not a student).
+export interface UserEnrollments {
+  teaching: TeacherEnrollment[]
+  student: StudentEnrollment | null
+}
+
 // --- Math center "Серии" (homework series) -----------------------------------
 // Wire types for the series endpoints. Keep in sync with
 // backend/internal/handlers/mathcenter (seriesView) and the homework rollup /

@@ -102,6 +102,18 @@ FROM math_center_teachers t
 WHERE t.user_id = $1
 ORDER BY mc.graduation_year ASC;
 
+-- name: ListTeacherEnrollmentsForUser :many
+-- Like ListCentersForTeacher, but also returns the math_center_teachers row id
+-- (teacher_id) so the admin UI can remove an individual teaching enrollment.
+SELECT t.id              AS teacher_id,
+       t.math_center_id  AS center_id,
+       mc.graduation_year AS graduation_year,
+       t.is_head_teacher AS is_head_teacher
+FROM math_center_teachers t
+         JOIN math_centers mc ON mc.id = t.math_center_id
+WHERE t.user_id = $1
+ORDER BY mc.graduation_year DESC;
+
 -- name: SetTeacherHead :execrows
 UPDATE math_center_teachers
 SET is_head_teacher = $2

@@ -11,12 +11,14 @@ import {
   DropdownMenuTrigger,
   ThemeToggle,
 } from '../design/ui'
-import { activeModule, modules } from './modules'
+import { activeNavModule } from './modules'
+import { useNavModules } from './use-nav-modules'
 import { UserMenu } from './user-menu'
 
 // MobileNav mirrors the rail's links in a dropdown for small screens. It switches
 // BETWEEN modules; a module's own pages render as tabs in the bar.
 function MobileNav({ user }: { user: User }) {
+  const modules = useNavModules()
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -51,7 +53,7 @@ function MobileNav({ user }: { user: User }) {
 // right of the brand. macOS-like: the module's screens live in the top bar.
 function ModuleTabs({ user }: { user: User }) {
   const { pathname } = useLocation()
-  const mod = activeModule(pathname, user.is_admin)
+  const mod = activeNavModule(useNavModules(), pathname, user.is_admin)
   const pages = mod?.pages
   if (!pages || pages.length === 0) return null
 

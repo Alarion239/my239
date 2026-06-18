@@ -9,18 +9,29 @@ import { Button, StatusLegend, StatusTile } from '../../design/ui'
 import { cn } from '../../design/cn'
 
 export interface StudentProblemListProps {
+  centerId: number
   seriesId: number
   rollup: MyRollup
 }
 
-function submitPath(seriesId: number, subproblemId: number): string {
-  return '/mathcenter/series/' + seriesId + '/submit/' + subproblemId
+function submitPath(
+  centerId: number,
+  seriesId: number,
+  subproblemId: number,
+): string {
+  return (
+    '/mathcenter/' + centerId + '/series/' + seriesId + '/submit/' + subproblemId
+  )
 }
 
 // StudentProblemList shows the calling student's own progress: one row per
 // problem with a clickable status tile per subproblem, a problem-level summary
 // badge, and a "Сдать" shortcut to the first not-yet-accepted subproblem.
-export function StudentProblemList({ seriesId, rollup }: StudentProblemListProps) {
+export function StudentProblemList({
+  centerId,
+  seriesId,
+  rollup,
+}: StudentProblemListProps) {
   if (rollup.problems.length === 0) {
     return <p className="py-6 text-sm text-muted">В этой серии пока нет задач.</p>
   }
@@ -28,7 +39,12 @@ export function StudentProblemList({ seriesId, rollup }: StudentProblemListProps
   return (
     <div className="flex flex-col gap-3">
       {rollup.problems.map((problem) => (
-        <ProblemRow key={problem.problem_id} seriesId={seriesId} problem={problem} />
+        <ProblemRow
+          key={problem.problem_id}
+          centerId={centerId}
+          seriesId={seriesId}
+          problem={problem}
+        />
       ))}
       <StatusLegend className="mt-2" />
     </div>
@@ -36,9 +52,11 @@ export function StudentProblemList({ seriesId, rollup }: StudentProblemListProps
 }
 
 function ProblemRow({
+  centerId,
   seriesId,
   problem,
 }: {
+  centerId: number
   seriesId: number
   problem: RollupProblem
 }) {
@@ -59,7 +77,7 @@ function ProblemRow({
         {problem.subproblems.map((sub) => (
           <Link
             key={sub.subproblem_id}
-            to={submitPath(seriesId, sub.subproblem_id)}
+            to={submitPath(centerId, seriesId, sub.subproblem_id)}
             title={sub.subproblem_label + ': ' + homeworkStatusMeta(sub.current_status).label}
             className={cn(
               'rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
@@ -78,7 +96,7 @@ function ProblemRow({
       </div>
       {next ? (
         <Button size="sm" variant="secondary" asChild>
-          <Link to={submitPath(seriesId, next.subproblem_id)}>Сдать</Link>
+          <Link to={submitPath(centerId, seriesId, next.subproblem_id)}>Сдать</Link>
         </Button>
       ) : (
         <Button size="sm" variant="secondary" disabled title="Все подзадачи приняты">

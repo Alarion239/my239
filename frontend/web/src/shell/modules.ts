@@ -1,5 +1,4 @@
 import {
-  FunctionSquare,
   GraduationCap,
   ShieldCheck,
   type LucideIcon,
@@ -27,17 +26,10 @@ export interface ModuleDef {
   pages?: ModulePage[]
 }
 
+// STATIC modules are the same for everyone (subject to `adminOnly`). The math
+// center modules are dynamic — one per center the user belongs to — and are
+// prepended at runtime by useNavModules().
 export const modules: ModuleDef[] = [
-  {
-    id: 'mathcenter',
-    label: 'Матцентр',
-    description: 'Серии задач, проверка работ и прогресс',
-    path: '/mathcenter',
-    icon: FunctionSquare,
-    status: 'active',
-    // The "Проверка" (grading) tab is added in a later workflow.
-    pages: [{ label: 'Серии', path: '/mathcenter', end: true }],
-  },
   {
     id: 'admin',
     label: 'Администрирование',
@@ -61,15 +53,17 @@ export const modules: ModuleDef[] = [
   },
 ]
 
-// activeModule returns the accessible module whose `path` is the longest prefix
-// of `pathname` (so /admin/users resolves to the admin module). `adminOnly`
-// modules are excluded when the caller is not an admin.
-export function activeModule(
+// activeNavModule returns the accessible module from `mods` whose `path` is the
+// longest prefix of `pathname` (so /admin/users resolves to the admin module,
+// and /mathcenter/7 to that center's module). `adminOnly` modules are excluded
+// when the caller is not an admin.
+export function activeNavModule(
+  mods: ModuleDef[],
   pathname: string,
   isAdmin: boolean,
 ): ModuleDef | undefined {
   let best: ModuleDef | undefined
-  for (const m of modules) {
+  for (const m of mods) {
     if (m.adminOnly && !isAdmin) continue
     if (pathname === m.path || pathname.startsWith(m.path + '/')) {
       if (!best || m.path.length > best.path.length) best = m

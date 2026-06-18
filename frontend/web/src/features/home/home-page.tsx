@@ -1,12 +1,13 @@
 import { Link } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
 import { useAuth } from '../../auth/auth-context'
-import { modules } from '../../shell/modules'
+import { useNavModules } from '../../shell/use-nav-modules'
 import { Card } from '../../design/ui'
 import { cn } from '../../design/cn'
 
 export function HomePage() {
   const { user } = useAuth()
+  const modules = useNavModules()
   if (!user) return null
 
   return (
@@ -17,7 +18,9 @@ export function HomePage() {
       <p className="mt-1 text-muted">Выберите модуль, чтобы начать.</p>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2">
-        {modules.map((m) => {
+        {modules
+          .filter((m) => !m.adminOnly || user.is_admin)
+          .map((m) => {
           const soon = m.status === 'soon'
           const inner = (
             <Card

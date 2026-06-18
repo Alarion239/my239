@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   ApiClient,
   ApiClientProvider,
+  type MeResponse,
   type TokenStore,
   type User,
 } from '@my239/shared'
@@ -53,7 +54,23 @@ function mockMatchMedia() {
   )
 }
 
-function mockFetch(me: User) {
+// A two-teacher-center + one-student-center membership, so the nav builds three
+// "Матцентр {year}" modules (deduped — the student center is distinct here).
+const mcMe: MeResponse = {
+  teacher: {
+    centers: [
+      { id: 7, graduation_year: 2026, grade: 9, is_head_teacher: false, teachers: [], groups: [] },
+      { id: 8, graduation_year: 2025, grade: 10, is_head_teacher: true, teachers: [], groups: [] },
+    ],
+  },
+  student: {
+    center: { id: 9, graduation_year: 2024, grade: 11 },
+    group: { id: 1, name: 'А' },
+    head_teachers: [],
+  },
+}
+
+function mockFetch(user: User, me: MeResponse = mcMe) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
@@ -63,7 +80,8 @@ function mockFetch(me: User) {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         })
-      if (url.includes('/auth/me')) return json(me)
+      if (url.includes('/auth/me')) return json(user)
+      if (url.includes('/mathcenter/me')) return json(me)
       return json([])
     }),
   )
@@ -107,7 +125,9 @@ describe('module navigation', () => {
     mockFetch(member)
     renderShell(<NavRail />, '/mathcenter')
 
-    expect(await screen.findByRole('link', { name: /Матцентр/ })).toBeInTheDocument()
+    expect(
+      (await screen.findAllByRole('link', { name: /Матцентр \d{4}/ })).length,
+    ).toBeGreaterThan(0)
     expect(
       screen.queryByRole('link', { name: 'Администрирование' }),
     ).not.toBeInTheDocument()
@@ -121,5 +141,24 @@ describe('module navigation', () => {
     expect(
       await screen.findByRole('link', { name: 'Администрирование' }),
     ).toBeInTheDocument()
+  })
+
+  it('renders one "Матцентр {year}" module per center, sorted by year desc', async () => {
+    const member = makeUser({ is_admin: false })
+    mockFetch(member)
+    renderShell(<NavRail />, '/mathcenter/7')
+
+    const links = await screen.findAllByRole('link', { name: /Матцентр \d{4}/ })
+    const labels = links.map((l) => l.textContent)
+    expect(labels).toEqual(['Матцентр 2026', 'Матцентр 2025', 'Матцентр 2024'])
+  })
+
+  it('exposes the per-center module tabs in the top bar', async () => {
+    const member = makeUser({ is_admin: false })
+    mockFetch(member)
+    renderShell(<TopBar user={member} />, '/mathcenter/8')
+
+    // The active module's "Серии" tab for center 8 shows in the bar.
+    expect(await screen.findByRole('link', { name: 'Серии' })).toBeInTheDocument()
   })
 })

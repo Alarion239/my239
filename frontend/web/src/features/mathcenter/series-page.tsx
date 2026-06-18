@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
+import { Link, Navigate, useParams } from 'react-router-dom'
 import {
   currentSeries,
+  useMathCenterMe,
   useMySeriesRollup,
   useSeriesList,
   useSeriesProblemStats,
@@ -9,6 +11,7 @@ import {
 } from '@my239/shared'
 import { Card, CardContent, Spinner } from '../../design/ui'
 import { cn } from '../../design/cn'
+import { useAuth } from '../../auth/auth-context'
 import { StatementPanel } from './statement-panel'
 import { SeriesStrip } from './series-strip'
 import { StudentProblemList } from './student-problem-list'
@@ -17,8 +20,13 @@ import { UploadSeriesDialog } from './upload-series-dialog'
 import { useSeriesContext } from './use-series-context'
 
 export function SeriesPage() {
-  const ctx = useSeriesContext()
+  const { centerId: centerIdParam } = useParams<{ centerId: string }>()
+  const centerId = Number(centerIdParam)
+  const ctx = useSeriesContext(centerId)
 
+  if (!Number.isFinite(centerId) || centerId <= 0) {
+    return <NotFoundState />
+  }
   if (ctx.isLoading) {
     return (
       <div className="flex justify-center py-16">
@@ -29,60 +37,73 @@ export function SeriesPage() {
   if (ctx.isError) {
     return <p className="py-10 text-sm text-danger">Не удалось загрузить матцентр.</p>
   }
-  if (ctx.centers.length === 0) {
-    return (
-      <Card className="animate-rise px-6 py-16 text-center">
-        <p className="text-muted">У вас пока нет доступа к матцентрам.</p>
-      </Card>
-    )
+  if (!ctx.hasAccess) {
+    return <NotFoundState />
   }
 
   return (
     <div className="animate-rise flex flex-col gap-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-3xl font-medium text-ink">Серии</h1>
-        {ctx.centers.length > 1 ? (
-          <CenterSelector
-            centers={ctx.centers}
-            value={ctx.centerId}
-            onChange={ctx.setCenterId}
-          />
-        ) : null}
       </header>
 
       <CenterSeries
-        key={ctx.centerId}
-        centerId={ctx.centerId}
+        key={centerId}
+        centerId={centerId}
         isStudentView={ctx.isStudentView}
       />
     </div>
   )
 }
 
-function CenterSelector({
-  centers,
-  value,
-  onChange,
-}: {
-  centers: { id: number; label: string }[]
-  value: number
-  onChange: (id: number) => void
-}) {
+function NotFoundState() {
   return (
-    <label className="flex items-center gap-2 text-sm text-muted">
-      <span>Центр</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="h-9 rounded-lg border border-line-strong bg-surface px-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-      >
-        {centers.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.label}
-          </option>
-        ))}
-      </select>
-    </label>
+    <Card className="animate-rise px-6 py-16 text-center">
+      <p className="text-muted">Нет доступа к этому матцентру.</p>
+    </Card>
+  )
+}
+
+// MathCenterIndex handles bare /mathcenter: redirect to the first center the
+// user can access, or — if none — show an empty state (admins get a hint to use
+// the admin area, where they can enrol themselves or pick any center).
+export function MathCenterIndex() {
+  const { user } = useAuth()
+  const me = useMathCenterMe()
+  const isAdmin = user?.is_admin ?? false
+
+  if (me.isPending) {
+    return (
+      <div className="flex justify-center py-16">
+        <Spinner />
+      </div>
+    )
+  }
+
+  const teacherCenters = me.data?.teacher?.centers ?? []
+  const studentCenter = me.data?.student?.center ?? null
+  const firstId = teacherCenters[0]?.id ?? studentCenter?.id ?? null
+
+  if (firstId !== null) {
+    return <Navigate to={'/mathcenter/' + firstId} replace />
+  }
+
+  return (
+    <Card className="animate-rise px-6 py-16 text-center">
+      <p className="text-muted">Вы не состоите ни в одном матцентре.</p>
+      {isAdmin ? (
+        <p className="mt-2 text-sm text-muted">
+          Откройте{' '}
+          <Link
+            to="/admin/users"
+            className="font-medium text-accent underline-offset-4 hover:underline"
+          >
+            Администрирование
+          </Link>
+          , чтобы добавить себя в матцентр.
+        </p>
+      ) : null}
+    </Card>
   )
 }
 
@@ -161,7 +182,11 @@ function CenterSeries({
       {selected ? (
         <div className="grid gap-6 lg:grid-cols-2">
           <StatementPanel series={selected} />
-          <DetailSide series={selected} isStudentView={isStudentView} />
+          <DetailSide
+            centerId={centerId}
+            series={selected}
+            isStudentView={isStudentView}
+          />
         </div>
       ) : null}
     </>
@@ -169,9 +194,11 @@ function CenterSeries({
 }
 
 function DetailSide({
+  centerId,
   series,
   isStudentView,
 }: {
+  centerId: number
   series: Series
   isStudentView: boolean
 }) {
@@ -179,7 +206,7 @@ function DetailSide({
     <Card>
       <CardContent>
         {isStudentView ? (
-          <StudentSide series={series} />
+          <StudentSide centerId={centerId} series={series} />
         ) : (
           <TeacherSide series={series} />
         )}
@@ -188,7 +215,7 @@ function DetailSide({
   )
 }
 
-function StudentSide({ series }: { series: Series }) {
+function StudentSide({ centerId, series }: { centerId: number; series: Series }) {
   const { data, isPending, isError } = useMySeriesRollup(series.id)
   return (
     <SidePanel
@@ -197,15 +224,23 @@ function StudentSide({ series }: { series: Series }) {
       isError={isError}
       hasData={!!data}
     >
-      {data ? <StudentProblemListWithCounts seriesId={series.id} rollup={data} /> : null}
+      {data ? (
+        <StudentProblemListWithCounts
+          centerId={centerId}
+          seriesId={series.id}
+          rollup={data}
+        />
+      ) : null}
     </SidePanel>
   )
 }
 
 function StudentProblemListWithCounts({
+  centerId,
   seriesId,
   rollup,
 }: {
+  centerId: number
   seriesId: number
   rollup: MyRollup
 }) {
@@ -239,7 +274,7 @@ function StudentProblemListWithCounts({
           Не решено: <span className="font-medium text-muted">{unsolved}</span>
         </span>
       </div>
-      <StudentProblemList seriesId={seriesId} rollup={rollup} />
+      <StudentProblemList centerId={centerId} seriesId={seriesId} rollup={rollup} />
     </div>
   )
 }

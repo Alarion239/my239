@@ -87,6 +87,9 @@ type Querier interface {
 	ListStudentsForCenters(ctx context.Context, centerIds []int64) ([]ListStudentsForCentersRow, error)
 	ListSubproblemsForSeries(ctx context.Context, seriesID int64) ([]ListSubproblemsForSeriesRow, error)
 	ListSubproblemsForSeriesIDs(ctx context.Context, seriesIds []int64) ([]ListSubproblemsForSeriesIDsRow, error)
+	// Like ListCentersForTeacher, but also returns the math_center_teachers row id
+	// (teacher_id) so the admin UI can remove an individual teaching enrollment.
+	ListTeacherEnrollmentsForUser(ctx context.Context, userID int64) ([]ListTeacherEnrollmentsForUserRow, error)
 	ListTeachersForCenter(ctx context.Context, mathCenterID int64) ([]ListTeachersForCenterRow, error)
 	ListTeachersForCenters(ctx context.Context, centerIds []int64) ([]ListTeachersForCentersRow, error)
 	ListThreadEvents(ctx context.Context, threadID int64) ([]HomeworkThreadEvent, error)

@@ -18,6 +18,8 @@ func Router(database *db.DB, tokens *internalAuth.TokenService) chi.Router {
 	r.Use(middleware.AdminMiddleware)
 
 	r.Get("/users", ListUsers(database))
+	r.Get("/users/{id}", GetUser(database))
+	r.Get("/users/{id}/enrollments", GetUserEnrollments(database))
 	r.Patch("/users/{id}/admin", SetUserAdmin(database))
 
 	r.Get("/tokens", ListTokens(database))
