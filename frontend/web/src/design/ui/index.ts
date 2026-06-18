@@ -24,3 +24,4 @@ export {
   DialogTitle,
   DialogDescription,
 } from './dialog'
+export { Table, THead, TBody, Tr, Th, Td } from './table'

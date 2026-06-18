@@ -6,7 +6,8 @@ import { RegisterPage } from '../features/auth/register-page'
 import { HomePage } from '../features/home/home-page'
 import { ProfilePage } from '../features/profile/profile-page'
 import { MathCenterPage } from '../features/mathcenter/mathcenter-page'
-import { AdminPage } from '../features/admin/admin-page'
+import { UsersPage } from '../features/admin/users-page'
+import { MathCentersPage } from '../features/admin/math-centers-page'
 
 export const router = createBrowserRouter([
   {
@@ -27,7 +28,11 @@ export const router = createBrowserRouter([
           { path: 'mathcenter', element: <MathCenterPage /> },
           {
             element: <RequireRole roles={['admin']} />,
-            children: [{ path: 'admin', element: <AdminPage /> }],
+            children: [
+              { path: 'admin', element: <Navigate to="/admin/users" replace /> },
+              { path: 'admin/users', element: <UsersPage /> },
+              { path: 'admin/math-centers', element: <MathCentersPage /> },
+            ],
           },
         ],
       },

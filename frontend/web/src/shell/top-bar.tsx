@@ -1,6 +1,7 @@
-import { Link, NavLink } from 'react-router-dom'
-import { Menu, ShieldCheck, User as UserIcon } from 'lucide-react'
+import { Link, NavLink, useLocation } from 'react-router-dom'
+import { Menu, User as UserIcon } from 'lucide-react'
 import type { User } from '@my239/shared'
+import { cn } from '../design/cn'
 import {
   Button,
   DropdownMenu,
@@ -10,10 +11,11 @@ import {
   DropdownMenuTrigger,
   ThemeToggle,
 } from '../design/ui'
-import { modules } from './modules'
+import { activeModule, modules } from './modules'
 import { UserMenu } from './user-menu'
 
-// MobileNav mirrors the rail's links in a dropdown for small screens.
+// MobileNav mirrors the rail's links in a dropdown for small screens. It switches
+// BETWEEN modules; a module's own pages render as tabs in the bar.
 function MobileNav({ user }: { user: User }) {
   return (
     <DropdownMenu>
@@ -24,7 +26,7 @@ function MobileNav({ user }: { user: User }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
         {modules
-          .filter((m) => m.status === 'active')
+          .filter((m) => m.status === 'active' && (!m.adminOnly || user.is_admin))
           .map((m) => (
             <DropdownMenuItem key={m.id} asChild>
               <NavLink to={m.path}>
@@ -40,26 +42,50 @@ function MobileNav({ user }: { user: User }) {
             Профиль
           </NavLink>
         </DropdownMenuItem>
-        {user.is_admin ? (
-          <DropdownMenuItem asChild>
-            <NavLink to="/admin">
-              <ShieldCheck className="h-4 w-4" aria-hidden />
-              Администрирование
-            </NavLink>
-          </DropdownMenuItem>
-        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   )
 }
 
+// ModuleTabs renders the active module's pages as horizontal NavLink tabs to the
+// right of the brand. macOS-like: the module's screens live in the top bar.
+function ModuleTabs({ user }: { user: User }) {
+  const { pathname } = useLocation()
+  const mod = activeModule(pathname, user.is_admin)
+  const pages = mod?.pages
+  if (!pages || pages.length === 0) return null
+
+  return (
+    <nav className="flex min-w-0 items-center gap-1 overflow-x-auto" aria-label="Разделы модуля">
+      {pages.map((p) => (
+        <NavLink
+          key={p.path}
+          to={p.path}
+          end={p.end}
+          className={({ isActive }) =>
+            cn(
+              'whitespace-nowrap rounded-lg px-3 py-1.5 text-sm transition-colors',
+              isActive
+                ? 'bg-accent-soft font-medium text-accent-ink'
+                : 'text-muted hover:bg-surface-muted hover:text-ink',
+            )
+          }
+        >
+          {p.label}
+        </NavLink>
+      ))}
+    </nav>
+  )
+}
+
 export function TopBar({ user }: { user: User }) {
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line bg-paper/80 px-4 backdrop-blur">
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-paper/80 px-4 backdrop-blur">
       <MobileNav user={user} />
-      <Link to="/" className="font-display text-xl font-medium text-ink md:hidden">
+      <Link to="/" className="shrink-0 font-display text-xl font-medium text-ink">
         my239
       </Link>
+      <ModuleTabs user={user} />
       <div className="flex-1" />
       <ThemeToggle />
       <UserMenu user={user} />
