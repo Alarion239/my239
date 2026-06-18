@@ -142,3 +142,92 @@ export interface MathCenterGroup {
   name: string
   created_at: string
 }
+
+// --- Math center "Серии" (homework series) -----------------------------------
+// Wire types for the series endpoints. Keep in sync with
+// backend/internal/handlers/mathcenter (seriesView) and the homework rollup /
+// stats handlers.
+
+// HomeworkStatus is the grading state of a single subproblem thread. Mirrors
+// the backend status enum.
+export type HomeworkStatus =
+  | 'ungraded'
+  | 'submitted'
+  | 'accepted'
+  | 'rejected'
+  | 'appealed'
+
+// SeriesProblem is one problem within a series, with its subproblem labels.
+export interface SeriesProblem {
+  id: number
+  number: number
+  display_name: string
+  subproblems: string[]
+}
+
+// Series mirrors the backend seriesView: a numbered homework set with a due
+// date, publication state, and the available PDF/TeX artefacts.
+export interface Series {
+  id: number
+  math_center_id: number
+  number: number
+  name: string
+  display_name: string
+  due_at: string
+  published: boolean
+  published_at?: string | null
+  has_pdf: boolean
+  has_tex: boolean
+  problems: SeriesProblem[]
+}
+
+// RollupSubproblem is one subproblem's status in a student's own rollup
+// (GET /homework/series/{id}/my).
+export interface RollupSubproblem {
+  subproblem_id: number
+  subproblem_label: string
+  thread_id: number
+  current_status: HomeworkStatus
+}
+
+export interface RollupProblem {
+  problem_id: number
+  problem_number: number
+  problem_display: string
+  subproblems: RollupSubproblem[]
+}
+
+// MyRollup is the student-facing view of their own progress on a series.
+export interface MyRollup {
+  counts: {
+    accepted: number
+    rejected: number
+    pending: number
+  }
+  problems: RollupProblem[]
+}
+
+// SeriesProblemStat is per-problem aggregate counts across all students in the
+// teacher stats view (GET /homework/series/{id}/problem-stats).
+export interface SeriesProblemStat {
+  problem_id: number
+  problem_number: number
+  problem_display: string
+  accepted: number
+  appealed: number
+  rejected: number
+  submitted: number
+  unsolved: number
+}
+
+export interface SeriesProblemStats {
+  total_students: number
+  problems: SeriesProblemStat[]
+}
+
+// PdfUploadURL is the presigned target for a direct-to-storage series PDF
+// upload (POST /mathcenter/series/{id}/pdf/upload-url).
+export interface PdfUploadURL {
+  object_key: string
+  upload_url: string
+}

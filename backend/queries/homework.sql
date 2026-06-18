@@ -288,6 +288,30 @@ FROM math_center_students mcs
 WHERE g.math_center_id = $1
 ORDER BY g.name ASC, u.last_name ASC, u.first_name ASC, s.number ASC, p.number ASC, sp.label ASC;
 
+-- name: SeriesProblemStats :many
+-- One row per (student × subproblem) for a whole series: the center roster
+-- crossed with the series's subproblems, LEFT JOINed to that student's thread
+-- so untouched subproblems still appear with status='ungraded'. The handler
+-- folds these into per-(student,problem) precedence and per-problem counts.
+-- Roster scoping mirrors TeacherSeriesGrid: every student of a group in the
+-- series's math center.
+SELECT
+    mcs.user_id                            AS student_user_id,
+    p.id                                   AS problem_id,
+    p.number                               AS problem_number,
+    sp.id                                  AS subproblem_id,
+    COALESCE(t.current_status, 'ungraded') AS current_status
+FROM math_center_students mcs
+         JOIN math_center_groups g ON g.id = mcs.group_id
+         CROSS JOIN math_center_subproblems sp
+         JOIN math_center_problems p ON p.id = sp.problem_id
+         LEFT JOIN homework_thread t
+                   ON t.student_user_id = mcs.user_id
+                  AND t.subproblem_id   = sp.id
+WHERE g.math_center_id = (SELECT s.math_center_id FROM math_center_series s WHERE s.id = $1)
+  AND p.series_id = $1
+ORDER BY p.number ASC, p.id ASC, mcs.user_id ASC, sp.label ASC;
+
 -- name: GetSubproblemContext :one
 -- One-shot fetch of "what center/series/problem does this subproblem belong
 -- to", used at the start of every event-creating handler so we don't have to

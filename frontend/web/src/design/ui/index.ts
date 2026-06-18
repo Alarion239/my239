@@ -25,3 +25,4 @@ export {
   DialogDescription,
 } from './dialog'
 export { Table, THead, TBody, Tr, Th, Td } from './table'
+export { StatusTile, StatusLegend, type StatusTileProps } from './status-tile'

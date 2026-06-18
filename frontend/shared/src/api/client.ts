@@ -40,6 +40,13 @@ export class ApiClient {
     this.tokenStore = opts.tokenStore
   }
 
+  // getBaseURL exposes the configured API base so callers can build absolute
+  // URLs when needed. (The series PDF upload targets an absolute presigned
+  // `upload_url` directly and does NOT go through the base URL.)
+  getBaseURL(): string {
+    return this.baseURL
+  }
+
   // setActingAs toggles admin impersonation. Pass a user id to act as that
   // user on subsequent domain requests, or null to act as oneself again.
   setActingAs(userId: number | null): void {
@@ -71,6 +78,38 @@ export class ApiClient {
       }
       throw e
     }
+  }
+
+  // requestBlob is the binary sibling of `request`: an authed GET that follows
+  // redirects (the PDF endpoint 302s to a presigned storage URL) and returns
+  // the response body as a Blob. It mirrors the 401 -> refresh -> retry dance
+  // and carries the act-as header, but reads `res.blob()` instead of JSON.
+  async requestBlob(path: string): Promise<Blob> {
+    const headers = this.actingAsHeaders()
+    let res = await this.fetchBlob(path, this.accessToken, headers)
+    if (res.status === 401) {
+      const fresh = await this.refresh()
+      if (fresh) res = await this.fetchBlob(path, fresh, headers)
+    }
+    if (!res.ok) {
+      throw new APIErrorImpl({
+        status: res.status,
+        message: `request failed (${res.status})`,
+      })
+    }
+    return res.blob()
+  }
+
+  private async fetchBlob(
+    path: string,
+    token: string | null,
+    extraHeaders?: Record<string, string>,
+  ): Promise<Response> {
+    const headers: Record<string, string> = {}
+    if (token) headers['Authorization'] = `Bearer ${token}`
+    if (extraHeaders) Object.assign(headers, extraHeaders)
+    // `redirect: 'follow'` (the default) lets fetch chase the 302 to storage.
+    return fetch(`${this.baseURL}${path}`, { headers, redirect: 'follow' })
   }
 
   private async refresh(): Promise<string | null> {

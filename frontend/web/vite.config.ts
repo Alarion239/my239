@@ -5,6 +5,13 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  optimizeDeps: {
+    // latex.js dynamically require()s its documentclasses/ and packages/ dirs,
+    // which contain `.keep` placeholder files esbuild can't load while
+    // pre-bundling in dev. Treat `.keep` as empty so dep optimization succeeds
+    // (the prod rollup build already handles this).
+    esbuildOptions: { loader: { '.keep': 'empty' } },
+  },
   server: {
     host: '0.0.0.0',
     port: 5173,
