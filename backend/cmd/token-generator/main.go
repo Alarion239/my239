@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/Alarion239/my239/backend/internal/store"
+	"github.com/Alarion239/my239/backend/internal/tokenpreset"
 	"github.com/Alarion239/my239/backend/pkg/db"
 )
 
@@ -67,12 +69,25 @@ func printUsage() {
 	fmt.Println(`Token Generator CLI
 
 Usage:
-  token-generator create --max-uses=<n> --expires=<duration> --description=<text>
+  token-generator create --max-uses=<n> --expires=<duration> --description=<text> [preset flags]
   token-generator list
   token-generator revoke --token=<token> | --id=<id>
 
+Preset flags (optional; describe who the registrant becomes — enforced at
+registration). Either pass raw JSON via --preset, OR use the convenience flags,
+not both:
+  --preset='<json>'            Raw preset JSON, e.g. '{"grants_admin":true}'
+  --grant-admin                Grant admin on registration
+  --student-group-id=<id>      Enroll as math-center student in this group
+  --teacher-center-id=<id>     Enroll as math-center teacher of this center
+  --head-teacher               With --teacher-center-id, enroll as head teacher
+
 Examples:
   token-generator create --max-uses=10 --expires=720h --description="For new users"
+  token-generator create --max-uses=1 --expires=72h --description="New admin" --grant-admin
+  token-generator create --max-uses=1 --expires=72h --description="Student" --student-group-id=3
+  token-generator create --max-uses=1 --expires=72h --description="Head teacher" --teacher-center-id=2 --head-teacher
+  token-generator create --max-uses=1 --expires=72h --description="raw" --preset='{"grants_admin":true}'
   token-generator list
   token-generator revoke --token=abc123...
   token-generator revoke --id=5`)
@@ -80,14 +95,24 @@ Examples:
 
 func createToken(ctx context.Context, q *store.Queries) {
 	var (
-		maxUses     int
-		expires     string
-		description string
+		maxUses        int
+		expires        string
+		description    string
+		presetJSON     string
+		grantAdmin     bool
+		studentGroupID int64
+		teacherCenter  int64
+		headTeacher    bool
 	)
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 	fs.IntVar(&maxUses, "max-uses", 0, "Maximum number of times this token can be used")
 	fs.StringVar(&expires, "expires", "", "Expiration duration (e.g., 720h for 30 days)")
 	fs.StringVar(&description, "description", "", "Description of the token (max 255 characters)")
+	fs.StringVar(&presetJSON, "preset", "", "Raw preset JSON (mutually exclusive with the convenience flags)")
+	fs.BoolVar(&grantAdmin, "grant-admin", false, "Grant admin on registration")
+	fs.Int64Var(&studentGroupID, "student-group-id", 0, "Enroll registrant as a math-center student in this group")
+	fs.Int64Var(&teacherCenter, "teacher-center-id", 0, "Enroll registrant as a math-center teacher of this center")
+	fs.BoolVar(&headTeacher, "head-teacher", false, "With --teacher-center-id, enroll as head teacher")
 	_ = fs.Parse(os.Args[2:])
 
 	if maxUses <= 0 {
@@ -105,6 +130,19 @@ func createToken(ctx context.Context, q *store.Queries) {
 		log.Fatalf("Invalid duration format: %v", err)
 	}
 
+	preset := buildPreset(presetJSON, grantAdmin, studentGroupID, teacherCenter, headTeacher)
+
+	// Validate against the DB before minting, so the CLI cannot create a token
+	// referencing a non-existent group/center or an internally contradictory
+	// preset (e.g. student + teacher of the same center).
+	if err := tokenpreset.Validate(ctx, q, preset); err != nil {
+		log.Fatalf("Invalid preset: %v", err)
+	}
+	storedPreset, err := tokenpreset.Marshal(preset)
+	if err != nil {
+		log.Fatalf("Failed to encode preset: %v", err)
+	}
+
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
 		log.Fatalf("Failed to generate random token: %v", err)
@@ -116,6 +154,7 @@ func createToken(ctx context.Context, q *store.Queries) {
 		Description: description,
 		MaxUses:     int32(maxUses),
 		ExpiresAt:   time.Now().Add(duration),
+		Preset:      storedPreset,
 	})
 	if err != nil {
 		log.Fatalf("Failed to create token: %v", err)
@@ -127,6 +166,40 @@ func createToken(ctx context.Context, q *store.Queries) {
 	fmt.Printf("  Description: %s\n", tk.Description)
 	fmt.Printf("  Max uses:    %d\n", tk.MaxUses)
 	fmt.Printf("  Expires at:  %s\n", tk.ExpiresAt.Format(time.RFC3339))
+	fmt.Printf("  Preset:      %s\n", tk.Preset)
+}
+
+// buildPreset turns the CLI flags into a Preset. --preset (raw JSON) and the
+// convenience flags are mutually exclusive: passing both is a usage error.
+func buildPreset(presetJSON string, grantAdmin bool, studentGroupID, teacherCenter int64, headTeacher bool) tokenpreset.Preset {
+	convenienceUsed := grantAdmin || studentGroupID != 0 || teacherCenter != 0 || headTeacher
+
+	if presetJSON != "" {
+		if convenienceUsed {
+			log.Fatal("--preset cannot be combined with --grant-admin/--student-group-id/--teacher-center-id/--head-teacher")
+		}
+		preset, err := tokenpreset.Parse(json.RawMessage(presetJSON))
+		if err != nil {
+			log.Fatalf("Invalid --preset JSON: %v", err)
+		}
+		return preset
+	}
+
+	if headTeacher && teacherCenter == 0 {
+		log.Fatal("--head-teacher requires --teacher-center-id")
+	}
+
+	preset := tokenpreset.Preset{GrantsAdmin: grantAdmin}
+	if studentGroupID != 0 {
+		preset.MathCenterStudent = &tokenpreset.MathCenterStudent{GroupID: studentGroupID}
+	}
+	if teacherCenter != 0 {
+		preset.MathCenterTeacher = &tokenpreset.MathCenterTeacher{
+			CenterID:      teacherCenter,
+			IsHeadTeacher: headTeacher,
+		}
+	}
+	return preset
 }
 
 func listTokens(ctx context.Context, _ *db.DB, q *store.Queries) {

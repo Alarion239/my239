@@ -7,19 +7,21 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 )
 
 const createInvitationToken = `-- name: CreateInvitationToken :one
-INSERT INTO invitation_tokens (token, description, max_uses, expires_at)
-VALUES ($1, $2, $3, $4) RETURNING id, token, description, max_uses, expires_at, created_at
+INSERT INTO invitation_tokens (token, description, max_uses, expires_at, preset)
+VALUES ($1, $2, $3, $4, $5) RETURNING id, token, description, max_uses, expires_at, created_at, preset
 `
 
 type CreateInvitationTokenParams struct {
-	Token       string    `json:"token"`
-	Description string    `json:"description"`
-	MaxUses     int32     `json:"max_uses"`
-	ExpiresAt   time.Time `json:"expires_at"`
+	Token       string          `json:"token"`
+	Description string          `json:"description"`
+	MaxUses     int32           `json:"max_uses"`
+	ExpiresAt   time.Time       `json:"expires_at"`
+	Preset      json.RawMessage `json:"preset"`
 }
 
 func (q *Queries) CreateInvitationToken(ctx context.Context, arg CreateInvitationTokenParams) (InvitationToken, error) {
@@ -28,6 +30,7 @@ func (q *Queries) CreateInvitationToken(ctx context.Context, arg CreateInvitatio
 		arg.Description,
 		arg.MaxUses,
 		arg.ExpiresAt,
+		arg.Preset,
 	)
 	var i InvitationToken
 	err := row.Scan(
@@ -37,12 +40,13 @@ func (q *Queries) CreateInvitationToken(ctx context.Context, arg CreateInvitatio
 		&i.MaxUses,
 		&i.ExpiresAt,
 		&i.CreatedAt,
+		&i.Preset,
 	)
 	return i, err
 }
 
 const getInvitationTokenByValue = `-- name: GetInvitationTokenByValue :one
-SELECT id, token, description, max_uses, expires_at, created_at
+SELECT id, token, description, max_uses, expires_at, created_at, preset
 FROM invitation_tokens
 WHERE token = $1
 `
@@ -57,12 +61,13 @@ func (q *Queries) GetInvitationTokenByValue(ctx context.Context, token string) (
 		&i.MaxUses,
 		&i.ExpiresAt,
 		&i.CreatedAt,
+		&i.Preset,
 	)
 	return i, err
 }
 
 const getInvitationTokenByValueForUpdate = `-- name: GetInvitationTokenByValueForUpdate :one
-SELECT id, token, description, max_uses, expires_at, created_at
+SELECT id, token, description, max_uses, expires_at, created_at, preset
 FROM invitation_tokens
 WHERE token = $1 FOR UPDATE
 `
@@ -77,12 +82,13 @@ func (q *Queries) GetInvitationTokenByValueForUpdate(ctx context.Context, token 
 		&i.MaxUses,
 		&i.ExpiresAt,
 		&i.CreatedAt,
+		&i.Preset,
 	)
 	return i, err
 }
 
 const listInvitationTokens = `-- name: ListInvitationTokens :many
-SELECT id, token, description, max_uses, expires_at, created_at
+SELECT id, token, description, max_uses, expires_at, created_at, preset
 FROM invitation_tokens
 ORDER BY created_at DESC
 `
@@ -103,6 +109,7 @@ func (q *Queries) ListInvitationTokens(ctx context.Context) ([]InvitationToken, 
 			&i.MaxUses,
 			&i.ExpiresAt,
 			&i.CreatedAt,
+			&i.Preset,
 		); err != nil {
 			return nil, err
 		}

@@ -2,6 +2,7 @@ package bootstrap_test
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 )
 
 // invitationTokenColumns matches `SELECT * FROM invitation_tokens` after sqlc.
-var invitationTokenColumns = []string{"id", "token", "description", "max_uses", "expires_at", "created_at"}
+var invitationTokenColumns = []string{"id", "token", "description", "max_uses", "expires_at", "created_at", "preset"}
 
 // TestEnsureAdminInviteToken_NoUsersCreatesToken verifies that an empty
 // deployment with no existing bootstrap token mints a fresh single-use one.
@@ -31,9 +32,9 @@ func TestEnsureAdminInviteToken_NoUsersCreatesToken(t *testing.T) {
 		WillReturnRows(mock.NewRows(invitationTokenColumns))
 	// A new single-use bootstrap token is created.
 	mock.ExpectQuery(`INSERT INTO invitation_tokens`).
-		WithArgs(pgxmock.AnyArg(), "first-admin bootstrap", int32(1), pgxmock.AnyArg()).
+		WithArgs(pgxmock.AnyArg(), "first-admin bootstrap", int32(1), pgxmock.AnyArg(), json.RawMessage(`{}`)).
 		WillReturnRows(mock.NewRows(invitationTokenColumns).
-			AddRow(int64(1), "deadbeef", "first-admin bootstrap", int32(1), now.Add(7*24*time.Hour), now))
+			AddRow(int64(1), "deadbeef", "first-admin bootstrap", int32(1), now.Add(7*24*time.Hour), now, []byte(`{}`)))
 
 	if err := bootstrap.EnsureAdminInviteToken(context.Background(), store.New(mock)); err != nil {
 		t.Fatalf("EnsureAdminInviteToken: %v", err)
@@ -79,7 +80,7 @@ func TestEnsureAdminInviteToken_ReusesActiveToken(t *testing.T) {
 	// An unexpired bootstrap token already exists.
 	mock.ExpectQuery(`SELECT .* FROM invitation_tokens`).
 		WillReturnRows(mock.NewRows(invitationTokenColumns).
-			AddRow(int64(1), "existing-token", "first-admin bootstrap", int32(1), now.Add(time.Hour), now))
+			AddRow(int64(1), "existing-token", "first-admin bootstrap", int32(1), now.Add(time.Hour), now, []byte(`{}`)))
 	// It is unused (0 < max_uses), so it gets reused.
 	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM users WHERE invitation_token_id`).
 		WithArgs(int64(1)).
