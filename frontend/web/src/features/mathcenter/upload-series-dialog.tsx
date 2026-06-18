@@ -150,9 +150,17 @@ function DetailsStep({
 
   const onSubmit = handleSubmit((values) => {
     setFormError(null)
+    // The datetime-local input yields local "YYYY-MM-DDTHH:mm"; the backend
+    // decodes due_at as RFC3339, so convert before sending (else: 400).
+    const dueDate = new Date(values.due_at)
+    if (Number.isNaN(dueDate.getTime())) {
+      setError('due_at', { message: 'Укажите корректный срок' })
+      return
+    }
+    const payload = { ...values, due_at: dueDate.toISOString() }
     const mutation = isEdit ? update : create
     return new Promise<void>((resolve) => {
-      mutation.mutate(values, {
+      mutation.mutate(payload, {
         onSuccess: (saved) => {
           onSaved(saved)
           resolve()

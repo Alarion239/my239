@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ApiClient, ApiClientProvider, type TokenStore } from '@my239/shared'
@@ -63,5 +63,55 @@ describe('UploadSeriesDialog — validation', () => {
     await user.click(screen.getByRole('button', { name: 'Создать и продолжить' }))
 
     expect(await screen.findByText('Номера задач не должны повторяться')).toBeInTheDocument()
+  })
+})
+
+describe('UploadSeriesDialog — due_at format (regression)', () => {
+  // Regression: the "Срок сдачи" datetime-local input yields a value like
+  // "2030-01-01T12:00" (no seconds / timezone). It must be converted to RFC3339
+  // before POSTing, or the backend rejects the body with 400. See PR #17.
+  it('sends due_at as RFC3339, not the raw datetime-local value', async () => {
+    const user = userEvent.setup()
+    let sentDueAt: string | null = null
+
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (
+        typeof url === 'string' &&
+        url.endsWith('/mathcenter/centers/7/series') &&
+        init?.method === 'POST'
+      ) {
+        const body = JSON.parse(init.body as string) as { due_at: string }
+        sentDueAt = body.due_at
+        return new Response(
+          JSON.stringify({
+            id: 1,
+            math_center_id: 7,
+            number: 1,
+            name: 'Производные',
+            display_name: 'Серия 1. Производные',
+            due_at: body.due_at,
+            published: false,
+            has_pdf: false,
+            has_tex: false,
+            problems: [],
+          }),
+          { status: 201, headers: { 'Content-Type': 'application/json' } },
+        )
+      }
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderDialog()
+    await user.click(screen.getByRole('button', { name: 'Загрузить серию' }))
+    await user.type(screen.getByLabelText('Название'), 'Производные')
+    await user.type(screen.getByLabelText('Срок сдачи'), '2030-01-01T12:00')
+    await user.click(screen.getByRole('button', { name: 'Создать и продолжить' }))
+
+    await waitFor(() => expect(sentDueAt).not.toBeNull())
+    // Must be the ISO/RFC3339 form (seconds + Z), NOT the bare datetime-local value.
+    expect(sentDueAt).toBe(new Date('2030-01-01T12:00').toISOString())
+    expect(sentDueAt).toMatch(/T\d\d:\d\d:\d\d(\.\d+)?Z$/)
+    expect(sentDueAt).not.toBe('2030-01-01T12:00')
   })
 })
