@@ -33,6 +33,10 @@ go.work.sum
 .cursor/
 .claude/
 
+# Claude Code agent skills — vendored tooling, not project code.
+.agents/
+skills-lock.json
+
 # macOS
 *.DS_Store
 
