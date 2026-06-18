@@ -26,6 +26,13 @@ sql:
               import: "time"
               type: "Time"
               pointer: true
+          # JSONB columns map to encoding/json.RawMessage so the application
+          # owns the (versioned, typed) decode. Non-pointer: the only JSONB
+          # column (invitation_tokens.preset) is NOT NULL DEFAULT '{}'.
+          - db_type: "jsonb"
+            go_type:
+              import: "encoding/json"
+              type: "RawMessage"
           # password_hash never serializes into HTTP responses; the User
           # struct is shared between auth (needs hash) and API responses.
           - column: "users.password_hash"

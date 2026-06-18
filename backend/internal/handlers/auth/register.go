@@ -13,6 +13,7 @@ import (
 	"github.com/Alarion239/my239/backend/internal/httpx"
 	"github.com/Alarion239/my239/backend/internal/logger"
 	"github.com/Alarion239/my239/backend/internal/store"
+	"github.com/Alarion239/my239/backend/internal/tokenpreset"
 	"github.com/Alarion239/my239/backend/pkg/db"
 )
 
@@ -113,6 +114,33 @@ func Register(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 			logger.LogErrorContext(ctx, "register: create user", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
+		}
+
+		// The invitation token carries a server-enforced preset (admin grant,
+		// math-center enrollment). Apply it inside the same transaction so the
+		// grants commit atomically with the user — or not at all.
+		preset, err := tokenpreset.Parse(invitation.Preset)
+		if err != nil {
+			logger.LogErrorContext(ctx, "register: parse token preset", err, "token_id", invitation.ID)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
+		if err := tokenpreset.Apply(ctx, q, user.ID, preset); err != nil {
+			switch {
+			case errors.Is(err, tokenpreset.ErrConflict):
+				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, err.Error())
+			case errors.Is(err, tokenpreset.ErrInvalidPreset):
+				httpx.WriteAPIError(w, r, http.StatusUnprocessableEntity, httpx.CodeBadRequest, err.Error())
+			default:
+				logger.LogErrorContext(ctx, "register: apply token preset", err, "token_id", invitation.ID)
+				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			}
+			return
+		}
+		// Reflect the admin grant on the user the handler returns and signs into
+		// the access token (the CreateUser row predates SetUserAdmin).
+		if preset.GrantsAdmin {
+			user.IsAdmin = true
 		}
 
 		if err := tx.Commit(ctx); err != nil {

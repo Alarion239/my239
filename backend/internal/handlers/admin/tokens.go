@@ -3,6 +3,8 @@ package admin
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -12,6 +14,7 @@ import (
 	"github.com/Alarion239/my239/backend/internal/httpx"
 	"github.com/Alarion239/my239/backend/internal/logger"
 	"github.com/Alarion239/my239/backend/internal/store"
+	"github.com/Alarion239/my239/backend/internal/tokenpreset"
 	"github.com/Alarion239/my239/backend/pkg/db"
 )
 
@@ -19,13 +22,14 @@ import (
 // store.InvitationToken struct plus a derived `uses` count so the frontend
 // doesn't have to fan out one query per row.
 type TokenView struct {
-	ID          int64     `json:"id"`
-	Token       string    `json:"token"`
-	Description string    `json:"description"`
-	MaxUses     int32     `json:"max_uses"`
-	Uses        int64     `json:"uses"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID          int64           `json:"id"`
+	Token       string          `json:"token"`
+	Description string          `json:"description"`
+	MaxUses     int32           `json:"max_uses"`
+	Uses        int64           `json:"uses"`
+	ExpiresAt   time.Time       `json:"expires_at"`
+	CreatedAt   time.Time       `json:"created_at"`
+	Preset      json.RawMessage `json:"preset"`
 }
 
 // ListTokens returns every invitation token, including the consumed-uses
@@ -58,6 +62,7 @@ func ListTokens(database *db.DB) http.HandlerFunc {
 				Uses:        uses,
 				ExpiresAt:   t.ExpiresAt,
 				CreatedAt:   t.CreatedAt,
+				Preset:      t.Preset,
 			})
 		}
 
@@ -66,9 +71,10 @@ func ListTokens(database *db.DB) http.HandlerFunc {
 }
 
 type createTokenRequest struct {
-	Description    string `json:"description"`
-	MaxUses        int32  `json:"max_uses"`
-	ExpiresInHours int    `json:"expires_in_hours"`
+	Description    string          `json:"description"`
+	MaxUses        int32           `json:"max_uses"`
+	ExpiresInHours int             `json:"expires_in_hours"`
+	Preset         json.RawMessage `json:"preset"`
 }
 
 // CreateToken mints a fresh invitation token. The token value is a 32-byte
@@ -92,6 +98,31 @@ func CreateToken(database *db.DB) http.HandlerFunc {
 			return
 		}
 
+		// Decode and validate the (optional) preset before minting the token,
+		// so an admin cannot create a token that references a non-existent
+		// group/center or is internally contradictory. An omitted preset stays
+		// the empty "{}" — a plain invitation token.
+		preset, err := tokenpreset.Parse(req.Preset)
+		if err != nil {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+			return
+		}
+		if err := tokenpreset.Validate(r.Context(), store.New(database.Pool()), preset); err != nil {
+			if errors.Is(err, tokenpreset.ErrInvalidPreset) {
+				httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+				return
+			}
+			logger.LogErrorContext(r.Context(), "admin: validate token preset", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to create token")
+			return
+		}
+		presetJSON, err := tokenpreset.Marshal(preset)
+		if err != nil {
+			logger.LogErrorContext(r.Context(), "admin: marshal token preset", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to create token")
+			return
+		}
+
 		raw, err := randomHex(32)
 		if err != nil {
 			logger.LogErrorContext(r.Context(), "admin: random token", err)
@@ -104,6 +135,7 @@ func CreateToken(database *db.DB) http.HandlerFunc {
 			Description: req.Description,
 			MaxUses:     req.MaxUses,
 			ExpiresAt:   time.Now().Add(time.Duration(req.ExpiresInHours) * time.Hour),
+			Preset:      presetJSON,
 		})
 		if err != nil {
 			logger.LogErrorContext(r.Context(), "admin: create token", err)
@@ -119,6 +151,7 @@ func CreateToken(database *db.DB) http.HandlerFunc {
 			Uses:        0,
 			ExpiresAt:   tok.ExpiresAt,
 			CreatedAt:   tok.CreatedAt,
+			Preset:      tok.Preset,
 		})
 	}
 }
