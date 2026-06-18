@@ -38,10 +38,10 @@ type Limiter interface {
 	Middleware(key string, limit int, windowSeconds int) func(http.Handler) http.Handler
 }
 
-// clientIP extracts the client IP. We trust whatever the upstream chi RealIP
-// middleware has already put in r.RemoteAddr — that middleware reads
-// X-Forwarded-For / X-Real-IP. If RemoteAddr happens to include a port,
-// strip it.
+// clientIP extracts the client IP. We trust whatever the upstream RealIP
+// middleware (internal/middleware.RealIPMiddleware) has already put in
+// r.RemoteAddr — that middleware reads X-Forwarded-For / X-Real-IP from the
+// trusted proxy. If RemoteAddr happens to include a port, strip it.
 func clientIP(r *http.Request) string {
 	addr := r.RemoteAddr
 	if host, _, err := net.SplitHostPort(addr); err == nil {
