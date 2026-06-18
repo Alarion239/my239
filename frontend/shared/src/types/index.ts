@@ -282,3 +282,175 @@ export interface PdfUploadURL {
   object_key: string
   upload_url: string
 }
+
+// --- Homework threads: submission / appeal / grading -------------------------
+// Wire types for the per-(student, subproblem) thread that carries an
+// event-sourced timeline (submit → grade → appeal → re-grade / retract). Keep
+// in sync with backend/internal/handlers/homework (get_thread.go, grade.go,
+// grader_queue.go, teacher_grid.go, grader_stats.go).
+
+// Verdict is a teacher's binary decision on an attempt.
+export type Verdict = 'accepted' | 'rejected'
+
+// EventKind is the type of one timeline entry. `claimed`/`released` are logged
+// server-side but not surfaced as cards in the current UI.
+export type EventKind =
+  | 'submitted'
+  | 'appealed'
+  | 'graded'
+  | 'retracted'
+  | 'claimed'
+  | 'released'
+
+// PhotoView is one image attached to an event. `url` is a short-TTL presigned
+// GET; `object_key` is exposed too so the UI can match images back to events.
+export interface PhotoView {
+  index: number
+  object_key: string
+  url: string
+  content_type: string
+  size_bytes: number
+}
+
+// EventView mirrors one homework_thread_event row plus its photos.
+export interface EventView {
+  id: number
+  event_uuid: string
+  kind: EventKind
+  actor_user_id: number
+  body: string
+  verdict?: Verdict | null
+  refers_to_event_id?: number | null
+  created_at: string
+  photos: PhotoView[]
+}
+
+// ThreadView is the full timeline + cache state for one thread (GET
+// /homework/threads/by-id/{id}). `users` maps every user_id that appears on the
+// page (student, claim holder, last grader, event actors) → display name, so
+// the UI never renders "пользователь #N". `series_due_at` lets the UI gate the
+// submit form after the deadline without an extra round-trip.
+export interface ThreadView {
+  id: number
+  student_user_id: number
+  subproblem_id: number
+  series_id: number
+  series_due_at: string
+  math_center_id: number
+  current_status: HomeworkStatus
+  last_grader_user_id?: number | null
+  claim_holder_user_id?: number | null
+  claim_expires_at?: string | null
+  created_at: string
+  updated_at: string
+  events: EventView[]
+  users: Record<string, string>
+}
+
+// UploadSlot is one presigned PUT target minted for a photo upload.
+export interface UploadSlot {
+  index: number
+  object_key: string
+  upload_url: string
+  content_type: string
+}
+
+// UploadURLsResponse is the result of requesting upload URLs: the event UUID to
+// echo back on submit/grade, plus one slot per requested content type.
+export interface UploadURLsResponse {
+  event_uuid: string
+  slots: UploadSlot[]
+}
+
+// SubmitOrAppealPayload is the finalize body for a student submit or appeal.
+export interface SubmitOrAppealPayload {
+  event_uuid: string
+  body: string
+  object_keys: string[]
+}
+
+// GradePayload is the finalize body for a teacher grade (verdict required).
+export interface GradePayload {
+  verdict: Verdict
+  body: string
+  event_uuid: string
+  object_keys: string[]
+}
+
+// SubproblemContext is what the "new submission" page needs before any thread
+// exists: the series due-date (to gate the form) and the problem/series
+// identifiers so navigation can return to the right place
+// (GET /homework/subproblems/{id}).
+export interface SubproblemContext {
+  subproblem_id: number
+  subproblem_label: string
+  problem_id: number
+  problem_number: number
+  problem_display: string
+  series_id: number
+  math_center_id: number
+  series_due_at: string
+  series_published_at?: string | null
+}
+
+// QueueItem is one row of the grader queue (GET /homework/series/{id}/queue):
+// a submission/appeal awaiting grading.
+export interface QueueItem {
+  thread_id: number
+  student_user_id: number
+  student_name: string
+  subproblem_id: number
+  subproblem_label: string
+  problem_number: number
+  problem_display: string
+  current_status: HomeworkStatus
+  last_grader_user_id?: number | null
+  claim_holder_user_id?: number | null
+  claim_expires_at?: string | null
+  updated_at: string
+}
+
+// GraderStats are the at-a-glance workload counters for a center
+// (GET /homework/centers/{id}/grader-stats).
+export interface GraderStats {
+  pending_count: number
+  my_claimed_count: number
+  my_appeals_count: number
+}
+
+// --- Teacher per-series grid (GET /homework/series/{id}/grid) -----------------
+
+export interface GridColumn {
+  subproblem_id: number
+  subproblem_label: string
+  problem_id: number
+  problem_number: number
+  problem_display: string
+}
+
+// GridCell is one (student × subproblem) status. `thread_id` is 0 when no
+// thread exists yet (the student has never submitted).
+export interface GridCell {
+  subproblem_id: number
+  subproblem_label: string
+  problem_id: number
+  problem_number: number
+  thread_id: number
+  current_status: HomeworkStatus
+  last_grader_user_id?: number | null
+  claim_holder_user_id?: number | null
+  claim_expires_at?: string | null
+}
+
+export interface GridStudent {
+  student_user_id: number
+  student_name: string
+  group_id: number
+  group_name: string
+  cells: GridCell[]
+}
+
+export interface GridResponse {
+  columns: GridColumn[]
+  students: GridStudent[]
+}

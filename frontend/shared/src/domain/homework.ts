@@ -2,7 +2,13 @@
 // series state. No I/O, no React, no DOM — safe to use from web, native, or
 // tests. The web layer maps `tone` to its own colour tokens.
 
-import type { HomeworkStatus, Series } from '../types'
+import type {
+  EventKind,
+  HomeworkStatus,
+  Series,
+  ThreadView,
+  Verdict,
+} from '../types'
 
 // StatusTone is the abstract visual category a platform maps to its own colour
 // palette. Keeping it abstract (not a colour) keeps this file platform-agnostic.
@@ -79,4 +85,136 @@ export function currentSeries(
 
   // Fallback: the highest-numbered published series.
   return published.reduce((best, s) => (s.number > best.number ? s : best))
+}
+
+// --- Thread role resolution --------------------------------------------------
+
+// ThreadRole is how a viewer relates to a thread: the owning student, a teacher
+// of its center, an admin (full grading superset), or none.
+export type ThreadRole = 'student' | 'teacher' | 'admin' | 'none'
+
+export interface ThreadRoleInput {
+  // Real account admin flag (from /auth/me, which does NOT honour act-as).
+  isAdmin: boolean
+  // Impersonated user id when an admin is "viewing as" someone, else null.
+  actingAsUserId: number | null
+  // The real account's user id (from /auth/me).
+  realUserId: number
+  // Centers the (effective) user teaches, and their student center.
+  teacherCenterIds: number[]
+  studentCenterId: number | null
+  // The center the thread belongs to.
+  centerId: number
+  // The thread owner; undefined in the first-submission flow (no thread yet),
+  // where the student check relies on center membership alone.
+  threadStudentUserId?: number
+}
+
+// resolveThreadRole decides the viewer's role AND the effective viewer id.
+//
+// The subtlety this centralises: while impersonating, /auth/me still returns
+// the real admin (the act-as header is not sent to auth endpoints), so the
+// viewer id must come from actingAsUserId — otherwise "Вы" labelling and the
+// student-owner check both compare against the wrong id. Admin also loses its
+// grading superset under impersonation, matching the backend, which rewrites
+// is_admin to false for the impersonated request.
+export function resolveThreadRole(input: ThreadRoleInput): {
+  role: ThreadRole
+  userId: number
+} {
+  const impersonating = input.actingAsUserId != null
+  const userId = impersonating ? (input.actingAsUserId as number) : input.realUserId
+  const effectiveAdmin = input.isAdmin && !impersonating
+
+  let role: ThreadRole = 'none'
+  if (effectiveAdmin) {
+    role = 'admin'
+  } else if (input.teacherCenterIds.includes(input.centerId)) {
+    role = 'teacher'
+  } else if (
+    input.studentCenterId === input.centerId &&
+    (input.threadStudentUserId === undefined ||
+      input.threadStudentUserId === userId)
+  ) {
+    role = 'student'
+  }
+
+  return { role, userId }
+}
+
+// --- Thread / timeline helpers -----------------------------------------------
+
+// eventKindLabel renders the Russian heading for one timeline event. A graded
+// event splits on its verdict so the card reads "Принято" / "Отклонено".
+export function eventKindLabel(
+  kind: EventKind,
+  verdict?: Verdict | null,
+): string {
+  switch (kind) {
+    case 'submitted':
+      return 'Решение'
+    case 'graded':
+      return verdict === 'accepted' ? 'Принято' : 'Отклонено'
+    case 'retracted':
+      return 'Оценка отозвана'
+    case 'appealed':
+      return 'Апелляция'
+    case 'claimed':
+      return 'Взято в проверку'
+    case 'released':
+      return 'Освобождено'
+  }
+}
+
+// eventTone maps a timeline event to an abstract StatusTone so the web layer
+// can colour its left-border accent from the same status tokens used by tiles.
+// `null` means "no status tint" (neutral/ink) — used for plain submissions and
+// retractions, which aren't a grading outcome.
+export function eventTone(
+  kind: EventKind,
+  verdict?: Verdict | null,
+): StatusTone | null {
+  switch (kind) {
+    case 'graded':
+      return verdict === 'accepted' ? 'accepted' : 'rejected'
+    case 'appealed':
+      return 'appeal'
+    default:
+      return null
+  }
+}
+
+// isClosed reports whether a series deadline has passed. Centralised so every
+// surface that branches on "can submit / view-only" stays in lockstep.
+// `nowMs` is injectable for testability.
+export function isClosed(
+  dueAt: string | null | undefined,
+  nowMs: number = Date.now(),
+): boolean {
+  if (!dueAt) return false
+  const t = Date.parse(dueAt)
+  return Number.isFinite(t) && t < nowMs
+}
+
+// claimIsLive reports whether a claim lock is currently held (set and not
+// expired). `nowMs` is injectable for testability.
+export function claimIsLive(
+  thread: Pick<ThreadView, 'claim_holder_user_id' | 'claim_expires_at'>,
+  nowMs: number = Date.now(),
+): boolean {
+  if (thread.claim_holder_user_id == null) return false
+  if (!thread.claim_expires_at) return true
+  const t = Date.parse(thread.claim_expires_at)
+  return Number.isNaN(t) || t > nowMs
+}
+
+// userNameFromThread resolves a user_id appearing on a thread to its display
+// name, with a sensible fallback when the id isn't in the map (e.g. a deleted
+// actor on an old event).
+export function userNameFromThread(
+  thread: ThreadView,
+  userId: number | null | undefined,
+): string {
+  if (userId == null) return ''
+  return thread.users[String(userId)] ?? 'неизвестно'
 }
