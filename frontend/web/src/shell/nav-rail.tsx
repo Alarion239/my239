@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom'
 import { User as UserIcon, type LucideIcon } from 'lucide-react'
 import { cn } from '../design/cn'
 import { useAuth } from '../auth/auth-context'
-import { modules } from './modules'
+import { useNavModules } from './use-nav-modules'
 
 function NavItem({
   to,
@@ -41,6 +41,7 @@ function NavItem({
 export function NavRail() {
   const { user } = useAuth()
   const isAdmin = !!user?.is_admin
+  const modules = useNavModules()
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-line bg-surface px-3 py-5 md:flex">
       <p className="mb-1 px-2.5 text-xs text-faint">Модули</p>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   APIErrorImpl,
   fullName,
@@ -86,7 +87,12 @@ function UsersTable() {
             return (
               <Tr key={u.id}>
                 <Td>
-                  <div className="font-medium text-ink">{fullName(u)}</div>
+                  <Link
+                    to={'/admin/users/' + u.id}
+                    className="font-medium text-ink underline-offset-4 hover:text-accent hover:underline"
+                  >
+                    {fullName(u)}
+                  </Link>
                   <div className="text-xs text-muted">@{u.username}</div>
                 </Td>
                 <Td>

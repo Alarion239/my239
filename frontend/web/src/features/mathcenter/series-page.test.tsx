@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   ApiClient,
@@ -131,8 +131,10 @@ function renderPage() {
     <QueryClientProvider client={queryClient}>
       <ApiClientProvider client={client}>
         <AuthProvider>
-          <MemoryRouter>
-            <SeriesPage />
+          <MemoryRouter initialEntries={['/mathcenter/' + CENTER_ID]}>
+            <Routes>
+              <Route path="/mathcenter/:centerId" element={<SeriesPage />} />
+            </Routes>
           </MemoryRouter>
         </AuthProvider>
       </ApiClientProvider>

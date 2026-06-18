@@ -6,7 +6,12 @@ import { Card } from '../../design/ui'
 // which a later workflow fills in. It reads the route params so the link back to
 // the series works, and so the URL is exercised end to end now.
 export function SubmissionPlaceholder() {
-  const { seriesId } = useParams<{ seriesId: string; subproblemId: string }>()
+  const { centerId, seriesId } = useParams<{
+    centerId: string
+    seriesId: string
+    subproblemId: string
+  }>()
+  const backTo = centerId ? '/mathcenter/' + centerId : '/mathcenter'
 
   return (
     <div className="animate-rise flex justify-center py-10">
@@ -21,7 +26,7 @@ export function SubmissionPlaceholder() {
           Здесь появится форма отправки решения и переписка с проверяющим.
         </p>
         <Link
-          to="/mathcenter"
+          to={backTo}
           className="inline-flex items-center gap-1.5 text-sm font-medium text-accent underline-offset-4 hover:underline"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden />

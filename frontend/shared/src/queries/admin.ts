@@ -7,7 +7,10 @@ import type {
   InvitationToken,
   MathCenter,
   MathCenterGroup,
+  MathCenterStudent,
+  MathCenterTeacher,
   User,
+  UserEnrollments,
 } from '../types'
 import { useApiClient } from './context'
 import { queryKeys } from './keys'
@@ -34,6 +37,140 @@ export function useSetUserAdmin() {
         body: { is_admin: isAdmin },
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.adminUsers }),
+  })
+}
+
+// useAdminUser backs the admin "manage one user" view: a single user record.
+export function useAdminUser(userId: number) {
+  const client = useApiClient()
+  return useQuery<User>({
+    queryKey: queryKeys.adminUser(userId),
+    queryFn: () => client.request<User>('/admin/users/' + userId),
+    enabled: userId > 0,
+  })
+}
+
+// useUserEnrollments returns the user's teaching + student roles, the data the
+// admin user-management UI edits via the mutations below.
+export function useUserEnrollments(userId: number) {
+  const client = useApiClient()
+  return useQuery<UserEnrollments>({
+    queryKey: queryKeys.userEnrollments(userId),
+    queryFn: () =>
+      client.request<UserEnrollments>(
+        '/admin/users/' + userId + '/enrollments',
+      ),
+    enabled: userId > 0,
+  })
+}
+
+// --- User enrollment management ----------------------------------------------
+// Mutations the admin user view uses to add/remove a user's math-center roles.
+// Each takes the userId so it can invalidate that user's enrollments cache.
+
+export function useEnrollTeacher() {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      centerId,
+      userId,
+      isHeadTeacher,
+    }: {
+      centerId: number
+      userId: number
+      isHeadTeacher: boolean
+    }) =>
+      client.request<MathCenterTeacher>(
+        '/admin/mathcenter/' + centerId + '/teachers',
+        {
+          method: 'POST',
+          body: { user_id: userId, is_head_teacher: isHeadTeacher },
+        },
+      ),
+    onSuccess: (_data, { userId }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.userEnrollments(userId) })
+      qc.invalidateQueries({ queryKey: queryKeys.adminUsers })
+    },
+  })
+}
+
+export function useRemoveTeacher() {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      teacherId,
+    }: {
+      teacherId: number
+      userId: number
+    }) =>
+      client.request('/admin/mathcenter/teachers/' + teacherId, {
+        method: 'DELETE',
+      }),
+    onSuccess: (_data, { userId }) =>
+      qc.invalidateQueries({ queryKey: queryKeys.userEnrollments(userId) }),
+  })
+}
+
+export function useSetTeacherHead() {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      teacherId,
+      isHeadTeacher,
+    }: {
+      teacherId: number
+      userId: number
+      isHeadTeacher: boolean
+    }) =>
+      client.request(
+        '/admin/mathcenter/teachers/' + teacherId + '/head',
+        { method: 'PATCH', body: { is_head_teacher: isHeadTeacher } },
+      ),
+    onSuccess: (_data, { userId }) =>
+      qc.invalidateQueries({ queryKey: queryKeys.userEnrollments(userId) }),
+  })
+}
+
+export function useEnrollStudent() {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      groupId,
+      userId,
+    }: {
+      groupId: number
+      userId: number
+    }) =>
+      client.request<MathCenterStudent>('/admin/mathcenter/students', {
+        method: 'POST',
+        body: { user_id: userId, group_id: groupId },
+      }),
+    onSuccess: (_data, { userId }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.userEnrollments(userId) })
+      qc.invalidateQueries({ queryKey: queryKeys.adminUsers })
+    },
+  })
+}
+
+export function useRemoveStudent() {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      studentId,
+    }: {
+      studentId: number
+      userId: number
+    }) =>
+      client.request('/admin/mathcenter/students/' + studentId, {
+        method: 'DELETE',
+      }),
+    onSuccess: (_data, { userId }) =>
+      qc.invalidateQueries({ queryKey: queryKeys.userEnrollments(userId) }),
   })
 }
 

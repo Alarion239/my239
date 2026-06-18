@@ -470,6 +470,51 @@ func (q *Queries) ListStudentsForCenters(ctx context.Context, centerIds []int64)
 	return items, nil
 }
 
+const listTeacherEnrollmentsForUser = `-- name: ListTeacherEnrollmentsForUser :many
+SELECT t.id              AS teacher_id,
+       t.math_center_id  AS center_id,
+       mc.graduation_year AS graduation_year,
+       t.is_head_teacher AS is_head_teacher
+FROM math_center_teachers t
+         JOIN math_centers mc ON mc.id = t.math_center_id
+WHERE t.user_id = $1
+ORDER BY mc.graduation_year DESC
+`
+
+type ListTeacherEnrollmentsForUserRow struct {
+	TeacherID      int64 `json:"teacher_id"`
+	CenterID       int64 `json:"center_id"`
+	GraduationYear int32 `json:"graduation_year"`
+	IsHeadTeacher  bool  `json:"is_head_teacher"`
+}
+
+// Like ListCentersForTeacher, but also returns the math_center_teachers row id
+// (teacher_id) so the admin UI can remove an individual teaching enrollment.
+func (q *Queries) ListTeacherEnrollmentsForUser(ctx context.Context, userID int64) ([]ListTeacherEnrollmentsForUserRow, error) {
+	rows, err := q.db.Query(ctx, listTeacherEnrollmentsForUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTeacherEnrollmentsForUserRow{}
+	for rows.Next() {
+		var i ListTeacherEnrollmentsForUserRow
+		if err := rows.Scan(
+			&i.TeacherID,
+			&i.CenterID,
+			&i.GraduationYear,
+			&i.IsHeadTeacher,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTeachersForCenter = `-- name: ListTeachersForCenter :many
 SELECT t.id              AS id,
        t.user_id         AS user_id,

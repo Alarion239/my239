@@ -1,5 +1,6 @@
 export { Button, type ButtonProps } from './button'
 export { Input, type InputProps } from './input'
+export { Select, type SelectProps } from './select'
 export { Label } from './label'
 export { Field } from './field'
 export { Card, CardHeader, CardTitle, CardDescription, CardContent } from './card'
