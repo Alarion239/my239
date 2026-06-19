@@ -4,6 +4,7 @@ import {
   problemStateFromSubproblems,
   type MyRollup,
   type RollupProblem,
+  type RollupSubproblem,
 } from '@my239/shared'
 import { Button, StatusLegend, StatusTile } from '../../design/ui'
 import { cn } from '../../design/cn'
@@ -14,14 +15,18 @@ export interface StudentProblemListProps {
   rollup: MyRollup
 }
 
-function submitPath(
+// subproblemPath routes to the existing thread when the student has already
+// submitted (thread_id > 0), otherwise to the first-submission form keyed by
+// subproblem id.
+function subproblemPath(
   centerId: number,
   seriesId: number,
-  subproblemId: number,
+  sub: RollupSubproblem,
 ): string {
-  return (
-    '/mathcenter/' + centerId + '/series/' + seriesId + '/submit/' + subproblemId
-  )
+  const base = '/mathcenter/' + centerId + '/series/' + seriesId
+  return sub.thread_id > 0
+    ? base + '/thread/' + sub.thread_id
+    : base + '/submit/' + sub.subproblem_id
 }
 
 // StudentProblemList shows the calling student's own progress: one row per
@@ -77,7 +82,7 @@ function ProblemRow({
         {problem.subproblems.map((sub) => (
           <Link
             key={sub.subproblem_id}
-            to={submitPath(centerId, seriesId, sub.subproblem_id)}
+            to={subproblemPath(centerId, seriesId, sub)}
             title={sub.subproblem_label + ': ' + homeworkStatusMeta(sub.current_status).label}
             className={cn(
               'rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
@@ -96,7 +101,7 @@ function ProblemRow({
       </div>
       {next ? (
         <Button size="sm" variant="secondary" asChild>
-          <Link to={submitPath(centerId, seriesId, next.subproblem_id)}>Сдать</Link>
+          <Link to={subproblemPath(centerId, seriesId, next)}>Сдать</Link>
         </Button>
       ) : (
         <Button size="sm" variant="secondary" disabled title="Все подзадачи приняты">

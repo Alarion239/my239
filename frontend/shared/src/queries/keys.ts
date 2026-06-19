@@ -18,4 +18,13 @@ export const queryKeys = {
   myRollup: (id: number) => ['homework', 'series', id, 'my'] as const,
   problemStats: (id: number) =>
     ['homework', 'series', id, 'problem-stats'] as const,
+  thread: (id: number) => ['homework', 'thread', id] as const,
+  subproblemContext: (id: number) =>
+    ['homework', 'subproblem', id] as const,
+  graderQueue: (seriesId: number, mine: boolean) =>
+    ['homework', 'series', seriesId, 'queue', mine] as const,
+  teacherGrid: (seriesId: number) =>
+    ['homework', 'series', seriesId, 'grid'] as const,
+  graderStats: (centerId: number) =>
+    ['homework', 'centers', centerId, 'grader-stats'] as const,
 }

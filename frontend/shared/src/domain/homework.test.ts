@@ -1,10 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import {
+  claimIsLive,
   currentSeries,
+  eventKindLabel,
+  eventTone,
   homeworkStatusMeta,
+  isClosed,
   problemStateFromSubproblems,
+  resolveThreadRole,
+  userNameFromThread,
 } from './homework'
-import type { HomeworkStatus, Series } from '../types'
+import type { ThreadRoleInput } from './homework'
+import type { HomeworkStatus, Series, ThreadView } from '../types'
 
 describe('homeworkStatusMeta', () => {
   it('maps accepted', () => {
@@ -144,5 +151,136 @@ describe('currentSeries', () => {
       makeSeries({ id: 2, number: 2, due_at: '2026-05-01T00:00:00Z' }),
     ]
     expect(currentSeries(list, NOW)?.id).toBe(2)
+  })
+})
+
+describe('eventKindLabel', () => {
+  it('splits a graded event on its verdict', () => {
+    expect(eventKindLabel('graded', 'accepted')).toBe('Принято')
+    expect(eventKindLabel('graded', 'rejected')).toBe('Отклонено')
+  })
+
+  it('labels submission, appeal, and retraction', () => {
+    expect(eventKindLabel('submitted')).toBe('Решение')
+    expect(eventKindLabel('appealed')).toBe('Апелляция')
+    expect(eventKindLabel('retracted')).toBe('Оценка отозвана')
+  })
+})
+
+describe('eventTone', () => {
+  it('maps graded verdicts and appeals to status tones', () => {
+    expect(eventTone('graded', 'accepted')).toBe('accepted')
+    expect(eventTone('graded', 'rejected')).toBe('rejected')
+    expect(eventTone('appealed')).toBe('appeal')
+  })
+
+  it('returns null for neutral events (submitted, retracted)', () => {
+    expect(eventTone('submitted')).toBeNull()
+    expect(eventTone('retracted')).toBeNull()
+  })
+})
+
+describe('isClosed', () => {
+  const NOW = Date.parse('2030-06-01T00:00:00Z')
+  it('is true once the deadline has passed', () => {
+    expect(isClosed('2030-05-01T00:00:00Z', NOW)).toBe(true)
+  })
+  it('is false before the deadline and for missing/invalid dates', () => {
+    expect(isClosed('2030-07-01T00:00:00Z', NOW)).toBe(false)
+    expect(isClosed(null, NOW)).toBe(false)
+    expect(isClosed('not-a-date', NOW)).toBe(false)
+  })
+})
+
+describe('claimIsLive', () => {
+  const NOW = Date.parse('2030-06-01T00:00:00Z')
+  it('is false with no holder', () => {
+    expect(claimIsLive({ claim_holder_user_id: null, claim_expires_at: null }, NOW)).toBe(false)
+  })
+  it('is true while held and unexpired', () => {
+    expect(
+      claimIsLive(
+        { claim_holder_user_id: 2, claim_expires_at: '2030-06-01T00:10:00Z' },
+        NOW,
+      ),
+    ).toBe(true)
+  })
+  it('is false once the lease has expired', () => {
+    expect(
+      claimIsLive(
+        { claim_holder_user_id: 2, claim_expires_at: '2030-05-31T23:50:00Z' },
+        NOW,
+      ),
+    ).toBe(false)
+  })
+})
+
+describe('userNameFromThread', () => {
+  const thread = { users: { '2': 'Пётр Иванов' } } as unknown as ThreadView
+  it('resolves a known id and falls back gracefully', () => {
+    expect(userNameFromThread(thread, 2)).toBe('Пётр Иванов')
+    expect(userNameFromThread(thread, 9)).toBe('неизвестно')
+    expect(userNameFromThread(thread, null)).toBe('')
+  })
+})
+
+describe('resolveThreadRole', () => {
+  const base: ThreadRoleInput = {
+    isAdmin: false,
+    actingAsUserId: null,
+    realUserId: 50,
+    teacherCenterIds: [],
+    studentCenterId: null,
+    centerId: 5,
+  }
+
+  it('treats an admin as the grading superset', () => {
+    expect(resolveThreadRole({ ...base, isAdmin: true }).role).toBe('admin')
+  })
+
+  it('is a teacher of a center they teach', () => {
+    expect(
+      resolveThreadRole({ ...base, teacherCenterIds: [5] }).role,
+    ).toBe('teacher')
+  })
+
+  it('is the student when it is their center and their thread', () => {
+    const r = resolveThreadRole({
+      ...base,
+      realUserId: 7,
+      studentCenterId: 5,
+      threadStudentUserId: 7,
+    })
+    expect(r.role).toBe('student')
+    expect(r.userId).toBe(7)
+  })
+
+  it('is not the student for someone else’s thread in their center', () => {
+    expect(
+      resolveThreadRole({
+        ...base,
+        realUserId: 7,
+        studentCenterId: 5,
+        threadStudentUserId: 99,
+      }).role,
+    ).toBe('none')
+  })
+
+  // Regression: an admin impersonating a student must resolve as that STUDENT
+  // (not admin), and the effective viewer id must be the impersonated user —
+  // /auth/me still returns the real admin under impersonation, so using
+  // realUserId would mis-label "Вы" and hide the student's appeal box.
+  it('resolves an impersonating admin as the impersonated student', () => {
+    const r = resolveThreadRole({
+      isAdmin: true,
+      actingAsUserId: 7,
+      realUserId: 50,
+      teacherCenterIds: [],
+      studentCenterId: 5,
+      centerId: 5,
+      threadStudentUserId: 7,
+    })
+    expect(r.role).toBe('student')
+    expect(r.userId).toBe(7)
   })
 })

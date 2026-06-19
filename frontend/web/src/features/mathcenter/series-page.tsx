@@ -16,6 +16,8 @@ import { StatementPanel } from './statement-panel'
 import { SeriesStrip } from './series-strip'
 import { StudentProblemList } from './student-problem-list'
 import { TeacherProblemStats } from './teacher-problem-stats'
+import { GraderQueue } from './grader-queue'
+import { TeacherGrid } from './teacher-grid'
 import { UploadSeriesDialog } from './upload-series-dialog'
 import { useSeriesContext } from './use-series-context'
 
@@ -279,7 +281,70 @@ function StudentProblemListWithCounts({
   )
 }
 
+type TeacherTab = 'stats' | 'queue' | 'grid'
+
 function TeacherSide({ series }: { series: Series }) {
+  const [tab, setTab] = useState<TeacherTab>('stats')
+  const [mine, setMine] = useState(false)
+  const centerId = series.math_center_id
+  return (
+    <div className="flex flex-col gap-4">
+      <TeacherTabBar value={tab} onChange={setTab} />
+      {tab === 'stats' ? (
+        <StatsTab series={series} />
+      ) : tab === 'queue' ? (
+        <GraderQueue
+          centerId={centerId}
+          seriesId={series.id}
+          mine={mine}
+          onMineChange={setMine}
+        />
+      ) : (
+        <TeacherGrid centerId={centerId} seriesId={series.id} />
+      )}
+    </div>
+  )
+}
+
+const TEACHER_TABS: { id: TeacherTab; label: string }[] = [
+  { id: 'stats', label: 'Статистика' },
+  { id: 'queue', label: 'Очередь' },
+  { id: 'grid', label: 'Таблица' },
+]
+
+function TeacherTabBar({
+  value,
+  onChange,
+}: {
+  value: TeacherTab
+  onChange: (v: TeacherTab) => void
+}) {
+  return (
+    <div
+      className="inline-flex self-start rounded-full border border-line bg-surface-muted p-0.5"
+      role="tablist"
+      aria-label="Раздел проверки"
+    >
+      {TEACHER_TABS.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          role="tab"
+          aria-selected={value === t.id}
+          onClick={() => onChange(t.id)}
+          className={cn(
+            'rounded-full px-3 py-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+            value === t.id ? 'bg-accent-soft text-accent-ink' : 'text-muted hover:text-ink',
+          )}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function StatsTab({ series }: { series: Series }) {
   const { data, isPending, isError } = useSeriesProblemStats(series.id)
   return (
     <SidePanel
