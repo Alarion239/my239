@@ -4,7 +4,6 @@ import {
   claimIsLive,
   formatDateTime,
   useGraderQueue,
-  useGraderStats,
   type QueueItem,
 } from '@my239/shared'
 import { Spinner } from '../../design/ui'
@@ -28,45 +27,34 @@ function itemLabel(item: QueueItem): string {
     : item.problem_display
 }
 
-// GraderQueue lists submissions/appeals awaiting grading in a series, with a
-// "только мои" filter and at-a-glance workload badges. Each row links to the
-// thread.
+// GraderQueue lists submissions/appeals AVAILABLE to grade in a series (the
+// backend excludes items another grader is actively holding). Counts are
+// derived from this series' list so they always match the rows shown — no
+// center-wide vs series-scoped mismatch. Items being graded by someone else
+// live in the "Таблица" view, not here.
 export function GraderQueue({
   centerId,
   seriesId,
   mine,
   onMineChange,
 }: GraderQueueProps) {
-  const stats = useGraderStats(centerId)
   const queue = useGraderQueue(seriesId, mine)
+  const items = queue.data ?? []
+  const appeals = items.filter((i) => i.current_status === 'appealed').length
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        {stats.data ? (
-          <div className="flex flex-wrap gap-3 text-xs text-muted">
-            <span>
-              Ожидают:{' '}
-              <span className="font-medium text-status-checking">
-                {stats.data.pending_count}
-              </span>
-            </span>
-            <span>
-              У меня:{' '}
-              <span className="font-medium text-accent">
-                {stats.data.my_claimed_count}
-              </span>
-            </span>
-            <span>
-              Апелляции:{' '}
-              <span className="font-medium text-status-appeal">
-                {stats.data.my_appeals_count}
-              </span>
-            </span>
-          </div>
-        ) : (
-          <span />
-        )}
+        <div className="flex flex-wrap gap-3 text-xs text-muted">
+          <span>
+            Доступно к проверке:{' '}
+            <span className="font-medium text-status-checking">{items.length}</span>
+          </span>
+          <span>
+            Апелляции:{' '}
+            <span className="font-medium text-status-appeal">{appeals}</span>
+          </span>
+        </div>
         <label className="flex items-center gap-2 text-sm text-ink">
           <input
             type="checkbox"

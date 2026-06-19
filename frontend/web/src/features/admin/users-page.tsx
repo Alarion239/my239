@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   APIErrorImpl,
@@ -16,6 +16,7 @@ import {
   Badge,
   Button,
   Card,
+  Input,
   Spinner,
   Table,
   TBody,
@@ -35,11 +36,20 @@ function tokenStatus(t: InvitationToken): { label: string; variant: 'success' | 
   return { label: 'Активен', variant: 'success' }
 }
 
+const USERS_PAGE_SIZE = 20
+
 function UsersTable() {
   const { user: current } = useAuth()
   const { data: users, isPending, isError } = useAdminUsers()
   const setAdmin = useSetUserAdmin()
   const [actionError, setActionError] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [page, setPage] = useState(0)
+
+  // Reset to the first page whenever the search changes.
+  useEffect(() => {
+    setPage(0)
+  }, [query])
 
   if (isPending) {
     return (
@@ -54,6 +64,21 @@ function UsersTable() {
   if (users.length === 0) {
     return <p className="py-6 text-sm text-muted">Пока нет пользователей.</p>
   }
+
+  // Client-side search + pagination keeps a center's worth of accounts (the
+  // list endpoint returns all of them) navigable.
+  const q = query.trim().toLowerCase()
+  const filtered = q
+    ? users.filter(
+        (u) =>
+          fullName(u).toLowerCase().includes(q) ||
+          u.username.toLowerCase().includes(q),
+      )
+    : users
+  const pageCount = Math.max(1, Math.ceil(filtered.length / USERS_PAGE_SIZE))
+  const safePage = Math.min(page, pageCount - 1)
+  const start = safePage * USERS_PAGE_SIZE
+  const visible = filtered.slice(start, start + USERS_PAGE_SIZE)
 
   function toggleAdmin(u: User) {
     setActionError(null)
@@ -72,6 +97,22 @@ function UsersTable() {
   return (
     <>
       {actionError ? <p className="mb-3 text-sm text-danger">{actionError}</p> : null}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
+        <Input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Поиск по имени или @логину…"
+          className="h-9 max-w-xs"
+          aria-label="Поиск пользователя"
+        />
+        <span className="text-xs text-muted">
+          {filtered.length} из {users.length}
+        </span>
+      </div>
+      {visible.length === 0 ? (
+        <p className="py-6 text-sm text-muted">Пользователь не найден.</p>
+      ) : (
       <Table>
         <THead>
           <Tr>
@@ -82,7 +123,7 @@ function UsersTable() {
           </Tr>
         </THead>
         <TBody>
-          {users.map((u) => {
+          {visible.map((u) => {
             const isSelf = current?.id === u.id
             return (
               <Tr key={u.id}>
@@ -121,6 +162,35 @@ function UsersTable() {
           })}
         </TBody>
       </Table>
+      )}
+      {pageCount > 1 ? (
+        <div className="mt-3 flex items-center justify-between gap-2 px-1 text-sm">
+          <span className="text-muted">
+            {start + 1}–{start + visible.length} из {filtered.length}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={safePage === 0}
+              onClick={() => setPage(safePage - 1)}
+            >
+              Назад
+            </Button>
+            <span className="text-muted">
+              {safePage + 1} / {pageCount}
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={safePage >= pageCount - 1}
+              onClick={() => setPage(safePage + 1)}
+            >
+              Далее
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </>
   )
 }
