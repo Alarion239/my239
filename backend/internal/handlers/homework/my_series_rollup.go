@@ -21,6 +21,10 @@ type rollupSubproblem struct {
 	SubproblemLabel string `json:"subproblem_label"`
 	ThreadID        int64  `json:"thread_id"`
 	CurrentStatus   string `json:"current_status"`
+	// BeingGraded is true when a grader currently holds a live claim on this
+	// thread — lets the student see "На проверке" vs "В очереди". The grader's
+	// identity is intentionally not exposed here.
+	BeingGraded bool `json:"being_graded"`
 }
 
 // rollupProblem groups subproblems by problem.
@@ -119,6 +123,7 @@ func MySeriesRollup(database *db.DB) http.HandlerFunc {
 				SubproblemLabel: row.SubproblemLabel,
 				ThreadID:        row.ThreadID,
 				CurrentStatus:   row.CurrentStatus,
+				BeingGraded:     row.BeingGraded,
 			})
 		}
 		if problems == nil {

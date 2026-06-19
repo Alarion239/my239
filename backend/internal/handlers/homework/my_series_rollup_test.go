@@ -29,11 +29,11 @@ func TestMyRollup_GroupsByProblemAndCounts(t *testing.T) {
 		WithArgs(int64(100), int64(7)).
 		WillReturnRows(mock.NewRows([]string{
 			"subproblem_id", "subproblem_label", "problem_id", "problem_number",
-			"thread_id", "current_status",
+			"thread_id", "current_status", "being_graded",
 		}).
-			AddRow(int64(900), "a", int64(500), int32(1), int64(1), "accepted").
-			AddRow(int64(901), "b", int64(500), int32(1), int64(2), "rejected").
-			AddRow(int64(910), "", int64(501), int32(2), int64(0), "ungraded"))
+			AddRow(int64(900), "a", int64(500), int32(1), int64(1), "accepted", false).
+			AddRow(int64(901), "b", int64(500), int32(1), int64(2), "submitted", true).
+			AddRow(int64(910), "", int64(501), int32(2), int64(0), "ungraded", false))
 
 	mock.ExpectQuery(`COUNT\(\*\) FILTER`).
 		WithArgs(int64(100), int64(7)).
@@ -56,8 +56,9 @@ func TestMyRollup_GroupsByProblemAndCounts(t *testing.T) {
 			ProblemNumber  int    `json:"problem_number"`
 			ProblemDisplay string `json:"problem_display"`
 			Subproblems    []struct {
-				Label  string `json:"subproblem_label"`
-				Status string `json:"current_status"`
+				Label       string `json:"subproblem_label"`
+				Status      string `json:"current_status"`
+				BeingGraded bool   `json:"being_graded"`
 			} `json:"subproblems"`
 		} `json:"problems"`
 	}
@@ -70,6 +71,11 @@ func TestMyRollup_GroupsByProblemAndCounts(t *testing.T) {
 	}
 	if resp.Problems[0].ProblemDisplay != "Задача 1" || len(resp.Problems[0].Subproblems) != 2 {
 		t.Errorf("problem 1 wrong: %+v", resp.Problems[0])
+	}
+	// The claimed submission surfaces being_graded=true so the student can see
+	// "На проверке" rather than a bare "В очереди".
+	if !resp.Problems[0].Subproblems[1].BeingGraded {
+		t.Errorf("expected subproblem b to be flagged being_graded: %+v", resp.Problems[0].Subproblems[1])
 	}
 	if resp.Problems[1].ProblemDisplay != "Задача 2" || len(resp.Problems[1].Subproblems) != 1 {
 		t.Errorf("problem 2 wrong: %+v", resp.Problems[1])

@@ -614,7 +614,11 @@ SELECT sp.id                                  AS subproblem_id,
        p.id                                   AS problem_id,
        p.number                               AS problem_number,
        COALESCE(t.id, 0)::bigint              AS thread_id,
-       COALESCE(t.current_status, 'ungraded') AS current_status
+       COALESCE(t.current_status, 'ungraded') AS current_status,
+       -- Privacy-safe "a grader has claimed this" flag: lets the student see
+       -- "На проверке" vs "В очереди" without exposing the grader's identity.
+       (t.claim_holder_user_id IS NOT NULL
+            AND t.claim_expires_at > now())::boolean AS being_graded
 FROM math_center_subproblems sp
          JOIN math_center_problems p ON p.id = sp.problem_id
          LEFT JOIN homework_thread t
@@ -636,6 +640,7 @@ type StudentSeriesRollupRow struct {
 	ProblemNumber   int32  `json:"problem_number"`
 	ThreadID        int64  `json:"thread_id"`
 	CurrentStatus   string `json:"current_status"`
+	BeingGraded     bool   `json:"being_graded"`
 }
 
 // Per-subproblem status grid for one student in one series. The LEFT JOIN
@@ -657,6 +662,7 @@ func (q *Queries) StudentSeriesRollup(ctx context.Context, arg StudentSeriesRoll
 			&i.ProblemNumber,
 			&i.ThreadID,
 			&i.CurrentStatus,
+			&i.BeingGraded,
 		); err != nil {
 			return nil, err
 		}

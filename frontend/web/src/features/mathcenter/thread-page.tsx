@@ -3,8 +3,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, ChevronDown } from 'lucide-react'
 import {
   claimIsLive,
+  displayStatusMeta,
   formatDateTime,
-  homeworkStatusMeta,
   isClosed,
   useSeries,
   useSubmitAttempt,
@@ -248,8 +248,8 @@ function ThreadHeader({
   ctx: SubproblemContext | undefined
   userId: number
 }) {
-  const meta = homeworkStatusMeta(thread.current_status)
   const live = claimIsLive(thread)
+  const meta = displayStatusMeta(thread.current_status, live)
   const claimedByMe = live && thread.claim_holder_user_id === userId
   const claimedByOther = live && thread.claim_holder_user_id !== userId
   return (

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import {
-  homeworkStatusMeta,
+  claimIsLive,
+  displayStatusMeta,
   useTeacherGrid,
   type GridColumn,
   type GridStudent,
@@ -127,8 +128,11 @@ function GroupRows({
             {columns.map((col) => {
               const cell = byId.get(col.subproblem_id)
               const status = cell?.current_status ?? 'ungraded'
+              const beingGraded = cell ? claimIsLive(cell) : false
               const label =
-                columnHeader(col) + ': ' + homeworkStatusMeta(status).label
+                columnHeader(col) +
+                ': ' +
+                displayStatusMeta(status, beingGraded).label
               return (
                 <td key={col.subproblem_id} className="px-1 py-1 text-center">
                   {cell && cell.thread_id > 0 ? (
@@ -136,10 +140,10 @@ function GroupRows({
                       to={threadPath(centerId, seriesId, cell.thread_id)}
                       className="inline-block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                     >
-                      <StatusTile status={status} label={label} />
+                      <StatusTile status={status} beingGraded={beingGraded} label={label} />
                     </Link>
                   ) : (
-                    <StatusTile status={status} label={label} />
+                    <StatusTile status={status} beingGraded={beingGraded} label={label} />
                   )}
                 </td>
               )

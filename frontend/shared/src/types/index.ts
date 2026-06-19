@@ -233,12 +233,15 @@ export interface Series {
 }
 
 // RollupSubproblem is one subproblem's status in a student's own rollup
-// (GET /homework/series/{id}/my).
+// (GET /homework/series/{id}/my). `being_graded` is a privacy-safe flag —
+// true when a grader currently holds a live claim — so the student sees
+// "На проверке" vs "В очереди" without learning the grader's identity.
 export interface RollupSubproblem {
   subproblem_id: number
   subproblem_label: string
   thread_id: number
   current_status: HomeworkStatus
+  being_graded: boolean
 }
 
 export interface RollupProblem {

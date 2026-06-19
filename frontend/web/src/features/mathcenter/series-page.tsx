@@ -248,16 +248,20 @@ function StudentProblemListWithCounts({
 }) {
   // Count per-subproblem statuses granularly so the summary matches the tiles:
   // the backend's `pending` lumps unsolved with under-review, which reads wrong.
+  // "На проверке"/"В очереди" split mirrors the per-tile being_graded flag.
   let accepted = 0
-  let checking = 0
+  let queued = 0
+  let grading = 0
   let rejected = 0
   let unsolved = 0
   for (const p of rollup.problems) {
     for (const s of p.subproblems) {
       if (s.current_status === 'accepted') accepted++
       else if (s.current_status === 'rejected') rejected++
-      else if (s.current_status === 'submitted' || s.current_status === 'appealed') checking++
-      else unsolved++
+      else if (s.current_status === 'submitted' || s.current_status === 'appealed') {
+        if (s.being_graded) grading++
+        else queued++
+      } else unsolved++
     }
   }
   return (
@@ -267,7 +271,10 @@ function StudentProblemListWithCounts({
           Принято: <span className="font-medium text-status-accepted">{accepted}</span>
         </span>
         <span>
-          На проверке: <span className="font-medium text-status-checking">{checking}</span>
+          В очереди: <span className="font-medium text-status-checking">{queued}</span>
+        </span>
+        <span>
+          На проверке: <span className="font-medium text-status-grading">{grading}</span>
         </span>
         <span>
           Отклонено: <span className="font-medium text-status-rejected">{rejected}</span>

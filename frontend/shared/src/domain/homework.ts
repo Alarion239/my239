@@ -12,9 +12,11 @@ import type {
 
 // StatusTone is the abstract visual category a platform maps to its own colour
 // palette. Keeping it abstract (not a colour) keeps this file platform-agnostic.
+// `checking` (amber) = awaiting a grader; `grading` (blue) = a grader has it.
 export type StatusTone =
   | 'accepted'
   | 'checking'
+  | 'grading'
   | 'rejected'
   | 'appeal'
   | 'unsolved'
@@ -25,8 +27,9 @@ export interface StatusMeta {
   glyph: string
 }
 
-// homeworkStatusMeta maps a status to its Russian label, abstract tone, and a
-// compact glyph for dense lists.
+// homeworkStatusMeta maps a raw status to its Russian label, abstract tone, and
+// a compact glyph. This is the claim-unaware view (used where claim state isn't
+// available); for the "В очереди" vs "На проверке" split see displayStatusMeta.
 export function homeworkStatusMeta(status: HomeworkStatus): StatusMeta {
   switch (status) {
     case 'accepted':
@@ -37,6 +40,33 @@ export function homeworkStatusMeta(status: HomeworkStatus): StatusMeta {
       return { label: 'Отклонено', tone: 'rejected', glyph: '✗' }
     case 'appealed':
       return { label: 'Апелляция', tone: 'appeal', glyph: '?' }
+    case 'ungraded':
+      return { label: 'Не решено', tone: 'unsolved', glyph: '○' }
+  }
+}
+
+// displayStatusMeta is the claim-AWARE presentation: it splits the "checking"
+// family by whether a grader currently holds the thread, so both students and
+// graders can tell "В очереди" (queued, amber) from "На проверке" (being
+// graded, blue). `beingGraded` is the live-claim signal — from the rollup's
+// `being_graded` flag (students) or claimIsLive(cell/thread) (graders).
+export function displayStatusMeta(
+  status: HomeworkStatus,
+  beingGraded: boolean,
+): StatusMeta {
+  switch (status) {
+    case 'accepted':
+      return { label: 'Принято', tone: 'accepted', glyph: '✓' }
+    case 'rejected':
+      return { label: 'Отклонено', tone: 'rejected', glyph: '✗' }
+    case 'submitted':
+      return beingGraded
+        ? { label: 'На проверке', tone: 'grading', glyph: '◐' }
+        : { label: 'В очереди', tone: 'checking', glyph: '…' }
+    case 'appealed':
+      return beingGraded
+        ? { label: 'Апелляция · проверка', tone: 'grading', glyph: '◐' }
+        : { label: 'Апелляция в очереди', tone: 'appeal', glyph: '?' }
     case 'ungraded':
       return { label: 'Не решено', tone: 'unsolved', glyph: '○' }
   }

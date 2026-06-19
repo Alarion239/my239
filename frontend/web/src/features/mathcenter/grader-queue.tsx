@@ -3,14 +3,13 @@ import { Lock } from 'lucide-react'
 import {
   claimIsLive,
   formatDateTime,
-  homeworkStatusMeta,
   useGraderQueue,
   useGraderStats,
   type QueueItem,
 } from '@my239/shared'
 import { Spinner } from '../../design/ui'
 import { cn } from '../../design/cn'
-import { statusPillClassesFor } from './status-style'
+import { displayPill } from './status-style'
 
 export interface GraderQueueProps {
   centerId: number
@@ -111,8 +110,8 @@ function QueueRow({
   seriesId: number
   item: QueueItem
 }) {
-  const meta = homeworkStatusMeta(item.current_status)
   const locked = claimIsLive(item)
+  const { meta, className } = displayPill(item.current_status, locked)
   return (
     <Link
       to={threadPath(centerId, seriesId, item.thread_id)}
@@ -129,10 +128,7 @@ function QueueRow({
         {formatDateTime(item.updated_at)}
       </span>
       <span
-        className={cn(
-          'rounded-full px-2.5 py-0.5 text-xs font-medium',
-          statusPillClassesFor(item.current_status),
-        )}
+        className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium', className)}
       >
         {meta.label}
       </span>

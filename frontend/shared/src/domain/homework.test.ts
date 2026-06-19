@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   claimIsLive,
   currentSeries,
+  displayStatusMeta,
   eventKindLabel,
   eventTone,
   homeworkStatusMeta,
@@ -221,6 +222,32 @@ describe('userNameFromThread', () => {
     expect(userNameFromThread(thread, 2)).toBe('Пётр Иванов')
     expect(userNameFromThread(thread, 9)).toBe('неизвестно')
     expect(userNameFromThread(thread, null)).toBe('')
+  })
+})
+
+describe('displayStatusMeta', () => {
+  it('splits submitted into queued vs being-graded', () => {
+    expect(displayStatusMeta('submitted', false)).toEqual({
+      label: 'В очереди',
+      tone: 'checking',
+      glyph: '…',
+    })
+    expect(displayStatusMeta('submitted', true)).toEqual({
+      label: 'На проверке',
+      tone: 'grading',
+      glyph: '◐',
+    })
+  })
+
+  it('splits appealed into queued vs being-graded', () => {
+    expect(displayStatusMeta('appealed', false).tone).toBe('appeal')
+    expect(displayStatusMeta('appealed', true).tone).toBe('grading')
+  })
+
+  it('ignores beingGraded for terminal/untouched states', () => {
+    expect(displayStatusMeta('accepted', true).label).toBe('Принято')
+    expect(displayStatusMeta('rejected', true).label).toBe('Отклонено')
+    expect(displayStatusMeta('ungraded', true).label).toBe('Не решено')
   })
 })
 

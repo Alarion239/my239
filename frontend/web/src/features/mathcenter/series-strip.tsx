@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useRef } from 'react'
 import { formatDateTime, type Series } from '@my239/shared'
 import { Badge } from '../../design/ui'
 import { cn } from '../../design/cn'
@@ -13,8 +14,10 @@ export interface SeriesStripProps {
 }
 
 // SeriesStrip is the horizontal, scrollable row of series cards above the detail
-// area. The "current" series is emphasised with an accent border + a badge; the
-// selected card gets a ring.
+// area, ordered by due date (earliest left → latest right). The "current"
+// series (closest upcoming deadline) is emphasised, and the strip auto-scrolls
+// to centre it on load — so with many series you land on the current one and
+// swipe left to reach earlier ones.
 export function SeriesStrip({
   series,
   selectedId,
@@ -22,18 +25,53 @@ export function SeriesStrip({
   onSelect,
   progress,
 }: SeriesStripProps) {
+  const scrollerRef = useRef<HTMLDivElement>(null)
+  const centerRef = useRef<HTMLButtonElement | null>(null)
+
+  // Chronological order by due date; ties fall back to series number.
+  const ordered = useMemo(
+    () =>
+      [...series].sort((a, b) => {
+        const da = Date.parse(a.due_at)
+        const db = Date.parse(b.due_at)
+        if (da !== db && !Number.isNaN(da) && !Number.isNaN(db)) return da - db
+        return a.number - b.number
+      }),
+    [series],
+  )
+
+  // The card to centre on: the current series, else the selected one.
+  const centerId = currentId ?? selectedId
+
+  // Centre that card on load (and whenever the target changes). Computed from
+  // bounding rects so it's robust to the scroller's offsetParent.
+  useEffect(() => {
+    const scroller = scrollerRef.current
+    const el = centerRef.current
+    if (!scroller || !el) return
+    const elRect = el.getBoundingClientRect()
+    const scRect = scroller.getBoundingClientRect()
+    const delta =
+      elRect.left - scRect.left - (scroller.clientWidth - el.clientWidth) / 2
+    scroller.scrollLeft = Math.max(0, scroller.scrollLeft + delta)
+  }, [centerId, ordered.length])
+
   return (
+    // px/py padding keeps the selected card's 2px ring from being clipped by the
+    // scroll container (overflow-x:auto also clips the cross axis).
     <div
-      className="flex gap-3 overflow-x-auto pb-2"
+      ref={scrollerRef}
+      className="flex gap-3 overflow-x-auto px-1 py-2"
       role="tablist"
       aria-label="Серии"
     >
-      {series.map((s) => {
+      {ordered.map((s) => {
         const isCurrent = s.id === currentId
         const isSelected = s.id === selectedId
         return (
           <button
             key={s.id}
+            ref={s.id === centerId ? centerRef : undefined}
             type="button"
             role="tab"
             aria-selected={isSelected}

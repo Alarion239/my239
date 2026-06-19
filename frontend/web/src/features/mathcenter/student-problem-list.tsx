@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import {
+  displayStatusMeta,
   homeworkStatusMeta,
   problemStateFromSubproblems,
   type MyRollup,
@@ -83,17 +84,22 @@ function ProblemRow({
           <Link
             key={sub.subproblem_id}
             to={subproblemPath(centerId, seriesId, sub)}
-            title={sub.subproblem_label + ': ' + homeworkStatusMeta(sub.current_status).label}
+            title={
+              sub.subproblem_label +
+              ': ' +
+              displayStatusMeta(sub.current_status, sub.being_graded).label
+            }
             className={cn(
               'rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
             )}
           >
             <StatusTile
               status={sub.current_status}
+              beingGraded={sub.being_graded}
               label={
                 sub.subproblem_label +
                 ': ' +
-                homeworkStatusMeta(sub.current_status).label
+                displayStatusMeta(sub.current_status, sub.being_graded).label
               }
             />
           </Link>

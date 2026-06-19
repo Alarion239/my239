@@ -79,8 +79,8 @@ const studentRollup: MyRollup = {
       problem_number: 1,
       problem_display: 'Задача 1',
       subproblems: [
-        { subproblem_id: 1000, subproblem_label: 'а', thread_id: 1, current_status: 'accepted' },
-        { subproblem_id: 1001, subproblem_label: 'б', thread_id: 2, current_status: 'submitted' },
+        { subproblem_id: 1000, subproblem_label: 'а', thread_id: 1, current_status: 'accepted', being_graded: false },
+        { subproblem_id: 1001, subproblem_label: 'б', thread_id: 2, current_status: 'submitted', being_graded: true },
       ],
     },
   ],
@@ -168,7 +168,8 @@ describe('SeriesPage — student view', () => {
     expect(await screen.findByText('Мой прогресс')).toBeInTheDocument()
     expect(screen.getByText('Задача 1')).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'а: Принято' })).toBeInTheDocument()
-    expect(screen.getByRole('img', { name: 'б: Проверяется' })).toBeInTheDocument()
+    // Subproblem б is submitted AND claimed (being_graded) → "На проверке".
+    expect(screen.getByRole('img', { name: 'б: На проверке' })).toBeInTheDocument()
     // No teacher toolbar in the student view.
     expect(screen.queryByRole('button', { name: 'Загрузить серию' })).not.toBeInTheDocument()
   })
