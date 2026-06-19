@@ -182,38 +182,20 @@ function CenterSeries({
       />
 
       {selected ? (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <StatementPanel series={selected} />
-          <DetailSide
-            centerId={centerId}
-            series={selected}
-            isStudentView={isStudentView}
-          />
-        </div>
+        isStudentView ? (
+          <div className="grid gap-6 lg:grid-cols-2">
+            <StatementPanel series={selected} />
+            <Card>
+              <CardContent>
+                <StudentSide centerId={centerId} series={selected} />
+              </CardContent>
+            </Card>
+          </div>
+        ) : (
+          <TeacherSeriesView centerId={centerId} series={selected} />
+        )
       ) : null}
     </>
-  )
-}
-
-function DetailSide({
-  centerId,
-  series,
-  isStudentView,
-}: {
-  centerId: number
-  series: Series
-  isStudentView: boolean
-}) {
-  return (
-    <Card>
-      <CardContent>
-        {isStudentView ? (
-          <StudentSide centerId={centerId} series={series} />
-        ) : (
-          <TeacherSide series={series} />
-        )}
-      </CardContent>
-    </Card>
   )
 }
 
@@ -290,24 +272,46 @@ function StudentProblemListWithCounts({
 
 type TeacherTab = 'stats' | 'queue' | 'grid'
 
-function TeacherSide({ series }: { series: Series }) {
+// TeacherSeriesView gives teachers a top-level switch between "Статистика"
+// (kept in the two-column master-detail beside the statement) and the grading
+// surfaces "Очередь"/"Таблица", which take the full width — a 60+ student grid
+// or a long queue needs the room and doesn't want the statement column.
+function TeacherSeriesView({
+  centerId,
+  series,
+}: {
+  centerId: number
+  series: Series
+}) {
   const [tab, setTab] = useState<TeacherTab>('stats')
   const [mine, setMine] = useState(false)
-  const centerId = series.math_center_id
   return (
     <div className="flex flex-col gap-4">
       <TeacherTabBar value={tab} onChange={setTab} />
       {tab === 'stats' ? (
-        <StatsTab series={series} />
-      ) : tab === 'queue' ? (
-        <GraderQueue
-          centerId={centerId}
-          seriesId={series.id}
-          mine={mine}
-          onMineChange={setMine}
-        />
+        <div className="grid gap-6 lg:grid-cols-2">
+          <StatementPanel series={series} />
+          <Card>
+            <CardContent>
+              <StatsTab series={series} />
+            </CardContent>
+          </Card>
+        </div>
       ) : (
-        <TeacherGrid centerId={centerId} seriesId={series.id} />
+        <Card>
+          <CardContent>
+            {tab === 'queue' ? (
+              <GraderQueue
+                centerId={centerId}
+                seriesId={series.id}
+                mine={mine}
+                onMineChange={setMine}
+              />
+            ) : (
+              <TeacherGrid centerId={centerId} seriesId={series.id} />
+            )}
+          </CardContent>
+        </Card>
       )}
     </div>
   )
