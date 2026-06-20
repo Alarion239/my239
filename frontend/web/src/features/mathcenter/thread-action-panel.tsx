@@ -4,6 +4,7 @@ import {
   claimIsLive,
   useClaimThread,
   useGradeThread,
+  useReleaseClaim,
   useRetractGrade,
   useSubmitAttempt,
   userNameFromThread,
@@ -87,6 +88,7 @@ function GraderActions({
 }) {
   const claim = useClaimThread(thread.id)
   const grade = useGradeThread(thread.id)
+  const release = useReleaseClaim(thread.id)
 
   const live = claimIsLive(thread)
   const heldByMe = live && thread.claim_holder_user_id === userId
@@ -124,9 +126,21 @@ function GraderActions({
 
       {canGrade ? (
         <Card className="p-4">
-          <h3 className="mb-3 font-display text-lg font-medium text-ink">
-            Поставить оценку
-          </h3>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="font-display text-lg font-medium text-ink">
+              Поставить оценку
+            </h3>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => release.mutate()}
+              disabled={release.isPending}
+              title="Снять задачу с проверки, вернуть в очередь"
+            >
+              {release.isPending ? 'Освобождаем…' : 'Освободить'}
+            </Button>
+          </div>
           <SubmissionForm
             presignKind="grader"
             presignId={thread.id}

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import {
   currentSeries,
+  isClosed,
   useMathCenterMe,
   useMySeriesRollup,
   useSeriesList,
@@ -201,6 +202,7 @@ function CenterSeries({
 
 function StudentSide({ centerId, series }: { centerId: number; series: Series }) {
   const { data, isPending, isError } = useMySeriesRollup(series.id)
+  const closed = isClosed(series.due_at)
   return (
     <SidePanel
       title="Мой прогресс"
@@ -213,6 +215,7 @@ function StudentSide({ centerId, series }: { centerId: number; series: Series })
           centerId={centerId}
           seriesId={series.id}
           rollup={data}
+          closed={closed}
         />
       ) : null}
     </SidePanel>
@@ -223,10 +226,12 @@ function StudentProblemListWithCounts({
   centerId,
   seriesId,
   rollup,
+  closed,
 }: {
   centerId: number
   seriesId: number
   rollup: MyRollup
+  closed: boolean
 }) {
   // Count per-subproblem statuses granularly so the summary matches the tiles:
   // the backend's `pending` lumps unsolved with under-review, which reads wrong.
@@ -265,7 +270,18 @@ function StudentProblemListWithCounts({
           Не решено: <span className="font-medium text-muted">{unsolved}</span>
         </span>
       </div>
-      <StudentProblemList centerId={centerId} seriesId={seriesId} rollup={rollup} />
+      {closed ? (
+        <p className="text-xs text-muted">
+          Серия закрыта — отправка решений недоступна. Можно открыть задачу и
+          подать апелляцию по отклонённым.
+        </p>
+      ) : null}
+      <StudentProblemList
+        centerId={centerId}
+        seriesId={seriesId}
+        rollup={rollup}
+        closed={closed}
+      />
     </div>
   )
 }

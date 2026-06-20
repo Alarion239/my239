@@ -129,8 +129,9 @@ LIMIT 1;
 
 -- name: ListGraderQueueForSeries :many
 -- Items needing grading: 'submitted' or 'appealed', not locked by someone
--- else (a stale lock counts as available). mine=true restricts to threads
--- where the caller was the most recent grader (appeal stickiness).
+-- else (a stale lock counts as available). mine=true restricts to "my work":
+-- threads I currently hold a live claim on, OR where I was the most recent
+-- grader (appeal stickiness) — so a grader can find what they've taken on.
 SELECT t.id              AS id,
        t.student_user_id AS student_user_id,
        t.subproblem_id   AS subproblem_id,
@@ -155,7 +156,10 @@ WHERE t.series_id = $1
   AND (t.claim_holder_user_id IS NULL
        OR t.claim_expires_at < NOW()
        OR t.claim_holder_user_id = @caller_user_id::bigint)
-  AND (NOT @mine_only::bool OR t.last_grader_user_id = @caller_user_id::bigint)
+  AND (NOT @mine_only::bool
+       OR t.last_grader_user_id = @caller_user_id::bigint
+       OR (t.claim_holder_user_id = @caller_user_id::bigint
+           AND t.claim_expires_at > NOW()))
 ORDER BY t.current_status ASC,
          t.updated_at ASC;
 

@@ -383,7 +383,10 @@ WHERE t.series_id = $1
   AND (t.claim_holder_user_id IS NULL
        OR t.claim_expires_at < NOW()
        OR t.claim_holder_user_id = $2::bigint)
-  AND (NOT $3::bool OR t.last_grader_user_id = $2::bigint)
+  AND (NOT $3::bool
+       OR t.last_grader_user_id = $2::bigint
+       OR (t.claim_holder_user_id = $2::bigint
+           AND t.claim_expires_at > NOW()))
 ORDER BY t.current_status ASC,
          t.updated_at ASC
 `
@@ -413,8 +416,9 @@ type ListGraderQueueForSeriesRow struct {
 }
 
 // Items needing grading: 'submitted' or 'appealed', not locked by someone
-// else (a stale lock counts as available). mine=true restricts to threads
-// where the caller was the most recent grader (appeal stickiness).
+// else (a stale lock counts as available). mine=true restricts to "my work":
+// threads I currently hold a live claim on, OR where I was the most recent
+// grader (appeal stickiness) — so a grader can find what they've taken on.
 func (q *Queries) ListGraderQueueForSeries(ctx context.Context, arg ListGraderQueueForSeriesParams) ([]ListGraderQueueForSeriesRow, error) {
 	rows, err := q.db.Query(ctx, listGraderQueueForSeries, arg.SeriesID, arg.CallerUserID, arg.MineOnly)
 	if err != nil {
