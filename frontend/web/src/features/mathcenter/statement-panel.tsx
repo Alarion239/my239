@@ -33,7 +33,7 @@ export function StatementPanel({ series, className }: StatementPanelProps) {
         ) : active === 'tex' ? (
           <TexStatement series={series} />
         ) : (
-          <PdfViewer seriesId={series.id} />
+          <PdfViewer path={'/mathcenter/series/' + series.id + '/pdf'} title="Условие (PDF)" />
         )}
       </CardContent>
     </Card>

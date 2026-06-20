@@ -248,3 +248,39 @@ export function userNameFromThread(
   if (userId == null) return ''
   return thread.users[String(userId)] ?? 'неизвестно'
 }
+
+// --- Coffin-aware submission gating -----------------------------------------
+
+// CoffinGate is the subset of SubproblemContext needed to decide whether NEW
+// submissions are open. Mirrors backend internal/homework.SubmissionClosed.
+export interface CoffinGate {
+  is_coffin: boolean
+  coffin_released_at?: string | null
+  series_due_at: string
+}
+
+// submissionClosedFor reports whether new submissions are closed for a
+// subproblem: a normal problem closes at the series deadline; a coffin stays
+// open past it until its own solution is released. `nowMs` is injectable.
+export function submissionClosedFor(
+  ctx: CoffinGate,
+  nowMs: number = Date.now(),
+): boolean {
+  if (ctx.is_coffin) {
+    if (!ctx.coffin_released_at) return false
+    const t = Date.parse(ctx.coffin_released_at)
+    return Number.isFinite(t) && t <= nowMs
+  }
+  const due = Date.parse(ctx.series_due_at)
+  return Number.isFinite(due) && due <= nowMs
+}
+
+// coffinOpen reports whether a coffin still accepts submissions (not released).
+export function coffinOpen(
+  releasedAt: string | null | undefined,
+  nowMs: number = Date.now(),
+): boolean {
+  if (!releasedAt) return true
+  const t = Date.parse(releasedAt)
+  return Number.isFinite(t) ? t > nowMs : true
+}

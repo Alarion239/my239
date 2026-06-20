@@ -19,6 +19,8 @@ import { StudentProblemList } from './student-problem-list'
 import { TeacherProblemStats } from './teacher-problem-stats'
 import { GraderQueue } from './grader-queue'
 import { TeacherGrid } from './teacher-grid'
+import { CoffinMarkers } from './coffin-markers'
+import { SeriesSolutionPanel } from './series-solution-panel'
 import { UploadSeriesDialog } from './upload-series-dialog'
 import { useSeriesContext } from './use-series-context'
 
@@ -183,18 +185,21 @@ function CenterSeries({
       />
 
       {selected ? (
-        isStudentView ? (
-          <div className="grid gap-6 lg:grid-cols-2">
-            <StatementPanel series={selected} />
-            <Card>
-              <CardContent>
-                <StudentSide centerId={centerId} series={selected} />
-              </CardContent>
-            </Card>
-          </div>
-        ) : (
-          <TeacherSeriesView centerId={centerId} series={selected} />
-        )
+        <>
+          {isStudentView ? (
+            <div className="grid gap-6 lg:grid-cols-2">
+              <StatementPanel series={selected} />
+              <Card>
+                <CardContent>
+                  <StudentSide centerId={centerId} series={selected} />
+                </CardContent>
+              </Card>
+            </div>
+          ) : (
+            <TeacherSeriesView centerId={centerId} series={selected} />
+          )}
+          <SeriesSolutionPanel series={selected} isManager={!isStudentView} />
+        </>
       ) : null}
     </>
   )
@@ -374,14 +379,17 @@ function TeacherTabBar({
 function StatsTab({ series }: { series: Series }) {
   const { data, isPending, isError } = useSeriesProblemStats(series.id)
   return (
-    <SidePanel
-      title={'Статистика' + (data ? ' · ' + data.total_students + ' учеников' : '')}
-      isPending={isPending}
-      isError={isError}
-      hasData={!!data}
-    >
-      {data ? <TeacherProblemStats stats={data} /> : null}
-    </SidePanel>
+    <div className="flex flex-col gap-4">
+      <SidePanel
+        title={'Статистика' + (data ? ' · ' + data.total_students + ' учеников' : '')}
+        isPending={isPending}
+        isError={isError}
+        hasData={!!data}
+      >
+        {data ? <TeacherProblemStats stats={data} /> : null}
+      </SidePanel>
+      <CoffinMarkers series={series} />
+    </div>
   )
 }
 

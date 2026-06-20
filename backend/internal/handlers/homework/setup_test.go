@@ -33,11 +33,13 @@ var eventColumns = []string{
 var subproblemCtxColumns = []string{
 	"subproblem_id", "subproblem_label", "problem_id", "problem_number",
 	"series_id", "math_center_id", "series_due_at", "series_published_at",
+	"is_coffin", "coffin_released_at",
 }
 
 var seriesColumns = []string{
 	"id", "math_center_id", "number", "name", "due_at",
 	"pdf_object_key", "published_at", "created_at", "tex_source",
+	"solution_tex_source", "solution_pdf_object_key", "solution_link",
 }
 
 var queueRowColumns = []string{
@@ -117,13 +119,23 @@ func expectStudentCheck(mock pgxmock.PgxPoolIface, userID, centerID int64, ok bo
 		WillReturnRows(mock.NewRows([]string{"is_student"}).AddRow(ok))
 }
 
-// expectSubproblemContext adds the GetSubproblemContext expectation. due is
-// the series.due_at; publishedAt is non-nil for published series.
+// expectSubproblemContext adds the GetSubproblemContext expectation for a
+// non-coffin problem. due is the series.due_at; publishedAt is non-nil for
+// published series.
 func expectSubproblemContext(mock pgxmock.PgxPoolIface, subproblemID, problemID, seriesID, centerID int64, problemNumber int32, label string, due time.Time, publishedAt *time.Time) {
 	mock.ExpectQuery(`FROM math_center_subproblems sp\s+JOIN math_center_problems`).
 		WithArgs(subproblemID).
 		WillReturnRows(mock.NewRows(subproblemCtxColumns).
-			AddRow(subproblemID, label, problemID, problemNumber, seriesID, centerID, due, publishedAt))
+			AddRow(subproblemID, label, problemID, problemNumber, seriesID, centerID, due, publishedAt, false, (*time.Time)(nil)))
+}
+
+// expectSubproblemContextCoffin is the coffin variant: isCoffin=true and an
+// optional coffinReleasedAt (nil = still open).
+func expectSubproblemContextCoffin(mock pgxmock.PgxPoolIface, subproblemID, problemID, seriesID, centerID int64, problemNumber int32, label string, due time.Time, publishedAt *time.Time, coffinReleasedAt *time.Time) {
+	mock.ExpectQuery(`FROM math_center_subproblems sp\s+JOIN math_center_problems`).
+		WithArgs(subproblemID).
+		WillReturnRows(mock.NewRows(subproblemCtxColumns).
+			AddRow(subproblemID, label, problemID, problemNumber, seriesID, centerID, due, publishedAt, true, coffinReleasedAt))
 }
 
 // expectGetSeriesForView adds the GetSeries expectation that buildThreadView
@@ -136,7 +148,7 @@ func expectGetSeriesForView(mock pgxmock.PgxPoolIface, seriesID, centerID int64,
 	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
 		WithArgs(seriesID).
 		WillReturnRows(mock.NewRows(seriesColumns).
-			AddRow(seriesID, centerID, int32(1), "S", now.Add(time.Hour), (*string)(nil), &pub, now, (*string)(nil)))
+			AddRow(seriesID, centerID, int32(1), "S", now.Add(time.Hour), (*string)(nil), &pub, now, (*string)(nil), (*string)(nil), (*string)(nil), (*string)(nil)))
 }
 
 // expectGetUsersForView adds the bulk-user lookup buildThreadView makes

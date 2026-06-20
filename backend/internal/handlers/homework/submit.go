@@ -68,10 +68,11 @@ func SubmitAttempt(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 		if !requireStudent(ctx, w, r, q, userID, spCtx.MathCenterID) {
 			return
 		}
-		// Submissions close at the due time. Appeals are NOT blocked by
-		// due (a rejection might land post-due and the student still
-		// deserves a regrade path).
-		if !time.Now().Before(spCtx.SeriesDueAt) {
+		// Submission window. Normal problems close at the series deadline; a
+		// coffin (гроб) stays open past it until its own solution is released.
+		// Appeals are NOT blocked by this (a rejection might land post-due and
+		// the student still deserves a regrade path) — see AppealGrade.
+		if homework.SubmissionClosed(spCtx.IsCoffin, spCtx.CoffinReleasedAt, spCtx.SeriesDueAt, time.Now()) {
 			httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "submissions closed for this series")
 			return
 		}

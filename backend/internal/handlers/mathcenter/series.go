@@ -82,7 +82,13 @@ type seriesView struct {
 	PublishedAt  *time.Time    `json:"published_at,omitempty"`
 	HasPDF       bool          `json:"has_pdf"`
 	HasTex       bool          `json:"has_tex"`
-	Problems     []problemView `json:"problems"`
+	// Series-level разбор presence. The client decides visibility (teacher
+	// always; student only once due_at has passed) — the GET endpoints enforce
+	// the same gate server-side.
+	HasSolutionTex bool    `json:"has_solution_tex"`
+	HasSolutionPDF bool    `json:"has_solution_pdf"`
+	SolutionLink   *string `json:"solution_link,omitempty"`
+	Problems       []problemView `json:"problems"`
 }
 
 // Handlers -------------------------------------------------------------------
@@ -1034,11 +1040,14 @@ func assembleSeriesView(s store.MathCenterSeries, problems []store.MathCenterPro
 		Name:         s.Name,
 		DisplayName:  mc.SeriesDisplayName(int(s.Number), s.Name),
 		DueAt:        s.DueAt,
-		Published:    s.PublishedAt != nil,
-		PublishedAt:  s.PublishedAt,
-		HasPDF:       s.PdfObjectKey != nil,
-		HasTex:       s.TexSource != nil,
-		Problems:     pviews,
+		Published:      s.PublishedAt != nil,
+		PublishedAt:    s.PublishedAt,
+		HasPDF:         s.PdfObjectKey != nil,
+		HasTex:         s.TexSource != nil,
+		HasSolutionTex: s.SolutionTexSource != nil,
+		HasSolutionPDF: s.SolutionPdfObjectKey != nil,
+		SolutionLink:   s.SolutionLink,
+		Problems:       pviews,
 	}
 }
 
