@@ -179,6 +179,22 @@ export function useRetractGrade(threadId: number) {
   })
 }
 
+// useReleaseClaim drops the caller's claim on a thread (explicit "Освободить").
+// The endpoint returns 204, so there's no fresh thread to cache — invalidate the
+// thread and the lists that reflect claim state instead.
+export function useReleaseClaim(threadId: number) {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => releaseClaim(client, threadId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.thread(threadId) })
+      // The series queue / grid / stats all key under 'homework'.
+      qc.invalidateQueries({ queryKey: ['homework'] })
+    },
+  })
+}
+
 // --- Claim heartbeat / release (fire-and-forget, 204) ------------------------
 
 // heartbeatClaim extends the caller's grading lease. Returns void (204).

@@ -71,8 +71,9 @@ type Querier interface {
 	ListCentersForTeacher(ctx context.Context, userID int64) ([]ListCentersForTeacherRow, error)
 	ListEventPhotosForEvents(ctx context.Context, eventIds []int64) ([]HomeworkThreadEventPhoto, error)
 	// Items needing grading: 'submitted' or 'appealed', not locked by someone
-	// else (a stale lock counts as available). mine=true restricts to threads
-	// where the caller was the most recent grader (appeal stickiness).
+	// else (a stale lock counts as available). mine=true restricts to "my work":
+	// threads I currently hold a live claim on, OR where I was the most recent
+	// grader (appeal stickiness) — so a grader can find what they've taken on.
 	ListGraderQueueForSeries(ctx context.Context, arg ListGraderQueueForSeriesParams) ([]ListGraderQueueForSeriesRow, error)
 	ListGroupsForCenter(ctx context.Context, mathCenterID int64) ([]MathCenterGroup, error)
 	ListGroupsForCenters(ctx context.Context, centerIds []int64) ([]MathCenterGroup, error)
