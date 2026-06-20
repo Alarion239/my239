@@ -10,9 +10,9 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	mc "github.com/Alarion239/my239/backend/internal/mathcenter"
 	"github.com/Alarion239/my239/backend/internal/httpx"
 	"github.com/Alarion239/my239/backend/internal/logger"
+	mc "github.com/Alarion239/my239/backend/internal/mathcenter"
 	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/pkg/db"
 	"github.com/Alarion239/my239/backend/pkg/objectstore"
