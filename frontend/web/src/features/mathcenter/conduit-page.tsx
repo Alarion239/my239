@@ -27,8 +27,10 @@ export function ConduitPage() {
     return <NoAccess />
   }
 
+  // Fills the full-bleed content region; the grid below is the single scroll
+  // surface (see AppShell's full-bleed branch).
   return (
-    <div className="flex flex-col gap-4">
+    <div className="h-full">
       <Conduit centerId={centerId} />
     </div>
   )
@@ -131,13 +133,14 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
 
   const divider = 'border-l-2 border-l-line-strong'
 
+  // The grid IS the page: it fills the full-bleed region and is the single
+  // scroll surface (both axes), like a spreadsheet — no Card, no nested box.
   return (
-    <Card className="overflow-hidden p-0">
-      <div
-        ref={scrollerRef}
-        className="max-h-[calc(100vh-11rem)] overflow-auto overscroll-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        <table className="border-collapse text-sm [&_td]:border [&_td]:border-line [&_th]:border [&_th]:border-line">
+    <div
+      ref={scrollerRef}
+      className="h-full overflow-auto overscroll-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
+      <table className="border-collapse text-sm [&_td]:border [&_td]:border-line [&_th]:border [&_th]:border-line">
           <thead>
             {/* Series band — one header spanning each series' columns. */}
             <tr>
@@ -266,8 +269,7 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
             </tr>
           </tbody>
         </table>
-      </div>
-    </Card>
+    </div>
   )
 }
 

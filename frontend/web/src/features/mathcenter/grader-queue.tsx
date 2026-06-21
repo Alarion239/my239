@@ -48,27 +48,9 @@ export function GraderQueue({ centerId, seriesId }: GraderQueueProps) {
   // filtered out server-side), so it's "in my work".
   const mine = solutionsFirst(all.filter((i) => claimIsLive(i)))
   const available = solutionsFirst(all.filter((i) => !claimIsLive(i)))
-  const appeals = available.filter((i) => i.current_status === 'appealed').length
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
-        <span>
-          Доступно к проверке:{' '}
-          <span className="font-medium text-status-checking">{available.length}</span>
-        </span>
-        <span>
-          Апелляции:{' '}
-          <span className="font-medium text-status-appeal">{appeals}</span>
-        </span>
-        {mine.length > 0 ? (
-          <span>
-            В работе у вас:{' '}
-            <span className="font-medium text-accent-ink">{mine.length}</span>
-          </span>
-        ) : null}
-      </div>
-
       {queue.isPending ? (
         <div className="flex justify-center py-10">
           <Spinner />
@@ -99,7 +81,7 @@ export function GraderQueue({ centerId, seriesId }: GraderQueueProps) {
             {available.length === 0 ? (
               <p className="py-2 text-sm text-muted">Свободных задач нет.</p>
             ) : (
-              <ul className="flex max-h-[28rem] flex-col gap-2 overflow-y-auto pr-1">
+              <ul className="flex flex-col gap-2">
                 {available.map((item) => (
                   <li key={item.thread_id}>
                     <QueueRow centerId={centerId} seriesId={seriesId} item={item} />

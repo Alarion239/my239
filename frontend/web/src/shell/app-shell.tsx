@@ -1,20 +1,35 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/auth-context'
 import { useImpersonation } from '../auth/impersonation-context'
 import { Button } from '../design/ui'
+import { cn } from '../design/cn'
 import { NavRail } from './nav-rail'
 import { TopBar } from './top-bar'
 
 // AppShell is the authenticated chrome: persistent nav rail (md+), a top bar,
 // and the routed content region. Every module renders into <Outlet/>.
+//
+// Most pages scroll with the window inside a padded, centred column. "Full
+// bleed" pages (the Кондуит spreadsheet) instead fill the whole content region
+// edge-to-edge and own their single scroll surface — no padding, no width cap,
+// no page-level scroll — so the grid behaves like a spreadsheet that IS the
+// page.
 export function AppShell() {
   const { user } = useAuth()
   const { actingAs, stop } = useImpersonation()
+  const location = useLocation()
   // RequireAuth guarantees a user before this renders, but guard defensively.
   if (!user) return null
 
+  const fullBleed = location.pathname.endsWith('/conduit')
+
   return (
-    <div className="flex min-h-screen bg-paper">
+    <div
+      className={cn(
+        'flex bg-paper',
+        fullBleed ? 'h-screen overflow-hidden' : 'min-h-screen',
+      )}
+    >
       <NavRail />
       <div className="flex min-w-0 flex-1 flex-col">
         {/* The top bar (and impersonation banner) stays pinned while the main
@@ -30,11 +45,17 @@ export function AppShell() {
             </div>
           ) : null}
         </div>
-        <main className="flex-1 px-4 py-5 sm:px-5 lg:px-6">
-          <div className="mx-auto w-full max-w-7xl">
+        {fullBleed ? (
+          <main className="min-h-0 flex-1">
             <Outlet />
-          </div>
-        </main>
+          </main>
+        ) : (
+          <main className="flex-1 px-4 py-5 sm:px-5 lg:px-6">
+            <div className="mx-auto w-full max-w-7xl">
+              <Outlet />
+            </div>
+          </main>
+        )}
       </div>
     </div>
   )
