@@ -490,6 +490,54 @@ func DownloadSubproblemSolutionPDF(database *db.DB, blobs objectstore.Store, ttl
 	}
 }
 
+// --- shared разбор groups ---------------------------------------------------
+
+type assignGroupRequest struct {
+	SubproblemIDs []int64 `json:"subproblem_ids"`
+}
+
+// AssignSolutionGroup — teacher-only. Mints a fresh group id and assigns it to
+// every subproblem in the set, recording that they share one разбор (so the
+// student Разбор view can group + light up the whole set). Content is set by
+// the per-subproblem endpoints first; this just labels the set.
+func AssignSolutionGroup(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		userID, ok := requireUser(w, r)
+		if !ok {
+			return
+		}
+		var req assignGroupRequest
+		if !httpx.DecodeJSONBody(w, r, &req) {
+			return
+		}
+		if len(req.SubproblemIDs) == 0 {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "subproblem_ids required")
+			return
+		}
+		q := store.New(database.Pool())
+		// Authorize via the first subproblem's center (they come from one
+		// series, so share a center); the content endpoints already checked each.
+		if _, ok := loadSubproblemForWrite(ctx, w, r, q, userID, req.SubproblemIDs[0]); !ok {
+			return
+		}
+		groupID, err := q.CreateSolutionGroup(ctx)
+		if err != nil {
+			logger.LogErrorContext(ctx, "coffins: create solution group", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to group разбор")
+			return
+		}
+		if err := q.SetSubproblemSolutionGroup(ctx, store.SetSubproblemSolutionGroupParams{
+			GroupID: groupID, SubproblemIds: req.SubproblemIDs,
+		}); err != nil {
+			logger.LogErrorContext(ctx, "coffins: set solution group", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to group разбор")
+			return
+		}
+		httpx.WriteJSON(w, http.StatusOK, map[string]int64{"group_id": groupID})
+	}
+}
+
 // --- per-subproblem разбор: external link -----------------------------------
 
 func SetSubproblemSolutionLinkHandler(database *db.DB) http.HandlerFunc {

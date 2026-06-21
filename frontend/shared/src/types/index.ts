@@ -221,6 +221,9 @@ export interface Subproblem {
   has_solution_tex: boolean
   has_solution_pdf: boolean
   solution_link?: string | null
+  // Shared-разбор group: subproblems with the same non-null id were given one
+  // разбор together (covers a set of problems). Null = its own разбор.
+  solution_group_id?: number | null
 }
 
 // SeriesProblem is one problem within a series — a display grouping of its

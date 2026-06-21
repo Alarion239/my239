@@ -1,6 +1,7 @@
 package mathcenter_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -14,7 +15,7 @@ import (
 var subproblemSolutionColumns = []string{
 	"id", "subproblem_id", "is_coffin", "released_at",
 	"solution_tex_source", "solution_pdf_object_key", "solution_link",
-	"created_at", "updated_at",
+	"created_at", "updated_at", "solution_group_id",
 }
 
 // GetSubproblemSolutionCenter resolution row (subproblem → problem → series → center).
@@ -41,7 +42,7 @@ func TestMarkCoffin_AdminSucceeds(t *testing.T) {
 	mock.ExpectQuery(`INSERT INTO math_center_subproblem_solutions`).
 		WithArgs(int64(900), true).
 		WillReturnRows(mock.NewRows(subproblemSolutionColumns).
-			AddRow(int64(9), int64(900), true, (*time.Time)(nil), (*string)(nil), (*string)(nil), (*string)(nil), now, now))
+			AddRow(int64(9), int64(900), true, (*time.Time)(nil), (*string)(nil), (*string)(nil), (*string)(nil), now, now, (*int64)(nil)))
 
 	req := authedAdminRequest(t, access, 1, http.MethodPost, "/subproblems/900/coffin", nil)
 	rr := httptest.NewRecorder()
@@ -87,7 +88,7 @@ func TestReleaseCoffin_AdminSucceeds(t *testing.T) {
 	mock.ExpectQuery(`UPDATE math_center_subproblem_solutions\s+SET released_at`).
 		WithArgs(int64(900)).
 		WillReturnRows(mock.NewRows(subproblemSolutionColumns).
-			AddRow(int64(9), int64(900), true, &now, (*string)(nil), (*string)(nil), (*string)(nil), now, now))
+			AddRow(int64(9), int64(900), true, &now, (*string)(nil), (*string)(nil), (*string)(nil), now, now, (*int64)(nil)))
 
 	req := authedAdminRequest(t, access, 1, http.MethodPost, "/subproblems/900/solution/release", nil)
 	rr := httptest.NewRecorder()
@@ -99,6 +100,56 @@ func TestReleaseCoffin_AdminSucceeds(t *testing.T) {
 	_ = json.Unmarshal(rr.Body.Bytes(), &resp)
 	if resp["released_at"] == nil {
 		t.Errorf("expected released_at set, got %v", resp)
+	}
+}
+
+func TestAssignSolutionGroup_AdminSucceeds(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	// Authorize via the first subproblem's center.
+	expectSubproblemCenter(mock, 900, 42, "a", 5, now)
+	// Mint a group, then assign it to the whole set.
+	mock.ExpectQuery(`INSERT INTO math_center_solution_groups`).
+		WillReturnRows(mock.NewRows([]string{"id"}).AddRow(int64(7)))
+	mock.ExpectExec(`UPDATE math_center_subproblem_solutions\s+SET solution_group_id`).
+		WithArgs(int64(7), []int64{900, 901}).
+		WillReturnResult(pgxmock.NewResult("UPDATE", 2))
+
+	body, _ := json.Marshal(map[string]any{"subproblem_ids": []int64{900, 901}})
+	req := authedAdminRequest(t, access, 1, http.MethodPost, "/subproblem-solutions/group", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	var resp map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &resp)
+	if resp["group_id"] != float64(7) {
+		t.Errorf("group_id: got %v, want 7", resp["group_id"])
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestAssignSolutionGroup_EmptyRejected(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	body, _ := json.Marshal(map[string]any{"subproblem_ids": []int64{}})
+	req := authedAdminRequest(t, access, 1, http.MethodPost, "/subproblem-solutions/group", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("got %d, want 400", rr.Code)
 	}
 }
 

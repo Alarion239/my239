@@ -5,9 +5,20 @@
 // both the Гробы tab and the series Разбор tab refresh.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { ApiClient } from '../api/client'
 import type { Coffin, PdfUploadURL } from '../types'
 import { useApiClient } from './context'
 import { queryKeys } from './keys'
+
+// groupSolutions records that the given subproblems share one разбор (so the
+// student Разбор view can group + light up the whole set). Called after the
+// content has been written to each subproblem.
+async function groupSolutions(client: ApiClient, subproblemIds: number[]) {
+  await client.request('/mathcenter/subproblem-solutions/group', {
+    method: 'POST',
+    body: { subproblem_ids: subproblemIds },
+  })
+}
 
 // CoffinAction is the lean response of mark/release/solution actions (no labels
 // — the client refetches the list/series view for those).
@@ -177,6 +188,7 @@ export function usePutSubproblemSolutionTexBatch(centerId: number) {
           ),
         ),
       )
+      await groupSolutions(client, subproblemIds)
     },
     onSuccess: (_data, { subproblemIds }) => {
       // Refresh each subproblem's cached разбор TeX so an open preview updates.
@@ -207,6 +219,7 @@ export function useSetSubproblemSolutionLinkBatch(centerId: number) {
           ),
         ),
       )
+      await groupSolutions(client, subproblemIds)
     },
     onSuccess: () => invalidate(qc, centerId),
   })
@@ -243,6 +256,7 @@ export function useUploadSubproblemSolutionPdfBatch(centerId: number) {
           { method: 'POST', body: { object_key } },
         )
       }
+      await groupSolutions(client, subproblemIds)
     },
     onSuccess: () => invalidate(qc, centerId),
   })

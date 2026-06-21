@@ -10,7 +10,7 @@ import {
   type Series,
   type Subproblem,
 } from '@my239/shared'
-import { Button, StatusLegend, StatusTile } from '../../design/ui'
+import { StatusLegend, StatusTile } from '../../design/ui'
 import { cn } from '../../design/cn'
 
 export interface StudentProblemListProps {
@@ -104,18 +104,10 @@ function ProblemRow({
     problem.subproblems.map((s) => s.current_status),
   )
   const summaryMeta = homeworkStatusMeta(summary)
-  // First not-yet-accepted subproblem that is still open for submission — where
-  // "Сдать" should land. An open coffin keeps the shortcut alive past the
-  // deadline; a closed normal subproblem doesn't.
-  const next = problem.subproblems.find(
-    (s) =>
-      s.current_status !== 'accepted' &&
-      !closedForSub(meta.get(s.subproblem_id), dueAt),
-  )
-  const allAccepted = problem.subproblems.every(
-    (s) => s.current_status === 'accepted',
-  )
 
+  // Submission is done by pressing a subproblem's status tile (its symbol):
+  // an existing thread opens its dialog; an untouched-but-open subproblem opens
+  // the submit form. No separate "Сдать" button.
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3">
       <div className="min-w-0 flex-1">
@@ -157,19 +149,6 @@ function ProblemRow({
           )
         })}
       </div>
-      {next ? (
-        <Button size="sm" variant="secondary" asChild>
-          <Link to={subproblemPath(centerId, seriesId, next)}>Сдать</Link>
-        </Button>
-      ) : allAccepted ? (
-        <Button size="sm" variant="secondary" disabled title="Все подзадачи приняты">
-          Сдать
-        </Button>
-      ) : (
-        <Button size="sm" variant="secondary" disabled title="Срок сдачи прошёл">
-          Сдать
-        </Button>
-      )}
     </div>
   )
 }

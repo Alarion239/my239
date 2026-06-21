@@ -29,6 +29,8 @@ type Querier interface {
 	CreateProblem(ctx context.Context, arg CreateProblemParams) (MathCenterProblem, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	CreateSeries(ctx context.Context, arg CreateSeriesParams) (MathCenterSeries, error)
+	// Mint a fresh shared-разбор group id.
+	CreateSolutionGroup(ctx context.Context) (int64, error)
 	CreateSubproblem(ctx context.Context, arg CreateSubproblemParams) (MathCenterSubproblem, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteMathCenter(ctx context.Context, id int64) (int64, error)
@@ -152,6 +154,9 @@ type Querier interface {
 	// the series wasn't already published, mirroring the PDF publish flow:
 	// a series with any rendered content is considered visible to students.
 	SetSeriesTex(ctx context.Context, arg SetSeriesTexParams) (MathCenterSeries, error)
+	// Assign a (just-minted) group to every subproblem in the set. The solution
+	// rows must already exist (content was set first); only existing rows update.
+	SetSubproblemSolutionGroup(ctx context.Context, arg SetSubproblemSolutionGroupParams) error
 	SetSubproblemSolutionLink(ctx context.Context, arg SetSubproblemSolutionLinkParams) (MathCenterSubproblemSolution, error)
 	SetSubproblemSolutionPdf(ctx context.Context, arg SetSubproblemSolutionPdfParams) (MathCenterSubproblemSolution, error)
 	// Upsert: authoring разбор on a non-coffin subproblem creates the row.

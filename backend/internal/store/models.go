@@ -88,6 +88,11 @@ type MathCenterSeries struct {
 	TexSource    *string    `json:"tex_source"`
 }
 
+type MathCenterSolutionGroup struct {
+	ID        int64     `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type MathCenterStudent struct {
 	ID        int64     `json:"id"`
 	UserID    int64     `json:"user_id"`
@@ -112,6 +117,7 @@ type MathCenterSubproblemSolution struct {
 	SolutionLink         *string    `json:"solution_link"`
 	CreatedAt            time.Time  `json:"created_at"`
 	UpdatedAt            time.Time  `json:"updated_at"`
+	SolutionGroupID      *int64     `json:"solution_group_id"`
 }
 
 type MathCenterTeacher struct {

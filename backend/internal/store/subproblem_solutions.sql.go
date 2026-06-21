@@ -10,6 +10,19 @@ import (
 	"time"
 )
 
+const createSolutionGroup = `-- name: CreateSolutionGroup :one
+INSERT INTO math_center_solution_groups DEFAULT VALUES
+RETURNING id
+`
+
+// Mint a fresh shared-разбор group id.
+func (q *Queries) CreateSolutionGroup(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, createSolutionGroup)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const deleteSubproblemSolution = `-- name: DeleteSubproblemSolution :execrows
 DELETE
 FROM math_center_subproblem_solutions
@@ -26,7 +39,7 @@ func (q *Queries) DeleteSubproblemSolution(ctx context.Context, subproblemID int
 }
 
 const getSubproblemSolution = `-- name: GetSubproblemSolution :one
-SELECT id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at
+SELECT id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at, solution_group_id
 FROM math_center_subproblem_solutions
 WHERE subproblem_id = $1
 `
@@ -44,6 +57,7 @@ func (q *Queries) GetSubproblemSolution(ctx context.Context, subproblemID int64)
 		&i.SolutionLink,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SolutionGroupID,
 	)
 	return i, err
 }
@@ -244,7 +258,8 @@ SELECT ss.subproblem_id                                   AS subproblem_id,
        ss.released_at                                     AS released_at,
        (ss.solution_tex_source IS NOT NULL)::boolean      AS has_solution_tex,
        (ss.solution_pdf_object_key IS NOT NULL)::boolean  AS has_solution_pdf,
-       ss.solution_link                                   AS solution_link
+       ss.solution_link                                   AS solution_link,
+       ss.solution_group_id                               AS solution_group_id
 FROM math_center_subproblem_solutions ss
          JOIN math_center_subproblems sp ON sp.id = ss.subproblem_id
          JOIN math_center_problems p ON p.id = sp.problem_id
@@ -253,13 +268,14 @@ ORDER BY p.number ASC, sp.label ASC
 `
 
 type ListSubproblemSolutionsForSeriesRow struct {
-	SubproblemID   int64      `json:"subproblem_id"`
-	ProblemID      int64      `json:"problem_id"`
-	IsCoffin       bool       `json:"is_coffin"`
-	ReleasedAt     *time.Time `json:"released_at"`
-	HasSolutionTex bool       `json:"has_solution_tex"`
-	HasSolutionPdf bool       `json:"has_solution_pdf"`
-	SolutionLink   *string    `json:"solution_link"`
+	SubproblemID    int64      `json:"subproblem_id"`
+	ProblemID       int64      `json:"problem_id"`
+	IsCoffin        bool       `json:"is_coffin"`
+	ReleasedAt      *time.Time `json:"released_at"`
+	HasSolutionTex  bool       `json:"has_solution_tex"`
+	HasSolutionPdf  bool       `json:"has_solution_pdf"`
+	SolutionLink    *string    `json:"solution_link"`
+	SolutionGroupID *int64     `json:"solution_group_id"`
 }
 
 // Per-subproblem разбор/coffin metadata for one series, so the teacher Разбор
@@ -282,6 +298,7 @@ func (q *Queries) ListSubproblemSolutionsForSeries(ctx context.Context, seriesID
 			&i.HasSolutionTex,
 			&i.HasSolutionPdf,
 			&i.SolutionLink,
+			&i.SolutionGroupID,
 		); err != nil {
 			return nil, err
 		}
@@ -300,7 +317,8 @@ SELECT ss.subproblem_id                                   AS subproblem_id,
        ss.released_at                                     AS released_at,
        (ss.solution_tex_source IS NOT NULL)::boolean      AS has_solution_tex,
        (ss.solution_pdf_object_key IS NOT NULL)::boolean  AS has_solution_pdf,
-       ss.solution_link                                   AS solution_link
+       ss.solution_link                                   AS solution_link,
+       ss.solution_group_id                               AS solution_group_id
 FROM math_center_subproblem_solutions ss
          JOIN math_center_subproblems sp ON sp.id = ss.subproblem_id
          JOIN math_center_problems p ON p.id = sp.problem_id
@@ -309,13 +327,14 @@ ORDER BY p.number ASC, sp.label ASC
 `
 
 type ListSubproblemSolutionsForSeriesIDsRow struct {
-	SubproblemID   int64      `json:"subproblem_id"`
-	ProblemID      int64      `json:"problem_id"`
-	IsCoffin       bool       `json:"is_coffin"`
-	ReleasedAt     *time.Time `json:"released_at"`
-	HasSolutionTex bool       `json:"has_solution_tex"`
-	HasSolutionPdf bool       `json:"has_solution_pdf"`
-	SolutionLink   *string    `json:"solution_link"`
+	SubproblemID    int64      `json:"subproblem_id"`
+	ProblemID       int64      `json:"problem_id"`
+	IsCoffin        bool       `json:"is_coffin"`
+	ReleasedAt      *time.Time `json:"released_at"`
+	HasSolutionTex  bool       `json:"has_solution_tex"`
+	HasSolutionPdf  bool       `json:"has_solution_pdf"`
+	SolutionLink    *string    `json:"solution_link"`
+	SolutionGroupID *int64     `json:"solution_group_id"`
 }
 
 // Batched variant of the above for the series-LIST endpoint, so the list also
@@ -337,6 +356,7 @@ func (q *Queries) ListSubproblemSolutionsForSeriesIDs(ctx context.Context, serie
 			&i.HasSolutionTex,
 			&i.HasSolutionPdf,
 			&i.SolutionLink,
+			&i.SolutionGroupID,
 		); err != nil {
 			return nil, err
 		}
@@ -353,7 +373,7 @@ UPDATE math_center_subproblem_solutions
 SET released_at = COALESCE(released_at, NOW()),
     updated_at  = NOW()
 WHERE subproblem_id = $1
-RETURNING id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at
+RETURNING id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at, solution_group_id
 `
 
 // Stamp released_at (first release wins) — closes a coffin's submission window
@@ -371,8 +391,28 @@ func (q *Queries) ReleaseSubproblemSolution(ctx context.Context, subproblemID in
 		&i.SolutionLink,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SolutionGroupID,
 	)
 	return i, err
+}
+
+const setSubproblemSolutionGroup = `-- name: SetSubproblemSolutionGroup :exec
+UPDATE math_center_subproblem_solutions
+SET solution_group_id = $1::bigint,
+    updated_at        = NOW()
+WHERE subproblem_id = ANY ($2::bigint[])
+`
+
+type SetSubproblemSolutionGroupParams struct {
+	GroupID       int64   `json:"group_id"`
+	SubproblemIds []int64 `json:"subproblem_ids"`
+}
+
+// Assign a (just-minted) group to every subproblem in the set. The solution
+// rows must already exist (content was set first); only existing rows update.
+func (q *Queries) SetSubproblemSolutionGroup(ctx context.Context, arg SetSubproblemSolutionGroupParams) error {
+	_, err := q.db.Exec(ctx, setSubproblemSolutionGroup, arg.GroupID, arg.SubproblemIds)
+	return err
 }
 
 const setSubproblemSolutionLink = `-- name: SetSubproblemSolutionLink :one
@@ -380,7 +420,7 @@ INSERT INTO math_center_subproblem_solutions (subproblem_id, solution_link)
 VALUES ($1, $2)
 ON CONFLICT (subproblem_id)
     DO UPDATE SET solution_link = EXCLUDED.solution_link, updated_at = NOW()
-RETURNING id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at
+RETURNING id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at, solution_group_id
 `
 
 type SetSubproblemSolutionLinkParams struct {
@@ -401,6 +441,7 @@ func (q *Queries) SetSubproblemSolutionLink(ctx context.Context, arg SetSubprobl
 		&i.SolutionLink,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SolutionGroupID,
 	)
 	return i, err
 }
@@ -410,7 +451,7 @@ INSERT INTO math_center_subproblem_solutions (subproblem_id, solution_pdf_object
 VALUES ($1, $2)
 ON CONFLICT (subproblem_id)
     DO UPDATE SET solution_pdf_object_key = EXCLUDED.solution_pdf_object_key, updated_at = NOW()
-RETURNING id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at
+RETURNING id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at, solution_group_id
 `
 
 type SetSubproblemSolutionPdfParams struct {
@@ -431,6 +472,7 @@ func (q *Queries) SetSubproblemSolutionPdf(ctx context.Context, arg SetSubproble
 		&i.SolutionLink,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SolutionGroupID,
 	)
 	return i, err
 }
@@ -440,7 +482,7 @@ INSERT INTO math_center_subproblem_solutions (subproblem_id, solution_tex_source
 VALUES ($1, $2)
 ON CONFLICT (subproblem_id)
     DO UPDATE SET solution_tex_source = EXCLUDED.solution_tex_source, updated_at = NOW()
-RETURNING id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at
+RETURNING id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at, solution_group_id
 `
 
 type SetSubproblemSolutionTexParams struct {
@@ -462,6 +504,7 @@ func (q *Queries) SetSubproblemSolutionTex(ctx context.Context, arg SetSubproble
 		&i.SolutionLink,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SolutionGroupID,
 	)
 	return i, err
 }
@@ -472,7 +515,7 @@ INSERT INTO math_center_subproblem_solutions (subproblem_id, is_coffin)
 VALUES ($1, $2)
 ON CONFLICT (subproblem_id)
     DO UPDATE SET is_coffin = EXCLUDED.is_coffin, updated_at = NOW()
-RETURNING id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at
+RETURNING id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at, solution_group_id
 `
 
 type UpsertCoffinFlagParams struct {
@@ -498,6 +541,7 @@ func (q *Queries) UpsertCoffinFlag(ctx context.Context, arg UpsertCoffinFlagPara
 		&i.SolutionLink,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SolutionGroupID,
 	)
 	return i, err
 }

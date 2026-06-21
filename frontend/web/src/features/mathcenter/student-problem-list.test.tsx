@@ -57,23 +57,21 @@ function renderList(series: Series) {
 }
 
 describe('StudentProblemList — per-subproblem deadline gating', () => {
-  it('keeps "Сдать" active and links untouched subproblems while open', () => {
+  // Submission is done by pressing a subproblem's status tile (no "Сдать"
+  // button): an untouched-but-open subproblem links to its submit form.
+  it('links untouched subproblems to the submit form while open', () => {
     renderList(makeSeries(FUTURE, [sub({ id: 10, label: 'а' }), sub({ id: 11, label: 'б' })]))
-    const submit = screen.getByRole('link', { name: 'Сдать' })
-    expect(submit).toHaveAttribute('href', '/mathcenter/1/series/7/submit/10')
-    // Untouched subproblem 'а' links to the submit form.
     expect(
       document.querySelector('a[href="/mathcenter/1/series/7/submit/10"]'),
     ).not.toBeNull()
+    expect(screen.queryByRole('button', { name: 'Сдать' })).toBeNull()
   })
 
   // Regression: after the deadline the student must not be able to start a new
-  // submission — "Сдать" is disabled and the untouched tile is no longer a
-  // submit link. The rejected subproblem's thread link stays (to appeal).
+  // submission — the untouched tile is no longer a submit link. The rejected
+  // subproblem's thread link stays (to appeal).
   it('disables submission after the deadline but keeps thread links', () => {
     renderList(makeSeries(PAST, [sub({ id: 10, label: 'а' }), sub({ id: 11, label: 'б' })]))
-    const submit = screen.getByRole('button', { name: 'Сдать' })
-    expect(submit).toBeDisabled()
     expect(
       document.querySelector('a[href="/mathcenter/1/series/7/submit/10"]'),
     ).toBeNull()
@@ -92,7 +90,8 @@ describe('StudentProblemList — per-subproblem deadline gating', () => {
         sub({ id: 11, label: 'б' }),
       ]),
     )
-    const submit = screen.getByRole('link', { name: 'Сдать' })
-    expect(submit).toHaveAttribute('href', '/mathcenter/1/series/7/submit/10')
+    expect(
+      document.querySelector('a[href="/mathcenter/1/series/7/submit/10"]'),
+    ).not.toBeNull()
   })
 })
