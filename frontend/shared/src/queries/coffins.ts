@@ -178,7 +178,13 @@ export function usePutSubproblemSolutionTexBatch(centerId: number) {
         ),
       )
     },
-    onSuccess: () => invalidate(qc, centerId),
+    onSuccess: (_data, { subproblemIds }) => {
+      // Refresh each subproblem's cached разбор TeX so an open preview updates.
+      for (const id of subproblemIds) {
+        qc.invalidateQueries({ queryKey: queryKeys.subproblemSolutionTex(id) })
+      }
+      invalidate(qc, centerId)
+    },
   })
 }
 
