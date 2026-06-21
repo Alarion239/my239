@@ -8,6 +8,7 @@ import {
   type GridStudent,
 } from '@my239/shared'
 import { Input, Spinner, StatusTile } from '../../design/ui'
+import { cn } from '../../design/cn'
 
 export interface TeacherGridProps {
   centerId: number
@@ -100,11 +101,14 @@ export function TeacherGrid({ centerId, seriesId }: TeacherGridProps) {
                   <th
                     key={col.subproblem_id}
                     title={
-                      col.subproblem_label
+                      (col.subproblem_label
                         ? col.problem_display + ' (' + col.subproblem_label + ')'
-                        : col.problem_display
+                        : col.problem_display) + (col.is_coffin ? ' — гроб' : '')
                     }
-                    className="sticky top-0 z-20 border-b border-line bg-surface px-2 py-2 text-center text-xs font-medium text-muted"
+                    className={cn(
+                      'sticky top-0 z-20 border-b border-line px-2 py-2 text-center text-xs font-medium',
+                      col.is_coffin ? 'bg-line-strong/40 text-ink' : 'bg-surface text-muted',
+                    )}
                   >
                     {columnHeader(col)}
                   </th>
@@ -169,7 +173,13 @@ function GroupRows({
                 ': ' +
                 displayStatusMeta(status, beingGraded).label
               return (
-                <td key={col.subproblem_id} className="px-2 py-1 text-center">
+                <td
+                  key={col.subproblem_id}
+                  className={cn(
+                    'px-2 py-1 text-center',
+                    col.is_coffin && 'bg-line-strong/15',
+                  )}
+                >
                   {cell && cell.thread_id > 0 ? (
                     <Link
                       to={threadPath(centerId, seriesId, cell.thread_id)}

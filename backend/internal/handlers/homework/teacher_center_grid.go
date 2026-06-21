@@ -62,6 +62,7 @@ type centerGridColumn struct {
 	// subparts, "1" / "2a" / "5b" otherwise. Computed server-side so the
 	// frontend doesn't need a duplicate of the label rules.
 	ColumnLabel string `json:"column_label"`
+	IsCoffin    bool   `json:"is_coffin"`
 }
 
 type centerGridCell struct {
@@ -280,6 +281,7 @@ func (b *seriesBuilder) add(r store.TeacherCenterGridRow) {
 			ProblemID:       r.ProblemID,
 			ProblemNumber:   int(r.ProblemNumber),
 			ColumnLabel:     columnLabel(int(r.ProblemNumber), r.SubproblemLabel),
+			IsCoffin:        r.IsCoffin,
 		})
 	}
 }

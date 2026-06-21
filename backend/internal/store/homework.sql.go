@@ -706,6 +706,7 @@ SELECT
     sp.label                               AS subproblem_label,
     p.id                                   AS problem_id,
     p.number                               AS problem_number,
+    COALESCE(ss.is_coffin, false)::boolean AS is_coffin,
     COALESCE(t.id, 0)::bigint              AS thread_id,
     COALESCE(t.current_status, 'ungraded') AS current_status,
     t.last_grader_user_id                  AS last_grader_user_id,
@@ -719,6 +720,7 @@ FROM math_center_students mcs
          JOIN math_center_series s          ON s.math_center_id = g.math_center_id
          JOIN math_center_problems p        ON p.series_id = s.id
          JOIN math_center_subproblems sp    ON sp.problem_id = p.id
+         LEFT JOIN math_center_subproblem_solutions ss ON ss.subproblem_id = sp.id
          LEFT JOIN homework_thread t
                    ON t.student_user_id = mcs.user_id
                   AND t.subproblem_id   = sp.id
@@ -742,6 +744,7 @@ type TeacherCenterGridRow struct {
 	SubproblemLabel   string     `json:"subproblem_label"`
 	ProblemID         int64      `json:"problem_id"`
 	ProblemNumber     int32      `json:"problem_number"`
+	IsCoffin          bool       `json:"is_coffin"`
 	ThreadID          int64      `json:"thread_id"`
 	CurrentStatus     string     `json:"current_status"`
 	LastGraderUserID  *int64     `json:"last_grader_user_id"`
@@ -779,6 +782,7 @@ func (q *Queries) TeacherCenterGrid(ctx context.Context, mathCenterID int64) ([]
 			&i.SubproblemLabel,
 			&i.ProblemID,
 			&i.ProblemNumber,
+			&i.IsCoffin,
 			&i.ThreadID,
 			&i.CurrentStatus,
 			&i.LastGraderUserID,
@@ -809,6 +813,7 @@ SELECT
     sp.label                               AS subproblem_label,
     p.id                                   AS problem_id,
     p.number                               AS problem_number,
+    COALESCE(ss.is_coffin, false)::boolean AS is_coffin,
     COALESCE(t.id, 0)::bigint              AS thread_id,
     COALESCE(t.current_status, 'ungraded') AS current_status,
     t.last_grader_user_id                  AS last_grader_user_id,
@@ -820,6 +825,7 @@ FROM math_center_students mcs
          JOIN math_center_groups g ON g.id = mcs.group_id
          CROSS JOIN math_center_subproblems sp
          JOIN math_center_problems p  ON p.id  = sp.problem_id
+         LEFT JOIN math_center_subproblem_solutions ss ON ss.subproblem_id = sp.id
          LEFT JOIN homework_thread t
                    ON t.student_user_id = mcs.user_id
                   AND t.subproblem_id   = sp.id
@@ -839,6 +845,7 @@ type TeacherSeriesGridRow struct {
 	SubproblemLabel   string     `json:"subproblem_label"`
 	ProblemID         int64      `json:"problem_id"`
 	ProblemNumber     int32      `json:"problem_number"`
+	IsCoffin          bool       `json:"is_coffin"`
 	ThreadID          int64      `json:"thread_id"`
 	CurrentStatus     string     `json:"current_status"`
 	LastGraderUserID  *int64     `json:"last_grader_user_id"`
@@ -872,6 +879,7 @@ func (q *Queries) TeacherSeriesGrid(ctx context.Context, id int64) ([]TeacherSer
 			&i.SubproblemLabel,
 			&i.ProblemID,
 			&i.ProblemNumber,
+			&i.IsCoffin,
 			&i.ThreadID,
 			&i.CurrentStatus,
 			&i.LastGraderUserID,

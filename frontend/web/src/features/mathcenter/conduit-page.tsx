@@ -167,13 +167,17 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
                 Решено
               </th>
             </tr>
-            {/* Per-subproblem column labels. */}
+            {/* Per-subproblem column labels (coffins get a darker tint). */}
             <tr>
               {cols.map(({ col, firstInSeries }) => (
                 <th
                   key={col.subproblem_id}
+                  title={col.is_coffin ? 'Гроб' : undefined}
                   className={cn(
-                    'sticky top-9 z-20 min-w-9 bg-surface-muted px-1.5 py-1 text-center text-xs font-medium text-muted',
+                    'sticky top-9 z-20 min-w-9 px-1.5 py-1 text-center text-xs font-medium',
+                    col.is_coffin
+                      ? 'bg-line-strong/40 text-ink'
+                      : 'bg-surface-muted text-muted',
                     firstInSeries && divider,
                   )}
                 >
@@ -207,7 +211,9 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
                             firstInSeries && divider,
                             acc
                               ? 'bg-status-accepted-soft font-medium text-status-accepted'
-                              : 'text-faint',
+                              : col.is_coffin
+                                ? 'bg-line-strong/15 text-faint'
+                                : 'text-faint',
                           )}
                         >
                           {acc ? cellInitials(st.user_id, col.subproblem_id) : ''}

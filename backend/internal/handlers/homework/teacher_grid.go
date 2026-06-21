@@ -49,6 +49,7 @@ type gridSubproblemHeader struct {
 	ProblemID       int64  `json:"problem_id"`
 	ProblemNumber   int    `json:"problem_number"`
 	ProblemDisplay  string `json:"problem_display"`
+	IsCoffin        bool   `json:"is_coffin"`
 }
 
 // gridResponse pairs the column headers with the student rows. Rows are
@@ -128,6 +129,7 @@ func buildGridColumns(rows []store.TeacherSeriesGridRow) []gridSubproblemHeader 
 			ProblemID:       row.ProblemID,
 			ProblemNumber:   int(row.ProblemNumber),
 			ProblemDisplay:  mc.ProblemDisplayName(int(row.ProblemNumber)),
+			IsCoffin:        row.IsCoffin,
 		})
 	}
 	return cols
