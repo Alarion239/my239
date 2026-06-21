@@ -11,6 +11,18 @@ export const queryKeys = {
   adminCenters: ['admin', 'mathcenters'] as const,
   centerGroups: (centerId: number) =>
     ['admin', 'mathcenters', centerId, 'groups'] as const,
+  // Head-teacher management panel ("Управление").
+  manageGroups: (centerId: number) =>
+    ['mathcenter', 'manage', centerId, 'groups'] as const,
+  manageTeachers: (centerId: number) =>
+    ['mathcenter', 'manage', centerId, 'teachers'] as const,
+  manageStudents: (centerId: number) =>
+    ['mathcenter', 'manage', centerId, 'students'] as const,
+  manageInvites: (centerId: number) =>
+    ['mathcenter', 'manage', centerId, 'invites'] as const,
+  userSearch: (centerId: number, q: string) =>
+    ['mathcenter', 'manage', centerId, 'user-search', q] as const,
+  inviteContext: (token: string) => ['auth', 'invite', token] as const,
   seriesList: (centerId: number) =>
     ['mathcenter', 'centers', centerId, 'series'] as const,
   series: (id: number) => ['mathcenter', 'series', id] as const,
