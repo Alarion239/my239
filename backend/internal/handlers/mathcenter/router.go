@@ -32,6 +32,7 @@ func Router(database *db.DB, tokens *internalAuth.TokenService, blobs objectstor
 	})
 	// Center-wide coffins ("Гробы") tab.
 	r.Get("/centers/{centerID}/coffins", ListCenterCoffins(database))
+	r.Get("/centers/{centerID}/coffin-queue", ListCoffinQueue(database))
 	// Group a set of subproblems under one shared разбор (teacher).
 	r.Post("/subproblem-solutions/group", AssignSolutionGroup(database))
 

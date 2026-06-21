@@ -46,6 +46,9 @@ type coffinView struct {
 	HasSolutionTex  bool       `json:"has_solution_tex"`
 	HasSolutionPDF  bool       `json:"has_solution_pdf"`
 	SolutionLink    *string    `json:"solution_link,omitempty"`
+	// Teacher-only "solved N of M" stats.
+	AcceptedCount int `json:"accepted_count"`
+	TotalCount    int `json:"total_count"`
 	// Student-only thread status (zero for teachers).
 	ThreadID      int64  `json:"thread_id,omitempty"`
 	CurrentStatus string `json:"current_status,omitempty"`
@@ -133,6 +136,20 @@ func ListCenterCoffins(database *db.DB) http.HandlerFunc {
 			}
 		}
 
+		// Teachers get per-coffin "solved N of M" stats.
+		statsBySub := map[int64]store.ListCoffinSolvedCountsRow{}
+		if isTeacher {
+			counts, err := q.ListCoffinSolvedCounts(ctx, centerID)
+			if err != nil {
+				logger.LogErrorContext(ctx, "coffins: solved counts", err)
+				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+				return
+			}
+			for _, c := range counts {
+				statsBySub[c.SubproblemID] = c
+			}
+		}
+
 		out := make([]coffinView, 0, len(rows))
 		for _, c := range rows {
 			v := coffinView{
@@ -156,7 +173,76 @@ func ListCenterCoffins(database *db.DB) http.HandlerFunc {
 				v.CurrentStatus = st.CurrentStatus
 				v.BeingGraded = st.BeingGraded
 			}
+			if cs, ok := statsBySub[c.SubproblemID]; ok {
+				v.AcceptedCount = int(cs.Accepted)
+				v.TotalCount = int(cs.Total)
+			}
 			out = append(out, v)
+		}
+		httpx.WriteJSON(w, http.StatusOK, out)
+	}
+}
+
+// coffinQueueItem is one row of the center-wide coffin grading queue.
+type coffinQueueItem struct {
+	ThreadID          int64      `json:"thread_id"`
+	StudentUserID     int64      `json:"student_user_id"`
+	StudentName       string     `json:"student_name"`
+	SubproblemID      int64      `json:"subproblem_id"`
+	SubproblemLabel   string     `json:"subproblem_label"`
+	ProblemNumber     int        `json:"problem_number"`
+	ProblemDisplay    string     `json:"problem_display"`
+	SeriesID          int64      `json:"series_id"`
+	CurrentStatus     string     `json:"current_status"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+	LastGraderUserID  *int64     `json:"last_grader_user_id,omitempty"`
+	ClaimHolderUserID *int64     `json:"claim_holder_user_id,omitempty"`
+	ClaimExpiresAt    *time.Time `json:"claim_expires_at,omitempty"`
+}
+
+// ListCoffinQueue — teacher of the center. The center-wide coffin grading queue:
+// submissions/appeals on coffin subproblems available to grade.
+func ListCoffinQueue(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		userID, ok := requireUser(w, r)
+		if !ok {
+			return
+		}
+		centerID, err := pathInt64(r, "centerID")
+		if err != nil {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid center id")
+			return
+		}
+		q := store.New(database.Pool())
+		if !requireTeacher(ctx, w, r, q, userID, centerID) {
+			return
+		}
+		rows, err := q.ListCoffinQueueForCenter(ctx, store.ListCoffinQueueForCenterParams{
+			MathCenterID: centerID, CallerUserID: userID,
+		})
+		if err != nil {
+			logger.LogErrorContext(ctx, "coffins: queue", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to load coffin queue")
+			return
+		}
+		out := make([]coffinQueueItem, 0, len(rows))
+		for _, row := range rows {
+			out = append(out, coffinQueueItem{
+				ThreadID:          row.ThreadID,
+				StudentUserID:     row.StudentUserID,
+				StudentName:       mc.StudentDisplayName(row.StudentFirstName, row.StudentLastName),
+				SubproblemID:      row.SubproblemID,
+				SubproblemLabel:   row.SubproblemLabel,
+				ProblemNumber:     int(row.ProblemNumber),
+				ProblemDisplay:    mc.ProblemDisplayName(int(row.ProblemNumber)),
+				SeriesID:          row.SeriesID,
+				CurrentStatus:     row.CurrentStatus,
+				UpdatedAt:         row.UpdatedAt,
+				LastGraderUserID:  row.LastGraderUserID,
+				ClaimHolderUserID: row.ClaimHolderUserID,
+				ClaimExpiresAt:    row.ClaimExpiresAt,
+			})
 		}
 		httpx.WriteJSON(w, http.StatusOK, out)
 	}

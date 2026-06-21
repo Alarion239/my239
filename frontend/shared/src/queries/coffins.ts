@@ -6,7 +6,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ApiClient } from '../api/client'
-import type { Coffin, PdfUploadURL } from '../types'
+import type { Coffin, CoffinQueueItem, PdfUploadURL } from '../types'
 import { useApiClient } from './context'
 import { queryKeys } from './keys'
 
@@ -38,6 +38,19 @@ export function useCenterCoffins(centerId: number) {
     queryKey: queryKeys.centerCoffins(centerId),
     queryFn: () =>
       client.request<Coffin[]>('/mathcenter/centers/' + centerId + '/coffins'),
+    enabled: centerId > 0,
+  })
+}
+
+// useCoffinQueue fetches the center-wide coffin grading queue (teacher).
+export function useCoffinQueue(centerId: number) {
+  const client = useApiClient()
+  return useQuery<CoffinQueueItem[]>({
+    queryKey: queryKeys.coffinQueue(centerId),
+    queryFn: () =>
+      client.request<CoffinQueueItem[]>(
+        '/mathcenter/centers/' + centerId + '/coffin-queue',
+      ),
     enabled: centerId > 0,
   })
 }

@@ -442,10 +442,32 @@ export interface Coffin {
   has_solution_tex: boolean
   has_solution_pdf: boolean
   solution_link?: string | null
+  // Teacher-only "solved N of M" stats.
+  accepted_count: number
+  total_count: number
   // Calling student's own thread status (zero/empty for teachers).
   thread_id?: number
   current_status?: HomeworkStatus
   being_graded?: boolean
+}
+
+// CoffinQueueItem is one row of the center-wide coffin grading queue
+// (GET /mathcenter/centers/{id}/coffin-queue). Carries series_id since coffins
+// span series.
+export interface CoffinQueueItem {
+  thread_id: number
+  student_user_id: number
+  student_name: string
+  subproblem_id: number
+  subproblem_label: string
+  problem_number: number
+  problem_display: string
+  series_id: number
+  current_status: HomeworkStatus
+  updated_at: string
+  last_grader_user_id?: number | null
+  claim_holder_user_id?: number | null
+  claim_expires_at?: string | null
 }
 
 // QueueItem is one row of the grader queue (GET /homework/series/{id}/queue):

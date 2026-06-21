@@ -89,6 +89,13 @@ type Querier interface {
 	// newest series first. Used by the center-wide "Гробы" tab.
 	ListCenterCoffins(ctx context.Context, mathCenterID int64) ([]ListCenterCoffinsRow, error)
 	ListCentersForTeacher(ctx context.Context, userID int64) ([]ListCentersForTeacherRow, error)
+	// Center-wide grading queue for coffins: submissions/appeals on coffin
+	// subproblems that aren't locked by another grader. Mirrors the per-series
+	// grader queue but spans every series and is filtered to coffins.
+	ListCoffinQueueForCenter(ctx context.Context, arg ListCoffinQueueForCenterParams) ([]ListCoffinQueueForCenterRow, error)
+	// Per-coffin "solved N of M": how many of the center's students have an accepted
+	// thread on each coffin subproblem, out of the whole roster.
+	ListCoffinSolvedCounts(ctx context.Context, mathCenterID int64) ([]ListCoffinSolvedCountsRow, error)
 	// Each coffin subproblem in a center with the calling student's thread status,
 	// so the Гробы tab can render a tile + a "Сдать" link.
 	ListCoffinSubproblemsForStudent(ctx context.Context, arg ListCoffinSubproblemsForStudentParams) ([]ListCoffinSubproblemsForStudentRow, error)
