@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useSeriesTex, type Series } from '@my239/shared'
-import { Card, CardContent, CardHeader, CardTitle, Spinner } from '../../design/ui'
+import { Card, CardContent, Spinner } from '../../design/ui'
 import { cn } from '../../design/cn'
 import { TexViewer } from './tex-viewer'
 import { PdfViewer } from './pdf-viewer'
@@ -10,32 +10,45 @@ type View = 'tex' | 'pdf'
 export interface StatementPanelProps {
   series: Series
   className?: string
+  // bare drops the Card chrome so the statement spans full width inside a tab;
+  // the disclosure in thread-page keeps the card (default).
+  bare?: boolean
 }
 
-// StatementPanel renders a series' "Условие" (problem statement): TeX when
-// available (crisp KaTeX math), PDF otherwise, with a toggle when both exist.
-export function StatementPanel({ series, className }: StatementPanelProps) {
+// StatementPanel renders a series' problem statement: TeX when available (crisp
+// KaTeX math), PDF otherwise, with a format toggle when both exist. The
+// "Условие" label lives on the tab/disclosure that hosts this, so it is not
+// repeated here.
+export function StatementPanel({ series, className, bare }: StatementPanelProps) {
   const { has_tex, has_pdf } = series
   // TeX is the default surface when present.
   const [view, setView] = useState<View>(has_tex ? 'tex' : 'pdf')
   const both = has_tex && has_pdf
   const active: View = both ? view : has_tex ? 'tex' : 'pdf'
 
+  const body = (
+    <div className="flex flex-col gap-3">
+      {both ? (
+        <div className="flex justify-end">
+          <ViewToggle value={view} onChange={setView} />
+        </div>
+      ) : null}
+      {!has_tex && !has_pdf ? (
+        <EmptyStatement />
+      ) : active === 'tex' ? (
+        <TexStatement series={series} />
+      ) : (
+        <PdfViewer path={'/mathcenter/series/' + series.id + '/pdf'} title="Условие (PDF)" />
+      )}
+    </div>
+  )
+
+  if (bare) {
+    return <div className={className}>{body}</div>
+  }
   return (
     <Card className={className}>
-      <CardHeader className="flex-row items-center justify-between gap-3">
-        <CardTitle>Условие</CardTitle>
-        {both && <ViewToggle value={view} onChange={setView} />}
-      </CardHeader>
-      <CardContent>
-        {!has_tex && !has_pdf ? (
-          <EmptyStatement />
-        ) : active === 'tex' ? (
-          <TexStatement series={series} />
-        ) : (
-          <PdfViewer path={'/mathcenter/series/' + series.id + '/pdf'} title="Условие (PDF)" />
-        )}
-      </CardContent>
+      <CardContent>{body}</CardContent>
     </Card>
   )
 }

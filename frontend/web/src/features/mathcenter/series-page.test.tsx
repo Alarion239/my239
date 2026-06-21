@@ -188,9 +188,8 @@ describe('SeriesPage — student view', () => {
     // The upcoming published series is marked current.
     expect(screen.getByText('Текущая')).toBeInTheDocument()
 
-    // The student rollup renders per-subproblem status tiles.
-    expect(await screen.findByText('Мой прогресс')).toBeInTheDocument()
-    expect(screen.getByText('Задача 1')).toBeInTheDocument()
+    // The student rollup renders per-subproblem status tiles (no panel heading).
+    expect(await screen.findByText('Задача 1')).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'а: Принято' })).toBeInTheDocument()
     // Subproblem б is submitted AND claimed (being_graded) → "На проверке".
     expect(screen.getByRole('img', { name: 'б: На проверке' })).toBeInTheDocument()
@@ -222,11 +221,9 @@ describe('SeriesPage — teacher view', () => {
     // The "+" create-series card sits at the end of the strip.
     expect(await screen.findByRole('button', { name: 'Создать серию' })).toBeInTheDocument()
 
-    // Stats panel shows the student count in its heading and the breakdown.
-    expect(
-      await screen.findByRole('heading', { name: /Статистика · 12 учеников/ }),
-    ).toBeInTheDocument()
-    expect(screen.getByText('Принято:', { exact: false })).toBeInTheDocument()
+    // The Разбор tab (default) renders the per-subproblem stats breakdown
+    // full-width — no separate "Статистика" panel heading/container.
+    expect(await screen.findByText('Принято:', { exact: false })).toBeInTheDocument()
     expect(screen.getByText('5')).toBeInTheDocument()
   })
 })

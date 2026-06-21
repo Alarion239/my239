@@ -11,7 +11,7 @@ import {
   type MyRollup,
   type Series,
 } from '@my239/shared'
-import { Card, CardContent, Spinner } from '../../design/ui'
+import { Card, PillTabs, Spinner } from '../../design/ui'
 import { cn } from '../../design/cn'
 import { useAuth } from '../../auth/auth-context'
 import { StatementPanel } from './statement-panel'
@@ -210,41 +210,19 @@ function StudentSeriesView({ centerId, series }: { centerId: number; series: Ser
   const [tab, setTab] = useState<StudentTab>('progress')
   return (
     <div className="flex flex-col gap-4">
-      <div
-        className="inline-flex self-start rounded-full border border-line bg-surface-muted p-0.5"
-        role="tablist"
-        aria-label="Раздел серии"
-      >
-        {STUDENT_TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.id}
-            onClick={() => setTab(t.id)}
-            className={cn(
-              'rounded-full px-3 py-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-              tab === t.id ? 'bg-accent-soft text-accent-ink' : 'text-muted hover:text-ink',
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <PillTabs
+        value={tab}
+        onChange={setTab}
+        options={STUDENT_TABS}
+        ariaLabel="Раздел серии"
+        className="self-start"
+      />
       {tab === 'statement' ? (
-        <StatementPanel series={series} />
+        <StatementPanel series={series} bare />
       ) : tab === 'progress' ? (
-        <Card>
-          <CardContent>
-            <StudentSide centerId={centerId} series={series} />
-          </CardContent>
-        </Card>
+        <StudentSide centerId={centerId} series={series} />
       ) : (
-        <Card>
-          <CardContent>
-            <StudentRazbor series={series} />
-          </CardContent>
-        </Card>
+        <StudentRazbor series={series} />
       )}
     </div>
   )
@@ -254,12 +232,7 @@ function StudentSide({ centerId, series }: { centerId: number; series: Series })
   const { data, isPending, isError } = useMySeriesRollup(series.id)
   const closed = isClosed(series.due_at)
   return (
-    <SidePanel
-      title="Мой прогресс"
-      isPending={isPending}
-      isError={isError}
-      hasData={!!data}
-    >
+    <AsyncGate isPending={isPending} isError={isError} hasData={!!data}>
       {data ? (
         <StudentProblemListWithCounts
           centerId={centerId}
@@ -268,7 +241,7 @@ function StudentSide({ centerId, series }: { centerId: number; series: Series })
           closed={closed}
         />
       ) : null}
-    </SidePanel>
+    </AsyncGate>
   )
 }
 
@@ -352,45 +325,26 @@ function TeacherSeriesView({
   const [tab, setTab] = useState<TeacherTab>('razbor')
   return (
     <div className="flex flex-col gap-4">
-      <TeacherTabBar value={tab} onChange={setTab} />
+      {/* Tab switch on the left; the edit-series icon pinned to the right of the
+          same row (it never blends with the switch). */}
+      <div className="flex items-center justify-between gap-2">
+        <PillTabs
+          value={tab}
+          onChange={setTab}
+          options={TEACHER_TABS}
+          ariaLabel="Раздел проверки"
+          className="min-w-0"
+        />
+        <EditSeriesButton centerId={centerId} series={series} />
+      </div>
       {tab === 'statement' ? (
-        // The "Условие" tab also hosts editing the series structure/metadata.
-        <div className="flex flex-col gap-3">
-          <div className="flex justify-end">
-            <UploadSeriesDialog
-              key={'edit-' + series.id}
-              centerId={centerId}
-              series={series}
-              trigger={
-                <button
-                  type="button"
-                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3 text-sm font-medium text-ink transition-colors hover:bg-surface-muted"
-                >
-                  <Pencil className="h-4 w-4" aria-hidden />
-                  Редактировать серию
-                </button>
-              }
-            />
-          </div>
-          <StatementPanel series={series} />
-        </div>
+        <StatementPanel series={series} bare />
       ) : tab === 'razbor' ? (
-        // Per-subproblem statistics + разбор/coffin handling, all on one row.
-        <Card>
-          <CardContent>
-            <StatsTab series={series} centerId={centerId} />
-          </CardContent>
-        </Card>
+        <StatsTab series={series} centerId={centerId} />
+      ) : tab === 'queue' ? (
+        <GraderQueue centerId={centerId} seriesId={series.id} />
       ) : (
-        <Card>
-          <CardContent>
-            {tab === 'queue' ? (
-              <GraderQueue centerId={centerId} seriesId={series.id} />
-            ) : (
-              <TeacherGrid centerId={centerId} seriesId={series.id} />
-            )}
-          </CardContent>
-        </Card>
+        <TeacherGrid centerId={centerId} seriesId={series.id} />
       )}
     </div>
   )
@@ -403,35 +357,26 @@ const TEACHER_TABS: { id: TeacherTab; label: string }[] = [
   { id: 'grid', label: 'Таблица' },
 ]
 
-function TeacherTabBar({
-  value,
-  onChange,
-}: {
-  value: TeacherTab
-  onChange: (v: TeacherTab) => void
-}) {
+// EditSeriesButton is the icon-only «Редактировать серию» control that lives at
+// the right edge of the teacher tab row (resource-economy: no dedicated row,
+// no label).
+function EditSeriesButton({ centerId, series }: { centerId: number; series: Series }) {
   return (
-    <div
-      className="inline-flex self-start rounded-full border border-line bg-surface-muted p-0.5"
-      role="tablist"
-      aria-label="Раздел проверки"
-    >
-      {TEACHER_TABS.map((t) => (
+    <UploadSeriesDialog
+      key={'edit-' + series.id}
+      centerId={centerId}
+      series={series}
+      trigger={
         <button
-          key={t.id}
           type="button"
-          role="tab"
-          aria-selected={value === t.id}
-          onClick={() => onChange(t.id)}
-          className={cn(
-            'rounded-full px-3 py-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-            value === t.id ? 'bg-accent-soft text-accent-ink' : 'text-muted hover:text-ink',
-          )}
+          aria-label="Редактировать серию"
+          title="Редактировать серию"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-line-strong bg-surface text-muted transition-colors hover:bg-surface-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         >
-          {t.label}
+          <Pencil className="h-4 w-4" aria-hidden />
         </button>
-      ))}
-    </div>
+      }
+    />
   )
 }
 
@@ -439,16 +384,11 @@ function StatsTab({ series, centerId }: { series: Series; centerId: number }) {
   const { data, isPending, isError } = useSeriesProblemStats(series.id)
   return (
     <div className="flex flex-col gap-4">
-      <SidePanel
-        title={'Статистика' + (data ? ' · ' + data.total_students + ' учеников' : '')}
-        isPending={isPending}
-        isError={isError}
-        hasData={!!data}
-      >
+      <AsyncGate isPending={isPending} isError={isError} hasData={!!data}>
         {data ? (
           <TeacherProblemStats stats={data} series={series} centerId={centerId} />
         ) : null}
-      </SidePanel>
+      </AsyncGate>
       <p className="text-xs text-muted">
         Каждая подзадача (5а, 5б, …) — самостоятельная единица: у неё свой разбор
         и свой срок. Значок <span aria-hidden>☠</span> отмечает гроб (подзадача
@@ -459,31 +399,28 @@ function StatsTab({ series, centerId }: { series: Series; centerId: number }) {
   )
 }
 
-function SidePanel({
-  title,
+// AsyncGate renders the spinner/error states for a query, then its children —
+// no title, no container chrome (the tab itself spans full width).
+function AsyncGate({
   isPending,
   isError,
   hasData,
   children,
 }: {
-  title: string
   isPending: boolean
   isError: boolean
   hasData: boolean
   children: React.ReactNode
 }) {
-  return (
-    <div className="flex flex-col gap-3">
-      <h2 className={cn('font-display text-lg font-medium text-ink')}>{title}</h2>
-      {isPending ? (
-        <div className="flex justify-center py-10">
-          <Spinner />
-        </div>
-      ) : isError || !hasData ? (
-        <p className="py-6 text-sm text-danger">Не удалось загрузить данные.</p>
-      ) : (
-        children
-      )}
-    </div>
-  )
+  if (isPending) {
+    return (
+      <div className="flex justify-center py-10">
+        <Spinner />
+      </div>
+    )
+  }
+  if (isError || !hasData) {
+    return <p className="py-6 text-sm text-danger">Не удалось загрузить данные.</p>
+  }
+  return <>{children}</>
 }

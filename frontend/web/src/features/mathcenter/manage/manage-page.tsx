@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useMathCenterMe } from '@my239/shared'
-import { Card, Spinner } from '../../../design/ui'
-import { cn } from '../../../design/cn'
+import { Card, PillTabs, Spinner, type PillTabOption } from '../../../design/ui'
 import { useAuth } from '../../../auth/auth-context'
 import { GroupsTab } from './groups-tab'
 import { TeachersTab } from './teachers-tab'
@@ -10,7 +9,7 @@ import { StudentsTab } from './students-tab'
 
 type Tab = 'groups' | 'teachers' | 'students'
 
-const TABS: { id: Tab; label: string }[] = [
+const TABS: PillTabOption<Tab>[] = [
   { id: 'groups', label: 'Группы' },
   { id: 'teachers', label: 'Преподаватели' },
   { id: 'students', label: 'Ученики' },
@@ -43,23 +42,13 @@ export function ManagePage() {
 
   return (
     <div className="animate-rise flex flex-col gap-5">
-      <div className="flex flex-wrap gap-1 rounded-xl bg-surface-muted p-1">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            className={cn(
-              'rounded-lg px-4 py-1.5 text-sm font-medium transition-colors',
-              tab === t.id
-                ? 'bg-surface text-ink shadow-sm'
-                : 'text-muted hover:text-ink',
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <PillTabs
+        value={tab}
+        onChange={setTab}
+        options={TABS}
+        ariaLabel="Раздел управления"
+        className="self-start"
+      />
 
       {tab === 'groups' ? (
         <GroupsTab centerId={centerId} />
