@@ -1116,20 +1116,36 @@ func buildSeriesView(ctx context.Context, q *store.Queries, s store.MathCenterSe
 	if err != nil {
 		return nil, fmt.Errorf("list subproblems for series: %w", err)
 	}
-	// Per-subproblem разбор/coffin metadata for this series (single GET only).
+	// Per-subproblem разбор/coffin metadata for this series.
 	sols, err := q.ListSubproblemSolutionsForSeries(ctx, s.ID)
 	if err != nil {
 		return nil, fmt.Errorf("list subproblem solutions for series: %w", err)
 	}
-	solByID := make(map[int64]store.ListSubproblemSolutionsForSeriesRow, len(sols))
+	solByID := make(map[int64]subSolMeta, len(sols))
 	for _, sol := range sols {
-		solByID[sol.SubproblemID] = sol
+		solByID[sol.SubproblemID] = subSolMeta{
+			IsCoffin:       sol.IsCoffin,
+			ReleasedAt:     sol.ReleasedAt,
+			HasSolutionTex: sol.HasSolutionTex,
+			HasSolutionPDF: sol.HasSolutionPdf,
+			SolutionLink:   sol.SolutionLink,
+		}
 	}
 	bySub := make(map[int64][]subIdent, len(problems))
 	for _, sp := range subs {
 		bySub[sp.ProblemID] = append(bySub[sp.ProblemID], subIdent{ID: sp.ID, Label: sp.Label})
 	}
 	return assembleSeriesView(s, problems, bySub, solByID), nil
+}
+
+// subSolMeta is the per-subproblem разбор/coffin metadata, unifying the single
+// and batched solution-list row types for assembleSeriesView.
+type subSolMeta struct {
+	IsCoffin       bool
+	ReleasedAt     *time.Time
+	HasSolutionTex bool
+	HasSolutionPDF bool
+	SolutionLink   *string
 }
 
 // buildSeriesViews builds views for a set of series with a fixed two queries
@@ -1152,6 +1168,23 @@ func buildSeriesViews(ctx context.Context, q *store.Queries, series []store.Math
 		return nil, fmt.Errorf("list subproblems for series ids: %w", err)
 	}
 
+	// Per-subproblem разбор/coffin metadata, batched across all listed series so
+	// the list carries it too (the Разбор tab + student gating read off the list).
+	sols, err := q.ListSubproblemSolutionsForSeriesIDs(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("list subproblem solutions for series ids: %w", err)
+	}
+	solByID := make(map[int64]subSolMeta, len(sols))
+	for _, sol := range sols {
+		solByID[sol.SubproblemID] = subSolMeta{
+			IsCoffin:       sol.IsCoffin,
+			ReleasedAt:     sol.ReleasedAt,
+			HasSolutionTex: sol.HasSolutionTex,
+			HasSolutionPDF: sol.HasSolutionPdf,
+			SolutionLink:   sol.SolutionLink,
+		}
+	}
+
 	problemsBySeries := make(map[int64][]store.MathCenterProblem, len(series))
 	for _, p := range problems {
 		problemsBySeries[p.SeriesID] = append(problemsBySeries[p.SeriesID], p)
@@ -1161,11 +1194,9 @@ func buildSeriesViews(ctx context.Context, q *store.Queries, series []store.Math
 		bySub[sp.ProblemID] = append(bySub[sp.ProblemID], subIdent{ID: sp.ID, Label: sp.Label})
 	}
 
-	// The list endpoint omits per-subproblem разбор/coffin metadata (no rows in
-	// the map) to keep its query count flat; the single-series GET fills it in.
 	out := make([]seriesView, 0, len(series))
 	for _, s := range series {
-		out = append(out, *assembleSeriesView(s, problemsBySeries[s.ID], bySub, nil))
+		out = append(out, *assembleSeriesView(s, problemsBySeries[s.ID], bySub, solByID))
 	}
 	return out, nil
 }
@@ -1173,7 +1204,7 @@ func buildSeriesViews(ctx context.Context, q *store.Queries, series []store.Math
 // assembleSeriesView builds a seriesView from already-fetched problems, a
 // problem-id → subproblems map, and an optional subproblem-id → разбор/coffin
 // metadata map (nil on the list path).
-func assembleSeriesView(s store.MathCenterSeries, problems []store.MathCenterProblem, bySub map[int64][]subIdent, solByID map[int64]store.ListSubproblemSolutionsForSeriesRow) *seriesView {
+func assembleSeriesView(s store.MathCenterSeries, problems []store.MathCenterProblem, bySub map[int64][]subIdent, solByID map[int64]subSolMeta) *seriesView {
 	pviews := make([]problemView, 0, len(problems))
 	for _, p := range problems {
 		subs := bySub[p.ID]
@@ -1188,7 +1219,7 @@ func assembleSeriesView(s store.MathCenterSeries, problems []store.MathCenterPro
 				sv.IsCoffin = sol.IsCoffin
 				sv.ReleasedAt = sol.ReleasedAt
 				sv.HasSolutionTex = sol.HasSolutionTex
-				sv.HasSolutionPDF = sol.HasSolutionPdf
+				sv.HasSolutionPDF = sol.HasSolutionPDF
 				sv.SolutionLink = sol.SolutionLink
 			}
 			svs = append(svs, sv)

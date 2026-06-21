@@ -154,6 +154,8 @@ function BatchRazborBar({
         onPutTex={(tex) => putTex.mutateAsync({ subproblemIds, tex })}
         onUploadPdf={(file) => uploadPdf.mutateAsync({ subproblemIds, file })}
         onSetLink={(link) => setLink.mutateAsync({ subproblemIds, link })}
+        closeOnSave
+        onSaved={onClear}
         trigger={
           <Button type="button" size="sm">
             Прикрепить общий разбор

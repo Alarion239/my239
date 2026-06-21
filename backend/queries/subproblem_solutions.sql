@@ -133,3 +133,19 @@ FROM math_center_subproblem_solutions ss
          JOIN math_center_problems p ON p.id = sp.problem_id
 WHERE p.series_id = $1
 ORDER BY p.number ASC, sp.label ASC;
+
+-- name: ListSubproblemSolutionsForSeriesIDs :many
+-- Batched variant of the above for the series-LIST endpoint, so the list also
+-- carries per-subproblem разбор/coffin metadata (one query for all series).
+SELECT ss.subproblem_id                                   AS subproblem_id,
+       sp.problem_id                                      AS problem_id,
+       ss.is_coffin                                       AS is_coffin,
+       ss.released_at                                     AS released_at,
+       (ss.solution_tex_source IS NOT NULL)::boolean      AS has_solution_tex,
+       (ss.solution_pdf_object_key IS NOT NULL)::boolean  AS has_solution_pdf,
+       ss.solution_link                                   AS solution_link
+FROM math_center_subproblem_solutions ss
+         JOIN math_center_subproblems sp ON sp.id = ss.subproblem_id
+         JOIN math_center_problems p ON p.id = sp.problem_id
+WHERE p.series_id = ANY (@series_ids::bigint[])
+ORDER BY p.number ASC, sp.label ASC;

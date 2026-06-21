@@ -111,6 +111,9 @@ type Querier interface {
 	// tab and student views can show "has разбор / released / is coffin" per
 	// subproblem without N+1 fetches. Only subproblems with a row appear.
 	ListSubproblemSolutionsForSeries(ctx context.Context, seriesID int64) ([]ListSubproblemSolutionsForSeriesRow, error)
+	// Batched variant of the above for the series-LIST endpoint, so the list also
+	// carries per-subproblem разбор/coffin metadata (one query for all series).
+	ListSubproblemSolutionsForSeriesIDs(ctx context.Context, seriesIds []int64) ([]ListSubproblemSolutionsForSeriesIDsRow, error)
 	ListSubproblemsForSeries(ctx context.Context, seriesID int64) ([]ListSubproblemsForSeriesRow, error)
 	ListSubproblemsForSeriesIDs(ctx context.Context, seriesIds []int64) ([]ListSubproblemsForSeriesIDsRow, error)
 	// Like ListCentersForTeacher, but also returns the math_center_teachers row id
