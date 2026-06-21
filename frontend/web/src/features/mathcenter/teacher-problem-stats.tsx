@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Skull } from 'lucide-react'
+import { Skull, X } from 'lucide-react'
 import {
   coffinOpen,
   formatDateTime,
@@ -7,6 +7,7 @@ import {
   usePutSubproblemSolutionTexBatch,
   useReleaseCoffin,
   useSetSubproblemSolutionLinkBatch,
+  useSubproblemSolutionTex,
   useUnmarkCoffin,
   useUploadSubproblemSolutionPdfBatch,
   type SeriesProblemStat,
@@ -24,7 +25,13 @@ import {
   DropdownMenuTrigger,
 } from '../../design/ui'
 import { cn } from '../../design/cn'
+import { SolutionContent } from './solution-content'
 import { SolutionEditor } from './solution-editor'
+
+// hasRazbor reports whether a subproblem already carries an official разбор.
+function hasRazbor(meta: Subproblem | undefined): boolean {
+  return !!(meta && (meta.has_solution_tex || meta.has_solution_pdf || meta.solution_link))
+}
 
 // Each segment maps a stat field to its status colour token + Russian label.
 interface Segment {
@@ -70,20 +77,29 @@ export function TeacherProblemStats({ stats, series, centerId }: TeacherProblemS
   const release = useReleaseCoffin(centerId)
   const busy = mark.isPending || unmark.isPending || release.isPending
 
-  // Subproblems selected for a shared разбор (attach one source to several).
-  const [selected, setSelected] = useState<Set<number>>(new Set())
-  const toggleSelect = (id: number) =>
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-
   // Per-subproblem разбор/coffin metadata, keyed by subproblem id.
   const metaById = new Map<number, Subproblem>()
   for (const p of series.problems) {
     for (const sub of p.subproblems) metaById.set(sub.id, sub)
+  }
+
+  // Pressing a problem does one of two things, depending on its state:
+  //  - has a разбор  → preview it in the left panel (master-detail).
+  //  - no разбор yet → select it for a shared batch разбор.
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [previewId, setPreviewId] = useState<number | null>(null)
+
+  const press = (id: number) => {
+    if (hasRazbor(metaById.get(id))) {
+      setPreviewId((cur) => (cur === id ? null : id))
+    } else {
+      setSelected((prev) => {
+        const next = new Set(prev)
+        if (next.has(id)) next.delete(id)
+        else next.add(id)
+        return next
+      })
+    }
   }
 
   if (stats.problems.length === 0) {
@@ -93,27 +109,116 @@ export function TeacherProblemStats({ stats, series, centerId }: TeacherProblemS
   const selectedIds = stats.problems
     .map((p) => p.subproblem_id)
     .filter((id) => selected.has(id))
+  const previewSub =
+    previewId != null && hasRazbor(metaById.get(previewId))
+      ? metaById.get(previewId)
+      : undefined
 
   return (
-    <div className="flex flex-col gap-3">
-      <BatchRazborBar
-        centerId={centerId}
-        subproblemIds={selectedIds}
-        onClear={() => setSelected(new Set())}
-      />
-      {stats.problems.map((p) => (
-        <ProblemStatRow
-          key={p.subproblem_id}
-          stat={p}
-          meta={metaById.get(p.subproblem_id)}
-          busy={busy}
-          isSelected={selected.has(p.subproblem_id)}
-          onToggleSelect={() => toggleSelect(p.subproblem_id)}
-          onMark={() => mark.mutate(p.subproblem_id)}
-          onUnmark={() => unmark.mutate(p.subproblem_id)}
-          onRelease={() => release.mutate(p.subproblem_id)}
+    <div className="flex items-start">
+      {/* Left: разбор of the pressed problem — slides in/out smoothly. */}
+      <div
+        className={cn(
+          'shrink-0 overflow-hidden transition-all duration-300 ease-out',
+          previewSub ? 'w-1/2 opacity-100' : 'w-0 opacity-0',
+        )}
+      >
+        <div className="pr-4">
+          {previewSub ? (
+            <RazborPreview
+              centerId={centerId}
+              sub={previewSub}
+              onClose={() => setPreviewId(null)}
+            />
+          ) : null}
+        </div>
+      </div>
+
+      {/* Right: the statistics list + batch разбор bar. */}
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <BatchRazborBar
+          centerId={centerId}
+          subproblemIds={selectedIds}
+          onClear={() => setSelected(new Set())}
         />
-      ))}
+        {stats.problems.map((p) => (
+          <ProblemStatRow
+            key={p.subproblem_id}
+            stat={p}
+            meta={metaById.get(p.subproblem_id)}
+            busy={busy}
+            active={
+              hasRazbor(metaById.get(p.subproblem_id))
+                ? previewId === p.subproblem_id
+                : selected.has(p.subproblem_id)
+            }
+            onPress={() => press(p.subproblem_id)}
+            onMark={() => mark.mutate(p.subproblem_id)}
+            onUnmark={() => unmark.mutate(p.subproblem_id)}
+            onRelease={() => release.mutate(p.subproblem_id)}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// RazborPreview shows the official разбор of a solved problem on the left, with
+// a «Заменить» action (re-author it) and a close button.
+function RazborPreview({
+  centerId,
+  sub,
+  onClose,
+}: {
+  centerId: number
+  sub: Subproblem
+  onClose: () => void
+}) {
+  const texQuery = useSubproblemSolutionTex(sub.id, sub.has_solution_tex)
+  const putTex = usePutSubproblemSolutionTexBatch(centerId)
+  const uploadPdf = useUploadSubproblemSolutionPdfBatch(centerId)
+  const setLink = useSetSubproblemSolutionLinkBatch(centerId)
+  const ids = [sub.id]
+  return (
+    <div className="animate-rise rounded-xl border border-accent/40 bg-surface p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-display text-lg font-medium text-ink">
+          Разбор · {sub.display}
+        </h3>
+        <div className="flex items-center gap-2">
+          <SolutionEditor
+            title={'Заменить разбор · ' + sub.display}
+            hasTex={sub.has_solution_tex}
+            hasPdf={sub.has_solution_pdf}
+            link={sub.solution_link}
+            onPutTex={(tex) => putTex.mutateAsync({ subproblemIds: ids, tex })}
+            onUploadPdf={(file) => uploadPdf.mutateAsync({ subproblemIds: ids, file })}
+            onSetLink={(link) => setLink.mutateAsync({ subproblemIds: ids, link })}
+            closeOnSave
+            trigger={
+              <Button type="button" size="sm" variant="secondary">
+                Заменить
+              </Button>
+            }
+          />
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            aria-label="Закрыть разбор"
+            onClick={onClose}
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </Button>
+        </div>
+      </div>
+      <SolutionContent
+        hasTex={sub.has_solution_tex}
+        hasPdf={sub.has_solution_pdf}
+        link={sub.solution_link}
+        pdfPath={'/mathcenter/subproblems/' + sub.id + '/solution/pdf'}
+        texQuery={texQuery}
+      />
     </div>
   )
 }
@@ -173,8 +278,8 @@ function ProblemStatRow({
   stat,
   meta,
   busy,
-  isSelected,
-  onToggleSelect,
+  active,
+  onPress,
   onMark,
   onUnmark,
   onRelease,
@@ -182,8 +287,8 @@ function ProblemStatRow({
   stat: SeriesProblemStat
   meta: Subproblem | undefined
   busy: boolean
-  isSelected: boolean
-  onToggleSelect: () => void
+  active: boolean
+  onPress: () => void
   onMark: () => void
   onUnmark: () => void
   onRelease: () => void
@@ -192,30 +297,27 @@ function ProblemStatRow({
     stat.accepted + stat.submitted + stat.rejected + stat.appealed + stat.unsolved
   const isCoffin = meta?.is_coffin ?? false
   const open = isCoffin && coffinOpen(meta?.released_at)
-  const hasSolution = !!(
-    meta &&
-    (meta.has_solution_tex || meta.has_solution_pdf || meta.solution_link)
-  )
+  const hasSolution = hasRazbor(meta)
 
-  // The whole row toggles selection (press the problems you want, then attach a
-  // shared разбор). The right-hand controls stop propagation so they don't also
-  // select the row.
+  // Pressing the row previews its разбор (solved) or selects it for a shared
+  // разбор (unsolved). The right-hand controls stop propagation so they don't
+  // also trigger the press.
   return (
     <div
       role="button"
       tabIndex={0}
-      aria-pressed={isSelected}
-      onClick={onToggleSelect}
+      aria-pressed={active}
+      onClick={onPress}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
-          onToggleSelect()
+          onPress()
         }
       }}
       className={cn(
         'cursor-pointer rounded-xl border bg-surface px-4 py-3 transition-colors',
         'hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-        isSelected
+        active
           ? 'border-accent ring-2 ring-accent/50'
           : isCoffin
             ? 'border-status-checking'
