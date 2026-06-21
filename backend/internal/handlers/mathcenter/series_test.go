@@ -31,7 +31,7 @@ var seriesColumns = []string{
 // buildSeriesView issues to merge per-subproblem разбор/coffin metadata.
 var subproblemSolutionMetaColumns = []string{
 	"subproblem_id", "problem_id", "is_coffin", "released_at",
-	"has_solution_tex", "has_solution_pdf", "solution_link",
+	"has_solution_tex", "has_solution_pdf", "solution_link", "solution_group_id",
 }
 
 var (

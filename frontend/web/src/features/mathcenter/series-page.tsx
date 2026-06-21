@@ -17,6 +17,7 @@ import { useAuth } from '../../auth/auth-context'
 import { StatementPanel } from './statement-panel'
 import { SeriesStrip } from './series-strip'
 import { StudentProblemList } from './student-problem-list'
+import { StudentRazbor } from './student-razbor'
 import { TeacherProblemStats } from './teacher-problem-stats'
 import { GraderQueue } from './grader-queue'
 import { TeacherGrid } from './teacher-grid'
@@ -183,14 +184,7 @@ function CenterSeries({
 
       {selected ? (
         isStudentView ? (
-          <div className="grid gap-6 lg:grid-cols-2">
-            <StatementPanel series={selected} />
-            <Card>
-              <CardContent>
-                <StudentSide centerId={centerId} series={selected} />
-              </CardContent>
-            </Card>
-          </div>
+          <StudentSeriesView centerId={centerId} series={selected} />
         ) : (
           // Teachers get Условие / Разбор / Очередь / Таблица as full-width
           // tabs; разбор carries the statistics + coffin handling.
@@ -198,6 +192,61 @@ function CenterSeries({
         )
       ) : null}
     </>
+  )
+}
+
+type StudentTab = 'statement' | 'progress' | 'razbor'
+
+const STUDENT_TABS: { id: StudentTab; label: string }[] = [
+  { id: 'statement', label: 'Условие' },
+  { id: 'progress', label: 'Прогресс' },
+  { id: 'razbor', label: 'Разбор' },
+]
+
+// StudentSeriesView gives students the same tabbed layout as teachers: the
+// statement, their own progress, and a read-only «Разбор» of the released
+// solutions.
+function StudentSeriesView({ centerId, series }: { centerId: number; series: Series }) {
+  const [tab, setTab] = useState<StudentTab>('progress')
+  return (
+    <div className="flex flex-col gap-4">
+      <div
+        className="inline-flex self-start rounded-full border border-line bg-surface-muted p-0.5"
+        role="tablist"
+        aria-label="Раздел серии"
+      >
+        {STUDENT_TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.id}
+            onClick={() => setTab(t.id)}
+            className={cn(
+              'rounded-full px-3 py-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+              tab === t.id ? 'bg-accent-soft text-accent-ink' : 'text-muted hover:text-ink',
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {tab === 'statement' ? (
+        <StatementPanel series={series} />
+      ) : tab === 'progress' ? (
+        <Card>
+          <CardContent>
+            <StudentSide centerId={centerId} series={series} />
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent>
+            <StudentRazbor series={series} />
+          </CardContent>
+        </Card>
+      )}
+    </div>
   )
 }
 

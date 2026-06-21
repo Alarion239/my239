@@ -127,7 +127,8 @@ SELECT ss.subproblem_id                                   AS subproblem_id,
        ss.released_at                                     AS released_at,
        (ss.solution_tex_source IS NOT NULL)::boolean      AS has_solution_tex,
        (ss.solution_pdf_object_key IS NOT NULL)::boolean  AS has_solution_pdf,
-       ss.solution_link                                   AS solution_link
+       ss.solution_link                                   AS solution_link,
+       ss.solution_group_id                               AS solution_group_id
 FROM math_center_subproblem_solutions ss
          JOIN math_center_subproblems sp ON sp.id = ss.subproblem_id
          JOIN math_center_problems p ON p.id = sp.problem_id
@@ -143,9 +144,23 @@ SELECT ss.subproblem_id                                   AS subproblem_id,
        ss.released_at                                     AS released_at,
        (ss.solution_tex_source IS NOT NULL)::boolean      AS has_solution_tex,
        (ss.solution_pdf_object_key IS NOT NULL)::boolean  AS has_solution_pdf,
-       ss.solution_link                                   AS solution_link
+       ss.solution_link                                   AS solution_link,
+       ss.solution_group_id                               AS solution_group_id
 FROM math_center_subproblem_solutions ss
          JOIN math_center_subproblems sp ON sp.id = ss.subproblem_id
          JOIN math_center_problems p ON p.id = sp.problem_id
 WHERE p.series_id = ANY (@series_ids::bigint[])
 ORDER BY p.number ASC, sp.label ASC;
+
+-- name: CreateSolutionGroup :one
+-- Mint a fresh shared-разбор group id.
+INSERT INTO math_center_solution_groups DEFAULT VALUES
+RETURNING id;
+
+-- name: SetSubproblemSolutionGroup :exec
+-- Assign a (just-minted) group to every subproblem in the set. The solution
+-- rows must already exist (content was set first); only existing rows update.
+UPDATE math_center_subproblem_solutions
+SET solution_group_id = @group_id::bigint,
+    updated_at        = NOW()
+WHERE subproblem_id = ANY (@subproblem_ids::bigint[]);

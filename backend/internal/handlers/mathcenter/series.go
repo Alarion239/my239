@@ -74,14 +74,15 @@ type updateSeriesRequest struct {
 // coffin / carry a разбор. Solution metadata is populated only on the single-
 // series GET (the list endpoint leaves it zero to keep its query count flat).
 type subproblemView struct {
-	ID             int64      `json:"id"`
-	Label          string     `json:"label"`
-	Display        string     `json:"display"`
-	IsCoffin       bool       `json:"is_coffin"`
-	ReleasedAt     *time.Time `json:"released_at,omitempty"`
-	HasSolutionTex bool       `json:"has_solution_tex"`
-	HasSolutionPDF bool       `json:"has_solution_pdf"`
-	SolutionLink   *string    `json:"solution_link,omitempty"`
+	ID              int64      `json:"id"`
+	Label           string     `json:"label"`
+	Display         string     `json:"display"`
+	IsCoffin        bool       `json:"is_coffin"`
+	ReleasedAt      *time.Time `json:"released_at,omitempty"`
+	HasSolutionTex  bool       `json:"has_solution_tex"`
+	HasSolutionPDF  bool       `json:"has_solution_pdf"`
+	SolutionLink    *string    `json:"solution_link,omitempty"`
+	SolutionGroupID *int64     `json:"solution_group_id,omitempty"`
 }
 
 type problemView struct {
@@ -1124,11 +1125,12 @@ func buildSeriesView(ctx context.Context, q *store.Queries, s store.MathCenterSe
 	solByID := make(map[int64]subSolMeta, len(sols))
 	for _, sol := range sols {
 		solByID[sol.SubproblemID] = subSolMeta{
-			IsCoffin:       sol.IsCoffin,
-			ReleasedAt:     sol.ReleasedAt,
-			HasSolutionTex: sol.HasSolutionTex,
-			HasSolutionPDF: sol.HasSolutionPdf,
-			SolutionLink:   sol.SolutionLink,
+			IsCoffin:        sol.IsCoffin,
+			ReleasedAt:      sol.ReleasedAt,
+			HasSolutionTex:  sol.HasSolutionTex,
+			HasSolutionPDF:  sol.HasSolutionPdf,
+			SolutionLink:    sol.SolutionLink,
+			SolutionGroupID: sol.SolutionGroupID,
 		}
 	}
 	bySub := make(map[int64][]subIdent, len(problems))
@@ -1141,11 +1143,12 @@ func buildSeriesView(ctx context.Context, q *store.Queries, s store.MathCenterSe
 // subSolMeta is the per-subproblem разбор/coffin metadata, unifying the single
 // and batched solution-list row types for assembleSeriesView.
 type subSolMeta struct {
-	IsCoffin       bool
-	ReleasedAt     *time.Time
-	HasSolutionTex bool
-	HasSolutionPDF bool
-	SolutionLink   *string
+	IsCoffin        bool
+	ReleasedAt      *time.Time
+	HasSolutionTex  bool
+	HasSolutionPDF  bool
+	SolutionLink    *string
+	SolutionGroupID *int64
 }
 
 // buildSeriesViews builds views for a set of series with a fixed two queries
@@ -1177,11 +1180,12 @@ func buildSeriesViews(ctx context.Context, q *store.Queries, series []store.Math
 	solByID := make(map[int64]subSolMeta, len(sols))
 	for _, sol := range sols {
 		solByID[sol.SubproblemID] = subSolMeta{
-			IsCoffin:       sol.IsCoffin,
-			ReleasedAt:     sol.ReleasedAt,
-			HasSolutionTex: sol.HasSolutionTex,
-			HasSolutionPDF: sol.HasSolutionPdf,
-			SolutionLink:   sol.SolutionLink,
+			IsCoffin:        sol.IsCoffin,
+			ReleasedAt:      sol.ReleasedAt,
+			HasSolutionTex:  sol.HasSolutionTex,
+			HasSolutionPDF:  sol.HasSolutionPdf,
+			SolutionLink:    sol.SolutionLink,
+			SolutionGroupID: sol.SolutionGroupID,
 		}
 	}
 
@@ -1221,6 +1225,7 @@ func assembleSeriesView(s store.MathCenterSeries, problems []store.MathCenterPro
 				sv.HasSolutionTex = sol.HasSolutionTex
 				sv.HasSolutionPDF = sol.HasSolutionPDF
 				sv.SolutionLink = sol.SolutionLink
+				sv.SolutionGroupID = sol.SolutionGroupID
 			}
 			svs = append(svs, sv)
 		}
