@@ -6,6 +6,7 @@ import {
   displayStatusMeta,
   formatDateTime,
   isClosed,
+  submissionClosedFor,
   useSeries,
   useSubmitAttempt,
   useSubproblemContext,
@@ -142,7 +143,10 @@ function ThreadMode({
     )
   }
 
-  const closed = isClosed(thread.series_due_at)
+  // Coffin-aware: a marked-open coffin stays submittable past the deadline.
+  const closed = ctx.data
+    ? submissionClosedFor(ctx.data)
+    : isClosed(thread.series_due_at)
   return (
     <>
       <ThreadHeader thread={thread} ctx={ctx.data} userId={roleInfo.userId} />
@@ -188,7 +192,7 @@ function SubmitMode({
     )
   }
 
-  const closed = isClosed(ctx.series_due_at)
+  const closed = submissionClosedFor(ctx)
   return (
     <>
       <Card className="p-5">

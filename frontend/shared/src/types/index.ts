@@ -229,6 +229,12 @@ export interface Series {
   published_at?: string | null
   has_pdf: boolean
   has_tex: boolean
+  // Series-level «Разбор» (official solutions). Presence flags + external link;
+  // the client shows it to students only once due_at has passed (teachers
+  // always), and the GET endpoints enforce the same gate.
+  has_solution_tex: boolean
+  has_solution_pdf: boolean
+  solution_link?: string | null
   problems: SeriesProblem[]
 }
 
@@ -394,6 +400,40 @@ export interface SubproblemContext {
   math_center_id: number
   series_due_at: string
   series_published_at?: string | null
+  // Coffin state: a coffin stays open for submission past the series deadline
+  // until its solution is released (coffin_released_at set and in the past).
+  is_coffin: boolean
+  coffin_released_at?: string | null
+}
+
+// CoffinSubproblem is one subpart of a coffin with the calling student's own
+// thread status (populated only for student callers).
+export interface CoffinSubproblem {
+  subproblem_id: number
+  subproblem_label: string
+  thread_id: number
+  current_status: HomeworkStatus
+  being_graded: boolean
+}
+
+// Coffin is one «гроб» in a center (GET /mathcenter/centers/{id}/coffins): a
+// problem kept open for submission past the deadline until its own разбор is
+// released. `released_at` null = still open.
+export interface Coffin {
+  id: number
+  problem_id: number
+  series_id: number
+  series_number: number
+  series_name: string
+  math_center_id: number
+  problem_number: number
+  problem_display: string
+  released_at?: string | null
+  has_solution_tex: boolean
+  has_solution_pdf: boolean
+  solution_link?: string | null
+  // Per-subpart status for the calling student (absent for teachers).
+  subproblems?: CoffinSubproblem[]
 }
 
 // QueueItem is one row of the grader queue (GET /homework/series/{id}/queue):

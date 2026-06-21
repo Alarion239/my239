@@ -3,14 +3,16 @@ import { Spinner } from '../../design/ui'
 import { apiClient } from '../../lib/api'
 
 export interface PdfViewerProps {
-  seriesId: number
+  // The authed blob endpoint to fetch (e.g. /mathcenter/series/7/pdf or a
+  // /solution/pdf variant).
+  path: string
   title?: string
   className?: string
 }
 
-// PdfViewer fetches a series' PDF as an authed blob, shows it in an iframe, and
-// revokes the object URL on change/unmount. Loading + error states included.
-export function PdfViewer({ seriesId, title = 'Условие (PDF)', className }: PdfViewerProps) {
+// PdfViewer fetches a PDF as an authed blob from `path`, shows it in an iframe,
+// and revokes the object URL on change/unmount. Loading + error states included.
+export function PdfViewer({ path, title = 'PDF', className }: PdfViewerProps) {
   const [url, setUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -22,7 +24,7 @@ export function PdfViewer({ seriesId, title = 'Условие (PDF)', className 
     setError(null)
 
     apiClient
-      .requestBlob('/mathcenter/series/' + seriesId + '/pdf')
+      .requestBlob(path)
       .then((blob) => {
         if (cancelled) return
         objectUrl = URL.createObjectURL(blob)
@@ -37,7 +39,7 @@ export function PdfViewer({ seriesId, title = 'Условие (PDF)', className 
       cancelled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [seriesId])
+  }, [path])
 
   if (error) {
     return (

@@ -21,7 +21,7 @@ func TestMyRollup_GroupsByProblemAndCounts(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(seriesColumns).
-			AddRow(int64(100), int64(42), int32(1), "S", now.Add(time.Hour), (*string)(nil), &pub, now, (*string)(nil)))
+			AddRow(int64(100), int64(42), int32(1), "S", now.Add(time.Hour), (*string)(nil), &pub, now, (*string)(nil), (*string)(nil), (*string)(nil), (*string)(nil)))
 	expectStudentCheck(mock, 7, 42, true)
 
 	// Rollup rows: problem 1 has subparts a, b; problem 2 (sentinel) is single empty-label row.
@@ -95,7 +95,7 @@ func TestMyRollup_DraftHiddenFromStudent(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(seriesColumns).
-			AddRow(int64(100), int64(42), int32(1), "S", now.Add(time.Hour), (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
+			AddRow(int64(100), int64(42), int32(1), "S", now.Add(time.Hour), (*string)(nil), (*time.Time)(nil), now, (*string)(nil), (*string)(nil), (*string)(nil), (*string)(nil)))
 	expectStudentCheck(mock, 7, 42, true)
 
 	req := authedRequest(t, access, 7, false, http.MethodGet, "/series/100/my", nil)
@@ -117,7 +117,7 @@ func TestMyRollup_NonStudentForbidden(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(seriesColumns).
-			AddRow(int64(100), int64(42), int32(1), "S", now.Add(time.Hour), (*string)(nil), &pub, now, (*string)(nil)))
+			AddRow(int64(100), int64(42), int32(1), "S", now.Add(time.Hour), (*string)(nil), &pub, now, (*string)(nil), (*string)(nil), (*string)(nil), (*string)(nil)))
 	expectStudentCheck(mock, 7, 42, false)
 
 	req := authedRequest(t, access, 7, false, http.MethodGet, "/series/100/my", nil)

@@ -72,17 +72,23 @@ type problemView struct {
 }
 
 type seriesView struct {
-	ID           int64         `json:"id"`
-	MathCenterID int64         `json:"math_center_id"`
-	Number       int           `json:"number"`
-	Name         string        `json:"name"`
-	DisplayName  string        `json:"display_name"`
-	DueAt        time.Time     `json:"due_at"`
-	Published    bool          `json:"published"`
-	PublishedAt  *time.Time    `json:"published_at,omitempty"`
-	HasPDF       bool          `json:"has_pdf"`
-	HasTex       bool          `json:"has_tex"`
-	Problems     []problemView `json:"problems"`
+	ID           int64      `json:"id"`
+	MathCenterID int64      `json:"math_center_id"`
+	Number       int        `json:"number"`
+	Name         string     `json:"name"`
+	DisplayName  string     `json:"display_name"`
+	DueAt        time.Time  `json:"due_at"`
+	Published    bool       `json:"published"`
+	PublishedAt  *time.Time `json:"published_at,omitempty"`
+	HasPDF       bool       `json:"has_pdf"`
+	HasTex       bool       `json:"has_tex"`
+	// Series-level разбор presence. The client decides visibility (teacher
+	// always; student only once due_at has passed) — the GET endpoints enforce
+	// the same gate server-side.
+	HasSolutionTex bool          `json:"has_solution_tex"`
+	HasSolutionPDF bool          `json:"has_solution_pdf"`
+	SolutionLink   *string       `json:"solution_link,omitempty"`
+	Problems       []problemView `json:"problems"`
 }
 
 // Handlers -------------------------------------------------------------------
@@ -1028,17 +1034,20 @@ func assembleSeriesView(s store.MathCenterSeries, problems []store.MathCenterPro
 		})
 	}
 	return &seriesView{
-		ID:           s.ID,
-		MathCenterID: s.MathCenterID,
-		Number:       int(s.Number),
-		Name:         s.Name,
-		DisplayName:  mc.SeriesDisplayName(int(s.Number), s.Name),
-		DueAt:        s.DueAt,
-		Published:    s.PublishedAt != nil,
-		PublishedAt:  s.PublishedAt,
-		HasPDF:       s.PdfObjectKey != nil,
-		HasTex:       s.TexSource != nil,
-		Problems:     pviews,
+		ID:             s.ID,
+		MathCenterID:   s.MathCenterID,
+		Number:         int(s.Number),
+		Name:           s.Name,
+		DisplayName:    mc.SeriesDisplayName(int(s.Number), s.Name),
+		DueAt:          s.DueAt,
+		Published:      s.PublishedAt != nil,
+		PublishedAt:    s.PublishedAt,
+		HasPDF:         s.PdfObjectKey != nil,
+		HasTex:         s.TexSource != nil,
+		HasSolutionTex: s.SolutionTexSource != nil,
+		HasSolutionPDF: s.SolutionPdfObjectKey != nil,
+		SolutionLink:   s.SolutionLink,
+		Problems:       pviews,
 	}
 }
 

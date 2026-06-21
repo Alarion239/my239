@@ -33,7 +33,10 @@ export function useNavModules(): ModuleDef[] {
     path: '/mathcenter/' + c.id,
     icon: FunctionSquare,
     status: 'active',
-    pages: [{ label: 'Серии', path: '/mathcenter/' + c.id, end: true }],
+    pages: [
+      { label: 'Серии', path: '/mathcenter/' + c.id, end: true },
+      { label: 'Гробы', path: '/mathcenter/' + c.id + '/coffins' },
+    ],
   }))
 
   return [...mathModules, ...modules]

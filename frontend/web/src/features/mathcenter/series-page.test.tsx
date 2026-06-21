@@ -52,6 +52,8 @@ const seriesList: Series[] = [
     published_at: '2019-12-01T00:00:00Z',
     has_pdf: false,
     has_tex: false,
+    has_solution_tex: false,
+    has_solution_pdf: false,
     problems: [],
   },
   {
@@ -65,6 +67,8 @@ const seriesList: Series[] = [
     published_at: '2024-01-01T00:00:00Z',
     has_pdf: false,
     has_tex: false,
+    has_solution_tex: false,
+    has_solution_pdf: false,
     problems: [
       { id: 100, number: 1, display_name: 'Задача 1', subproblems: ['а', 'б'] },
     ],

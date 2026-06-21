@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   claimIsLive,
+  coffinOpen,
   currentSeries,
   displayStatusMeta,
   eventKindLabel,
@@ -9,6 +10,7 @@ import {
   isClosed,
   problemStateFromSubproblems,
   resolveThreadRole,
+  submissionClosedFor,
   userNameFromThread,
 } from './homework'
 import type { ThreadRoleInput } from './homework'
@@ -110,6 +112,8 @@ describe('currentSeries', () => {
       published: true,
       has_pdf: false,
       has_tex: false,
+      has_solution_tex: false,
+      has_solution_pdf: false,
       problems: [],
       ...over,
     }
@@ -309,5 +313,29 @@ describe('resolveThreadRole', () => {
     })
     expect(r.role).toBe('student')
     expect(r.userId).toBe(7)
+  })
+})
+
+describe('submissionClosedFor', () => {
+  const now = Date.parse('2030-06-01T12:00:00Z')
+  const past = '2030-05-01T00:00:00Z'
+  const future = '2030-07-01T00:00:00Z'
+  it('normal problem closes at the series deadline', () => {
+    expect(submissionClosedFor({ is_coffin: false, series_due_at: future }, now)).toBe(false)
+    expect(submissionClosedFor({ is_coffin: false, series_due_at: past }, now)).toBe(true)
+  })
+  it('coffin stays open past due until released', () => {
+    expect(submissionClosedFor({ is_coffin: true, coffin_released_at: null, series_due_at: past }, now)).toBe(false)
+    expect(submissionClosedFor({ is_coffin: true, coffin_released_at: past, series_due_at: past }, now)).toBe(true)
+    expect(submissionClosedFor({ is_coffin: true, coffin_released_at: future, series_due_at: past }, now)).toBe(false)
+  })
+})
+
+describe('coffinOpen', () => {
+  const now = Date.parse('2030-06-01T12:00:00Z')
+  it('is open with no release, closed once released', () => {
+    expect(coffinOpen(null, now)).toBe(true)
+    expect(coffinOpen('2030-05-01T00:00:00Z', now)).toBe(false)
+    expect(coffinOpen('2030-07-01T00:00:00Z', now)).toBe(true)
   })
 })

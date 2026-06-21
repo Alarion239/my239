@@ -65,10 +65,52 @@ SELECT tex_source
 FROM math_center_series
 WHERE id = $1;
 
+-- name: SetSeriesSolutionTex :one
+-- Stores/replaces the series-level разбор LaTeX. Does NOT touch published_at:
+-- разбор visibility is gated on due_at, not publication.
+UPDATE math_center_series
+SET solution_tex_source = $2
+WHERE id = $1
+RETURNING *;
+
+-- name: ClearSeriesSolutionTex :one
+UPDATE math_center_series
+SET solution_tex_source = NULL
+WHERE id = $1
+RETURNING *;
+
+-- name: GetSeriesSolutionTex :one
+SELECT solution_tex_source
+FROM math_center_series
+WHERE id = $1;
+
+-- name: SetSeriesSolutionPdf :one
+-- $2 = object key (set) or NULL (clear after a best-effort blob delete).
+UPDATE math_center_series
+SET solution_pdf_object_key = $2
+WHERE id = $1
+RETURNING *;
+
+-- name: SetSeriesSolutionLink :one
+-- $2 = external/video link (set) or NULL (clear).
+UPDATE math_center_series
+SET solution_link = $2
+WHERE id = $1
+RETURNING *;
+
 -- name: CreateProblem :one
 INSERT INTO math_center_problems (series_id, number)
 VALUES ($1, $2)
 RETURNING *;
+
+-- name: GetProblemCenter :one
+-- Resolve a problem to its series + center, for authorizing coffin actions.
+SELECT p.id             AS problem_id,
+       s.id             AS series_id,
+       s.math_center_id AS math_center_id
+FROM math_center_problems p
+         JOIN math_center_series s ON s.id = p.series_id
+WHERE p.id = $1;
 
 -- name: ListProblemsForSeries :many
 SELECT *
