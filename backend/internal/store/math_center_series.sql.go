@@ -115,6 +115,19 @@ func (q *Queries) CreateSubproblem(ctx context.Context, arg CreateSubproblemPara
 	return i, err
 }
 
+const deleteProblem = `-- name: DeleteProblem :exec
+DELETE
+FROM math_center_problems
+WHERE id = $1
+`
+
+// Delete one problem (cascades to its subproblems → threads/solutions). Used by
+// the diff update when a teacher removes a problem.
+func (q *Queries) DeleteProblem(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteProblem, id)
+	return err
+}
+
 const deleteProblemsForSeries = `-- name: DeleteProblemsForSeries :exec
 DELETE
 FROM math_center_problems
@@ -138,6 +151,19 @@ func (q *Queries) DeleteSeries(ctx context.Context, id int64) (int64, error) {
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const deleteSubproblem = `-- name: DeleteSubproblem :exec
+DELETE
+FROM math_center_subproblems
+WHERE id = $1
+`
+
+// Delete one subproblem (cascades to its thread/solution). Used by the diff
+// update when a problem's subparts shrink.
+func (q *Queries) DeleteSubproblem(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteSubproblem, id)
+	return err
 }
 
 const getProblemCenter = `-- name: GetProblemCenter :one
@@ -484,6 +510,24 @@ func (q *Queries) PublishSeries(ctx context.Context, arg PublishSeriesParams) (M
 		&i.TexSource,
 	)
 	return i, err
+}
+
+const setProblemNumber = `-- name: SetProblemNumber :exec
+UPDATE math_center_problems
+SET number = $2
+WHERE id = $1
+`
+
+type SetProblemNumberParams struct {
+	ID     int64 `json:"id"`
+	Number int32 `json:"number"`
+}
+
+// Renumber a problem in place (used by the diff-based series update so existing
+// problems keep their id — and thus their subproblems/threads/разборы/coffins).
+func (q *Queries) SetProblemNumber(ctx context.Context, arg SetProblemNumberParams) error {
+	_, err := q.db.Exec(ctx, setProblemNumber, arg.ID, arg.Number)
+	return err
 }
 
 const setSeriesTex = `-- name: SetSeriesTex :one

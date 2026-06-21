@@ -90,6 +90,27 @@ DELETE
 FROM math_center_problems
 WHERE series_id = $1;
 
+-- name: SetProblemNumber :exec
+-- Renumber a problem in place (used by the diff-based series update so existing
+-- problems keep their id — and thus their subproblems/threads/разборы/coffins).
+UPDATE math_center_problems
+SET number = $2
+WHERE id = $1;
+
+-- name: DeleteProblem :exec
+-- Delete one problem (cascades to its subproblems → threads/solutions). Used by
+-- the diff update when a teacher removes a problem.
+DELETE
+FROM math_center_problems
+WHERE id = $1;
+
+-- name: DeleteSubproblem :exec
+-- Delete one subproblem (cascades to its thread/solution). Used by the diff
+-- update when a problem's subparts shrink.
+DELETE
+FROM math_center_subproblems
+WHERE id = $1;
+
 -- name: CreateSubproblem :one
 INSERT INTO math_center_subproblems (problem_id, label)
 VALUES ($1, $2)

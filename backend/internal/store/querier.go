@@ -33,8 +33,14 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteMathCenter(ctx context.Context, id int64) (int64, error)
 	DeleteMathCenterGroup(ctx context.Context, id int64) (int64, error)
+	// Delete one problem (cascades to its subproblems → threads/solutions). Used by
+	// the diff update when a teacher removes a problem.
+	DeleteProblem(ctx context.Context, id int64) error
 	DeleteProblemsForSeries(ctx context.Context, seriesID int64) error
 	DeleteSeries(ctx context.Context, id int64) (int64, error)
+	// Delete one subproblem (cascades to its thread/solution). Used by the diff
+	// update when a problem's subparts shrink.
+	DeleteSubproblem(ctx context.Context, id int64) error
 	// Used when unmarking a coffin that carries no разбор content (clean up the row).
 	DeleteSubproblemSolution(ctx context.Context, subproblemID int64) (int64, error)
 	// INSERT ... ON CONFLICT DO UPDATE always returns a row, regardless of
@@ -136,6 +142,9 @@ type Querier interface {
 	// distinct line). Roster scoping mirrors TeacherSeriesGrid: every student of a
 	// group in the series's math center.
 	SeriesProblemStats(ctx context.Context, id int64) ([]SeriesProblemStatsRow, error)
+	// Renumber a problem in place (used by the diff-based series update so existing
+	// problems keep their id — and thus their subproblems/threads/разборы/coffins).
+	SetProblemNumber(ctx context.Context, arg SetProblemNumberParams) error
 	// Stores or replaces the raw LaTeX source. Also stamps published_at if
 	// the series wasn't already published, mirroring the PDF publish flow:
 	// a series with any rendered content is considered visible to students.

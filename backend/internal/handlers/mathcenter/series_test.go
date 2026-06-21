@@ -356,7 +356,13 @@ func TestGetSeries_AdminSeesDraft(t *testing.T) {
 // them, commit — then re-read for the response view. The Begin/Commit
 // expectations assert the whole rebuild happens in one transaction so a
 // partial failure can't destroy a series' problems.
-func TestUpdateSeries_TeacherRebuildsProblems(t *testing.T) {
+// TestUpdateSeries_AddsProblemPreservingExisting is the core diff guarantee:
+// editing a series to ADD a problem must keep the existing problem (id 600) and
+// its subproblems (a/b) intact — i.e. the handler must NOT delete-and-rebuild.
+// The proof is in the expectations: there is NO DeleteProblem/DeleteSubproblem
+// for 600 or its subparts; problem 600 is renumbered in place (park → final)
+// and only the new problem is inserted.
+func TestUpdateSeries_AddsProblemPreservingExisting(t *testing.T) {
 	t.Parallel()
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
@@ -371,30 +377,16 @@ func TestUpdateSeries_TeacherRebuildsProblems(t *testing.T) {
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(seriesColumns).
 			AddRow(int64(100), int64(42), int32(3), "Алгебра", oldDue, (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
-	// 2. Teacher check.
 	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
 		WithArgs(int64(7), int64(42)).
 		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(true))
-	// 3. The rebuild runs in a single transaction.
+	// 2. Reconcile runs in one transaction.
 	mock.ExpectBegin()
 	mock.ExpectQuery(`UPDATE math_center_series`).
 		WithArgs(int64(100), int32(5), "Геометрия", pgxmock.AnyArg()).
 		WillReturnRows(mock.NewRows(seriesColumns).
 			AddRow(int64(100), int64(42), int32(5), "Геометрия", newDue, (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
-	mock.ExpectExec(`DELETE\s+FROM math_center_problems WHERE series_id`).
-		WithArgs(int64(100)).
-		WillReturnResult(pgxmock.NewResult("DELETE", 1))
-	mock.ExpectQuery(`INSERT INTO math_center_problems`).
-		WithArgs(int64(100), int32(0)).
-		WillReturnRows(mock.NewRows(problemColumns).AddRow(int64(600), int64(100), int32(0), now))
-	mock.ExpectQuery(`INSERT INTO math_center_subproblems`).
-		WithArgs(int64(600), "a").
-		WillReturnRows(mock.NewRows([]string{"id", "problem_id", "label", "created_at"}).AddRow(int64(700), int64(600), "a", now))
-	mock.ExpectQuery(`INSERT INTO math_center_subproblems`).
-		WithArgs(int64(600), "b").
-		WillReturnRows(mock.NewRows([]string{"id", "problem_id", "label", "created_at"}).AddRow(int64(701), int64(600), "b", now))
-	mock.ExpectCommit()
-	// 4. buildSeriesView re-reads the rewritten problems on the pool.
+	// 3. Reconcile reads the current problems + subproblems.
 	mock.ExpectQuery(`SELECT .* FROM math_center_problems WHERE series_id`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(problemColumns).AddRow(int64(600), int64(100), int32(0), now))
@@ -403,13 +395,44 @@ func TestUpdateSeries_TeacherRebuildsProblems(t *testing.T) {
 		WillReturnRows(mock.NewRows(subproblemRowColumns).
 			AddRow(int64(700), int64(600), "a").
 			AddRow(int64(701), int64(600), "b"))
+	// 4. Kept problem 600 is parked at a temp number, then set to its final
+	//    number — NOT deleted. Its subparts a/b are unchanged (no sub queries).
+	mock.ExpectExec(`UPDATE math_center_problems\s+SET number`).
+		WithArgs(int64(600), int32(-600)).
+		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+	mock.ExpectExec(`UPDATE math_center_problems\s+SET number`).
+		WithArgs(int64(600), int32(0)).
+		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+	// 5. The newly-added problem (number 1, no subparts) is inserted.
+	mock.ExpectQuery(`INSERT INTO math_center_problems`).
+		WithArgs(int64(100), int32(1)).
+		WillReturnRows(mock.NewRows(problemColumns).AddRow(int64(601), int64(100), int32(1), now))
+	mock.ExpectQuery(`INSERT INTO math_center_subproblems`).
+		WithArgs(int64(601), "").
+		WillReturnRows(mock.NewRows([]string{"id", "problem_id", "label", "created_at"}).AddRow(int64(910), int64(601), "", now))
+	mock.ExpectCommit()
+	// 6. buildSeriesView re-reads everything for the response.
+	mock.ExpectQuery(`SELECT .* FROM math_center_problems WHERE series_id`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(problemColumns).
+			AddRow(int64(600), int64(100), int32(0), now).
+			AddRow(int64(601), int64(100), int32(1), now))
+	mock.ExpectQuery(`FROM math_center_subproblems s\s+JOIN math_center_problems`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(subproblemRowColumns).
+			AddRow(int64(700), int64(600), "a").
+			AddRow(int64(701), int64(600), "b").
+			AddRow(int64(910), int64(601), ""))
 	mock.ExpectQuery(`FROM math_center_subproblem_solutions ss`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(subproblemSolutionMetaColumns))
 
 	body, _ := json.Marshal(map[string]any{
 		"number": 5, "name": "Геометрия", "due_at": newDue,
-		"problems": []map[string]int{{"number": 0, "subproblem_count": 2}},
+		"problems": []map[string]any{
+			{"id": 600, "number": 0, "subproblem_count": 2}, // kept
+			{"number": 1, "subproblem_count": 0},            // added
+		},
 	})
 	req := authedRequest(t, access, 7, http.MethodPut, "/series/100", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -423,25 +446,95 @@ func TestUpdateSeries_TeacherRebuildsProblems(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if got["display_name"] != "Серия 5. Геометрия" {
-		t.Errorf("display_name: got %v", got["display_name"])
-	}
 	problems, _ := got["problems"].([]any)
-	if len(problems) != 1 {
-		t.Fatalf("problems: got %d, want 1", len(problems))
+	if len(problems) != 2 {
+		t.Fatalf("problems: got %d, want 2", len(problems))
 	}
 	subs := problems[0].(map[string]any)["subproblems"].([]any)
 	if len(subs) != 2 || subs[0].(map[string]any)["label"] != "a" || subs[1].(map[string]any)["label"] != "b" {
-		t.Errorf("subproblems: got %v", subs)
+		t.Errorf("kept problem's subproblems not preserved: got %v", subs)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }
 
-// TestUpdateSeries_RollsBackOnProblemFailure verifies the transaction is
-// rolled back (not committed) when a problem insert fails mid-rebuild, so a
-// failed update can't leave the series with its problems deleted.
+// TestUpdateSeries_RemovesProblem verifies the other half: a problem absent from
+// the request IS deleted (cascading its data) — removal is intentional.
+func TestUpdateSeries_RemovesProblem(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	due := now.Add(72 * time.Hour)
+
+	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(seriesColumns).
+			AddRow(int64(100), int64(42), int32(3), "Алгебра", due, (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
+	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
+		WithArgs(int64(7), int64(42)).
+		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(true))
+	mock.ExpectBegin()
+	mock.ExpectQuery(`UPDATE math_center_series`).
+		WithArgs(int64(100), int32(3), "Алгебра", pgxmock.AnyArg()).
+		WillReturnRows(mock.NewRows(seriesColumns).
+			AddRow(int64(100), int64(42), int32(3), "Алгебра", due, (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
+	// Two existing problems; the request keeps only 600, so 601 is deleted.
+	mock.ExpectQuery(`SELECT .* FROM math_center_problems WHERE series_id`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(problemColumns).
+			AddRow(int64(600), int64(100), int32(0), now).
+			AddRow(int64(601), int64(100), int32(1), now))
+	mock.ExpectQuery(`FROM math_center_subproblems s\s+JOIN math_center_problems`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(subproblemRowColumns).
+			AddRow(int64(700), int64(600), "").
+			AddRow(int64(910), int64(601), ""))
+	mock.ExpectExec(`DELETE\s+FROM math_center_problems WHERE id`).
+		WithArgs(int64(601)).
+		WillReturnResult(pgxmock.NewResult("DELETE", 1))
+	mock.ExpectExec(`UPDATE math_center_problems\s+SET number`).
+		WithArgs(int64(600), int32(-600)).
+		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+	mock.ExpectExec(`UPDATE math_center_problems\s+SET number`).
+		WithArgs(int64(600), int32(0)).
+		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+	mock.ExpectCommit()
+	mock.ExpectQuery(`SELECT .* FROM math_center_problems WHERE series_id`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(problemColumns).AddRow(int64(600), int64(100), int32(0), now))
+	mock.ExpectQuery(`FROM math_center_subproblems s\s+JOIN math_center_problems`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(subproblemRowColumns).AddRow(int64(700), int64(600), ""))
+	mock.ExpectQuery(`FROM math_center_subproblem_solutions ss`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(subproblemSolutionMetaColumns))
+
+	body, _ := json.Marshal(map[string]any{
+		"number": 3, "name": "Алгебра", "due_at": due,
+		"problems": []map[string]any{
+			{"id": 600, "number": 0, "subproblem_count": 0},
+		},
+	})
+	req := authedRequest(t, access, 7, http.MethodPut, "/series/100", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+// TestUpdateSeries_RollsBackOnProblemFailure verifies the transaction is rolled
+// back (not committed) when an insert fails mid-reconcile, so a failed update
+// can't leave the series half-rewritten.
 func TestUpdateSeries_RollsBackOnProblemFailure(t *testing.T) {
 	t.Parallel()
 	mock, _ := pgxmock.NewPool()
@@ -461,11 +554,13 @@ func TestUpdateSeries_RollsBackOnProblemFailure(t *testing.T) {
 		WithArgs(int64(100), int32(5), "Геометрия", pgxmock.AnyArg()).
 		WillReturnRows(mock.NewRows(seriesColumns).
 			AddRow(int64(100), int64(42), int32(5), "Геометрия", now, (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
-	mock.ExpectExec(`DELETE\s+FROM math_center_problems WHERE series_id`).
+	mock.ExpectQuery(`SELECT .* FROM math_center_problems WHERE series_id`).
 		WithArgs(int64(100)).
-		WillReturnResult(pgxmock.NewResult("DELETE", 1))
-	// The first problem insert fails -> handler returns 500 and the deferred
-	// rollback fires; Commit must never be called.
+		WillReturnRows(mock.NewRows(problemColumns))
+	mock.ExpectQuery(`FROM math_center_subproblems s\s+JOIN math_center_problems`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(subproblemRowColumns))
+	// A brand-new problem insert fails -> 500 + deferred rollback; no commit.
 	mock.ExpectQuery(`INSERT INTO math_center_problems`).
 		WithArgs(int64(100), int32(0)).
 		WillReturnError(fmt.Errorf("boom"))
@@ -473,7 +568,7 @@ func TestUpdateSeries_RollsBackOnProblemFailure(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{
 		"number": 5, "name": "Геометрия", "due_at": now.Add(72 * time.Hour),
-		"problems": []map[string]int{{"number": 0, "subproblem_count": 2}},
+		"problems": []map[string]any{{"number": 0, "subproblem_count": 2}},
 	})
 	req := authedRequest(t, access, 7, http.MethodPut, "/series/100", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")

@@ -4,7 +4,9 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Plus, Trash2 } from 'lucide-react'
 import {
   APIErrorImpl,
+  countToSubparts,
   createSeriesSchema,
+  toSeriesBody,
   useCreateSeries,
   usePutSeriesTex,
   useUpdateSeries,
@@ -57,7 +59,7 @@ function toLocalInput(iso: string | null | undefined): string {
 
 function defaultsFor(series: Series | undefined): CreateSeriesValues {
   if (!series) {
-    return { number: 1, name: '', due_at: '', problems: [{ number: 1, subproblem_count: 1 }] }
+    return { number: 1, name: '', due_at: '', problems: [{ number: 1, subparts: 'a' }] }
   }
   return {
     number: series.number,
@@ -66,12 +68,17 @@ function defaultsFor(series: Series | undefined): CreateSeriesValues {
     problems:
       series.problems.length > 0
         ? series.problems.map((p) => ({
+            // Carry the existing problem id so the backend keeps it in place
+            // (diff update) instead of rebuilding the whole series.
+            id: p.id,
             number: p.number,
-            // Count only REAL subparts: a single-part problem carries one
-            // sentinel subproblem (label="") that means "0 declared subparts".
-            subproblem_count: p.subproblems.filter((s) => s.label !== '').length,
+            // Show the last subpart letter; count only REAL subparts (a
+            // single-part problem has one sentinel subproblem labelled "").
+            subparts: countToSubparts(
+              p.subproblems.filter((s) => s.label !== '').length,
+            ),
           }))
-        : [{ number: 1, subproblem_count: 1 }],
+        : [{ number: 1, subparts: 'a' }],
   }
 }
 
@@ -148,7 +155,13 @@ function DetailsStep({
     resolver: zodResolver(createSeriesSchema),
     defaultValues: defaultsFor(series),
   })
-  const { fields, append, remove } = useFieldArray({ control, name: 'problems' })
+  // keyName '_key' keeps RHF's internal render id from clobbering our own
+  // problem `id` field (which we round-trip for the diff-based update).
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: 'problems',
+    keyName: '_key',
+  })
 
   const onSubmit = handleSubmit((values) => {
     setFormError(null)
@@ -159,7 +172,7 @@ function DetailsStep({
       setError('due_at', { message: 'Укажите корректный срок' })
       return
     }
-    const payload = { ...values, due_at: dueDate.toISOString() }
+    const payload = toSeriesBody(values, dueDate.toISOString())
     const mutation = isEdit ? update : create
     return new Promise<void>((resolve) => {
       mutation.mutate(payload, {
@@ -214,14 +227,25 @@ function DetailsStep({
             type="button"
             size="sm"
             variant="ghost"
-            onClick={() => append({ number: fields.length + 1, subproblem_count: 1 })}
+            onClick={() => append({ number: fields.length + 1, subparts: 'a' })}
           >
             <Plus className="h-4 w-4" aria-hidden /> Добавить
           </Button>
         </div>
+        <p className="text-xs text-faint">
+          Подзадачи: число (3) или последняя буква (c). Пусто — без подзадач.
+        </p>
 
         {fields.map((field, i) => (
-          <div key={field.id} className="flex items-start gap-2">
+          <div key={field._key} className="flex items-start gap-2">
+            {/* Round-trip the existing problem id so edits keep it in place. */}
+            <input
+              type="hidden"
+              defaultValue={field.id ?? ''}
+              {...register(`problems.${i}.id`, {
+                setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+              })}
+            />
             <div className="flex-1">
               <Input
                 type="number"
@@ -236,16 +260,15 @@ function DetailsStep({
             </div>
             <div className="flex-1">
               <Input
-                type="number"
-                min={0}
-                max={10}
-                aria-label={'Число подзадач ' + (i + 1)}
-                invalid={!!errors.problems?.[i]?.subproblem_count}
-                {...register(`problems.${i}.subproblem_count`, { valueAsNumber: true })}
+                type="text"
+                aria-label={'Подзадачи задачи ' + (i + 1)}
+                placeholder="напр. c или 3"
+                invalid={!!errors.problems?.[i]?.subparts}
+                {...register(`problems.${i}.subparts`)}
               />
-              {errors.problems?.[i]?.subproblem_count ? (
+              {errors.problems?.[i]?.subparts ? (
                 <p className="mt-1 text-xs text-danger">
-                  {errors.problems[i]?.subproblem_count?.message}
+                  {errors.problems[i]?.subparts?.message}
                 </p>
               ) : null}
             </div>
