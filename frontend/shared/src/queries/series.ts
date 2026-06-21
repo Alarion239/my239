@@ -10,7 +10,7 @@ import type {
   Series,
   SeriesProblemStats,
 } from '../types'
-import type { CreateSeriesValues } from '../validation/series'
+import type { CreateSeriesBody } from '../validation/series'
 import { useApiClient } from './context'
 import { queryKeys } from './keys'
 
@@ -79,10 +79,6 @@ export function useSeriesProblemStats(seriesId: number) {
 }
 
 // --- Mutations ---------------------------------------------------------------
-
-// CreateSeriesBody is the wire body for create/update; the form values map
-// onto it directly (CreateSeriesValues mirrors these fields).
-export type CreateSeriesBody = CreateSeriesValues
 
 // useCreateSeries creates a series in a center and invalidates the center list.
 export function useCreateSeries(centerId: number) {

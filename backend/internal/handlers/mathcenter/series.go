@@ -46,8 +46,12 @@ func pdfObjectKey(seriesID int64) string {
 // API DTOs -------------------------------------------------------------------
 
 type problemSpec struct {
-	Number          int `json:"number"`
-	SubproblemCount int `json:"subproblem_count"`
+	// ID echoes back an existing problem's id so UpdateSeries can keep it in
+	// place (preserving its subproblems/threads/разборы/coffins) instead of
+	// rebuilding. Absent/nil = a newly-added problem to insert.
+	ID              *int64 `json:"id,omitempty"`
+	Number          int    `json:"number"`
+	SubproblemCount int    `json:"subproblem_count"`
 }
 
 type createSeriesRequest struct {
@@ -332,10 +336,11 @@ func UpdateSeries(database *db.DB) http.HandlerFunc {
 			return
 		}
 
-		// Update the series and rebuild its problems atomically. The rebuild
-		// deletes every problem (cascading to subproblems) and re-inserts; on
-		// autocommit a failure between the delete and the rewrite would destroy
-		// the series' problems — and any homework threads that reference them.
+		// Update the series and DIFF its problems atomically: existing problems
+		// are kept in place (preserving their subproblems/threads/разборы/
+		// coffins), only removed problems are deleted and only added ones are
+		// inserted. The whole reconcile runs in one transaction so a mid-way
+		// failure rolls back cleanly.
 		tx, err := database.Pool().Begin(ctx)
 		if err != nil {
 			logger.LogErrorContext(ctx, "series: begin tx", err)
@@ -361,13 +366,12 @@ func UpdateSeries(database *db.DB) http.HandlerFunc {
 			return
 		}
 
-		if err := qx.DeleteProblemsForSeries(ctx, series.ID); err != nil {
-			logger.LogErrorContext(ctx, "series: clear problems", err)
-			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to update problems")
-			return
-		}
-		if err := writeProblems(ctx, qx, series.ID, req.Problems); err != nil {
-			logger.LogErrorContext(ctx, "series: write problems", err)
+		if err := reconcileSeriesProblems(ctx, qx, series.ID, req.Problems); err != nil {
+			if errors.Is(err, errUnknownProblem) || errors.Is(err, errDuplicateProblem) {
+				httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+				return
+			}
+			logger.LogErrorContext(ctx, "series: reconcile problems", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to update problems")
 			return
 		}
@@ -932,6 +936,41 @@ func validateSeriesPayload(number int, name string, problems []problemSpec) stri
 	return ""
 }
 
+// errUnknownProblem / errDuplicateProblem signal a bad UpdateSeries payload
+// (a problem id that isn't in this series, or a repeated id) so the handler can
+// map them to 400 instead of 500.
+var (
+	errUnknownProblem   = errors.New("unknown problem id for this series")
+	errDuplicateProblem = errors.New("duplicate problem id in request")
+)
+
+// desiredLabels turns a requested subpart count into the labels a problem should
+// have. count<=0 yields the single sentinel label "" (a one-part problem still
+// needs one subproblem row so homework threads have a stable FK to anchor to);
+// otherwise the first `count` Latin labels a, b, c, … .
+func desiredLabels(count int) []string {
+	labels := mc.SubproblemLabels(count)
+	if len(labels) == 0 {
+		return []string{""}
+	}
+	return labels
+}
+
+// writeSubproblems creates all subproblem rows for a freshly-created problem.
+func writeSubproblems(ctx context.Context, q *store.Queries, problemID int64, count int) error {
+	for _, label := range desiredLabels(count) {
+		if _, err := q.CreateSubproblem(ctx, store.CreateSubproblemParams{
+			ProblemID: problemID,
+			Label:     label,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeProblems creates problems + their subproblems from scratch (used by
+// CreateSeries, where nothing exists yet).
 func writeProblems(ctx context.Context, q *store.Queries, seriesID int64, specs []problemSpec) error {
 	for _, p := range specs {
 		problem, err := q.CreateProblem(ctx, store.CreateProblemParams{
@@ -941,25 +980,126 @@ func writeProblems(ctx context.Context, q *store.Queries, seriesID int64, specs 
 		if err != nil {
 			return err
 		}
-		labels := mc.SubproblemLabels(p.SubproblemCount)
-		// Problems without real subparts still need one row so the
-		// homework feature can FK its threads to a stable subproblem id.
-		// We use label='' as a sentinel; buildSeriesView hides it from
-		// the API response.
-		if len(labels) == 0 {
+		if err := writeSubproblems(ctx, q, problem.ID, p.SubproblemCount); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// reconcileSubproblems brings a problem's subproblem rows to match `count`,
+// keyed by LABEL (the stable identity within a problem): labels that already
+// exist are left untouched (preserving their thread/разбор/coffin), surplus
+// labels are deleted (cascading their data — the teacher shrank the problem),
+// and missing labels are inserted. `existing` is the problem's current
+// subproblems in label order.
+func reconcileSubproblems(ctx context.Context, q *store.Queries, problemID int64, existing []subIdent, count int) error {
+	desired := desiredLabels(count)
+	desiredSet := make(map[string]bool, len(desired))
+	for _, l := range desired {
+		desiredSet[l] = true
+	}
+	have := make(map[string]bool, len(existing))
+	for _, sp := range existing {
+		have[sp.Label] = true
+		if !desiredSet[sp.Label] {
+			if err := q.DeleteSubproblem(ctx, sp.ID); err != nil {
+				return err
+			}
+		}
+	}
+	for _, label := range desired {
+		if !have[label] {
 			if _, err := q.CreateSubproblem(ctx, store.CreateSubproblemParams{
-				ProblemID: problem.ID,
-				Label:     "",
+				ProblemID: problemID,
+				Label:     label,
 			}); err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+// reconcileSeriesProblems diffs the requested problem set against what the
+// series currently has, keyed by problem id, so an edit preserves everything it
+// doesn't touch. Removed problems are deleted (cascade), kept problems are
+// renumbered in place + their subproblems reconciled, and new problems (no id)
+// are inserted. Renumbering is two-phase (park at temporary negative numbers,
+// then assign finals) so the UNIQUE(series_id, number) constraint can't trip on
+// a swap. Runs inside the caller's transaction.
+func reconcileSeriesProblems(ctx context.Context, q *store.Queries, seriesID int64, specs []problemSpec) error {
+	existingProblems, err := q.ListProblemsForSeries(ctx, seriesID)
+	if err != nil {
+		return err
+	}
+	existingSubs, err := q.ListSubproblemsForSeries(ctx, seriesID)
+	if err != nil {
+		return err
+	}
+
+	existingIDs := make(map[int64]bool, len(existingProblems))
+	for _, p := range existingProblems {
+		existingIDs[p.ID] = true
+	}
+	// Validate referenced ids belong to this series + collect the keep set.
+	keep := make(map[int64]bool)
+	for _, s := range specs {
+		if s.ID == nil {
 			continue
 		}
-		for _, label := range labels {
-			if _, err := q.CreateSubproblem(ctx, store.CreateSubproblemParams{
-				ProblemID: problem.ID,
-				Label:     label,
-			}); err != nil {
+		if !existingIDs[*s.ID] {
+			return errUnknownProblem
+		}
+		if keep[*s.ID] {
+			return errDuplicateProblem
+		}
+		keep[*s.ID] = true
+	}
+
+	// 1. Delete the problems the teacher removed (cascade wipes their data).
+	for _, p := range existingProblems {
+		if !keep[p.ID] {
+			if err := q.DeleteProblem(ctx, p.ID); err != nil {
+				return err
+			}
+		}
+	}
+
+	// 2. Park kept problems at unique temporary (negative) numbers so the next
+	//    pass can assign finals without colliding mid-swap.
+	for _, s := range specs {
+		if s.ID != nil {
+			if err := q.SetProblemNumber(ctx, store.SetProblemNumberParams{ID: *s.ID, Number: int32(-*s.ID)}); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Group surviving problems' subproblems (label order) for reconciliation.
+	subsByProblem := make(map[int64][]subIdent)
+	for _, sp := range existingSubs {
+		if keep[sp.ProblemID] {
+			subsByProblem[sp.ProblemID] = append(subsByProblem[sp.ProblemID], subIdent{ID: sp.ID, Label: sp.Label})
+		}
+	}
+
+	// 3. Assign final numbers + reconcile subproblems for kept problems; insert
+	//    new problems (no id) outright.
+	for _, s := range specs {
+		if s.ID != nil {
+			if err := q.SetProblemNumber(ctx, store.SetProblemNumberParams{ID: *s.ID, Number: int32(s.Number)}); err != nil {
+				return err
+			}
+			if err := reconcileSubproblems(ctx, q, *s.ID, subsByProblem[*s.ID], s.SubproblemCount); err != nil {
+				return err
+			}
+		} else {
+			problem, err := q.CreateProblem(ctx, store.CreateProblemParams{SeriesID: seriesID, Number: int32(s.Number)})
+			if err != nil {
+				return err
+			}
+			if err := writeSubproblems(ctx, q, problem.ID, s.SubproblemCount); err != nil {
 				return err
 			}
 		}
