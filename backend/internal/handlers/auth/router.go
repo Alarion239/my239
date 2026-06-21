@@ -27,6 +27,10 @@ func Router(database *db.DB, tokens *internalAuth.TokenService, limiter ratelimi
 		Post("/login", Login(database, tokens))
 	r.With(limiter.Middleware("auth.refresh", 30, 60)).
 		Post("/refresh", Refresh(database, tokens))
+	// Public lookup so the registration page can describe what an invite link
+	// grants (center/role/group) before the user submits.
+	r.With(limiter.Middleware("auth.invite", 30, 60)).
+		Get("/invite/{token}", InviteLookup(database))
 	r.With(limiter.Middleware("auth.logout", 30, 60)).
 		Post("/logout", Logout(tokens))
 
