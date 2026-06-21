@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   claimIsLive,
+  coffinOpen,
   displayStatusMeta,
   useTeacherGrid,
   type GridColumn,
@@ -97,22 +98,34 @@ export function TeacherGrid({ centerId, seriesId }: TeacherGridProps) {
                 <th className="sticky left-0 top-0 z-30 border-b border-line bg-surface px-3 py-2 text-left text-xs font-medium text-muted">
                   Ученик
                 </th>
-                {data.columns.map((col) => (
-                  <th
-                    key={col.subproblem_id}
-                    title={
-                      (col.subproblem_label
-                        ? col.problem_display + ' (' + col.subproblem_label + ')'
-                        : col.problem_display) + (col.is_coffin ? ' — гроб' : '')
-                    }
-                    className={cn(
-                      'sticky top-0 z-20 border-b border-line px-2 py-2 text-center text-xs font-medium',
-                      col.is_coffin ? 'bg-faint text-white' : 'bg-surface text-muted',
-                    )}
-                  >
-                    {columnHeader(col)}
-                  </th>
-                ))}
+                {data.columns.map((col) => {
+                  const open = col.is_coffin && coffinOpen(col.coffin_released_at)
+                  return (
+                    <th
+                      key={col.subproblem_id}
+                      title={
+                        (col.subproblem_label
+                          ? col.problem_display + ' (' + col.subproblem_label + ')'
+                          : col.problem_display) +
+                        (col.is_coffin
+                          ? open
+                            ? ' — гроб (открыт)'
+                            : ' — гроб (разобран)'
+                          : '')
+                      }
+                      className={cn(
+                        'sticky top-0 z-20 border-b border-line px-2 py-2 text-center text-xs font-medium',
+                        open
+                          ? 'bg-status-checking text-white'
+                          : col.is_coffin
+                            ? 'bg-faint text-white'
+                            : 'bg-surface text-muted',
+                      )}
+                    >
+                      {columnHeader(col)}
+                    </th>
+                  )
+                })}
               </tr>
             </thead>
             <tbody>
@@ -172,12 +185,13 @@ function GroupRows({
                 columnHeader(col) +
                 ': ' +
                 displayStatusMeta(status, beingGraded).label
+              const open = col.is_coffin && coffinOpen(col.coffin_released_at)
               return (
                 <td
                   key={col.subproblem_id}
                   className={cn(
                     'px-2 py-1 text-center',
-                    col.is_coffin && 'bg-faint/35',
+                    open ? 'bg-status-checking/25' : col.is_coffin && 'bg-faint/35',
                   )}
                 >
                   {cell && cell.thread_id > 0 ? (

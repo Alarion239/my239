@@ -504,6 +504,7 @@ export interface GridColumn {
   problem_number: number
   problem_display: string
   is_coffin: boolean
+  coffin_released_at?: string | null
 }
 
 // GridCell is one (student × subproblem) status. `thread_id` is 0 when no
@@ -542,6 +543,7 @@ export interface CenterGridColumn {
   problem_number: number
   column_label: string
   is_coffin: boolean
+  coffin_released_at?: string | null
 }
 
 export interface CenterGridSeries {

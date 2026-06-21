@@ -61,8 +61,9 @@ type centerGridColumn struct {
 	// "Упр" for problem 0 with no subparts, "Упр а" for problem 0 with
 	// subparts, "1" / "2a" / "5b" otherwise. Computed server-side so the
 	// frontend doesn't need a duplicate of the label rules.
-	ColumnLabel string `json:"column_label"`
-	IsCoffin    bool   `json:"is_coffin"`
+	ColumnLabel      string     `json:"column_label"`
+	IsCoffin         bool       `json:"is_coffin"`
+	CoffinReleasedAt *time.Time `json:"coffin_released_at,omitempty"`
 }
 
 type centerGridCell struct {
@@ -276,12 +277,13 @@ func (b *seriesBuilder) add(r store.TeacherCenterGridRow) {
 	if !b.colsBySeries[r.SeriesID][r.SubproblemID] {
 		b.colsBySeries[r.SeriesID][r.SubproblemID] = true
 		b.out[sIdx].Columns = append(b.out[sIdx].Columns, centerGridColumn{
-			SubproblemID:    r.SubproblemID,
-			SubproblemLabel: r.SubproblemLabel,
-			ProblemID:       r.ProblemID,
-			ProblemNumber:   int(r.ProblemNumber),
-			ColumnLabel:     columnLabel(int(r.ProblemNumber), r.SubproblemLabel),
-			IsCoffin:        r.IsCoffin,
+			SubproblemID:     r.SubproblemID,
+			SubproblemLabel:  r.SubproblemLabel,
+			ProblemID:        r.ProblemID,
+			ProblemNumber:    int(r.ProblemNumber),
+			ColumnLabel:      columnLabel(int(r.ProblemNumber), r.SubproblemLabel),
+			IsCoffin:         r.IsCoffin,
+			CoffinReleasedAt: r.CoffinReleasedAt,
 		})
 	}
 }
