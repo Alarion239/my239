@@ -509,3 +509,51 @@ export interface GridResponse {
   columns: GridColumn[]
   students: GridStudent[]
 }
+
+// --- Teacher center-wide grid / «Кондуит» (GET /homework/centers/{id}/grid) ---
+
+export interface CenterGridColumn {
+  subproblem_id: number
+  subproblem_label: string
+  problem_id: number
+  problem_number: number
+  column_label: string
+}
+
+export interface CenterGridSeries {
+  series_id: number
+  number: number
+  name: string
+  display_name: string
+  due_at: string
+  columns: CenterGridColumn[]
+}
+
+export interface CenterGridStudentEntry {
+  user_id: number
+  name: string
+}
+
+export interface CenterGridGroup {
+  group_id: number
+  name: string
+  students: CenterGridStudentEntry[]
+}
+
+export interface CenterGridCell {
+  thread_id: number
+  current_status: HomeworkStatus
+  last_grader_user_id?: number | null
+  claim_holder_user_id?: number | null
+  claim_expires_at?: string | null
+}
+
+// CenterGridResponse is the everything-at-once payload: cells are keyed
+// "<studentId>:<subproblemId>" (absent = no thread); graders maps a grader's
+// user id (as a string key) to their initials for the «Кондуит» view.
+export interface CenterGridResponse {
+  groups: CenterGridGroup[]
+  series: CenterGridSeries[]
+  cells: Record<string, CenterGridCell>
+  graders: Record<string, string>
+}

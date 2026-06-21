@@ -7,6 +7,7 @@ import { HomePage } from '../features/home/home-page'
 import { ProfilePage } from '../features/profile/profile-page'
 import { MathCenterIndex, SeriesPage } from '../features/mathcenter/series-page'
 import { CoffinsPage } from '../features/mathcenter/coffins-page'
+import { ConduitPage } from '../features/mathcenter/conduit-page'
 import { ThreadPage } from '../features/mathcenter/thread-page'
 import { UsersPage } from '../features/admin/users-page'
 import { UserDetailPage } from '../features/admin/user-detail-page'
@@ -31,6 +32,7 @@ export const router = createBrowserRouter([
           { path: 'mathcenter', element: <MathCenterIndex /> },
           { path: 'mathcenter/:centerId', element: <SeriesPage /> },
           { path: 'mathcenter/:centerId/coffins', element: <CoffinsPage /> },
+          { path: 'mathcenter/:centerId/conduit', element: <ConduitPage /> },
           {
             path: 'mathcenter/:centerId/series/:seriesId/submit/:subproblemId',
             element: <ThreadPage />,

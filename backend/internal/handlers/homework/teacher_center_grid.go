@@ -26,6 +26,10 @@ type centerGridResponse struct {
 	Groups []centerGridGroup         `json:"groups"`
 	Series []centerGridSeries        `json:"series"`
 	Cells  map[string]centerGridCell `json:"cells"`
+	// Graders maps a grader's user id to their initials (first letter of the
+	// first name + first letter of the last name), for the «Кондуит» view that
+	// shows who accepted each problem.
+	Graders map[int64]string `json:"graders"`
 }
 
 type centerGridGroup struct {
@@ -96,7 +100,10 @@ func GetCenterGrid(database *db.DB) http.HandlerFunc {
 				// Empty center is a valid state — no students or no
 				// series yet. Return an empty shape so the frontend can
 				// render its "ничего нет" placeholder.
-				httpx.WriteJSON(w, http.StatusOK, centerGridResponse{Cells: map[string]centerGridCell{}})
+				httpx.WriteJSON(w, http.StatusOK, centerGridResponse{
+					Cells:   map[string]centerGridCell{},
+					Graders: map[int64]string{},
+				})
 				return
 			}
 			logger.LogErrorContext(ctx, "homework: center grid", err)
@@ -116,6 +123,7 @@ func buildCenterGridResponse(rows []store.TeacherCenterGridRow) centerGridRespon
 	groups := newGroupBuilder()
 	series := newSeriesBuilder()
 	cells := make(map[string]centerGridCell, len(rows))
+	graders := make(map[int64]string)
 
 	for _, row := range rows {
 		groups.add(row)
@@ -127,6 +135,11 @@ func buildCenterGridResponse(rows []store.TeacherCenterGridRow) centerGridRespon
 		if row.ThreadID == 0 {
 			continue
 		}
+		if row.LastGraderUserID != nil {
+			if _, ok := graders[*row.LastGraderUserID]; !ok {
+				graders[*row.LastGraderUserID] = initials(row.GraderFirstName, row.GraderLastName)
+			}
+		}
 		key := cellKey(row.StudentUserID, row.SubproblemID)
 		cells[key] = centerGridCell{
 			ThreadID:          row.ThreadID,
@@ -137,10 +150,32 @@ func buildCenterGridResponse(rows []store.TeacherCenterGridRow) centerGridRespon
 		}
 	}
 	return centerGridResponse{
-		Groups: groups.build(),
-		Series: series.build(),
-		Cells:  cells,
+		Groups:  groups.build(),
+		Series:  series.build(),
+		Cells:   cells,
+		Graders: graders,
 	}
+}
+
+// initials builds a grader's initials: the first letter of the first name plus
+// the first letter of the last name (Cyrillic-safe via runes). Either part may
+// be missing.
+func initials(first, last *string) string {
+	out := firstRune(first) + firstRune(last)
+	if out == "" {
+		return "?"
+	}
+	return out
+}
+
+func firstRune(s *string) string {
+	if s == nil {
+		return ""
+	}
+	for _, r := range strings.TrimSpace(*s) {
+		return string(r)
+	}
+	return ""
 }
 
 func cellKey(studentUserID, subproblemID int64) string {
