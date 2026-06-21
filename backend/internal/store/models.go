@@ -47,13 +47,14 @@ type HomeworkThreadEventPhoto struct {
 }
 
 type InvitationToken struct {
-	ID          int64           `json:"id"`
-	Token       string          `json:"token"`
-	Description string          `json:"description"`
-	MaxUses     int32           `json:"max_uses"`
-	ExpiresAt   time.Time       `json:"expires_at"`
-	CreatedAt   time.Time       `json:"created_at"`
-	Preset      json.RawMessage `json:"preset"`
+	ID           int64           `json:"id"`
+	Token        string          `json:"token"`
+	Description  string          `json:"description"`
+	MaxUses      int32           `json:"max_uses"`
+	ExpiresAt    time.Time       `json:"expires_at"`
+	CreatedAt    time.Time       `json:"created_at"`
+	Preset       json.RawMessage `json:"preset"`
+	MathCenterID *int64          `json:"math_center_id"`
 }
 
 type MathCenter struct {

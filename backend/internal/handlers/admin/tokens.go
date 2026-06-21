@@ -30,6 +30,9 @@ type TokenView struct {
 	ExpiresAt   time.Time       `json:"expires_at"`
 	CreatedAt   time.Time       `json:"created_at"`
 	Preset      json.RawMessage `json:"preset"`
+	// MathCenterID scopes a token to one center (head-teacher invites). NULL for
+	// global admin-minted tokens.
+	MathCenterID *int64 `json:"math_center_id,omitempty"`
 }
 
 // ListTokens returns every invitation token, including the consumed-uses
@@ -55,14 +58,15 @@ func ListTokens(database *db.DB) http.HandlerFunc {
 				uses = 0
 			}
 			out = append(out, TokenView{
-				ID:          t.ID,
-				Token:       t.Token,
-				Description: t.Description,
-				MaxUses:     t.MaxUses,
-				Uses:        uses,
-				ExpiresAt:   t.ExpiresAt,
-				CreatedAt:   t.CreatedAt,
-				Preset:      t.Preset,
+				ID:           t.ID,
+				Token:        t.Token,
+				Description:  t.Description,
+				MaxUses:      t.MaxUses,
+				Uses:         uses,
+				ExpiresAt:    t.ExpiresAt,
+				CreatedAt:    t.CreatedAt,
+				Preset:       t.Preset,
+				MathCenterID: t.MathCenterID,
 			})
 		}
 
@@ -131,11 +135,12 @@ func CreateToken(database *db.DB) http.HandlerFunc {
 		}
 
 		tok, err := store.New(database.Pool()).CreateInvitationToken(r.Context(), store.CreateInvitationTokenParams{
-			Token:       raw,
-			Description: req.Description,
-			MaxUses:     req.MaxUses,
-			ExpiresAt:   time.Now().Add(time.Duration(req.ExpiresInHours) * time.Hour),
-			Preset:      presetJSON,
+			Token:        raw,
+			Description:  req.Description,
+			MaxUses:      req.MaxUses,
+			ExpiresAt:    time.Now().Add(time.Duration(req.ExpiresInHours) * time.Hour),
+			Preset:       presetJSON,
+			MathCenterID: nil,
 		})
 		if err != nil {
 			logger.LogErrorContext(r.Context(), "admin: create token", err)
@@ -144,14 +149,15 @@ func CreateToken(database *db.DB) http.HandlerFunc {
 		}
 
 		httpx.WriteJSON(w, http.StatusCreated, TokenView{
-			ID:          tok.ID,
-			Token:       tok.Token,
-			Description: tok.Description,
-			MaxUses:     tok.MaxUses,
-			Uses:        0,
-			ExpiresAt:   tok.ExpiresAt,
-			CreatedAt:   tok.CreatedAt,
-			Preset:      tok.Preset,
+			ID:           tok.ID,
+			Token:        tok.Token,
+			Description:  tok.Description,
+			MaxUses:      tok.MaxUses,
+			Uses:         0,
+			ExpiresAt:    tok.ExpiresAt,
+			CreatedAt:    tok.CreatedAt,
+			Preset:       tok.Preset,
+			MathCenterID: tok.MathCenterID,
 		})
 	}
 }

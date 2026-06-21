@@ -15,7 +15,7 @@ import (
 	"github.com/Alarion239/my239/backend/pkg/db"
 )
 
-var invitationTokenColumns = []string{"id", "token", "description", "max_uses", "expires_at", "created_at", "preset"}
+var invitationTokenColumns = []string{"id", "token", "description", "max_uses", "expires_at", "created_at", "preset", "math_center_id"}
 
 // emptyPreset is the JSONB stored by tokens with no enrollment intent.
 var emptyPreset = []byte(`{}`)
@@ -41,7 +41,7 @@ func TestRegister_Success(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM invitation_tokens WHERE token = \$1 FOR UPDATE`).
 		WithArgs("invite-abc").
 		WillReturnRows(mock.NewRows(invitationTokenColumns).
-			AddRow(int64(1), "invite-abc", "test invite", int32(5), now.Add(24*time.Hour), now, emptyPreset))
+			AddRow(int64(1), "invite-abc", "test invite", int32(5), now.Add(24*time.Hour), now, emptyPreset, nil))
 	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM users WHERE invitation_token_id = \$1`).
 		WithArgs(int64(1)).
 		WillReturnRows(mock.NewRows([]string{"count"}).AddRow(int64(0)))
@@ -94,7 +94,7 @@ func TestRegister_UsernameLowercased(t *testing.T) {
 	mock.ExpectQuery(`FOR UPDATE`).
 		WithArgs("invite-abc").
 		WillReturnRows(mock.NewRows(invitationTokenColumns).
-			AddRow(int64(1), "invite-abc", "test invite", int32(5), now.Add(24*time.Hour), now, emptyPreset))
+			AddRow(int64(1), "invite-abc", "test invite", int32(5), now.Add(24*time.Hour), now, emptyPreset, nil))
 	mock.ExpectQuery(`SELECT COUNT`).
 		WithArgs(int64(1)).
 		WillReturnRows(mock.NewRows([]string{"count"}).AddRow(int64(0)))
@@ -161,7 +161,7 @@ func TestRegister_TokenExpired(t *testing.T) {
 	mock.ExpectQuery(`FOR UPDATE`).
 		WithArgs("invite-abc").
 		WillReturnRows(mock.NewRows(invitationTokenColumns).
-			AddRow(int64(1), "invite-abc", "d", int32(5), expired, expired.Add(-time.Hour), emptyPreset))
+			AddRow(int64(1), "invite-abc", "d", int32(5), expired, expired.Add(-time.Hour), emptyPreset, nil))
 	mock.ExpectRollback()
 
 	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewReader(validRegisterBody()))
@@ -186,7 +186,7 @@ func TestRegister_TokenExhausted(t *testing.T) {
 	mock.ExpectQuery(`FOR UPDATE`).
 		WithArgs("invite-abc").
 		WillReturnRows(mock.NewRows(invitationTokenColumns).
-			AddRow(int64(1), "invite-abc", "d", int32(1), now.Add(time.Hour), now, emptyPreset))
+			AddRow(int64(1), "invite-abc", "d", int32(1), now.Add(time.Hour), now, emptyPreset, nil))
 	mock.ExpectQuery(`SELECT COUNT`).
 		WithArgs(int64(1)).
 		WillReturnRows(mock.NewRows([]string{"count"}).AddRow(int64(1)))
@@ -214,7 +214,7 @@ func TestRegister_UsernameTaken(t *testing.T) {
 	mock.ExpectQuery(`FOR UPDATE`).
 		WithArgs("invite-abc").
 		WillReturnRows(mock.NewRows(invitationTokenColumns).
-			AddRow(int64(1), "invite-abc", "d", int32(5), now.Add(time.Hour), now, emptyPreset))
+			AddRow(int64(1), "invite-abc", "d", int32(5), now.Add(time.Hour), now, emptyPreset, nil))
 	mock.ExpectQuery(`SELECT COUNT`).
 		WithArgs(int64(1)).
 		WillReturnRows(mock.NewRows([]string{"count"}).AddRow(int64(0)))
@@ -271,7 +271,7 @@ func TestRegister_AdminPreset(t *testing.T) {
 	mock.ExpectQuery(`FOR UPDATE`).
 		WithArgs("invite-abc").
 		WillReturnRows(mock.NewRows(invitationTokenColumns).
-			AddRow(int64(1), "invite-abc", "admin invite", int32(5), now.Add(24*time.Hour), now, []byte(`{"version":1,"grants_admin":true}`)))
+			AddRow(int64(1), "invite-abc", "admin invite", int32(5), now.Add(24*time.Hour), now, []byte(`{"version":1,"grants_admin":true}`), nil))
 	mock.ExpectQuery(`SELECT COUNT`).
 		WithArgs(int64(1)).
 		WillReturnRows(mock.NewRows([]string{"count"}).AddRow(int64(0)))
@@ -320,7 +320,7 @@ func TestRegister_StudentPreset(t *testing.T) {
 	mock.ExpectQuery(`FOR UPDATE`).
 		WithArgs("invite-abc").
 		WillReturnRows(mock.NewRows(invitationTokenColumns).
-			AddRow(int64(1), "invite-abc", "student invite", int32(5), now.Add(24*time.Hour), now, []byte(`{"version":1,"mathcenter_student":{"group_id":3}}`)))
+			AddRow(int64(1), "invite-abc", "student invite", int32(5), now.Add(24*time.Hour), now, []byte(`{"version":1,"mathcenter_student":{"group_id":3}}`), nil))
 	mock.ExpectQuery(`SELECT COUNT`).
 		WithArgs(int64(1)).
 		WillReturnRows(mock.NewRows([]string{"count"}).AddRow(int64(0)))
