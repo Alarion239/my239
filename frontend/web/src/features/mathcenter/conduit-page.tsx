@@ -176,7 +176,7 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
                   className={cn(
                     'sticky top-9 z-20 min-w-9 px-1.5 py-1 text-center text-xs font-medium',
                     col.is_coffin
-                      ? 'bg-line-strong/40 text-ink'
+                      ? 'bg-faint text-white'
                       : 'bg-surface-muted text-muted',
                     firstInSeries && divider,
                   )}
@@ -212,7 +212,7 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
                             acc
                               ? 'bg-status-accepted-soft font-medium text-status-accepted'
                               : col.is_coffin
-                                ? 'bg-line-strong/15 text-faint'
+                                ? 'bg-faint/35 text-faint'
                                 : 'text-faint',
                           )}
                         >
