@@ -12,20 +12,22 @@ import (
 
 // Column list must match the SELECT order in the SeriesProblemStats query.
 var problemStatsRowColumns = []string{
-	"student_user_id", "problem_id", "problem_number", "subproblem_id", "current_status",
+	"student_user_id", "problem_id", "problem_number", "subproblem_id", "subproblem_label", "current_status",
 }
 
 type problemStatsResp struct {
 	TotalStudents int `json:"total_students"`
 	Problems      []struct {
-		ProblemID      int64  `json:"problem_id"`
-		ProblemNumber  int    `json:"problem_number"`
-		ProblemDisplay string `json:"problem_display"`
-		Accepted       int    `json:"accepted"`
-		Appealed       int    `json:"appealed"`
-		Rejected       int    `json:"rejected"`
-		Submitted      int    `json:"submitted"`
-		Unsolved       int    `json:"unsolved"`
+		ProblemID       int64  `json:"problem_id"`
+		ProblemNumber   int    `json:"problem_number"`
+		ProblemDisplay  string `json:"problem_display"`
+		SubproblemID    int64  `json:"subproblem_id"`
+		SubproblemLabel string `json:"subproblem_label"`
+		Accepted        int    `json:"accepted"`
+		Appealed        int    `json:"appealed"`
+		Rejected        int    `json:"rejected"`
+		Submitted       int    `json:"submitted"`
+		Unsolved        int    `json:"unsolved"`
 	} `json:"problems"`
 }
 
@@ -36,11 +38,13 @@ func expectSeriesForStats(mock pgxmock.PgxPoolIface, seriesID, centerID int64, n
 			AddRow(seriesID, centerID, int32(1), "S", now.Add(time.Hour), (*string)(nil), &now, now, (*string)(nil), (*string)(nil), (*string)(nil), (*string)(nil)))
 }
 
-func statRow(studentID, problemID int64, problemNumber int32, subproblemID int64, status string) []any {
-	return []any{studentID, problemID, problemNumber, subproblemID, status}
+func statRow(studentID, problemID int64, problemNumber int32, subproblemID int64, label, status string) []any {
+	return []any{studentID, problemID, problemNumber, subproblemID, label, status}
 }
 
-func TestProblemStats_DerivationPrecedence(t *testing.T) {
+// Each subproblem (1а, 1б) is reported as its own line — statuses are counted
+// per subproblem, never folded into the parent problem.
+func TestProblemStats_PerSubproblemCounts(t *testing.T) {
 	t.Parallel()
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
@@ -50,26 +54,23 @@ func TestProblemStats_DerivationPrecedence(t *testing.T) {
 	expectSeriesForStats(mock, 100, 42, now)
 	expectTeacherCheck(mock, 3, 42, true)
 
-	// One problem (id 500, number 1) with two subproblems (a=900, b=901).
-	// Five students, each landing in a distinct bucket:
-	//   s1: a=accepted,  b=accepted   -> accepted  (ALL accepted)
-	//   s2: a=appealed,  b=rejected   -> appealed  (appealed beats rejected)
-	//   s3: a=rejected,  b=accepted   -> rejected  (rejected beats accepted-but-not-all)
-	//   s4: a=submitted, b=ungraded   -> submitted
-	//   s5: a=ungraded,  b=ungraded   -> unsolved
+	// One problem (id 500, number 1) with two subproblems (a=900, b=901),
+	// five students. Counted per subproblem:
+	//   900 (а): accepted/appealed/rejected/submitted/ungraded -> 1/1/1/1/1
+	//   901 (б): accepted x2, rejected x1, ungraded x2          -> 2/0/1/0/2
 	mock.ExpectQuery(`FROM math_center_students mcs\s+JOIN math_center_groups`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(problemStatsRowColumns).
-			AddRow(statRow(1, 500, 1, 900, "accepted")...).
-			AddRow(statRow(1, 500, 1, 901, "accepted")...).
-			AddRow(statRow(2, 500, 1, 900, "appealed")...).
-			AddRow(statRow(2, 500, 1, 901, "rejected")...).
-			AddRow(statRow(3, 500, 1, 900, "rejected")...).
-			AddRow(statRow(3, 500, 1, 901, "accepted")...).
-			AddRow(statRow(4, 500, 1, 900, "submitted")...).
-			AddRow(statRow(4, 500, 1, 901, "ungraded")...).
-			AddRow(statRow(5, 500, 1, 900, "ungraded")...).
-			AddRow(statRow(5, 500, 1, 901, "ungraded")...))
+			AddRow(statRow(1, 500, 1, 900, "a", "accepted")...).
+			AddRow(statRow(2, 500, 1, 900, "a", "appealed")...).
+			AddRow(statRow(3, 500, 1, 900, "a", "rejected")...).
+			AddRow(statRow(4, 500, 1, 900, "a", "submitted")...).
+			AddRow(statRow(5, 500, 1, 900, "a", "ungraded")...).
+			AddRow(statRow(1, 500, 1, 901, "b", "accepted")...).
+			AddRow(statRow(2, 500, 1, 901, "b", "rejected")...).
+			AddRow(statRow(3, 500, 1, 901, "b", "accepted")...).
+			AddRow(statRow(4, 500, 1, 901, "b", "ungraded")...).
+			AddRow(statRow(5, 500, 1, 901, "b", "ungraded")...))
 
 	req := authedRequest(t, access, 3, false, http.MethodGet, "/series/100/problem-stats", nil)
 	rr := httptest.NewRecorder()
@@ -85,18 +86,30 @@ func TestProblemStats_DerivationPrecedence(t *testing.T) {
 	if resp.TotalStudents != 5 {
 		t.Fatalf("total_students = %d, want 5", resp.TotalStudents)
 	}
-	if len(resp.Problems) != 1 {
-		t.Fatalf("want 1 problem, got %d", len(resp.Problems))
+	if len(resp.Problems) != 2 {
+		t.Fatalf("want 2 subproblem lines, got %d", len(resp.Problems))
 	}
-	p := resp.Problems[0]
-	if p.ProblemID != 500 || p.ProblemNumber != 1 || p.ProblemDisplay != "Задача 1" {
-		t.Errorf("problem header wrong: %+v", p)
+
+	a := resp.Problems[0]
+	if a.SubproblemID != 900 || a.SubproblemLabel != "a" || a.ProblemDisplay != "Задача 1" {
+		t.Errorf("subproblem a header wrong: %+v", a)
 	}
-	if p.Accepted != 1 || p.Appealed != 1 || p.Rejected != 1 || p.Submitted != 1 || p.Unsolved != 1 {
-		t.Errorf("buckets = a%d ap%d r%d s%d u%d, want 1/1/1/1/1", p.Accepted, p.Appealed, p.Rejected, p.Submitted, p.Unsolved)
+	if a.Accepted != 1 || a.Appealed != 1 || a.Rejected != 1 || a.Submitted != 1 || a.Unsolved != 1 {
+		t.Errorf("a buckets = a%d ap%d r%d s%d u%d, want 1/1/1/1/1", a.Accepted, a.Appealed, a.Rejected, a.Submitted, a.Unsolved)
 	}
-	if sum := p.Accepted + p.Appealed + p.Rejected + p.Submitted + p.Unsolved; sum != resp.TotalStudents {
-		t.Errorf("buckets sum %d != total_students %d", sum, resp.TotalStudents)
+
+	b := resp.Problems[1]
+	if b.SubproblemID != 901 || b.SubproblemLabel != "b" {
+		t.Errorf("subproblem b header wrong: %+v", b)
+	}
+	if b.Accepted != 2 || b.Appealed != 0 || b.Rejected != 1 || b.Submitted != 0 || b.Unsolved != 2 {
+		t.Errorf("b buckets = a%d ap%d r%d s%d u%d, want 2/0/1/0/2", b.Accepted, b.Appealed, b.Rejected, b.Submitted, b.Unsolved)
+	}
+
+	for _, p := range resp.Problems {
+		if sum := p.Accepted + p.Appealed + p.Rejected + p.Submitted + p.Unsolved; sum != resp.TotalStudents {
+			t.Errorf("subproblem %d buckets sum %d != total_students %d", p.SubproblemID, sum, resp.TotalStudents)
+		}
 	}
 }
 
@@ -110,19 +123,18 @@ func TestProblemStats_MultipleProblemsOrdered(t *testing.T) {
 	expectSeriesForStats(mock, 100, 42, now)
 	expectTeacherCheck(mock, 3, 42, true)
 
-	// Two problems, two students. Problem 1 (id 500): both subproblems
-	// accepted for s1 -> accepted; s2 has one submitted -> submitted.
-	// Problem 2 (id 501, single sentinel subproblem 950): s1 rejected,
-	// s2 ungraded. Rows arrive number-ordered (1 then 2) from SQL.
+	// Problem 1 (id 500) has subproblems a=900, b=901; problem 2 (id 501) has a
+	// single sentinel subproblem 950 (label ''). Two students. Rows arrive in
+	// (problem number, subproblem label) order from SQL.
 	mock.ExpectQuery(`FROM math_center_students mcs\s+JOIN math_center_groups`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(problemStatsRowColumns).
-			AddRow(statRow(1, 500, 1, 900, "accepted")...).
-			AddRow(statRow(1, 500, 1, 901, "accepted")...).
-			AddRow(statRow(2, 500, 1, 900, "submitted")...).
-			AddRow(statRow(2, 500, 1, 901, "accepted")...).
-			AddRow(statRow(1, 501, 2, 950, "rejected")...).
-			AddRow(statRow(2, 501, 2, 950, "ungraded")...))
+			AddRow(statRow(1, 500, 1, 900, "a", "accepted")...).
+			AddRow(statRow(2, 500, 1, 900, "a", "submitted")...).
+			AddRow(statRow(1, 500, 1, 901, "b", "accepted")...).
+			AddRow(statRow(2, 500, 1, 901, "b", "accepted")...).
+			AddRow(statRow(1, 501, 2, 950, "", "rejected")...).
+			AddRow(statRow(2, 501, 2, 950, "", "ungraded")...))
 
 	req := authedRequest(t, access, 3, false, http.MethodGet, "/series/100/problem-stats", nil)
 	rr := httptest.NewRecorder()
@@ -138,23 +150,27 @@ func TestProblemStats_MultipleProblemsOrdered(t *testing.T) {
 	if resp.TotalStudents != 2 {
 		t.Fatalf("total_students = %d, want 2", resp.TotalStudents)
 	}
-	if len(resp.Problems) != 2 {
-		t.Fatalf("want 2 problems, got %d", len(resp.Problems))
+	if len(resp.Problems) != 3 {
+		t.Fatalf("want 3 subproblem lines, got %d", len(resp.Problems))
 	}
-	if resp.Problems[0].ProblemNumber != 1 || resp.Problems[1].ProblemNumber != 2 {
-		t.Fatalf("problems not ordered by number: %d then %d", resp.Problems[0].ProblemNumber, resp.Problems[1].ProblemNumber)
+	if resp.Problems[0].SubproblemID != 900 || resp.Problems[1].SubproblemID != 901 || resp.Problems[2].SubproblemID != 950 {
+		t.Fatalf("subproblems not ordered: %d, %d, %d", resp.Problems[0].SubproblemID, resp.Problems[1].SubproblemID, resp.Problems[2].SubproblemID)
 	}
-	p1 := resp.Problems[0]
-	if p1.Accepted != 1 || p1.Submitted != 1 || p1.Appealed != 0 || p1.Rejected != 0 || p1.Unsolved != 0 {
-		t.Errorf("problem 1 buckets wrong: %+v", p1)
+	if resp.Problems[2].SubproblemLabel != "" || resp.Problems[2].ProblemNumber != 2 {
+		t.Errorf("sentinel subproblem wrong: %+v", resp.Problems[2])
 	}
-	p2 := resp.Problems[1]
-	if p2.Rejected != 1 || p2.Unsolved != 1 || p2.Accepted != 0 || p2.Appealed != 0 || p2.Submitted != 0 {
-		t.Errorf("problem 2 buckets wrong: %+v", p2)
+	if resp.Problems[0].Accepted != 1 || resp.Problems[0].Submitted != 1 {
+		t.Errorf("subproblem 900 buckets wrong: %+v", resp.Problems[0])
+	}
+	if resp.Problems[1].Accepted != 2 {
+		t.Errorf("subproblem 901 buckets wrong: %+v", resp.Problems[1])
+	}
+	if resp.Problems[2].Rejected != 1 || resp.Problems[2].Unsolved != 1 {
+		t.Errorf("subproblem 950 buckets wrong: %+v", resp.Problems[2])
 	}
 	for _, p := range resp.Problems {
 		if sum := p.Accepted + p.Appealed + p.Rejected + p.Submitted + p.Unsolved; sum != resp.TotalStudents {
-			t.Errorf("problem %d buckets sum %d != total %d", p.ProblemNumber, sum, resp.TotalStudents)
+			t.Errorf("subproblem %d buckets sum %d != total %d", p.SubproblemID, sum, resp.TotalStudents)
 		}
 	}
 }
@@ -171,7 +187,7 @@ func TestProblemStats_AdminAllowed(t *testing.T) {
 	mock.ExpectQuery(`FROM math_center_students mcs\s+JOIN math_center_groups`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(problemStatsRowColumns).
-			AddRow(statRow(1, 500, 1, 900, "accepted")...))
+			AddRow(statRow(1, 500, 1, 900, "a", "accepted")...))
 
 	req := authedRequest(t, access, 9, true, http.MethodGet, "/series/100/problem-stats", nil)
 	rr := httptest.NewRecorder()

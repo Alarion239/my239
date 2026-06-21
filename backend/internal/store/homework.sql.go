@@ -529,6 +529,7 @@ SELECT
     p.id                                   AS problem_id,
     p.number                               AS problem_number,
     sp.id                                  AS subproblem_id,
+    sp.label                               AS subproblem_label,
     COALESCE(t.current_status, 'ungraded') AS current_status
 FROM math_center_students mcs
          JOIN math_center_groups g ON g.id = mcs.group_id
@@ -539,23 +540,24 @@ FROM math_center_students mcs
                   AND t.subproblem_id   = sp.id
 WHERE g.math_center_id = (SELECT s.math_center_id FROM math_center_series s WHERE s.id = $1)
   AND p.series_id = $1
-ORDER BY p.number ASC, p.id ASC, mcs.user_id ASC, sp.label ASC
+ORDER BY p.number ASC, p.id ASC, sp.label ASC, mcs.user_id ASC
 `
 
 type SeriesProblemStatsRow struct {
-	StudentUserID int64  `json:"student_user_id"`
-	ProblemID     int64  `json:"problem_id"`
-	ProblemNumber int32  `json:"problem_number"`
-	SubproblemID  int64  `json:"subproblem_id"`
-	CurrentStatus string `json:"current_status"`
+	StudentUserID   int64  `json:"student_user_id"`
+	ProblemID       int64  `json:"problem_id"`
+	ProblemNumber   int32  `json:"problem_number"`
+	SubproblemID    int64  `json:"subproblem_id"`
+	SubproblemLabel string `json:"subproblem_label"`
+	CurrentStatus   string `json:"current_status"`
 }
 
 // One row per (student × subproblem) for a whole series: the center roster
 // crossed with the series's subproblems, LEFT JOINed to that student's thread
 // so untouched subproblems still appear with status='ungraded'. The handler
-// folds these into per-(student,problem) precedence and per-problem counts.
-// Roster scoping mirrors TeacherSeriesGrid: every student of a group in the
-// series's math center.
+// counts these per subproblem (each subproblem — e.g. 1а, 1б — is reported as a
+// distinct line). Roster scoping mirrors TeacherSeriesGrid: every student of a
+// group in the series's math center.
 func (q *Queries) SeriesProblemStats(ctx context.Context, id int64) ([]SeriesProblemStatsRow, error) {
 	rows, err := q.db.Query(ctx, seriesProblemStats, id)
 	if err != nil {
@@ -570,6 +572,7 @@ func (q *Queries) SeriesProblemStats(ctx context.Context, id int64) ([]SeriesPro
 			&i.ProblemID,
 			&i.ProblemNumber,
 			&i.SubproblemID,
+			&i.SubproblemLabel,
 			&i.CurrentStatus,
 		); err != nil {
 			return nil, err

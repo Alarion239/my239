@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import {
+  formatDateTime,
   isClosed,
   useSeriesSolutionTex,
   usePutSeriesSolutionTex,
@@ -29,9 +30,9 @@ export function SeriesSolutionPanel({
 
   const hasAny =
     series.has_solution_tex || series.has_solution_pdf || !!series.solution_link
-  const availableToStudent = !isClosed(series.due_at) ? false : true
+  const releasedToStudents = isClosed(series.due_at)
   // Students can't see the разбор before the deadline; nothing to render then.
-  if (!isManager && (!availableToStudent || !hasAny)) return null
+  if (!isManager && (!releasedToStudents || !hasAny)) return null
 
   return (
     <Card>
@@ -61,6 +62,17 @@ export function SeriesSolutionPanel({
           ) : null}
         </div>
       </CardHeader>
+      {isManager ? (
+        <CardContent className="pt-0">
+          <p className="text-xs text-muted">
+            {releasedToStudents
+              ? 'Разбор виден ученикам — дедлайн серии прошёл.'
+              : 'Можно загрузить заранее: ученики увидят разбор только после дедлайна (' +
+                formatDateTime(series.due_at) +
+                ').'}
+          </p>
+        </CardContent>
+      ) : null}
       {show && hasAny ? (
         <CardContent>
           <SolutionContent

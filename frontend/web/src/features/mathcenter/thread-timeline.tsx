@@ -175,6 +175,10 @@ function InlineAppeal({ subproblemId }: { subproblemId: number }) {
       <p className="text-xs italic text-muted">
         Подать апелляцию (без новых фото — запрос на пересмотр текущей попытки)
       </p>
+      <p className="text-xs text-muted">
+        Апелляции проверяются в последнюю очередь — после новых решений в
+        очереди. Подавайте её, только если уверены, что это ошибка проверяющего.
+      </p>
       <Textarea
         aria-label="Текст апелляции"
         placeholder="Что нужно перепроверить?"

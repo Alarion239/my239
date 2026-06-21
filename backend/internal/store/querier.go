@@ -132,9 +132,9 @@ type Querier interface {
 	// One row per (student × subproblem) for a whole series: the center roster
 	// crossed with the series's subproblems, LEFT JOINed to that student's thread
 	// so untouched subproblems still appear with status='ungraded'. The handler
-	// folds these into per-(student,problem) precedence and per-problem counts.
-	// Roster scoping mirrors TeacherSeriesGrid: every student of a group in the
-	// series's math center.
+	// counts these per subproblem (each subproblem — e.g. 1а, 1б — is reported as a
+	// distinct line). Roster scoping mirrors TeacherSeriesGrid: every student of a
+	// group in the series's math center.
 	SeriesProblemStats(ctx context.Context, id int64) ([]SeriesProblemStatsRow, error)
 	SetCoffinSolutionLink(ctx context.Context, arg SetCoffinSolutionLinkParams) (MathCenterCoffin, error)
 	SetCoffinSolutionPdf(ctx context.Context, arg SetCoffinSolutionPdfParams) (MathCenterCoffin, error)

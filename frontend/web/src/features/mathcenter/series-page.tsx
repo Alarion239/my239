@@ -19,7 +19,6 @@ import { StudentProblemList } from './student-problem-list'
 import { TeacherProblemStats } from './teacher-problem-stats'
 import { GraderQueue } from './grader-queue'
 import { TeacherGrid } from './teacher-grid'
-import { CoffinMarkers } from './coffin-markers'
 import { SeriesSolutionPanel } from './series-solution-panel'
 import { UploadSeriesDialog } from './upload-series-dialog'
 import { useSeriesContext } from './use-series-context'
@@ -48,10 +47,6 @@ export function SeriesPage() {
 
   return (
     <div className="animate-rise flex flex-col gap-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-3xl font-medium text-ink">Серии</h1>
-      </header>
-
       <CenterSeries
         key={centerId}
         centerId={centerId}
@@ -185,8 +180,8 @@ function CenterSeries({
       />
 
       {selected ? (
-        <>
-          {isStudentView ? (
+        isStudentView ? (
+          <>
             <div className="grid gap-6 lg:grid-cols-2">
               <StatementPanel series={selected} />
               <Card>
@@ -195,11 +190,13 @@ function CenterSeries({
                 </CardContent>
               </Card>
             </div>
-          ) : (
-            <TeacherSeriesView centerId={centerId} series={selected} />
-          )}
-          <SeriesSolutionPanel series={selected} isManager={!isStudentView} />
-        </>
+            <SeriesSolutionPanel series={selected} isManager={false} />
+          </>
+        ) : (
+          // Teachers get Условие / Разбор / Очередь / Таблица as full-width
+          // tabs; разбор carries the statistics + coffin handling.
+          <TeacherSeriesView centerId={centerId} series={selected} />
+        )
       ) : null}
     </>
   )
@@ -291,12 +288,12 @@ function StudentProblemListWithCounts({
   )
 }
 
-type TeacherTab = 'stats' | 'queue' | 'grid'
+type TeacherTab = 'statement' | 'razbor' | 'queue' | 'grid'
 
-// TeacherSeriesView gives teachers a top-level switch between "Статистика"
-// (kept in the two-column master-detail beside the statement) and the grading
-// surfaces "Очередь"/"Таблица", which take the full width — a 60+ student grid
-// or a long queue needs the room and doesn't want the statement column.
+// TeacherSeriesView gives teachers full-width tabs: «Условие» (the statement),
+// «Разбор» (official solutions + statistics + coffin handling), and the grading
+// surfaces «Очередь»/«Таблица» — a 60+ student grid or a long queue needs the
+// room. Each tab takes the full width.
 function TeacherSeriesView({
   centerId,
   series,
@@ -304,19 +301,21 @@ function TeacherSeriesView({
   centerId: number
   series: Series
 }) {
-  const [tab, setTab] = useState<TeacherTab>('stats')
+  const [tab, setTab] = useState<TeacherTab>('razbor')
   const [mine, setMine] = useState(false)
   return (
     <div className="flex flex-col gap-4">
       <TeacherTabBar value={tab} onChange={setTab} />
-      {tab === 'stats' ? (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <StatementPanel series={series} />
+      {tab === 'statement' ? (
+        <StatementPanel series={series} />
+      ) : tab === 'razbor' ? (
+        <div className="flex flex-col gap-6">
           <Card>
             <CardContent>
-              <StatsTab series={series} />
+              <StatsTab series={series} centerId={centerId} />
             </CardContent>
           </Card>
+          <SeriesSolutionPanel series={series} isManager />
         </div>
       ) : (
         <Card>
@@ -339,7 +338,8 @@ function TeacherSeriesView({
 }
 
 const TEACHER_TABS: { id: TeacherTab; label: string }[] = [
-  { id: 'stats', label: 'Статистика' },
+  { id: 'statement', label: 'Условие' },
+  { id: 'razbor', label: 'Разбор' },
   { id: 'queue', label: 'Очередь' },
   { id: 'grid', label: 'Таблица' },
 ]
@@ -376,7 +376,7 @@ function TeacherTabBar({
   )
 }
 
-function StatsTab({ series }: { series: Series }) {
+function StatsTab({ series, centerId }: { series: Series; centerId: number }) {
   const { data, isPending, isError } = useSeriesProblemStats(series.id)
   return (
     <div className="flex flex-col gap-4">
@@ -386,9 +386,13 @@ function StatsTab({ series }: { series: Series }) {
         isError={isError}
         hasData={!!data}
       >
-        {data ? <TeacherProblemStats stats={data} /> : null}
+        {data ? <TeacherProblemStats stats={data} centerId={centerId} /> : null}
       </SidePanel>
-      <CoffinMarkers series={series} />
+      <p className="text-xs text-muted">
+        Нажмите на значок <span aria-hidden>☠</span> у задачи, чтобы отметить её
+        гробом — она останется открытой для сдачи после дедлайна, пока вы не
+        опубликуете разбор.
+      </p>
     </div>
   )
 }

@@ -97,6 +97,8 @@ const problemStats: SeriesProblemStats = {
       problem_id: 100,
       problem_number: 1,
       problem_display: 'Задача 1',
+      subproblem_id: 900,
+      subproblem_label: '',
       accepted: 5,
       appealed: 1,
       rejected: 2,

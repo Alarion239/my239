@@ -267,12 +267,15 @@ export interface MyRollup {
   problems: RollupProblem[]
 }
 
-// SeriesProblemStat is per-problem aggregate counts across all students in the
-// teacher stats view (GET /homework/series/{id}/problem-stats).
+// SeriesProblemStat is per-subproblem aggregate counts across all students in
+// the teacher stats view (GET /homework/series/{id}/problem-stats). Each
+// subproblem (1а, 1б) is reported as its own line — never folded into a problem.
 export interface SeriesProblemStat {
   problem_id: number
   problem_number: number
   problem_display: string
+  subproblem_id: number
+  subproblem_label: string
   accepted: number
   appealed: number
   rejected: number
