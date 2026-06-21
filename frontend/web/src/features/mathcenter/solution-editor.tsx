@@ -20,6 +20,11 @@ export interface SolutionEditorProps {
   onUploadPdf: (file: Blob) => Promise<unknown>
   onSetLink: (link: string) => Promise<unknown>
   trigger: ReactNode
+  // Fired after a successful save (any format). The batch flow uses it to close
+  // the dialog + clear the selection so the result is reflected immediately.
+  onSaved?: () => void
+  // Close the dialog automatically once a save succeeds.
+  closeOnSave?: boolean
 }
 
 // SolutionEditor is the teacher's «Разбор» authoring panel: paste LaTeX, upload
@@ -34,6 +39,8 @@ export function SolutionEditor({
   onUploadPdf,
   onSetLink,
   trigger,
+  onSaved,
+  closeOnSave,
 }: SolutionEditorProps) {
   const [open, setOpen] = useState(false)
   const [tex, setTex] = useState('')
@@ -50,6 +57,8 @@ export function SolutionEditor({
     try {
       await fn()
       setDone(label)
+      if (closeOnSave) setOpen(false)
+      onSaved?.()
     } catch (e) {
       setError(e instanceof APIErrorImpl ? e.message : 'Не удалось сохранить')
     } finally {

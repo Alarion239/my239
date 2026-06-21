@@ -647,6 +647,9 @@ func TestListSeries_StudentSeesOnlyPublished(t *testing.T) {
 	mock.ExpectQuery(`FROM math_center_subproblems s\s+JOIN math_center_problems`).
 		WithArgs([]int64{100}).
 		WillReturnRows(mock.NewRows(subproblemRowColumns))
+	mock.ExpectQuery(`FROM math_center_subproblem_solutions ss`).
+		WithArgs([]int64{100}).
+		WillReturnRows(mock.NewRows(subproblemSolutionMetaColumns))
 
 	req := authedRequest(t, access, 7, http.MethodGet, "/centers/42/series", nil)
 	rr := httptest.NewRecorder()
