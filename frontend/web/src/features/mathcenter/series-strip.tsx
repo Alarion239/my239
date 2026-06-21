@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { formatDateTime, type Series } from '@my239/shared'
 import { Badge } from '../../design/ui'
 import { cn } from '../../design/cn'
@@ -11,6 +11,9 @@ export interface SeriesStripProps {
   // Optional per-series progress hint (e.g. "3/5") shown on the card, for the
   // student view where the rollup is cheap to summarise.
   progress?: Record<number, string>
+  // Optional card rendered at the END of the strip (the teacher "+ create"
+  // card). Stretches to the row height like the series cards.
+  trailing?: ReactNode
 }
 
 // SeriesStrip is the horizontal, scrollable row of series cards above the detail
@@ -24,6 +27,7 @@ export function SeriesStrip({
   currentId,
   onSelect,
   progress,
+  trailing,
 }: SeriesStripProps) {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const centerRef = useRef<HTMLButtonElement | null>(null)
@@ -101,6 +105,7 @@ export function SeriesStrip({
           </button>
         )
       })}
+      {trailing}
     </div>
   )
 }

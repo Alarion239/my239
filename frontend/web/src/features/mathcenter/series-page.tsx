@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
+import { Pencil, Plus } from 'lucide-react'
 import {
   currentSeries,
   isClosed,
@@ -60,6 +61,30 @@ function NotFoundState() {
     <Card className="animate-rise px-6 py-16 text-center">
       <p className="text-muted">Нет доступа к этому матцентру.</p>
     </Card>
+  )
+}
+
+// CreateSeriesCard is the empty "+" card at the end of the series strip that
+// opens the create-series dialog — replacing the old toolbar button. It mirrors
+// the series cards' width and stretches to their height.
+function CreateSeriesCard({ centerId }: { centerId: number }) {
+  return (
+    <UploadSeriesDialog
+      centerId={centerId}
+      trigger={
+        <button
+          type="button"
+          aria-label="Создать серию"
+          className={cn(
+            'flex w-56 shrink-0 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-line-strong bg-surface p-4 text-muted transition-colors',
+            'hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+          )}
+        >
+          <Plus className="h-6 w-6" aria-hidden />
+          <span className="text-sm font-medium">Создать серию</span>
+        </button>
+      }
+    />
   )
 }
 
@@ -132,50 +157,28 @@ function CenterSeries({
 
   const selected =
     list.find((s) => s.id === selectedId) ?? current ?? list[0]
+  const createCard = !isStudentView ? (
+    <CreateSeriesCard centerId={centerId} />
+  ) : undefined
 
   if (list.length === 0) {
-    return (
-      <>
-        {!isStudentView ? (
-          <div className="flex justify-end">
-            <UploadSeriesDialog centerId={centerId} />
-          </div>
-        ) : null}
-        <Card className="px-6 py-16 text-center">
-          <p className="text-muted">Серий пока нет</p>
-        </Card>
-      </>
+    return !isStudentView ? (
+      <div className="flex">{createCard}</div>
+    ) : (
+      <Card className="px-6 py-16 text-center">
+        <p className="text-muted">Серий пока нет</p>
+      </Card>
     )
   }
 
   return (
     <>
-      {!isStudentView ? (
-        <div className="flex flex-wrap justify-end gap-2">
-          <UploadSeriesDialog centerId={centerId} />
-          {selected ? (
-            <UploadSeriesDialog
-              key={'edit-' + selected.id}
-              centerId={centerId}
-              series={selected}
-              trigger={
-                <button
-                  type="button"
-                  className="inline-flex h-9 items-center rounded-lg border border-line-strong bg-surface px-3 text-sm font-medium text-ink transition-colors hover:bg-surface-muted"
-                >
-                  Редактировать
-                </button>
-              }
-            />
-          ) : null}
-        </div>
-      ) : null}
-
       <SeriesStrip
         series={list}
         selectedId={selected?.id ?? null}
         currentId={current?.id ?? null}
         onSelect={setSelectedId}
+        trailing={createCard}
       />
 
       {selected ? (
@@ -298,12 +301,30 @@ function TeacherSeriesView({
   series: Series
 }) {
   const [tab, setTab] = useState<TeacherTab>('razbor')
-  const [mine, setMine] = useState(false)
   return (
     <div className="flex flex-col gap-4">
       <TeacherTabBar value={tab} onChange={setTab} />
       {tab === 'statement' ? (
-        <StatementPanel series={series} />
+        // The "Условие" tab also hosts editing the series structure/metadata.
+        <div className="flex flex-col gap-3">
+          <div className="flex justify-end">
+            <UploadSeriesDialog
+              key={'edit-' + series.id}
+              centerId={centerId}
+              series={series}
+              trigger={
+                <button
+                  type="button"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3 text-sm font-medium text-ink transition-colors hover:bg-surface-muted"
+                >
+                  <Pencil className="h-4 w-4" aria-hidden />
+                  Редактировать серию
+                </button>
+              }
+            />
+          </div>
+          <StatementPanel series={series} />
+        </div>
       ) : tab === 'razbor' ? (
         // Per-subproblem statistics + разбор/coffin handling, all on one row.
         <Card>
@@ -315,12 +336,7 @@ function TeacherSeriesView({
         <Card>
           <CardContent>
             {tab === 'queue' ? (
-              <GraderQueue
-                centerId={centerId}
-                seriesId={series.id}
-                mine={mine}
-                onMineChange={setMine}
-              />
+              <GraderQueue centerId={centerId} seriesId={series.id} />
             ) : (
               <TeacherGrid centerId={centerId} seriesId={series.id} />
             )}

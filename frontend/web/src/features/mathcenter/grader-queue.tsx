@@ -13,8 +13,6 @@ import { displayPill } from './status-style'
 export interface GraderQueueProps {
   centerId: number
   seriesId: number
-  mine: boolean
-  onMineChange: (mine: boolean) => void
 }
 
 function threadPath(centerId: number, seriesId: number, threadId: number): string {
@@ -27,50 +25,48 @@ function itemLabel(item: QueueItem): string {
     : item.problem_display
 }
 
-// GraderQueue lists submissions/appeals AVAILABLE to grade in a series (the
-// backend excludes items another grader is actively holding). Counts are
-// derived from this series' list so they always match the rows shown — no
-// center-wide vs series-scoped mismatch. Items being graded by someone else
-// live in the "Таблица" view, not here.
-export function GraderQueue({
-  centerId,
-  seriesId,
-  mine,
-  onMineChange,
-}: GraderQueueProps) {
-  const queue = useGraderQueue(seriesId, mine)
-  // New solutions are graded before appeals: appeals are a re-read request and
-  // wait behind fresh submissions. Stable sort keeps the backend's within-group
-  // ordering (oldest-waiting first).
-  const items = [...(queue.data ?? [])].sort(
+// New solutions are graded before appeals (an appeal is a re-read request that
+// waits behind fresh submissions). Stable sort keeps the backend's within-group
+// order (oldest-waiting first).
+function solutionsFirst(items: QueueItem[]): QueueItem[] {
+  return [...items].sort(
     (a, b) =>
       (a.current_status === 'appealed' ? 1 : 0) -
       (b.current_status === 'appealed' ? 1 : 0),
   )
-  const appeals = items.filter((i) => i.current_status === 'appealed').length
+}
+
+// GraderQueue lists submissions/appeals to grade in a series. The backend
+// returns the caller's own active claims plus the unclaimed pool (items another
+// grader is actively holding are excluded — they live in the "Таблица" view).
+// Anything the caller currently holds ("В работе") is pulled to the top so they
+// can resume it; the rest is the scrollable available pool below.
+export function GraderQueue({ centerId, seriesId }: GraderQueueProps) {
+  const queue = useGraderQueue(seriesId, false)
+  const all = queue.data ?? []
+  // A live claim in this result is necessarily the caller's own (others are
+  // filtered out server-side), so it's "in my work".
+  const mine = solutionsFirst(all.filter((i) => claimIsLive(i)))
+  const available = solutionsFirst(all.filter((i) => !claimIsLive(i)))
+  const appeals = available.filter((i) => i.current_status === 'appealed').length
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-3 text-xs text-muted">
+      <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
+        <span>
+          Доступно к проверке:{' '}
+          <span className="font-medium text-status-checking">{available.length}</span>
+        </span>
+        <span>
+          Апелляции:{' '}
+          <span className="font-medium text-status-appeal">{appeals}</span>
+        </span>
+        {mine.length > 0 ? (
           <span>
-            Доступно к проверке:{' '}
-            <span className="font-medium text-status-checking">{items.length}</span>
+            В работе у вас:{' '}
+            <span className="font-medium text-accent-ink">{mine.length}</span>
           </span>
-          <span>
-            Апелляции:{' '}
-            <span className="font-medium text-status-appeal">{appeals}</span>
-          </span>
-        </div>
-        <label className="flex items-center gap-2 text-sm text-ink">
-          <input
-            type="checkbox"
-            checked={mine}
-            onChange={(e) => onMineChange(e.target.checked)}
-            className="h-4 w-4 rounded border-line-strong accent-accent"
-          />
-          Только мои
-        </label>
+        ) : null}
       </div>
 
       {queue.isPending ? (
@@ -79,18 +75,40 @@ export function GraderQueue({
         </div>
       ) : queue.isError || !queue.data ? (
         <p className="py-6 text-sm text-danger">Не удалось загрузить очередь.</p>
-      ) : items.length === 0 ? (
-        <p className="py-6 text-sm text-muted">
-          {mine ? 'У вас нет задач в работе.' : 'Очередь пуста.'}
-        </p>
+      ) : all.length === 0 ? (
+        <p className="py-6 text-sm text-muted">Очередь пуста.</p>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {items.map((item) => (
-            <li key={item.thread_id}>
-              <QueueRow centerId={centerId} seriesId={seriesId} item={item} />
-            </li>
-          ))}
-        </ul>
+        <>
+          {mine.length > 0 ? (
+            <section className="flex flex-col gap-2">
+              <h3 className="text-sm font-medium text-ink">В работе</h3>
+              <ul className="flex flex-col gap-2">
+                {mine.map((item) => (
+                  <li key={item.thread_id}>
+                    <QueueRow centerId={centerId} seriesId={seriesId} item={item} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          <section className="flex flex-col gap-2">
+            {mine.length > 0 ? (
+              <h3 className="text-sm font-medium text-ink">Доступно к проверке</h3>
+            ) : null}
+            {available.length === 0 ? (
+              <p className="py-2 text-sm text-muted">Свободных задач нет.</p>
+            ) : (
+              <ul className="flex max-h-[28rem] flex-col gap-2 overflow-y-auto pr-1">
+                {available.map((item) => (
+                  <li key={item.thread_id}>
+                    <QueueRow centerId={centerId} seriesId={seriesId} item={item} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </>
       )}
     </div>
   )

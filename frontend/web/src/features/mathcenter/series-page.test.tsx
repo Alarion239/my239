@@ -194,13 +194,13 @@ describe('SeriesPage — student view', () => {
     expect(screen.getByRole('img', { name: 'а: Принято' })).toBeInTheDocument()
     // Subproblem б is submitted AND claimed (being_graded) → "На проверке".
     expect(screen.getByRole('img', { name: 'б: На проверке' })).toBeInTheDocument()
-    // No teacher toolbar in the student view.
-    expect(screen.queryByRole('button', { name: 'Загрузить серию' })).not.toBeInTheDocument()
+    // No teacher "create series" card in the student view.
+    expect(screen.queryByRole('button', { name: 'Создать серию' })).not.toBeInTheDocument()
   })
 })
 
 describe('SeriesPage — teacher view', () => {
-  it('renders stat counts and the "Загрузить серию" toolbar', async () => {
+  it('renders stat counts and the "Создать серию" card', async () => {
     const me: MeResponse = {
       teacher: {
         centers: [
@@ -219,7 +219,8 @@ describe('SeriesPage — teacher view', () => {
     renderPage()
 
     expect(await screen.findByText('Серия 2')).toBeInTheDocument()
-    expect(await screen.findByRole('button', { name: 'Загрузить серию' })).toBeInTheDocument()
+    // The "+" create-series card sits at the end of the strip.
+    expect(await screen.findByRole('button', { name: 'Создать серию' })).toBeInTheDocument()
 
     // Stats panel shows the student count in its heading and the breakdown.
     expect(
