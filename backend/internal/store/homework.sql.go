@@ -709,6 +709,8 @@ SELECT
     COALESCE(t.id, 0)::bigint              AS thread_id,
     COALESCE(t.current_status, 'ungraded') AS current_status,
     t.last_grader_user_id                  AS last_grader_user_id,
+    gu.first_name                          AS grader_first_name,
+    gu.last_name                           AS grader_last_name,
     t.claim_holder_user_id                 AS claim_holder_user_id,
     t.claim_expires_at                     AS claim_expires_at
 FROM math_center_students mcs
@@ -720,6 +722,7 @@ FROM math_center_students mcs
          LEFT JOIN homework_thread t
                    ON t.student_user_id = mcs.user_id
                   AND t.subproblem_id   = sp.id
+         LEFT JOIN users gu                 ON gu.id = t.last_grader_user_id
 WHERE g.math_center_id = $1
 ORDER BY g.name ASC, u.last_name ASC, u.first_name ASC, s.number ASC, p.number ASC, sp.label ASC
 `
@@ -742,6 +745,8 @@ type TeacherCenterGridRow struct {
 	ThreadID          int64      `json:"thread_id"`
 	CurrentStatus     string     `json:"current_status"`
 	LastGraderUserID  *int64     `json:"last_grader_user_id"`
+	GraderFirstName   *string    `json:"grader_first_name"`
+	GraderLastName    *string    `json:"grader_last_name"`
 	ClaimHolderUserID *int64     `json:"claim_holder_user_id"`
 	ClaimExpiresAt    *time.Time `json:"claim_expires_at"`
 }
@@ -777,6 +782,8 @@ func (q *Queries) TeacherCenterGrid(ctx context.Context, mathCenterID int64) ([]
 			&i.ThreadID,
 			&i.CurrentStatus,
 			&i.LastGraderUserID,
+			&i.GraderFirstName,
+			&i.GraderLastName,
 			&i.ClaimHolderUserID,
 			&i.ClaimExpiresAt,
 		); err != nil {

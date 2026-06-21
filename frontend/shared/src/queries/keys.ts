@@ -30,6 +30,8 @@ export const queryKeys = {
     ['homework', 'series', seriesId, 'queue', mine] as const,
   teacherGrid: (seriesId: number) =>
     ['homework', 'series', seriesId, 'grid'] as const,
+  centerGrid: (centerId: number) =>
+    ['homework', 'centers', centerId, 'grid'] as const,
   graderStats: (centerId: number) =>
     ['homework', 'centers', centerId, 'grader-stats'] as const,
 }

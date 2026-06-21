@@ -7,6 +7,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
 import type {
+  CenterGridResponse,
   GradePayload,
   GraderStats,
   GridResponse,
@@ -69,6 +70,18 @@ export function useTeacherGrid(seriesId: number) {
     queryFn: () =>
       client.request<GridResponse>('/homework/series/' + seriesId + '/grid'),
     enabled: seriesId > 0,
+  })
+}
+
+// useCenterGrid fetches the center-wide students × all-subproblems matrix used
+// by the «Кондуит» page.
+export function useCenterGrid(centerId: number) {
+  const client = useApiClient()
+  return useQuery<CenterGridResponse>({
+    queryKey: queryKeys.centerGrid(centerId),
+    queryFn: () =>
+      client.request<CenterGridResponse>('/homework/centers/' + centerId + '/grid'),
+    enabled: centerId > 0,
   })
 }
 

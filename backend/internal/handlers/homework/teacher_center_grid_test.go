@@ -16,6 +16,7 @@ var centerGridColumns = []string{
 	"group_id", "group_name",
 	"subproblem_id", "subproblem_label", "problem_id", "problem_number",
 	"thread_id", "current_status", "last_grader_user_id",
+	"grader_first_name", "grader_last_name",
 	"claim_holder_user_id", "claim_expires_at",
 }
 
@@ -29,27 +30,29 @@ func TestGetCenterGrid_HappyPath(t *testing.T) {
 
 	now := time.Now()
 	due := now.Add(time.Hour)
+	graderID := int64(3)
+	grFirst, grLast := "Пётр", "Сидоров"
 	mock.ExpectQuery(`FROM math_center_students mcs\s+JOIN users u`).
 		WithArgs(int64(42)).
 		WillReturnRows(mock.NewRows(centerGridColumns).
-			// Series 1, problem 0 (Упр), no subparts, student A
+			// Series 1, problem 0 (Упр), no subparts, student A — ACCEPTED by ПС.
 			AddRow(int64(100), int32(0), "Алгебра", due,
 				int64(7), "Аня", (*string)(nil), "Иванова",
 				int64(10), "А",
 				int64(900), "", int64(500), int32(0),
-				int64(1), "submitted", (*int64)(nil), (*int64)(nil), (*time.Time)(nil)).
+				int64(1), "accepted", &graderID, &grFirst, &grLast, (*int64)(nil), (*time.Time)(nil)).
 			// Series 1, problem 1, subpart a, student A
 			AddRow(int64(100), int32(0), "Алгебра", due,
 				int64(7), "Аня", (*string)(nil), "Иванова",
 				int64(10), "А",
 				int64(901), "a", int64(501), int32(1),
-				int64(0), "ungraded", (*int64)(nil), (*int64)(nil), (*time.Time)(nil)).
+				int64(0), "ungraded", (*int64)(nil), (*string)(nil), (*string)(nil), (*int64)(nil), (*time.Time)(nil)).
 			// Series 2, problem 1, no subparts, student A
 			AddRow(int64(200), int32(2), "Геометрия", due,
 				int64(7), "Аня", (*string)(nil), "Иванова",
 				int64(10), "А",
 				int64(910), "", int64(600), int32(1),
-				int64(0), "ungraded", (*int64)(nil), (*int64)(nil), (*time.Time)(nil)))
+				int64(0), "ungraded", (*int64)(nil), (*string)(nil), (*string)(nil), (*int64)(nil), (*time.Time)(nil)))
 
 	req := authedRequest(t, access, 3, false, http.MethodGet, "/centers/42/grid", nil)
 	rr := httptest.NewRecorder()
@@ -79,6 +82,7 @@ func TestGetCenterGrid_HappyPath(t *testing.T) {
 			ThreadID      int64  `json:"thread_id"`
 			CurrentStatus string `json:"current_status"`
 		} `json:"cells"`
+		Graders map[string]string `json:"graders"`
 	}
 	_ = json.Unmarshal(rr.Body.Bytes(), &resp)
 
@@ -106,11 +110,15 @@ func TestGetCenterGrid_HappyPath(t *testing.T) {
 		t.Errorf("series 1 col 0 label: got %q, want 1", resp.Series[1].Columns[0].ColumnLabel)
 	}
 	// Cells: only the (7, 900) thread is non-empty.
-	if c, ok := resp.Cells["7:900"]; !ok || c.ThreadID != 1 || c.CurrentStatus != "submitted" {
+	if c, ok := resp.Cells["7:900"]; !ok || c.ThreadID != 1 || c.CurrentStatus != "accepted" {
 		t.Errorf("cell 7:900: %+v ok=%v", c, ok)
 	}
 	if _, ok := resp.Cells["7:901"]; ok {
 		t.Error("cell 7:901 should be absent (ungraded)")
+	}
+	// The grader of the accepted cell is exposed by initials for the Кондуит.
+	if resp.Graders["3"] != "ПС" {
+		t.Errorf("grader initials: got %q, want ПС", resp.Graders["3"])
 	}
 }
 
