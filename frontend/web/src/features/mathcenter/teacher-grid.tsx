@@ -107,7 +107,7 @@ export function TeacherGrid({ centerId, seriesId }: TeacherGridProps) {
                     }
                     className={cn(
                       'sticky top-0 z-20 border-b border-line px-2 py-2 text-center text-xs font-medium',
-                      col.is_coffin ? 'bg-line-strong/40 text-ink' : 'bg-surface text-muted',
+                      col.is_coffin ? 'bg-faint text-white' : 'bg-surface text-muted',
                     )}
                   >
                     {columnHeader(col)}
@@ -177,7 +177,7 @@ function GroupRows({
                   key={col.subproblem_id}
                   className={cn(
                     'px-2 py-1 text-center',
-                    col.is_coffin && 'bg-line-strong/15',
+                    col.is_coffin && 'bg-faint/35',
                   )}
                 >
                   {cell && cell.thread_id > 0 ? (
