@@ -25,6 +25,10 @@ export interface SolutionEditorProps {
   onSaved?: () => void
   // Close the dialog automatically once a save succeeds.
   closeOnSave?: boolean
+  // When set, renders a resolve action (e.g. «Снять гроб») in the dialog footer
+  // so the teacher can attach the разбор and close the coffin in one place.
+  onResolve?: () => Promise<unknown>
+  resolveLabel?: string
 }
 
 // SolutionEditor is the teacher's «Разбор» authoring panel: paste LaTeX, upload
@@ -41,6 +45,8 @@ export function SolutionEditor({
   trigger,
   onSaved,
   closeOnSave,
+  onResolve,
+  resolveLabel,
 }: SolutionEditorProps) {
   const [open, setOpen] = useState(false)
   const [tex, setTex] = useState('')
@@ -61,6 +67,23 @@ export function SolutionEditor({
       onSaved?.()
     } catch (e) {
       setError(e instanceof APIErrorImpl ? e.message : 'Не удалось сохранить')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  // The resolve action (e.g. «Снять гроб») runs after any optional attach, then
+  // closes the dialog regardless of closeOnSave.
+  async function doResolve() {
+    if (!onResolve) return
+    setBusy('resolve')
+    setError(null)
+    try {
+      await onResolve()
+      setOpen(false)
+      onSaved?.()
+    } catch (e) {
+      setError(e instanceof APIErrorImpl ? e.message : 'Не удалось выполнить')
     } finally {
       setBusy(null)
     }
@@ -158,6 +181,23 @@ export function SolutionEditor({
               ) : null}
             </div>
           </section>
+
+          {onResolve ? (
+            <section className="flex flex-col gap-2 border-t border-line pt-4">
+              <p className="text-xs text-muted">
+                Прикрепите разбор выше (необязательно), затем закройте гроб.
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                disabled={busy !== null}
+                onClick={doResolve}
+                className="self-start"
+              >
+                {busy === 'resolve' ? 'Закрываем…' : (resolveLabel ?? 'Снять')}
+              </Button>
+            </section>
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>

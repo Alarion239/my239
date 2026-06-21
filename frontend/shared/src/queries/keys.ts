@@ -17,6 +17,8 @@ export const queryKeys = {
   seriesTex: (id: number) => ['mathcenter', 'series', id, 'tex'] as const,
   centerCoffins: (centerId: number) =>
     ['mathcenter', 'centers', centerId, 'coffins'] as const,
+  coffinQueue: (centerId: number) =>
+    ['mathcenter', 'centers', centerId, 'coffin-queue'] as const,
   // Per-subproblem «Разбор» LaTeX (keyed by subproblem id).
   subproblemSolutionTex: (id: number) =>
     ['mathcenter', 'subproblems', id, 'solution', 'tex'] as const,

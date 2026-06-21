@@ -152,6 +152,55 @@ FROM math_center_subproblem_solutions ss
 WHERE p.series_id = ANY (@series_ids::bigint[])
 ORDER BY p.number ASC, sp.label ASC;
 
+-- name: ListCoffinSolvedCounts :many
+-- Per-coffin "solved N of M": how many of the center's students have an accepted
+-- thread on each coffin subproblem, out of the whole roster.
+SELECT ss.subproblem_id                                     AS subproblem_id,
+       COUNT(*) FILTER (WHERE t.current_status = 'accepted') AS accepted,
+       COUNT(*)                                              AS total
+FROM math_center_subproblem_solutions ss
+         JOIN math_center_subproblems sp ON sp.id = ss.subproblem_id
+         JOIN math_center_problems p ON p.id = sp.problem_id
+         JOIN math_center_series s ON s.id = p.series_id
+         JOIN math_center_groups g ON g.math_center_id = s.math_center_id
+         JOIN math_center_students mcs ON mcs.group_id = g.id
+         LEFT JOIN homework_thread t
+                   ON t.subproblem_id = ss.subproblem_id
+                  AND t.student_user_id = mcs.user_id
+WHERE s.math_center_id = $1
+  AND ss.is_coffin = true
+GROUP BY ss.subproblem_id;
+
+-- name: ListCoffinQueueForCenter :many
+-- Center-wide grading queue for coffins: submissions/appeals on coffin
+-- subproblems that aren't locked by another grader. Mirrors the per-series
+-- grader queue but spans every series and is filtered to coffins.
+SELECT t.id                   AS thread_id,
+       t.student_user_id      AS student_user_id,
+       t.subproblem_id        AS subproblem_id,
+       t.series_id            AS series_id,
+       t.current_status       AS current_status,
+       t.last_grader_user_id  AS last_grader_user_id,
+       t.claim_holder_user_id AS claim_holder_user_id,
+       t.claim_expires_at     AS claim_expires_at,
+       t.updated_at           AS updated_at,
+       u.first_name           AS student_first_name,
+       u.middle_name          AS student_middle_name,
+       u.last_name            AS student_last_name,
+       sp.label               AS subproblem_label,
+       p.number               AS problem_number
+FROM homework_thread t
+         JOIN math_center_subproblem_solutions ss ON ss.subproblem_id = t.subproblem_id AND ss.is_coffin = true
+         JOIN users u ON u.id = t.student_user_id
+         JOIN math_center_subproblems sp ON sp.id = t.subproblem_id
+         JOIN math_center_problems p ON p.id = sp.problem_id
+WHERE t.math_center_id = $1
+  AND t.current_status IN ('submitted', 'appealed')
+  AND (t.claim_holder_user_id IS NULL
+       OR t.claim_expires_at < NOW()
+       OR t.claim_holder_user_id = @caller_user_id::bigint)
+ORDER BY t.current_status ASC, t.updated_at ASC;
+
 -- name: CreateSolutionGroup :one
 -- Mint a fresh shared-разбор group id.
 INSERT INTO math_center_solution_groups DEFAULT VALUES

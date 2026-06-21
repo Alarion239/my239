@@ -103,6 +103,39 @@ func TestReleaseCoffin_AdminSucceeds(t *testing.T) {
 	}
 }
 
+func TestListCoffinQueue_AdminReturnsRows(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	mock.ExpectQuery(`FROM homework_thread t\s+JOIN math_center_subproblem_solutions ss`).
+		WithArgs(int64(42), int64(1)).
+		WillReturnRows(mock.NewRows([]string{
+			"thread_id", "student_user_id", "subproblem_id", "series_id",
+			"current_status", "last_grader_user_id", "claim_holder_user_id",
+			"claim_expires_at", "updated_at",
+			"student_first_name", "student_middle_name", "student_last_name",
+			"subproblem_label", "problem_number",
+		}).
+			AddRow(int64(55), int64(7), int64(901), int64(100),
+				"submitted", (*int64)(nil), (*int64)(nil), (*time.Time)(nil), now,
+				"Аня", (*string)(nil), "Иванова", "b", int32(4)))
+
+	req := authedAdminRequest(t, access, 1, http.MethodGet, "/centers/42/coffin-queue", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	var resp []map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &resp)
+	if len(resp) != 1 || resp[0]["student_name"] != "Аня Иванова" || resp[0]["series_id"] != float64(100) {
+		t.Errorf("unexpected coffin queue: %v", resp)
+	}
+}
+
 func TestAssignSolutionGroup_AdminSucceeds(t *testing.T) {
 	t.Parallel()
 	mock, _ := pgxmock.NewPool()
@@ -170,6 +203,11 @@ func TestListCenterCoffins_AdminReturnsRows(t *testing.T) {
 		}).
 			AddRow(int64(901), true, (*time.Time)(nil), (*string)(nil), (*string)(nil), (*string)(nil), now,
 				"b", int64(500), int32(4), int64(100), int32(2), "Геометрия", now, int64(42)))
+	// Teachers (admin) also get the per-coffin solved counts.
+	mock.ExpectQuery(`FROM math_center_subproblem_solutions ss\s+JOIN math_center_subproblems sp[\s\S]*GROUP BY`).
+		WithArgs(int64(42)).
+		WillReturnRows(mock.NewRows([]string{"subproblem_id", "accepted", "total"}).
+			AddRow(int64(901), int64(3), int64(10)))
 
 	req := authedAdminRequest(t, access, 1, http.MethodGet, "/centers/42/coffins", nil)
 	rr := httptest.NewRecorder()
@@ -181,5 +219,8 @@ func TestListCenterCoffins_AdminReturnsRows(t *testing.T) {
 	_ = json.Unmarshal(rr.Body.Bytes(), &resp)
 	if len(resp) != 1 || resp[0]["display"] != "Задача 4 (b)" || resp[0]["subproblem_id"] != float64(901) {
 		t.Errorf("unexpected coffins list: %v", resp)
+	}
+	if resp[0]["accepted_count"] != float64(3) || resp[0]["total_count"] != float64(10) {
+		t.Errorf("solved counts: got %v / %v, want 3 / 10", resp[0]["accepted_count"], resp[0]["total_count"])
 	}
 }
