@@ -131,7 +131,15 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
     scroller.scrollLeft += elRect.left - scRect.left - 200
   }, [currentId])
 
-  const divider = 'border-l-2 border-l-line-strong'
+  // Each cell's left vertical line: a thick series divider on the first column
+  // of a series, a normal hairline otherwise. Borders are LEFT/BOTTOM-owned so
+  // that with border-separate every line belongs to exactly one cell — and a
+  // sticky cell additionally draws the border on the edge facing the scrolling
+  // content (right edge for the frozen left column, top edge for the frozen
+  // bottom totals), so its grid lines travel WITH it instead of letting the
+  // table show through at the seam.
+  const vert = (firstInSeries: boolean) =>
+    firstInSeries ? 'border-l-2 border-l-line-strong' : 'border-l border-line'
 
   // The grid IS the page: it fills the full-bleed region and is the single
   // scroll surface (both axes), like a spreadsheet — no Card, no nested box.
@@ -140,13 +148,13 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
       ref={scrollerRef}
       className="h-full overflow-auto overscroll-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
-      <table className="border-collapse text-sm [&_td]:border [&_td]:border-line [&_th]:border [&_th]:border-line">
+      <table className="border-separate border-spacing-0 text-sm">
           <thead>
             {/* Series band — one header spanning each series' columns. */}
             <tr>
               <th
                 rowSpan={2}
-                className="sticky left-0 top-0 z-40 min-w-44 bg-surface-muted px-3 py-2 text-left font-medium text-ink"
+                className="sticky left-0 top-0 z-40 min-w-44 border-b border-l border-r border-t border-line bg-surface-muted px-3 py-2 text-left font-medium text-ink"
               >
                 Ученик
               </th>
@@ -155,10 +163,7 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
                   key={s.series_id}
                   ref={s.series_id === currentId ? currentThRef : undefined}
                   colSpan={s.columns.length}
-                  className={cn(
-                    'sticky top-0 z-20 h-9 whitespace-nowrap bg-surface-muted px-3 text-center font-medium text-ink',
-                    divider,
-                  )}
+                  className="sticky top-0 z-20 h-9 whitespace-nowrap border-b border-l-2 border-t border-line border-l-line-strong bg-surface-muted px-3 text-center font-medium text-ink"
                   title={s.display_name}
                 >
                   Серия {s.number}
@@ -166,7 +171,7 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
               ))}
               <th
                 rowSpan={2}
-                className="sticky right-0 top-0 z-40 bg-surface-muted px-3 py-2 text-center font-medium text-ink"
+                className="sticky right-0 top-0 z-40 border-b border-l border-r border-t border-line bg-surface-muted px-3 py-2 text-center font-medium text-ink"
               >
                 Решено
               </th>
@@ -187,13 +192,13 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
                         : undefined
                     }
                     className={cn(
-                      'sticky top-9 z-20 min-w-9 px-1.5 py-1 text-center text-xs font-medium',
+                      'sticky top-9 z-20 min-w-9 border-b border-line px-1.5 py-1 text-center text-xs font-medium',
+                      vert(firstInSeries),
                       open
                         ? 'bg-status-checking text-white'
                         : col.is_coffin
                           ? 'bg-faint text-white'
                           : 'bg-surface-muted text-muted',
-                      firstInSeries && divider,
                     )}
                   >
                     {col.column_label}
@@ -206,7 +211,7 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
             {data.groups.map((g) => (
               <Fragment key={g.group_id}>
                 <tr className="bg-surface-muted/60">
-                  <td colSpan={cols.length + 2} className="p-0">
+                  <td colSpan={cols.length + 2} className="border-b border-line p-0">
                     <div className="sticky left-0 inline-block px-3 py-1 text-xs font-medium text-muted">
                       {g.name}
                     </div>
@@ -214,7 +219,7 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
                 </tr>
                 {g.students.map((st) => (
                   <tr key={st.user_id} className="hover:bg-surface-muted/40">
-                    <td className="sticky left-0 z-10 min-w-44 whitespace-nowrap bg-surface-muted px-3 py-1.5 text-ink">
+                    <td className="sticky left-0 z-10 min-w-44 whitespace-nowrap border-b border-l border-r border-line bg-surface-muted px-3 py-1.5 text-ink">
                       {st.name}
                     </td>
                     {cols.map(({ col, firstInSeries }) => {
@@ -224,8 +229,8 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
                         <td
                           key={col.subproblem_id}
                           className={cn(
-                            'px-1.5 py-1.5 text-center',
-                            firstInSeries && divider,
+                            'border-b border-line px-1.5 py-1.5 text-center',
+                            vert(firstInSeries),
                             acc
                               ? 'bg-status-accepted-soft font-medium text-status-accepted'
                               : open
@@ -239,7 +244,7 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
                         </td>
                       )
                     })}
-                    <td className="sticky right-0 z-10 bg-surface px-3 py-1.5 text-center font-medium text-ink">
+                    <td className="sticky right-0 z-10 border-b border-l border-r border-line bg-surface px-3 py-1.5 text-center font-medium text-ink">
                       {rowTotal(st.user_id)}
                     </td>
                   </tr>
@@ -249,21 +254,22 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
             {/* Column totals: people who solved each problem — pinned to the
                 bottom so it's always on screen. */}
             <tr>
-              <td className="sticky bottom-0 left-0 z-30 bg-surface-muted px-3 py-1.5 font-medium text-ink">
+              <td className="sticky bottom-0 left-0 z-30 border-b border-l border-r border-t border-line bg-surface-muted px-3 py-1.5 font-medium text-ink">
                 Решили
               </td>
               {cols.map(({ col, firstInSeries }) => (
                 <td
                   key={col.subproblem_id}
                   className={cn(
-                    'sticky bottom-0 z-20 bg-surface-muted px-1.5 py-1.5 text-center font-medium text-ink',
-                    firstInSeries && divider,
+                    'sticky bottom-0 z-20 border-b border-t border-line px-1.5 py-1.5 text-center font-medium text-ink',
+                    vert(firstInSeries),
+                    'bg-surface-muted',
                   )}
                 >
                   {colTotal(col.subproblem_id)}
                 </td>
               ))}
-              <td className="sticky bottom-0 right-0 z-30 bg-surface-muted px-3 py-1.5 text-center font-medium text-ink">
+              <td className="sticky bottom-0 right-0 z-30 border-b border-l border-r border-t border-line bg-surface-muted px-3 py-1.5 text-center font-medium text-ink">
                 {grandTotal}
               </td>
             </tr>
