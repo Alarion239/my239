@@ -14,22 +14,25 @@ import (
 	"github.com/Alarion239/my239/backend/pkg/db"
 )
 
-// problemStat is the per-problem breakdown of students by derived status. The
-// five buckets are mutually exclusive, so accepted+appealed+rejected+submitted+
-// unsolved == total_students for every problem.
+// problemStat is the per-subproblem breakdown of students by status. Each
+// subproblem (e.g. 1а, 1б) is reported as its own line — they are never folded
+// into a single problem. The five buckets are mutually exclusive, so
+// accepted+appealed+rejected+submitted+unsolved == total_students for every row.
 type problemStat struct {
-	ProblemID      int64  `json:"problem_id"`
-	ProblemNumber  int    `json:"problem_number"`
-	ProblemDisplay string `json:"problem_display"`
-	Accepted       int    `json:"accepted"`
-	Appealed       int    `json:"appealed"`
-	Rejected       int    `json:"rejected"`
-	Submitted      int    `json:"submitted"`
-	Unsolved       int    `json:"unsolved"`
+	ProblemID       int64  `json:"problem_id"`
+	ProblemNumber   int    `json:"problem_number"`
+	ProblemDisplay  string `json:"problem_display"`
+	SubproblemID    int64  `json:"subproblem_id"`
+	SubproblemLabel string `json:"subproblem_label"`
+	Accepted        int    `json:"accepted"`
+	Appealed        int    `json:"appealed"`
+	Rejected        int    `json:"rejected"`
+	Submitted       int    `json:"submitted"`
+	Unsolved        int    `json:"unsolved"`
 }
 
 // problemStatsResponse is the series-page teacher summary: the roster size plus
-// one breakdown per problem, ordered by problem number.
+// one breakdown per subproblem, ordered by problem number then subproblem label.
 type problemStatsResponse struct {
 	TotalStudents int           `json:"total_students"`
 	Problems      []problemStat `json:"problems"`
@@ -82,102 +85,53 @@ func ProblemStats(database *db.DB) http.HandlerFunc {
 	}
 }
 
-// aggregateProblemStats folds the flat (student × subproblem) rows into per-
-// problem bucket counts plus the distinct student total.
+// aggregateProblemStats counts the flat (student × subproblem) rows directly
+// into per-subproblem bucket counts plus the distinct student total.
 //
-// Each input row carries one subproblem's status for one student. We first
-// reduce a student's subproblem statuses for a problem into a single
-// per-(student,problem) status by this precedence (highest first):
-//
-//  1. accepted  — ALL of the problem's subproblems are accepted
-//  2. appealed  — else ANY subproblem is appealed
-//  3. rejected  — else ANY subproblem is rejected
-//  4. submitted — else ANY subproblem is submitted
-//  5. unsolved  — none of the above (every subproblem is ungraded)
-//
-// Then we count students per (problem, derived status). Every student of the
-// center appears for every problem (the SQL crosses roster × subproblems), so
-// the five buckets per problem always sum to the distinct student count.
+// Each input row carries one subproblem's status for one student; we tally that
+// status straight into the subproblem's bucket. Subproblems are NOT folded into
+// a parent problem — 1а and 1б are two independent lines. Every student of the
+// center appears for every subproblem (the SQL crosses roster × subproblems), so
+// the five buckets per subproblem always sum to the distinct student count.
 func aggregateProblemStats(rows []store.SeriesProblemStatsRow) (totalStudents int, problems []problemStat) {
-	// Accumulated flags for one (student, problem) pair as we scan its rows.
-	type acc struct {
-		allAccepted  bool
-		anyAppealed  bool
-		anyRejected  bool
-		anySubmitted bool
-	}
+	type subKey = int64
 
-	type problemKey = int64
-
-	// Per problem: ordered appearance + the running per-student accumulator.
-	type problemAgg struct {
-		stat problemStat
-		// keyed by student_user_id, reset is unnecessary because each student
-		// appears under a problem exactly once (all its subproblem rows).
-		perStudent map[int64]*acc
-	}
-
-	order := make([]problemKey, 0)
-	byProblem := make(map[problemKey]*problemAgg)
+	order := make([]subKey, 0)
+	bySub := make(map[subKey]*problemStat)
 	students := make(map[int64]struct{})
 
 	for _, row := range rows {
 		students[row.StudentUserID] = struct{}{}
 
-		pa, ok := byProblem[row.ProblemID]
+		s, ok := bySub[row.SubproblemID]
 		if !ok {
-			pa = &problemAgg{
-				stat: problemStat{
-					ProblemID:      row.ProblemID,
-					ProblemNumber:  int(row.ProblemNumber),
-					ProblemDisplay: mc.ProblemDisplayName(int(row.ProblemNumber)),
-				},
-				perStudent: make(map[int64]*acc),
+			s = &problemStat{
+				ProblemID:       row.ProblemID,
+				ProblemNumber:   int(row.ProblemNumber),
+				ProblemDisplay:  mc.ProblemDisplayName(int(row.ProblemNumber)),
+				SubproblemID:    row.SubproblemID,
+				SubproblemLabel: row.SubproblemLabel,
 			}
-			byProblem[row.ProblemID] = pa
-			order = append(order, row.ProblemID)
+			bySub[row.SubproblemID] = s
+			order = append(order, row.SubproblemID)
 		}
 
-		a, ok := pa.perStudent[row.StudentUserID]
-		if !ok {
-			a = &acc{allAccepted: true}
-			pa.perStudent[row.StudentUserID] = a
-		}
 		switch row.CurrentStatus {
 		case hw.StatusAccepted:
-			// allAccepted stays true unless contradicted by another subproblem.
+			s.Accepted++
 		case hw.StatusAppealed:
-			a.anyAppealed = true
-			a.allAccepted = false
+			s.Appealed++
 		case hw.StatusRejected:
-			a.anyRejected = true
-			a.allAccepted = false
+			s.Rejected++
 		case hw.StatusSubmitted:
-			a.anySubmitted = true
-			a.allAccepted = false
-		default: // ungraded (or any unknown status) — not accepted
-			a.allAccepted = false
+			s.Submitted++
+		default: // ungraded (or any unknown status)
+			s.Unsolved++
 		}
 	}
 
-	// Resolve each student's per-problem status by precedence and tally it.
-	for _, pid := range order {
-		pa := byProblem[pid]
-		for _, a := range pa.perStudent {
-			switch {
-			case a.allAccepted:
-				pa.stat.Accepted++
-			case a.anyAppealed:
-				pa.stat.Appealed++
-			case a.anyRejected:
-				pa.stat.Rejected++
-			case a.anySubmitted:
-				pa.stat.Submitted++
-			default:
-				pa.stat.Unsolved++
-			}
-		}
-		problems = append(problems, pa.stat)
+	for _, id := range order {
+		problems = append(problems, *bySub[id])
 	}
 	if problems == nil {
 		problems = []problemStat{}

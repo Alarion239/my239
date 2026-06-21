@@ -39,7 +39,14 @@ export function GraderQueue({
   onMineChange,
 }: GraderQueueProps) {
   const queue = useGraderQueue(seriesId, mine)
-  const items = queue.data ?? []
+  // New solutions are graded before appeals: appeals are a re-read request and
+  // wait behind fresh submissions. Stable sort keeps the backend's within-group
+  // ordering (oldest-waiting first).
+  const items = [...(queue.data ?? [])].sort(
+    (a, b) =>
+      (a.current_status === 'appealed' ? 1 : 0) -
+      (b.current_status === 'appealed' ? 1 : 0),
+  )
   const appeals = items.filter((i) => i.current_status === 'appealed').length
 
   return (
@@ -72,13 +79,13 @@ export function GraderQueue({
         </div>
       ) : queue.isError || !queue.data ? (
         <p className="py-6 text-sm text-danger">Не удалось загрузить очередь.</p>
-      ) : queue.data.length === 0 ? (
+      ) : items.length === 0 ? (
         <p className="py-6 text-sm text-muted">
           {mine ? 'У вас нет задач в работе.' : 'Очередь пуста.'}
         </p>
       ) : (
         <ul className="flex flex-col gap-2">
-          {queue.data.map((item) => (
+          {items.map((item) => (
             <li key={item.thread_id}>
               <QueueRow centerId={centerId} seriesId={seriesId} item={item} />
             </li>

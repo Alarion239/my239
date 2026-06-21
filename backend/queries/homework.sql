@@ -300,14 +300,15 @@ ORDER BY g.name ASC, u.last_name ASC, u.first_name ASC, s.number ASC, p.number A
 -- One row per (student × subproblem) for a whole series: the center roster
 -- crossed with the series's subproblems, LEFT JOINed to that student's thread
 -- so untouched subproblems still appear with status='ungraded'. The handler
--- folds these into per-(student,problem) precedence and per-problem counts.
--- Roster scoping mirrors TeacherSeriesGrid: every student of a group in the
--- series's math center.
+-- counts these per subproblem (each subproblem — e.g. 1а, 1б — is reported as a
+-- distinct line). Roster scoping mirrors TeacherSeriesGrid: every student of a
+-- group in the series's math center.
 SELECT
     mcs.user_id                            AS student_user_id,
     p.id                                   AS problem_id,
     p.number                               AS problem_number,
     sp.id                                  AS subproblem_id,
+    sp.label                               AS subproblem_label,
     COALESCE(t.current_status, 'ungraded') AS current_status
 FROM math_center_students mcs
          JOIN math_center_groups g ON g.id = mcs.group_id
@@ -318,7 +319,7 @@ FROM math_center_students mcs
                   AND t.subproblem_id   = sp.id
 WHERE g.math_center_id = (SELECT s.math_center_id FROM math_center_series s WHERE s.id = $1)
   AND p.series_id = $1
-ORDER BY p.number ASC, p.id ASC, mcs.user_id ASC, sp.label ASC;
+ORDER BY p.number ASC, p.id ASC, sp.label ASC, mcs.user_id ASC;
 
 -- name: GetSubproblemContext :one
 -- One-shot fetch of "what center/series/problem does this subproblem belong
