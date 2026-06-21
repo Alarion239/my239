@@ -10,9 +10,24 @@ import (
 	"github.com/pashagolub/pgxmock/v4"
 )
 
-var coffinColumns = []string{
-	"id", "problem_id", "released_at", "solution_tex_source",
-	"solution_pdf_object_key", "solution_link", "created_at", "updated_at",
+// Full math_center_subproblem_solutions row, in SELECT * order.
+var subproblemSolutionColumns = []string{
+	"id", "subproblem_id", "is_coffin", "released_at",
+	"solution_tex_source", "solution_pdf_object_key", "solution_link",
+	"created_at", "updated_at",
+}
+
+// GetSubproblemSolutionCenter resolution row (subproblem → problem → series → center).
+var subproblemCenterColumns = []string{
+	"subproblem_id", "subproblem_label", "problem_id", "problem_number",
+	"series_id", "math_center_id", "series_due_at",
+}
+
+func expectSubproblemCenter(mock pgxmock.PgxPoolIface, subproblemID, centerID int64, label string, problemNumber int32, now time.Time) {
+	mock.ExpectQuery(`FROM math_center_subproblems sp\s+JOIN math_center_problems`).
+		WithArgs(subproblemID).
+		WillReturnRows(mock.NewRows(subproblemCenterColumns).
+			AddRow(subproblemID, label, int64(500), problemNumber, int64(100), centerID, now))
 }
 
 func TestMarkCoffin_AdminSucceeds(t *testing.T) {
@@ -22,16 +37,13 @@ func TestMarkCoffin_AdminSucceeds(t *testing.T) {
 	r, access, _ := newRouter(t, mock)
 
 	now := time.Now()
-	mock.ExpectQuery(`FROM math_center_problems p\s+JOIN math_center_series`).
-		WithArgs(int64(500)).
-		WillReturnRows(mock.NewRows([]string{"problem_id", "series_id", "math_center_id"}).
-			AddRow(int64(500), int64(100), int64(42)))
-	mock.ExpectQuery(`INSERT INTO math_center_coffins`).
-		WithArgs(int64(500)).
-		WillReturnRows(mock.NewRows(coffinColumns).
-			AddRow(int64(9), int64(500), (*time.Time)(nil), (*string)(nil), (*string)(nil), (*string)(nil), now, now))
+	expectSubproblemCenter(mock, 900, 42, "b", 5, now)
+	mock.ExpectQuery(`INSERT INTO math_center_subproblem_solutions`).
+		WithArgs(int64(900), true).
+		WillReturnRows(mock.NewRows(subproblemSolutionColumns).
+			AddRow(int64(9), int64(900), true, (*time.Time)(nil), (*string)(nil), (*string)(nil), (*string)(nil), now, now))
 
-	req := authedAdminRequest(t, access, 1, http.MethodPost, "/problems/500/coffin", nil)
+	req := authedAdminRequest(t, access, 1, http.MethodPost, "/subproblems/900/coffin", nil)
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
@@ -39,7 +51,7 @@ func TestMarkCoffin_AdminSucceeds(t *testing.T) {
 	}
 	var resp map[string]any
 	_ = json.Unmarshal(rr.Body.Bytes(), &resp)
-	if resp["id"] != float64(9) || resp["problem_id"] != float64(500) {
+	if resp["subproblem_id"] != float64(900) || resp["is_coffin"] != true {
 		t.Errorf("unexpected coffin view: %v", resp)
 	}
 }
@@ -50,15 +62,13 @@ func TestMarkCoffin_NonTeacherForbidden(t *testing.T) {
 	defer mock.Close()
 	r, access, _ := newRouter(t, mock)
 
-	mock.ExpectQuery(`FROM math_center_problems p\s+JOIN math_center_series`).
-		WithArgs(int64(500)).
-		WillReturnRows(mock.NewRows([]string{"problem_id", "series_id", "math_center_id"}).
-			AddRow(int64(500), int64(100), int64(42)))
+	now := time.Now()
+	expectSubproblemCenter(mock, 900, 42, "b", 5, now)
 	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
 		WithArgs(int64(7), int64(42)).
 		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(false))
 
-	req := authedRequest(t, access, 7, http.MethodPost, "/problems/500/coffin", nil)
+	req := authedRequest(t, access, 7, http.MethodPost, "/subproblems/900/coffin", nil)
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 	if rr.Code != http.StatusForbidden {
@@ -73,20 +83,13 @@ func TestReleaseCoffin_AdminSucceeds(t *testing.T) {
 	r, access, _ := newRouter(t, mock)
 
 	now := time.Now()
-	mock.ExpectQuery(`FROM math_center_coffins c\s+JOIN math_center_problems`).
-		WithArgs(int64(9)).
-		WillReturnRows(mock.NewRows([]string{"coffin_id", "problem_id", "math_center_id"}).
-			AddRow(int64(9), int64(500), int64(42)))
-	mock.ExpectQuery(`FROM math_center_coffins\s+WHERE id`).
-		WithArgs(int64(9)).
-		WillReturnRows(mock.NewRows(coffinColumns).
-			AddRow(int64(9), int64(500), (*time.Time)(nil), (*string)(nil), (*string)(nil), (*string)(nil), now, now))
-	mock.ExpectQuery(`UPDATE math_center_coffins\s+SET released_at`).
-		WithArgs(int64(9)).
-		WillReturnRows(mock.NewRows(coffinColumns).
-			AddRow(int64(9), int64(500), &now, (*string)(nil), (*string)(nil), (*string)(nil), now, now))
+	expectSubproblemCenter(mock, 900, 42, "b", 5, now)
+	mock.ExpectQuery(`UPDATE math_center_subproblem_solutions\s+SET released_at`).
+		WithArgs(int64(900)).
+		WillReturnRows(mock.NewRows(subproblemSolutionColumns).
+			AddRow(int64(9), int64(900), true, &now, (*string)(nil), (*string)(nil), (*string)(nil), now, now))
 
-	req := authedAdminRequest(t, access, 1, http.MethodPost, "/coffins/9/release", nil)
+	req := authedAdminRequest(t, access, 1, http.MethodPost, "/subproblems/900/solution/release", nil)
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
@@ -106,15 +109,16 @@ func TestListCenterCoffins_AdminReturnsRows(t *testing.T) {
 	r, access, _ := newRouter(t, mock)
 
 	now := time.Now()
-	mock.ExpectQuery(`FROM math_center_coffins c\s+JOIN math_center_problems`).
+	mock.ExpectQuery(`FROM math_center_subproblem_solutions ss\s+JOIN math_center_subproblems`).
 		WithArgs(int64(42)).
 		WillReturnRows(mock.NewRows([]string{
-			"id", "problem_id", "released_at", "solution_tex_source",
+			"subproblem_id", "is_coffin", "released_at", "solution_tex_source",
 			"solution_pdf_object_key", "solution_link", "created_at",
-			"problem_number", "series_id", "series_number", "series_name", "math_center_id",
+			"subproblem_label", "problem_id", "problem_number",
+			"series_id", "series_number", "series_name", "series_due_at", "math_center_id",
 		}).
-			AddRow(int64(9), int64(500), (*time.Time)(nil), (*string)(nil), (*string)(nil), (*string)(nil), now,
-				int32(4), int64(100), int32(2), "Геометрия", int64(42)))
+			AddRow(int64(901), true, (*time.Time)(nil), (*string)(nil), (*string)(nil), (*string)(nil), now,
+				"b", int64(500), int32(4), int64(100), int32(2), "Геометрия", now, int64(42)))
 
 	req := authedAdminRequest(t, access, 1, http.MethodGet, "/centers/42/coffins", nil)
 	rr := httptest.NewRecorder()
@@ -124,7 +128,7 @@ func TestListCenterCoffins_AdminReturnsRows(t *testing.T) {
 	}
 	var resp []map[string]any
 	_ = json.Unmarshal(rr.Body.Bytes(), &resp)
-	if len(resp) != 1 || resp[0]["problem_display"] != "Задача 4" {
+	if len(resp) != 1 || resp[0]["display"] != "Задача 4 (b)" || resp[0]["subproblem_id"] != float64(901) {
 		t.Errorf("unexpected coffins list: %v", resp)
 	}
 }

@@ -112,8 +112,6 @@ describe('currentSeries', () => {
       published: true,
       has_pdf: false,
       has_tex: false,
-      has_solution_tex: false,
-      has_solution_pdf: false,
       problems: [],
       ...over,
     }

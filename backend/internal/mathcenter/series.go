@@ -27,6 +27,17 @@ func ProblemDisplayName(number int) string {
 	return fmt.Sprintf("Задача %d", number)
 }
 
+// SubproblemDisplayName renders a subproblem's user-facing name: "Задача 5 (а)"
+// when it has a real label, or just the problem name "Задача 5" for a single-
+// part problem (sentinel label="").
+func SubproblemDisplayName(number int, label string) string {
+	base := ProblemDisplayName(number)
+	if label == "" {
+		return base
+	}
+	return fmt.Sprintf("%s (%s)", base, label)
+}
+
 // SubproblemLabels returns the first `count` Latin lowercase labels: a, b, c,
 // d, … Returns nil for count <= 0; clamps to MaxSubproblemsPerProblem.
 func SubproblemLabels(count int) []string {

@@ -1,24 +1,26 @@
-// Coffins ("гробы") data layer: the center-wide list + teacher actions
-// (mark/unmark/release) and the coffin's own «Разбор» (TeX/PDF/link). Mutations
-// invalidate the center coffins list so the Гробы tab refreshes.
+// Coffins ("гробы") + per-subproblem «Разбор» data layer: the center-wide list
+// + teacher actions (mark/unmark/release) and each subproblem's own разбор
+// (TeX/PDF/link). Everything keys on the subproblem id (the atomic unit).
+// Mutations invalidate the center coffins list AND the center's series list so
+// both the Гробы tab and the series Разбор tab refresh.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Coffin, PdfUploadURL } from '../types'
 import { useApiClient } from './context'
 import { queryKeys } from './keys'
 
-// CoffinAction is the lean response of mark/release/solution actions (no series
-// labels — the client refetches the list for those).
+// CoffinAction is the lean response of mark/release/solution actions (no labels
+// — the client refetches the list/series view for those).
 export interface CoffinAction {
-  id: number
-  problem_id: number
+  subproblem_id: number
+  is_coffin: boolean
   released_at?: string | null
   has_solution_tex: boolean
   has_solution_pdf: boolean
   solution_link?: string | null
 }
 
-// useCenterCoffins lists every coffin in a center for the Гробы tab.
+// useCenterCoffins lists every coffin subproblem in a center for the Гробы tab.
 export function useCenterCoffins(centerId: number) {
   const client = useApiClient()
   return useQuery<Coffin[]>({
@@ -29,30 +31,32 @@ export function useCenterCoffins(centerId: number) {
   })
 }
 
-// useMarkCoffin marks a problem as a coffin (teacher), re-opening submission.
+// useMarkCoffin marks a subproblem as a coffin (teacher), re-opening submission.
 export function useMarkCoffin(centerId: number) {
   const client = useApiClient()
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (problemId: number) =>
+    mutationFn: (subproblemId: number) =>
       client.request<CoffinAction>(
-        '/mathcenter/problems/' + problemId + '/coffin',
+        '/mathcenter/subproblems/' + subproblemId + '/coffin',
         { method: 'POST' },
       ),
-    onSuccess: () => invalidateCoffins(qc, centerId),
+    onSuccess: () => invalidate(qc, centerId),
   })
 }
 
-// useUnmarkCoffin removes the coffin (problem reverts to the series deadline).
+// useUnmarkCoffin clears the coffin flag (the subproblem reverts to the series
+// deadline).
 export function useUnmarkCoffin(centerId: number) {
   const client = useApiClient()
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (problemId: number) =>
-      client.request<void>('/mathcenter/problems/' + problemId + '/coffin', {
-        method: 'DELETE',
-      }),
-    onSuccess: () => invalidateCoffins(qc, centerId),
+    mutationFn: (subproblemId: number) =>
+      client.request<void>(
+        '/mathcenter/subproblems/' + subproblemId + '/coffin',
+        { method: 'DELETE' },
+      ),
+    onSuccess: () => invalidate(qc, centerId),
   })
 }
 
@@ -61,53 +65,55 @@ export function useReleaseCoffin(centerId: number) {
   const client = useApiClient()
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (coffinId: number) =>
+    mutationFn: (subproblemId: number) =>
       client.request<CoffinAction>(
-        '/mathcenter/coffins/' + coffinId + '/release',
+        '/mathcenter/subproblems/' + subproblemId + '/solution/release',
         { method: 'POST' },
       ),
-    onSuccess: () => invalidateCoffins(qc, centerId),
+    onSuccess: () => invalidate(qc, centerId),
   })
 }
 
-// --- coffin «Разбор» ---------------------------------------------------------
+// --- per-subproblem «Разбор» -------------------------------------------------
 
-// useCoffinSolutionTex fetches a coffin's разбор LaTeX (gated server-side).
-export function useCoffinSolutionTex(coffinId: number, enabled: boolean) {
+// useSubproblemSolutionTex fetches a subproblem's разбор LaTeX (gated server-side).
+export function useSubproblemSolutionTex(subproblemId: number, enabled: boolean) {
   const client = useApiClient()
   return useQuery<{ tex: string }>({
-    queryKey: queryKeys.coffinSolutionTex(coffinId),
+    queryKey: queryKeys.subproblemSolutionTex(subproblemId),
     queryFn: () =>
       client.request<{ tex: string }>(
-        '/mathcenter/coffins/' + coffinId + '/solution/tex',
+        '/mathcenter/subproblems/' + subproblemId + '/solution/tex',
       ),
-    enabled: enabled && coffinId > 0,
+    enabled: enabled && subproblemId > 0,
   })
 }
 
-export function usePutCoffinSolutionTex(coffinId: number, centerId: number) {
+export function usePutSubproblemSolutionTex(subproblemId: number, centerId: number) {
   const client = useApiClient()
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (tex: string) =>
       client.request<CoffinAction>(
-        '/mathcenter/coffins/' + coffinId + '/solution/tex',
+        '/mathcenter/subproblems/' + subproblemId + '/solution/tex',
         { method: 'PUT', body: { tex } },
       ),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.coffinSolutionTex(coffinId) })
-      invalidateCoffins(qc, centerId)
+      qc.invalidateQueries({
+        queryKey: queryKeys.subproblemSolutionTex(subproblemId),
+      })
+      invalidate(qc, centerId)
     },
   })
 }
 
-export function useUploadCoffinSolutionPdf(coffinId: number, centerId: number) {
+export function useUploadSubproblemSolutionPdf(subproblemId: number, centerId: number) {
   const client = useApiClient()
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (file: Blob): Promise<CoffinAction> => {
       const { object_key, upload_url } = await client.request<PdfUploadURL>(
-        '/mathcenter/coffins/' + coffinId + '/solution/pdf/upload-url',
+        '/mathcenter/subproblems/' + subproblemId + '/solution/pdf/upload-url',
         { method: 'POST' },
       )
       const put = await fetch(upload_url, {
@@ -119,30 +125,30 @@ export function useUploadCoffinSolutionPdf(coffinId: number, centerId: number) {
         throw new Error('PDF upload failed (' + put.status + ')')
       }
       return client.request<CoffinAction>(
-        '/mathcenter/coffins/' + coffinId + '/solution/pdf/publish',
+        '/mathcenter/subproblems/' + subproblemId + '/solution/pdf/publish',
         { method: 'POST', body: { object_key } },
       )
     },
-    onSuccess: () => invalidateCoffins(qc, centerId),
+    onSuccess: () => invalidate(qc, centerId),
   })
 }
 
-export function useSetCoffinSolutionLink(coffinId: number, centerId: number) {
+export function useSetSubproblemSolutionLink(subproblemId: number, centerId: number) {
   const client = useApiClient()
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (link: string) =>
       client.request<CoffinAction>(
-        '/mathcenter/coffins/' + coffinId + '/solution/link',
+        '/mathcenter/subproblems/' + subproblemId + '/solution/link',
         { method: 'PUT', body: { link } },
       ),
-    onSuccess: () => invalidateCoffins(qc, centerId),
+    onSuccess: () => invalidate(qc, centerId),
   })
 }
 
-function invalidateCoffins(
-  qc: ReturnType<typeof useQueryClient>,
-  centerId: number,
-) {
+function invalidate(qc: ReturnType<typeof useQueryClient>, centerId: number) {
   qc.invalidateQueries({ queryKey: queryKeys.centerCoffins(centerId) })
+  // The series view carries per-subproblem coffin/разбор metadata; refresh it
+  // so the Разбор tab badges + student gating update.
+  qc.invalidateQueries({ queryKey: queryKeys.seriesList(centerId) })
 }

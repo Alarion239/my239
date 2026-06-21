@@ -67,7 +67,9 @@ function defaultsFor(series: Series | undefined): CreateSeriesValues {
       series.problems.length > 0
         ? series.problems.map((p) => ({
             number: p.number,
-            subproblem_count: p.subproblems.length,
+            // Count only REAL subparts: a single-part problem carries one
+            // sentinel subproblem (label="") that means "0 declared subparts".
+            subproblem_count: p.subproblems.filter((s) => s.label !== '').length,
           }))
         : [{ number: 1, subproblem_count: 1 }],
   }

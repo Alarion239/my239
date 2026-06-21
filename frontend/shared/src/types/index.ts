@@ -208,12 +208,28 @@ export type HomeworkStatus =
   | 'rejected'
   | 'appealed'
 
-// SeriesProblem is one problem within a series, with its subproblem labels.
+// Subproblem is the atomic unit (5а, 5б, or the single-part "6"): its identity
+// plus its own per-subproblem разбор/coffin metadata. The sentinel single-part
+// subproblem has label="" and display equal to the problem name. A "coffin"
+// (гроб) stays open for submission past the series deadline until released.
+export interface Subproblem {
+  id: number
+  label: string
+  display: string
+  is_coffin: boolean
+  released_at?: string | null
+  has_solution_tex: boolean
+  has_solution_pdf: boolean
+  solution_link?: string | null
+}
+
+// SeriesProblem is one problem within a series — a display grouping of its
+// subproblems (which are the atomic units).
 export interface SeriesProblem {
   id: number
   number: number
   display_name: string
-  subproblems: string[]
+  subproblems: Subproblem[]
 }
 
 // Series mirrors the backend seriesView: a numbered homework set with a due
@@ -229,12 +245,6 @@ export interface Series {
   published_at?: string | null
   has_pdf: boolean
   has_tex: boolean
-  // Series-level «Разбор» (official solutions). Presence flags + external link;
-  // the client shows it to students only once due_at has passed (teachers
-  // always), and the GET endpoints enforce the same gate.
-  has_solution_tex: boolean
-  has_solution_pdf: boolean
-  solution_link?: string | null
   problems: SeriesProblem[]
 }
 
@@ -409,34 +419,30 @@ export interface SubproblemContext {
   coffin_released_at?: string | null
 }
 
-// CoffinSubproblem is one subpart of a coffin with the calling student's own
-// thread status (populated only for student callers).
-export interface CoffinSubproblem {
+// Coffin is one coffin SUBPROBLEM in a center
+// (GET /mathcenter/centers/{id}/coffins): a subproblem kept open for submission
+// past the deadline until its own разбор is released. `released_at` null = still
+// open. The trailing thread fields carry the calling student's own status
+// (absent/zero for teachers).
+export interface Coffin {
   subproblem_id: number
   subproblem_label: string
-  thread_id: number
-  current_status: HomeworkStatus
-  being_graded: boolean
-}
-
-// Coffin is one «гроб» in a center (GET /mathcenter/centers/{id}/coffins): a
-// problem kept open for submission past the deadline until its own разбор is
-// released. `released_at` null = still open.
-export interface Coffin {
-  id: number
   problem_id: number
+  problem_number: number
+  display: string
   series_id: number
   series_number: number
   series_name: string
   math_center_id: number
-  problem_number: number
-  problem_display: string
+  is_coffin: boolean
   released_at?: string | null
   has_solution_tex: boolean
   has_solution_pdf: boolean
   solution_link?: string | null
-  // Per-subpart status for the calling student (absent for teachers).
-  subproblems?: CoffinSubproblem[]
+  // Calling student's own thread status (zero/empty for teachers).
+  thread_id?: number
+  current_status?: HomeworkStatus
+  being_graded?: boolean
 }
 
 // QueueItem is one row of the grader queue (GET /homework/series/{id}/queue):

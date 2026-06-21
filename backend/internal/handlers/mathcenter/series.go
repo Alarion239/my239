@@ -64,31 +64,48 @@ type updateSeriesRequest struct {
 	Problems []problemSpec `json:"problems"`
 }
 
+// subproblemView is one subproblem (the atomic unit) with its per-subproblem
+// разбор/coffin metadata. The sentinel (label="") single-part subproblem is
+// included too — it is the unit for a one-part problem and can itself be a
+// coffin / carry a разбор. Solution metadata is populated only on the single-
+// series GET (the list endpoint leaves it zero to keep its query count flat).
+type subproblemView struct {
+	ID             int64      `json:"id"`
+	Label          string     `json:"label"`
+	Display        string     `json:"display"`
+	IsCoffin       bool       `json:"is_coffin"`
+	ReleasedAt     *time.Time `json:"released_at,omitempty"`
+	HasSolutionTex bool       `json:"has_solution_tex"`
+	HasSolutionPDF bool       `json:"has_solution_pdf"`
+	SolutionLink   *string    `json:"solution_link,omitempty"`
+}
+
 type problemView struct {
-	ID          int64    `json:"id"`
-	Number      int      `json:"number"`
-	DisplayName string   `json:"display_name"`
-	Subproblems []string `json:"subproblems"`
+	ID          int64            `json:"id"`
+	Number      int              `json:"number"`
+	DisplayName string           `json:"display_name"`
+	Subproblems []subproblemView `json:"subproblems"`
 }
 
 type seriesView struct {
-	ID           int64      `json:"id"`
-	MathCenterID int64      `json:"math_center_id"`
-	Number       int        `json:"number"`
-	Name         string     `json:"name"`
-	DisplayName  string     `json:"display_name"`
-	DueAt        time.Time  `json:"due_at"`
-	Published    bool       `json:"published"`
-	PublishedAt  *time.Time `json:"published_at,omitempty"`
-	HasPDF       bool       `json:"has_pdf"`
-	HasTex       bool       `json:"has_tex"`
-	// Series-level разбор presence. The client decides visibility (teacher
-	// always; student only once due_at has passed) — the GET endpoints enforce
-	// the same gate server-side.
-	HasSolutionTex bool          `json:"has_solution_tex"`
-	HasSolutionPDF bool          `json:"has_solution_pdf"`
-	SolutionLink   *string       `json:"solution_link,omitempty"`
-	Problems       []problemView `json:"problems"`
+	ID           int64         `json:"id"`
+	MathCenterID int64         `json:"math_center_id"`
+	Number       int           `json:"number"`
+	Name         string        `json:"name"`
+	DisplayName  string        `json:"display_name"`
+	DueAt        time.Time     `json:"due_at"`
+	Published    bool          `json:"published"`
+	PublishedAt  *time.Time    `json:"published_at,omitempty"`
+	HasPDF       bool          `json:"has_pdf"`
+	HasTex       bool          `json:"has_tex"`
+	Problems     []problemView `json:"problems"`
+}
+
+// subIdent is a subproblem's identity (id + label), unifying the single-series
+// and multi-series row types for assembleSeriesView.
+type subIdent struct {
+	ID    int64
+	Label string
 }
 
 // Handlers -------------------------------------------------------------------
@@ -959,7 +976,20 @@ func buildSeriesView(ctx context.Context, q *store.Queries, s store.MathCenterSe
 	if err != nil {
 		return nil, fmt.Errorf("list subproblems for series: %w", err)
 	}
-	return assembleSeriesView(s, problems, labelsByProblem(subs)), nil
+	// Per-subproblem разбор/coffin metadata for this series (single GET only).
+	sols, err := q.ListSubproblemSolutionsForSeries(ctx, s.ID)
+	if err != nil {
+		return nil, fmt.Errorf("list subproblem solutions for series: %w", err)
+	}
+	solByID := make(map[int64]store.ListSubproblemSolutionsForSeriesRow, len(sols))
+	for _, sol := range sols {
+		solByID[sol.SubproblemID] = sol
+	}
+	bySub := make(map[int64][]subIdent, len(problems))
+	for _, sp := range subs {
+		bySub[sp.ProblemID] = append(bySub[sp.ProblemID], subIdent{ID: sp.ID, Label: sp.Label})
+	}
+	return assembleSeriesView(s, problems, bySub, solByID), nil
 }
 
 // buildSeriesViews builds views for a set of series with a fixed two queries
@@ -986,68 +1016,62 @@ func buildSeriesViews(ctx context.Context, q *store.Queries, series []store.Math
 	for _, p := range problems {
 		problemsBySeries[p.SeriesID] = append(problemsBySeries[p.SeriesID], p)
 	}
-	byProblem := make(map[int64][]string, len(problems))
+	bySub := make(map[int64][]subIdent, len(problems))
 	for _, sp := range subs {
-		if sp.Label == "" {
-			continue
-		}
-		byProblem[sp.ProblemID] = append(byProblem[sp.ProblemID], sp.Label)
+		bySub[sp.ProblemID] = append(bySub[sp.ProblemID], subIdent{ID: sp.ID, Label: sp.Label})
 	}
 
+	// The list endpoint omits per-subproblem разбор/coffin metadata (no rows in
+	// the map) to keep its query count flat; the single-series GET fills it in.
 	out := make([]seriesView, 0, len(series))
 	for _, s := range series {
-		out = append(out, *assembleSeriesView(s, problemsBySeries[s.ID], byProblem))
+		out = append(out, *assembleSeriesView(s, problemsBySeries[s.ID], bySub, nil))
 	}
 	return out, nil
 }
 
-// labelsByProblem buckets the single-series subproblem rows into a
-// problem-id → labels map for assembleSeriesView.
-func labelsByProblem(subs []store.ListSubproblemsForSeriesRow) map[int64][]string {
-	byProblem := make(map[int64][]string, len(subs))
-	for _, sp := range subs {
-		// Hide sentinel labels: a problem declared with subproblem_count=0
-		// still has one anchor subproblem row (label=''), but should look
-		// subpart-less to clients.
-		if sp.Label == "" {
-			continue
-		}
-		byProblem[sp.ProblemID] = append(byProblem[sp.ProblemID], sp.Label)
-	}
-	return byProblem
-}
-
-// assembleSeriesView builds a seriesView from already-fetched problems and a
-// problem-id → subproblem-labels map.
-func assembleSeriesView(s store.MathCenterSeries, problems []store.MathCenterProblem, byProblem map[int64][]string) *seriesView {
+// assembleSeriesView builds a seriesView from already-fetched problems, a
+// problem-id → subproblems map, and an optional subproblem-id → разбор/coffin
+// metadata map (nil on the list path).
+func assembleSeriesView(s store.MathCenterSeries, problems []store.MathCenterProblem, bySub map[int64][]subIdent, solByID map[int64]store.ListSubproblemSolutionsForSeriesRow) *seriesView {
 	pviews := make([]problemView, 0, len(problems))
 	for _, p := range problems {
-		labels := byProblem[p.ID]
-		if labels == nil {
-			labels = []string{}
+		subs := bySub[p.ID]
+		svs := make([]subproblemView, 0, len(subs))
+		for _, sub := range subs {
+			sv := subproblemView{
+				ID:      sub.ID,
+				Label:   sub.Label,
+				Display: mc.SubproblemDisplayName(int(p.Number), sub.Label),
+			}
+			if sol, ok := solByID[sub.ID]; ok {
+				sv.IsCoffin = sol.IsCoffin
+				sv.ReleasedAt = sol.ReleasedAt
+				sv.HasSolutionTex = sol.HasSolutionTex
+				sv.HasSolutionPDF = sol.HasSolutionPdf
+				sv.SolutionLink = sol.SolutionLink
+			}
+			svs = append(svs, sv)
 		}
 		pviews = append(pviews, problemView{
 			ID:          p.ID,
 			Number:      int(p.Number),
 			DisplayName: mc.ProblemDisplayName(int(p.Number)),
-			Subproblems: labels,
+			Subproblems: svs,
 		})
 	}
 	return &seriesView{
-		ID:             s.ID,
-		MathCenterID:   s.MathCenterID,
-		Number:         int(s.Number),
-		Name:           s.Name,
-		DisplayName:    mc.SeriesDisplayName(int(s.Number), s.Name),
-		DueAt:          s.DueAt,
-		Published:      s.PublishedAt != nil,
-		PublishedAt:    s.PublishedAt,
-		HasPDF:         s.PdfObjectKey != nil,
-		HasTex:         s.TexSource != nil,
-		HasSolutionTex: s.SolutionTexSource != nil,
-		HasSolutionPDF: s.SolutionPdfObjectKey != nil,
-		SolutionLink:   s.SolutionLink,
-		Problems:       pviews,
+		ID:           s.ID,
+		MathCenterID: s.MathCenterID,
+		Number:       int(s.Number),
+		Name:         s.Name,
+		DisplayName:  mc.SeriesDisplayName(int(s.Number), s.Name),
+		DueAt:        s.DueAt,
+		Published:    s.PublishedAt != nil,
+		PublishedAt:  s.PublishedAt,
+		HasPDF:       s.PdfObjectKey != nil,
+		HasTex:       s.TexSource != nil,
+		Problems:     pviews,
 	}
 }
 

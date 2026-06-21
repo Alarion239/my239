@@ -19,7 +19,6 @@ import { StudentProblemList } from './student-problem-list'
 import { TeacherProblemStats } from './teacher-problem-stats'
 import { GraderQueue } from './grader-queue'
 import { TeacherGrid } from './teacher-grid'
-import { SeriesSolutionPanel } from './series-solution-panel'
 import { UploadSeriesDialog } from './upload-series-dialog'
 import { useSeriesContext } from './use-series-context'
 
@@ -181,17 +180,14 @@ function CenterSeries({
 
       {selected ? (
         isStudentView ? (
-          <>
-            <div className="grid gap-6 lg:grid-cols-2">
-              <StatementPanel series={selected} />
-              <Card>
-                <CardContent>
-                  <StudentSide centerId={centerId} series={selected} />
-                </CardContent>
-              </Card>
-            </div>
-            <SeriesSolutionPanel series={selected} isManager={false} />
-          </>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <StatementPanel series={selected} />
+            <Card>
+              <CardContent>
+                <StudentSide centerId={centerId} series={selected} />
+              </CardContent>
+            </Card>
+          </div>
         ) : (
           // Teachers get Условие / Разбор / Очередь / Таблица as full-width
           // tabs; разбор carries the statistics + coffin handling.
@@ -215,7 +211,7 @@ function StudentSide({ centerId, series }: { centerId: number; series: Series })
       {data ? (
         <StudentProblemListWithCounts
           centerId={centerId}
-          seriesId={series.id}
+          series={series}
           rollup={data}
           closed={closed}
         />
@@ -226,12 +222,12 @@ function StudentSide({ centerId, series }: { centerId: number; series: Series })
 
 function StudentProblemListWithCounts({
   centerId,
-  seriesId,
+  series,
   rollup,
   closed,
 }: {
   centerId: number
-  seriesId: number
+  series: Series
   rollup: MyRollup
   closed: boolean
 }) {
@@ -274,15 +270,15 @@ function StudentProblemListWithCounts({
       </div>
       {closed ? (
         <p className="text-xs text-muted">
-          Серия закрыта — отправка решений недоступна. Можно открыть задачу и
-          подать апелляцию по отклонённым.
+          Срок серии прошёл — обычные задачи сдавать нельзя (можно открыть задачу
+          и подать апелляцию по отклонённым). Открытые гробы остаются доступны.
         </p>
       ) : null}
       <StudentProblemList
         centerId={centerId}
-        seriesId={seriesId}
+        seriesId={series.id}
         rollup={rollup}
-        closed={closed}
+        series={series}
       />
     </div>
   )
@@ -309,14 +305,12 @@ function TeacherSeriesView({
       {tab === 'statement' ? (
         <StatementPanel series={series} />
       ) : tab === 'razbor' ? (
-        <div className="flex flex-col gap-6">
-          <Card>
-            <CardContent>
-              <StatsTab series={series} centerId={centerId} />
-            </CardContent>
-          </Card>
-          <SeriesSolutionPanel series={series} isManager />
-        </div>
+        // Per-subproblem statistics + разбор/coffin handling, all on one row.
+        <Card>
+          <CardContent>
+            <StatsTab series={series} centerId={centerId} />
+          </CardContent>
+        </Card>
       ) : (
         <Card>
           <CardContent>
@@ -386,12 +380,15 @@ function StatsTab({ series, centerId }: { series: Series; centerId: number }) {
         isError={isError}
         hasData={!!data}
       >
-        {data ? <TeacherProblemStats stats={data} centerId={centerId} /> : null}
+        {data ? (
+          <TeacherProblemStats stats={data} series={series} centerId={centerId} />
+        ) : null}
       </SidePanel>
       <p className="text-xs text-muted">
-        Нажмите на значок <span aria-hidden>☠</span> у задачи, чтобы отметить её
-        гробом — она останется открытой для сдачи после дедлайна, пока вы не
-        опубликуете разбор.
+        Каждая подзадача (5а, 5б, …) — самостоятельная единица: у неё свой разбор
+        и свой срок. Значок <span aria-hidden>☠</span> отмечает гроб (подзадача
+        остаётся открытой для сдачи после дедлайна, пока не выйдет разбор);
+        «Разбор» — чтобы прикрепить официальное решение.
       </p>
     </div>
   )

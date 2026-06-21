@@ -35,7 +35,7 @@ func expectSeriesForStats(mock pgxmock.PgxPoolIface, seriesID, centerID int64, n
 	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
 		WithArgs(seriesID).
 		WillReturnRows(mock.NewRows(seriesColumns).
-			AddRow(seriesID, centerID, int32(1), "S", now.Add(time.Hour), (*string)(nil), &now, now, (*string)(nil), (*string)(nil), (*string)(nil), (*string)(nil)))
+			AddRow(seriesID, centerID, int32(1), "S", now.Add(time.Hour), (*string)(nil), &now, now, (*string)(nil)))
 }
 
 func statRow(studentID, problemID int64, problemNumber int32, subproblemID int64, label, status string) []any {

@@ -62,17 +62,6 @@ type MathCenter struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
-type MathCenterCoffin struct {
-	ID                   int64      `json:"id"`
-	ProblemID            int64      `json:"problem_id"`
-	ReleasedAt           *time.Time `json:"released_at"`
-	SolutionTexSource    *string    `json:"solution_tex_source"`
-	SolutionPdfObjectKey *string    `json:"solution_pdf_object_key"`
-	SolutionLink         *string    `json:"solution_link"`
-	CreatedAt            time.Time  `json:"created_at"`
-	UpdatedAt            time.Time  `json:"updated_at"`
-}
-
 type MathCenterGroup struct {
 	ID           int64     `json:"id"`
 	MathCenterID int64     `json:"math_center_id"`
@@ -88,18 +77,15 @@ type MathCenterProblem struct {
 }
 
 type MathCenterSeries struct {
-	ID                   int64      `json:"id"`
-	MathCenterID         int64      `json:"math_center_id"`
-	Number               int32      `json:"number"`
-	Name                 string     `json:"name"`
-	DueAt                time.Time  `json:"due_at"`
-	PdfObjectKey         *string    `json:"pdf_object_key"`
-	PublishedAt          *time.Time `json:"published_at"`
-	CreatedAt            time.Time  `json:"created_at"`
-	TexSource            *string    `json:"tex_source"`
-	SolutionTexSource    *string    `json:"solution_tex_source"`
-	SolutionPdfObjectKey *string    `json:"solution_pdf_object_key"`
-	SolutionLink         *string    `json:"solution_link"`
+	ID           int64      `json:"id"`
+	MathCenterID int64      `json:"math_center_id"`
+	Number       int32      `json:"number"`
+	Name         string     `json:"name"`
+	DueAt        time.Time  `json:"due_at"`
+	PdfObjectKey *string    `json:"pdf_object_key"`
+	PublishedAt  *time.Time `json:"published_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+	TexSource    *string    `json:"tex_source"`
 }
 
 type MathCenterStudent struct {
@@ -114,6 +100,18 @@ type MathCenterSubproblem struct {
 	ProblemID int64     `json:"problem_id"`
 	Label     string    `json:"label"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+type MathCenterSubproblemSolution struct {
+	ID                   int64      `json:"id"`
+	SubproblemID         int64      `json:"subproblem_id"`
+	IsCoffin             bool       `json:"is_coffin"`
+	ReleasedAt           *time.Time `json:"released_at"`
+	SolutionTexSource    *string    `json:"solution_tex_source"`
+	SolutionPdfObjectKey *string    `json:"solution_pdf_object_key"`
+	SolutionLink         *string    `json:"solution_link"`
+	CreatedAt            time.Time  `json:"created_at"`
+	UpdatedAt            time.Time  `json:"updated_at"`
 }
 
 type MathCenterTeacher struct {

@@ -10,38 +10,11 @@ import (
 	"time"
 )
 
-const clearSeriesSolutionTex = `-- name: ClearSeriesSolutionTex :one
-UPDATE math_center_series
-SET solution_tex_source = NULL
-WHERE id = $1
-RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source, solution_tex_source, solution_pdf_object_key, solution_link
-`
-
-func (q *Queries) ClearSeriesSolutionTex(ctx context.Context, id int64) (MathCenterSeries, error) {
-	row := q.db.QueryRow(ctx, clearSeriesSolutionTex, id)
-	var i MathCenterSeries
-	err := row.Scan(
-		&i.ID,
-		&i.MathCenterID,
-		&i.Number,
-		&i.Name,
-		&i.DueAt,
-		&i.PdfObjectKey,
-		&i.PublishedAt,
-		&i.CreatedAt,
-		&i.TexSource,
-		&i.SolutionTexSource,
-		&i.SolutionPdfObjectKey,
-		&i.SolutionLink,
-	)
-	return i, err
-}
-
 const clearSeriesTex = `-- name: ClearSeriesTex :one
 UPDATE math_center_series
 SET tex_source = NULL
 WHERE id = $1
-RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source, solution_tex_source, solution_pdf_object_key, solution_link
+RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source
 `
 
 func (q *Queries) ClearSeriesTex(ctx context.Context, id int64) (MathCenterSeries, error) {
@@ -57,9 +30,6 @@ func (q *Queries) ClearSeriesTex(ctx context.Context, id int64) (MathCenterSerie
 		&i.PublishedAt,
 		&i.CreatedAt,
 		&i.TexSource,
-		&i.SolutionTexSource,
-		&i.SolutionPdfObjectKey,
-		&i.SolutionLink,
 	)
 	return i, err
 }
@@ -90,7 +60,7 @@ func (q *Queries) CreateProblem(ctx context.Context, arg CreateProblemParams) (M
 const createSeries = `-- name: CreateSeries :one
 INSERT INTO math_center_series (math_center_id, number, name, due_at)
 VALUES ($1, $2, $3, $4)
-RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source, solution_tex_source, solution_pdf_object_key, solution_link
+RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source
 `
 
 type CreateSeriesParams struct {
@@ -118,9 +88,6 @@ func (q *Queries) CreateSeries(ctx context.Context, arg CreateSeriesParams) (Mat
 		&i.PublishedAt,
 		&i.CreatedAt,
 		&i.TexSource,
-		&i.SolutionTexSource,
-		&i.SolutionPdfObjectKey,
-		&i.SolutionLink,
 	)
 	return i, err
 }
@@ -197,7 +164,7 @@ func (q *Queries) GetProblemCenter(ctx context.Context, id int64) (GetProblemCen
 }
 
 const getSeries = `-- name: GetSeries :one
-SELECT id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source, solution_tex_source, solution_pdf_object_key, solution_link
+SELECT id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source
 FROM math_center_series
 WHERE id = $1
 `
@@ -215,24 +182,8 @@ func (q *Queries) GetSeries(ctx context.Context, id int64) (MathCenterSeries, er
 		&i.PublishedAt,
 		&i.CreatedAt,
 		&i.TexSource,
-		&i.SolutionTexSource,
-		&i.SolutionPdfObjectKey,
-		&i.SolutionLink,
 	)
 	return i, err
-}
-
-const getSeriesSolutionTex = `-- name: GetSeriesSolutionTex :one
-SELECT solution_tex_source
-FROM math_center_series
-WHERE id = $1
-`
-
-func (q *Queries) GetSeriesSolutionTex(ctx context.Context, id int64) (*string, error) {
-	row := q.db.QueryRow(ctx, getSeriesSolutionTex, id)
-	var solution_tex_source *string
-	err := row.Scan(&solution_tex_source)
-	return solution_tex_source, err
 }
 
 const getSeriesTex = `-- name: GetSeriesTex :one
@@ -356,7 +307,7 @@ func (q *Queries) ListProblemsForSeriesIDs(ctx context.Context, seriesIds []int6
 }
 
 const listPublishedSeriesForCenter = `-- name: ListPublishedSeriesForCenter :many
-SELECT id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source, solution_tex_source, solution_pdf_object_key, solution_link
+SELECT id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source
 FROM math_center_series
 WHERE math_center_id = $1
   AND published_at IS NOT NULL
@@ -382,9 +333,6 @@ func (q *Queries) ListPublishedSeriesForCenter(ctx context.Context, mathCenterID
 			&i.PublishedAt,
 			&i.CreatedAt,
 			&i.TexSource,
-			&i.SolutionTexSource,
-			&i.SolutionPdfObjectKey,
-			&i.SolutionLink,
 		); err != nil {
 			return nil, err
 		}
@@ -397,7 +345,7 @@ func (q *Queries) ListPublishedSeriesForCenter(ctx context.Context, mathCenterID
 }
 
 const listSeriesForCenter = `-- name: ListSeriesForCenter :many
-SELECT id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source, solution_tex_source, solution_pdf_object_key, solution_link
+SELECT id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source
 FROM math_center_series
 WHERE math_center_id = $1
 ORDER BY number ASC
@@ -422,9 +370,6 @@ func (q *Queries) ListSeriesForCenter(ctx context.Context, mathCenterID int64) (
 			&i.PublishedAt,
 			&i.CreatedAt,
 			&i.TexSource,
-			&i.SolutionTexSource,
-			&i.SolutionPdfObjectKey,
-			&i.SolutionLink,
 		); err != nil {
 			return nil, err
 		}
@@ -513,7 +458,7 @@ UPDATE math_center_series
 SET pdf_object_key = $2,
     published_at   = NOW()
 WHERE id = $1
-RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source, solution_tex_source, solution_pdf_object_key, solution_link
+RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source
 `
 
 type PublishSeriesParams struct {
@@ -537,109 +482,6 @@ func (q *Queries) PublishSeries(ctx context.Context, arg PublishSeriesParams) (M
 		&i.PublishedAt,
 		&i.CreatedAt,
 		&i.TexSource,
-		&i.SolutionTexSource,
-		&i.SolutionPdfObjectKey,
-		&i.SolutionLink,
-	)
-	return i, err
-}
-
-const setSeriesSolutionLink = `-- name: SetSeriesSolutionLink :one
-UPDATE math_center_series
-SET solution_link = $2
-WHERE id = $1
-RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source, solution_tex_source, solution_pdf_object_key, solution_link
-`
-
-type SetSeriesSolutionLinkParams struct {
-	ID           int64   `json:"id"`
-	SolutionLink *string `json:"solution_link"`
-}
-
-// $2 = external/video link (set) or NULL (clear).
-func (q *Queries) SetSeriesSolutionLink(ctx context.Context, arg SetSeriesSolutionLinkParams) (MathCenterSeries, error) {
-	row := q.db.QueryRow(ctx, setSeriesSolutionLink, arg.ID, arg.SolutionLink)
-	var i MathCenterSeries
-	err := row.Scan(
-		&i.ID,
-		&i.MathCenterID,
-		&i.Number,
-		&i.Name,
-		&i.DueAt,
-		&i.PdfObjectKey,
-		&i.PublishedAt,
-		&i.CreatedAt,
-		&i.TexSource,
-		&i.SolutionTexSource,
-		&i.SolutionPdfObjectKey,
-		&i.SolutionLink,
-	)
-	return i, err
-}
-
-const setSeriesSolutionPdf = `-- name: SetSeriesSolutionPdf :one
-UPDATE math_center_series
-SET solution_pdf_object_key = $2
-WHERE id = $1
-RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source, solution_tex_source, solution_pdf_object_key, solution_link
-`
-
-type SetSeriesSolutionPdfParams struct {
-	ID                   int64   `json:"id"`
-	SolutionPdfObjectKey *string `json:"solution_pdf_object_key"`
-}
-
-// $2 = object key (set) or NULL (clear after a best-effort blob delete).
-func (q *Queries) SetSeriesSolutionPdf(ctx context.Context, arg SetSeriesSolutionPdfParams) (MathCenterSeries, error) {
-	row := q.db.QueryRow(ctx, setSeriesSolutionPdf, arg.ID, arg.SolutionPdfObjectKey)
-	var i MathCenterSeries
-	err := row.Scan(
-		&i.ID,
-		&i.MathCenterID,
-		&i.Number,
-		&i.Name,
-		&i.DueAt,
-		&i.PdfObjectKey,
-		&i.PublishedAt,
-		&i.CreatedAt,
-		&i.TexSource,
-		&i.SolutionTexSource,
-		&i.SolutionPdfObjectKey,
-		&i.SolutionLink,
-	)
-	return i, err
-}
-
-const setSeriesSolutionTex = `-- name: SetSeriesSolutionTex :one
-UPDATE math_center_series
-SET solution_tex_source = $2
-WHERE id = $1
-RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source, solution_tex_source, solution_pdf_object_key, solution_link
-`
-
-type SetSeriesSolutionTexParams struct {
-	ID                int64   `json:"id"`
-	SolutionTexSource *string `json:"solution_tex_source"`
-}
-
-// Stores/replaces the series-level разбор LaTeX. Does NOT touch published_at:
-// разбор visibility is gated on due_at, not publication.
-func (q *Queries) SetSeriesSolutionTex(ctx context.Context, arg SetSeriesSolutionTexParams) (MathCenterSeries, error) {
-	row := q.db.QueryRow(ctx, setSeriesSolutionTex, arg.ID, arg.SolutionTexSource)
-	var i MathCenterSeries
-	err := row.Scan(
-		&i.ID,
-		&i.MathCenterID,
-		&i.Number,
-		&i.Name,
-		&i.DueAt,
-		&i.PdfObjectKey,
-		&i.PublishedAt,
-		&i.CreatedAt,
-		&i.TexSource,
-		&i.SolutionTexSource,
-		&i.SolutionPdfObjectKey,
-		&i.SolutionLink,
 	)
 	return i, err
 }
@@ -649,7 +491,7 @@ UPDATE math_center_series
 SET tex_source  = $2,
     published_at = COALESCE(published_at, NOW())
 WHERE id = $1
-RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source, solution_tex_source, solution_pdf_object_key, solution_link
+RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source
 `
 
 type SetSeriesTexParams struct {
@@ -673,9 +515,6 @@ func (q *Queries) SetSeriesTex(ctx context.Context, arg SetSeriesTexParams) (Mat
 		&i.PublishedAt,
 		&i.CreatedAt,
 		&i.TexSource,
-		&i.SolutionTexSource,
-		&i.SolutionPdfObjectKey,
-		&i.SolutionLink,
 	)
 	return i, err
 }
@@ -686,7 +525,7 @@ SET number = $2,
     name   = $3,
     due_at = $4
 WHERE id = $1
-RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source, solution_tex_source, solution_pdf_object_key, solution_link
+RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source
 `
 
 type UpdateSeriesParams struct {
@@ -714,9 +553,6 @@ func (q *Queries) UpdateSeries(ctx context.Context, arg UpdateSeriesParams) (Mat
 		&i.PublishedAt,
 		&i.CreatedAt,
 		&i.TexSource,
-		&i.SolutionTexSource,
-		&i.SolutionPdfObjectKey,
-		&i.SolutionLink,
 	)
 	return i, err
 }

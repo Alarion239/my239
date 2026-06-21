@@ -12,7 +12,6 @@ type Querier interface {
 	AddStudentToGroup(ctx context.Context, arg AddStudentToGroupParams) (MathCenterStudent, error)
 	AddTeacherToCenter(ctx context.Context, arg AddTeacherToCenterParams) (MathCenterTeacher, error)
 	AppendEvent(ctx context.Context, arg AppendEventParams) (HomeworkThreadEvent, error)
-	ClearSeriesSolutionTex(ctx context.Context, id int64) (MathCenterSeries, error)
 	ClearSeriesTex(ctx context.Context, id int64) (MathCenterSeries, error)
 	CountUsers(ctx context.Context) (int64, error)
 	// The cast keeps the parameter a plain int64: invitation_token_id is nullable
@@ -36,14 +35,12 @@ type Querier interface {
 	DeleteMathCenterGroup(ctx context.Context, id int64) (int64, error)
 	DeleteProblemsForSeries(ctx context.Context, seriesID int64) error
 	DeleteSeries(ctx context.Context, id int64) (int64, error)
+	// Used when unmarking a coffin that carries no разбор content (clean up the row).
+	DeleteSubproblemSolution(ctx context.Context, subproblemID int64) (int64, error)
 	// INSERT ... ON CONFLICT DO UPDATE always returns a row, regardless of
 	// whether we created it now or matched an existing one. The DO UPDATE bumps
 	// updated_at so we can see activity even on no-op upserts.
 	FindOrCreateThread(ctx context.Context, arg FindOrCreateThreadParams) (HomeworkThread, error)
-	GetCoffin(ctx context.Context, id int64) (MathCenterCoffin, error)
-	GetCoffinByProblem(ctx context.Context, problemID int64) (MathCenterCoffin, error)
-	// Resolve a coffin to its problem + center, for authorizing release/solution.
-	GetCoffinCenter(ctx context.Context, id int64) (GetCoffinCenterRow, error)
 	GetEventKind(ctx context.Context, id int64) (string, error)
 	GetGroup(ctx context.Context, id int64) (MathCenterGroup, error)
 	GetInvitationTokenByValue(ctx context.Context, token string) (InvitationToken, error)
@@ -54,13 +51,17 @@ type Querier interface {
 	GetProblemCenter(ctx context.Context, id int64) (GetProblemCenterRow, error)
 	GetRefreshTokenByHash(ctx context.Context, tokenHash []byte) (RefreshToken, error)
 	GetSeries(ctx context.Context, id int64) (MathCenterSeries, error)
-	GetSeriesSolutionTex(ctx context.Context, id int64) (*string, error)
 	GetSeriesTex(ctx context.Context, id int64) (*string, error)
 	GetStudentByUserID(ctx context.Context, userID int64) (GetStudentByUserIDRow, error)
 	// One-shot fetch of "what center/series/problem does this subproblem belong
 	// to", used at the start of every event-creating handler so we don't have to
 	// chain three queries.
 	GetSubproblemContext(ctx context.Context, id int64) (GetSubproblemContextRow, error)
+	GetSubproblemSolution(ctx context.Context, subproblemID int64) (MathCenterSubproblemSolution, error)
+	// Resolve a subproblem to its problem + series + center (+ the series deadline),
+	// for authorizing coffin/разбор actions and gating student visibility. Returns
+	// the row even when no solution row exists yet.
+	GetSubproblemSolutionCenter(ctx context.Context, id int64) (GetSubproblemSolutionCenterRow, error)
 	GetThread(ctx context.Context, id int64) (HomeworkThread, error)
 	GetThreadByStudentAndSubproblem(ctx context.Context, arg GetThreadByStudentAndSubproblemParams) (HomeworkThread, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
@@ -76,12 +77,12 @@ type Querier interface {
 	InsertEventPhoto(ctx context.Context, arg InsertEventPhotoParams) error
 	IsStudentInCenter(ctx context.Context, arg IsStudentInCenterParams) (bool, error)
 	IsTeacherInCenter(ctx context.Context, arg IsTeacherInCenterParams) (bool, error)
-	// Every coffin in a center with the labels the UI needs (series + problem),
+	// Every coffin subproblem in a center with the labels the Гробы tab needs,
 	// newest series first. Used by the center-wide "Гробы" tab.
 	ListCenterCoffins(ctx context.Context, mathCenterID int64) ([]ListCenterCoffinsRow, error)
 	ListCentersForTeacher(ctx context.Context, userID int64) ([]ListCentersForTeacherRow, error)
-	// For every coffin in a center, the problem's subproblems with the calling
-	// student's thread status — so the Гробы tab can show tiles + a "Сдать" link.
+	// Each coffin subproblem in a center with the calling student's thread status,
+	// so the Гробы tab can render a tile + a "Сдать" link.
 	ListCoffinSubproblemsForStudent(ctx context.Context, arg ListCoffinSubproblemsForStudentParams) ([]ListCoffinSubproblemsForStudentRow, error)
 	ListEventPhotosForEvents(ctx context.Context, eventIds []int64) ([]HomeworkThreadEventPhoto, error)
 	// Items needing grading: 'submitted' or 'appealed', not locked by someone
@@ -100,6 +101,10 @@ type Querier interface {
 	ListSeriesForCenter(ctx context.Context, mathCenterID int64) ([]MathCenterSeries, error)
 	ListStudentsForCenter(ctx context.Context, mathCenterID int64) ([]ListStudentsForCenterRow, error)
 	ListStudentsForCenters(ctx context.Context, centerIds []int64) ([]ListStudentsForCentersRow, error)
+	// Per-subproblem разбор/coffin metadata for one series, so the teacher Разбор
+	// tab and student views can show "has разбор / released / is coffin" per
+	// subproblem without N+1 fetches. Only subproblems with a row appear.
+	ListSubproblemSolutionsForSeries(ctx context.Context, seriesID int64) ([]ListSubproblemSolutionsForSeriesRow, error)
 	ListSubproblemsForSeries(ctx context.Context, seriesID int64) ([]ListSubproblemsForSeriesRow, error)
 	ListSubproblemsForSeriesIDs(ctx context.Context, seriesIds []int64) ([]ListSubproblemsForSeriesIDsRow, error)
 	// Like ListCentersForTeacher, but also returns the math_center_teachers row id
@@ -109,19 +114,14 @@ type Querier interface {
 	ListTeachersForCenters(ctx context.Context, centerIds []int64) ([]ListTeachersForCentersRow, error)
 	ListThreadEvents(ctx context.Context, threadID int64) ([]HomeworkThreadEvent, error)
 	ListUsers(ctx context.Context) ([]User, error)
-	// Coffins ("гробы"): hard problems kept open for submission past the series
-	// deadline until their own разбор is released. A problem is a coffin iff a row
-	// exists. See migration 000010.
-	// Idempotent mark: re-marking an existing coffin is a no-op touch.
-	MarkCoffin(ctx context.Context, problemID int64) (MathCenterCoffin, error)
 	// Sets the PDF object key and stamps published_at to NOW(). Used both for
 	// first-time publishing and re-uploads (we just overwrite; the caller is
 	// responsible for deleting the prior key first if needed).
 	PublishSeries(ctx context.Context, arg PublishSeriesParams) (MathCenterSeries, error)
 	ReleaseClaim(ctx context.Context, arg ReleaseClaimParams) (int64, error)
-	// Stamps released_at (first release wins) — closes submission + makes the
-	// coffin's solution available.
-	ReleaseCoffin(ctx context.Context, id int64) (MathCenterCoffin, error)
+	// Stamp released_at (first release wins) — closes a coffin's submission window
+	// and makes its разбор available.
+	ReleaseSubproblemSolution(ctx context.Context, subproblemID int64) (MathCenterSubproblemSolution, error)
 	RemoveStudent(ctx context.Context, id int64) (int64, error)
 	RemoveTeacher(ctx context.Context, id int64) (int64, error)
 	RevokeAllRefreshTokensForUser(ctx context.Context, userID int64) error
@@ -136,20 +136,14 @@ type Querier interface {
 	// distinct line). Roster scoping mirrors TeacherSeriesGrid: every student of a
 	// group in the series's math center.
 	SeriesProblemStats(ctx context.Context, id int64) ([]SeriesProblemStatsRow, error)
-	SetCoffinSolutionLink(ctx context.Context, arg SetCoffinSolutionLinkParams) (MathCenterCoffin, error)
-	SetCoffinSolutionPdf(ctx context.Context, arg SetCoffinSolutionPdfParams) (MathCenterCoffin, error)
-	SetCoffinSolutionTex(ctx context.Context, arg SetCoffinSolutionTexParams) (MathCenterCoffin, error)
-	// $2 = external/video link (set) or NULL (clear).
-	SetSeriesSolutionLink(ctx context.Context, arg SetSeriesSolutionLinkParams) (MathCenterSeries, error)
-	// $2 = object key (set) or NULL (clear after a best-effort blob delete).
-	SetSeriesSolutionPdf(ctx context.Context, arg SetSeriesSolutionPdfParams) (MathCenterSeries, error)
-	// Stores/replaces the series-level разбор LaTeX. Does NOT touch published_at:
-	// разбор visibility is gated on due_at, not publication.
-	SetSeriesSolutionTex(ctx context.Context, arg SetSeriesSolutionTexParams) (MathCenterSeries, error)
 	// Stores or replaces the raw LaTeX source. Also stamps published_at if
 	// the series wasn't already published, mirroring the PDF publish flow:
 	// a series with any rendered content is considered visible to students.
 	SetSeriesTex(ctx context.Context, arg SetSeriesTexParams) (MathCenterSeries, error)
+	SetSubproblemSolutionLink(ctx context.Context, arg SetSubproblemSolutionLinkParams) (MathCenterSubproblemSolution, error)
+	SetSubproblemSolutionPdf(ctx context.Context, arg SetSubproblemSolutionPdfParams) (MathCenterSubproblemSolution, error)
+	// Upsert: authoring разбор on a non-coffin subproblem creates the row.
+	SetSubproblemSolutionTex(ctx context.Context, arg SetSubproblemSolutionTexParams) (MathCenterSubproblemSolution, error)
 	SetTeacherHead(ctx context.Context, arg SetTeacherHeadParams) (int64, error)
 	SetUserAdmin(ctx context.Context, arg SetUserAdminParams) error
 	// One-row summary: accepted / rejected / pending. Pending lumps 'ungraded',
@@ -173,7 +167,6 @@ type Querier interface {
 	// Returns the row when the claim is granted (no live holder, or the caller
 	// already holds it). Returns no rows when someone else holds a live claim.
 	TryClaim(ctx context.Context, arg TryClaimParams) (HomeworkThread, error)
-	UnmarkCoffin(ctx context.Context, problemID int64) (int64, error)
 	UpdateSeries(ctx context.Context, arg UpdateSeriesParams) (MathCenterSeries, error)
 	UpdateThreadAfterAppeal(ctx context.Context, arg UpdateThreadAfterAppealParams) error
 	// One statement does all four things atomically: set new status from
@@ -187,6 +180,12 @@ type Querier interface {
 	// appeal. The handler passes that rollback status in $2.
 	UpdateThreadAfterRetract(ctx context.Context, arg UpdateThreadAfterRetractParams) error
 	UpdateThreadAfterSubmit(ctx context.Context, arg UpdateThreadAfterSubmitParams) error
+	// Per-subproblem official solutions ("Разбор") + coffin state. A row exists iff
+	// the subproblem is a coffin OR carries a разбор. See migration 000011.
+	// A "coffin" (гроб) is a subproblem kept open for submission past the series
+	// deadline until its разбор is released (released_at).
+	// Mark/unmark a subproblem as a coffin without disturbing разбор fields.
+	UpsertCoffinFlag(ctx context.Context, arg UpsertCoffinFlagParams) (MathCenterSubproblemSolution, error)
 }
 
 var _ Querier = (*Queries)(nil)
