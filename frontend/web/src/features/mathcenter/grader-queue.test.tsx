@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { useState } from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ApiClient, ApiClientProvider, type TokenStore } from '@my239/shared'
@@ -13,7 +11,7 @@ const noopStore: TokenStore = {
   clear: async () => {},
 }
 
-const queueItem = {
+const available = {
   thread_id: 55,
   student_user_id: 1,
   student_name: 'Аня Смирнова',
@@ -23,24 +21,30 @@ const queueItem = {
   problem_display: 'Задача 3',
   current_status: 'submitted',
   updated_at: '2030-01-01T10:00:00Z',
+  claim_holder_user_id: null,
+  claim_expires_at: null,
 }
 
-function stubFetch() {
-  let mineRequested = false
+// A task the caller currently holds a live claim on (the backend only returns
+// the caller's own live claims) — should surface under "В работе".
+const claimedByMe = {
+  thread_id: 56,
+  student_user_id: 2,
+  student_name: 'Борис Иванов',
+  subproblem_id: 43,
+  subproblem_label: 'а',
+  problem_number: 4,
+  problem_display: 'Задача 4',
+  current_status: 'submitted',
+  updated_at: '2030-01-01T11:00:00Z',
+  claim_holder_user_id: 9,
+  claim_expires_at: '2999-01-01T00:00:00Z',
+}
+
+function stubFetch(items: unknown[]) {
   const fetchMock = vi.fn(async (url: string) => {
-    if (typeof url === 'string' && url.includes('/grader-stats')) {
-      return new Response(
-        JSON.stringify({
-          pending_count: 4,
-          my_claimed_count: 1,
-          my_appeals_count: 2,
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      )
-    }
     if (typeof url === 'string' && url.includes('/queue')) {
-      if (url.includes('mine=true')) mineRequested = true
-      return new Response(JSON.stringify([queueItem]), {
+      return new Response(JSON.stringify(items), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -51,14 +55,10 @@ function stubFetch() {
     })
   })
   vi.stubGlobal('fetch', fetchMock)
-  return () => mineRequested
 }
 
 function Harness() {
-  const [mine, setMine] = useState(false)
-  return (
-    <GraderQueue centerId={1} seriesId={7} mine={mine} onMineChange={setMine} />
-  )
+  return <GraderQueue centerId={1} seriesId={7} />
 }
 
 function renderQueue() {
@@ -83,7 +83,7 @@ afterEach(() => {
 
 describe('GraderQueue', () => {
   it('renders a queue row linking to the thread', async () => {
-    stubFetch()
+    stubFetch([available])
     renderQueue()
 
     expect(await screen.findByText('Аня Смирнова')).toBeInTheDocument()
@@ -91,18 +91,19 @@ describe('GraderQueue', () => {
     // The row links to the thread page.
     const link = document.querySelector('a[href="/mathcenter/1/series/7/thread/55"]')
     expect(link).not.toBeNull()
+    // No "только мои" filter any more.
+    expect(screen.queryByLabelText('Только мои')).toBeNull()
   })
 
-  it('refetches with ?mine=true when "Только мои" is toggled', async () => {
-    const wasMineRequested = stubFetch()
-    const user = userEvent.setup()
+  it('pulls claimed tasks into a "В работе" section above the available pool', async () => {
+    stubFetch([available, claimedByMe])
     renderQueue()
 
-    await screen.findByText('Аня Смирнова')
-    expect(wasMineRequested()).toBe(false)
-
-    await user.click(screen.getByLabelText('Только мои'))
-
-    await waitFor(() => expect(wasMineRequested()).toBe(true))
+    expect(await screen.findByText('В работе')).toBeInTheDocument()
+    expect(screen.getByText('Доступно к проверке')).toBeInTheDocument()
+    // The claimed task ("В работе") appears before the available one in the DOM.
+    const mine = screen.getByText('Борис Иванов')
+    const free = screen.getByText('Аня Смирнова')
+    expect(mine.compareDocumentPosition(free) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 })
