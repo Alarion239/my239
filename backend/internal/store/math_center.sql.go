@@ -57,6 +57,20 @@ func (q *Queries) AddTeacherToCenter(ctx context.Context, arg AddTeacherToCenter
 	return i, err
 }
 
+const countHeadTeachersForCenter = `-- name: CountHeadTeachersForCenter :one
+SELECT COUNT(*)
+FROM math_center_teachers
+WHERE math_center_id = $1
+  AND is_head_teacher = TRUE
+`
+
+func (q *Queries) CountHeadTeachersForCenter(ctx context.Context, mathCenterID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countHeadTeachersForCenter, mathCenterID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createMathCenter = `-- name: CreateMathCenter :one
 INSERT INTO math_centers (graduation_year)
 VALUES ($1)
@@ -152,6 +166,24 @@ func (q *Queries) GetMathCenter(ctx context.Context, id int64) (MathCenter, erro
 	return i, err
 }
 
+const getStudent = `-- name: GetStudent :one
+SELECT id, user_id, group_id, created_at
+FROM math_center_students
+WHERE id = $1
+`
+
+func (q *Queries) GetStudent(ctx context.Context, id int64) (MathCenterStudent, error) {
+	row := q.db.QueryRow(ctx, getStudent, id)
+	var i MathCenterStudent
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.GroupID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getStudentByUserID = `-- name: GetStudentByUserID :one
 SELECT s.id          AS id,
        s.user_id     AS user_id,
@@ -186,6 +218,47 @@ func (q *Queries) GetStudentByUserID(ctx context.Context, userID int64) (GetStud
 		&i.GraduationYear,
 	)
 	return i, err
+}
+
+const getTeacher = `-- name: GetTeacher :one
+SELECT id, user_id, math_center_id, is_head_teacher, created_at
+FROM math_center_teachers
+WHERE id = $1
+`
+
+func (q *Queries) GetTeacher(ctx context.Context, id int64) (MathCenterTeacher, error) {
+	row := q.db.QueryRow(ctx, getTeacher, id)
+	var i MathCenterTeacher
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.MathCenterID,
+		&i.IsHeadTeacher,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const isHeadTeacherInCenter = `-- name: IsHeadTeacherInCenter :one
+SELECT EXISTS (
+    SELECT 1
+    FROM math_center_teachers
+    WHERE user_id = $1
+      AND math_center_id = $2
+      AND is_head_teacher = TRUE
+) AS is_head_teacher
+`
+
+type IsHeadTeacherInCenterParams struct {
+	UserID       int64 `json:"user_id"`
+	MathCenterID int64 `json:"math_center_id"`
+}
+
+func (q *Queries) IsHeadTeacherInCenter(ctx context.Context, arg IsHeadTeacherInCenterParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isHeadTeacherInCenter, arg.UserID, arg.MathCenterID)
+	var is_head_teacher bool
+	err := row.Scan(&is_head_teacher)
+	return is_head_teacher, err
 }
 
 const listCentersForTeacher = `-- name: ListCentersForTeacher :many
@@ -641,6 +714,69 @@ WHERE id = $1
 
 func (q *Queries) RemoveTeacher(ctx context.Context, id int64) (int64, error) {
 	result, err := q.db.Exec(ctx, removeTeacher, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const searchUsers = `-- name: SearchUsers :many
+SELECT id, username, first_name, middle_name, last_name
+FROM users
+WHERE username ILIKE '%' || $1::text || '%'
+   OR first_name ILIKE '%' || $1::text || '%'
+   OR last_name ILIKE '%' || $1::text || '%'
+ORDER BY username ASC
+LIMIT 20
+`
+
+type SearchUsersRow struct {
+	ID         int64   `json:"id"`
+	Username   string  `json:"username"`
+	FirstName  string  `json:"first_name"`
+	MiddleName *string `json:"middle_name"`
+	LastName   string  `json:"last_name"`
+}
+
+func (q *Queries) SearchUsers(ctx context.Context, q_ string) ([]SearchUsersRow, error) {
+	rows, err := q.db.Query(ctx, searchUsers, q_)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchUsersRow{}
+	for rows.Next() {
+		var i SearchUsersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Username,
+			&i.FirstName,
+			&i.MiddleName,
+			&i.LastName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setStudentGroup = `-- name: SetStudentGroup :execrows
+UPDATE math_center_students
+SET group_id = $2
+WHERE id = $1
+`
+
+type SetStudentGroupParams struct {
+	ID      int64 `json:"id"`
+	GroupID int64 `json:"group_id"`
+}
+
+func (q *Queries) SetStudentGroup(ctx context.Context, arg SetStudentGroupParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setStudentGroup, arg.ID, arg.GroupID)
 	if err != nil {
 		return 0, err
 	}

@@ -13,6 +13,7 @@ type Querier interface {
 	AddTeacherToCenter(ctx context.Context, arg AddTeacherToCenterParams) (MathCenterTeacher, error)
 	AppendEvent(ctx context.Context, arg AppendEventParams) (HomeworkThreadEvent, error)
 	ClearSeriesTex(ctx context.Context, id int64) (MathCenterSeries, error)
+	CountHeadTeachersForCenter(ctx context.Context, mathCenterID int64) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
 	// The cast keeps the parameter a plain int64: invitation_token_id is nullable
 	// on the column (MathCenter accounts have none), but callers always count a
@@ -51,6 +52,7 @@ type Querier interface {
 	FindOrCreateThread(ctx context.Context, arg FindOrCreateThreadParams) (HomeworkThread, error)
 	GetEventKind(ctx context.Context, id int64) (string, error)
 	GetGroup(ctx context.Context, id int64) (MathCenterGroup, error)
+	GetInvitationTokenByID(ctx context.Context, id int64) (InvitationToken, error)
 	GetInvitationTokenByValue(ctx context.Context, token string) (InvitationToken, error)
 	GetInvitationTokenByValueForUpdate(ctx context.Context, token string) (InvitationToken, error)
 	GetMathCenter(ctx context.Context, id int64) (MathCenter, error)
@@ -60,6 +62,7 @@ type Querier interface {
 	GetRefreshTokenByHash(ctx context.Context, tokenHash []byte) (RefreshToken, error)
 	GetSeries(ctx context.Context, id int64) (MathCenterSeries, error)
 	GetSeriesTex(ctx context.Context, id int64) (*string, error)
+	GetStudent(ctx context.Context, id int64) (MathCenterStudent, error)
 	GetStudentByUserID(ctx context.Context, userID int64) (GetStudentByUserIDRow, error)
 	// One-shot fetch of "what center/series/problem does this subproblem belong
 	// to", used at the start of every event-creating handler so we don't have to
@@ -70,6 +73,7 @@ type Querier interface {
 	// for authorizing coffin/разбор actions and gating student visibility. Returns
 	// the row even when no solution row exists yet.
 	GetSubproblemSolutionCenter(ctx context.Context, id int64) (GetSubproblemSolutionCenterRow, error)
+	GetTeacher(ctx context.Context, id int64) (MathCenterTeacher, error)
 	GetThread(ctx context.Context, id int64) (HomeworkThread, error)
 	GetThreadByStudentAndSubproblem(ctx context.Context, arg GetThreadByStudentAndSubproblemParams) (HomeworkThread, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
@@ -83,6 +87,7 @@ type Querier interface {
 	GraderStatsForCenter(ctx context.Context, arg GraderStatsForCenterParams) (GraderStatsForCenterRow, error)
 	HeartbeatClaim(ctx context.Context, arg HeartbeatClaimParams) (int64, error)
 	InsertEventPhoto(ctx context.Context, arg InsertEventPhotoParams) error
+	IsHeadTeacherInCenter(ctx context.Context, arg IsHeadTeacherInCenterParams) (bool, error)
 	IsStudentInCenter(ctx context.Context, arg IsStudentInCenterParams) (bool, error)
 	IsTeacherInCenter(ctx context.Context, arg IsTeacherInCenterParams) (bool, error)
 	// Every coffin subproblem in a center with the labels the Гробы tab needs,
@@ -109,6 +114,7 @@ type Querier interface {
 	ListGroupsForCenters(ctx context.Context, centerIds []int64) ([]MathCenterGroup, error)
 	ListHeadTeachersForCenter(ctx context.Context, mathCenterID int64) ([]ListHeadTeachersForCenterRow, error)
 	ListInvitationTokens(ctx context.Context) ([]InvitationToken, error)
+	ListInvitationTokensForCenter(ctx context.Context, mathCenterID *int64) ([]InvitationToken, error)
 	ListMathCenters(ctx context.Context) ([]MathCenter, error)
 	ListProblemsForSeries(ctx context.Context, seriesID int64) ([]MathCenterProblem, error)
 	ListProblemsForSeriesIDs(ctx context.Context, seriesIds []int64) ([]MathCenterProblem, error)
@@ -147,6 +153,7 @@ type Querier interface {
 	RevokeInvitationTokenByValue(ctx context.Context, token string) (int64, error)
 	RevokeRefreshTokenByID(ctx context.Context, id int64) error
 	RotateRefreshToken(ctx context.Context, arg RotateRefreshTokenParams) error
+	SearchUsers(ctx context.Context, q_ string) ([]SearchUsersRow, error)
 	// One row per (student × subproblem) for a whole series: the center roster
 	// crossed with the series's subproblems, LEFT JOINed to that student's thread
 	// so untouched subproblems still appear with status='ungraded'. The handler
@@ -161,6 +168,7 @@ type Querier interface {
 	// the series wasn't already published, mirroring the PDF publish flow:
 	// a series with any rendered content is considered visible to students.
 	SetSeriesTex(ctx context.Context, arg SetSeriesTexParams) (MathCenterSeries, error)
+	SetStudentGroup(ctx context.Context, arg SetStudentGroupParams) (int64, error)
 	// Assign a (just-minted) group to every subproblem in the set. The solution
 	// rows must already exist (content was set first); only existing rows update.
 	SetSubproblemSolutionGroup(ctx context.Context, arg SetSubproblemSolutionGroupParams) error

@@ -126,6 +126,9 @@ export interface InvitationToken {
   uses: number
   expires_at: string
   created_at: string
+  // Set when the token is scoped to one center (head-teacher invites); null for
+  // global admin-minted tokens.
+  math_center_id?: number | null
 }
 
 // MathCenter is a cohort grouped by graduation year.
@@ -160,6 +163,65 @@ export interface MathCenterStudent {
   user_id: number
   group_id: number
   created_at: string
+}
+
+// --- Head-teacher management panel ("Управление") ----------------------------
+// Wire types for /mathcenter/centers/{id}/manage/*. Keep in sync with
+// backend/internal/handlers/mathcenter/manage.go.
+
+// ManageTeacher is a teacher roster row (ListTeachersForCenter).
+export interface ManageTeacher {
+  id: number
+  user_id: number
+  math_center_id: number
+  is_head_teacher: boolean
+  first_name: string
+  middle_name?: string | null
+  last_name: string
+}
+
+// ManageStudent is a student roster row (ListStudentsForCenter).
+export interface ManageStudent {
+  id: number
+  user_id: number
+  group_id: number
+  group_name: string
+  first_name: string
+  middle_name?: string | null
+  last_name: string
+}
+
+// UserSearchResult is a minimal user record for the "add from users" search.
+export interface UserSearchResult {
+  id: number
+  username: string
+  first_name: string
+  middle_name?: string | null
+  last_name: string
+}
+
+// CenterInvite is a center-scoped invitation token plus its decoded role.
+export interface CenterInvite {
+  id: number
+  token: string
+  description: string
+  max_uses: number
+  uses: number
+  expires_at: string
+  created_at: string
+  role: 'teacher' | 'student'
+  group_id?: number | null
+  is_head_teacher: boolean
+}
+
+// InviteContext is the public description of an invite link shown on the
+// registration page (GET /auth/invite/{token}).
+export interface InviteContext {
+  valid: boolean
+  description: string
+  role?: 'teacher' | 'student' | ''
+  center_name?: string
+  group_name?: string
 }
 
 // --- Admin user management ---------------------------------------------------

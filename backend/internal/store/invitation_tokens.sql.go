@@ -12,16 +12,17 @@ import (
 )
 
 const createInvitationToken = `-- name: CreateInvitationToken :one
-INSERT INTO invitation_tokens (token, description, max_uses, expires_at, preset)
-VALUES ($1, $2, $3, $4, $5) RETURNING id, token, description, max_uses, expires_at, created_at, preset
+INSERT INTO invitation_tokens (token, description, max_uses, expires_at, preset, math_center_id)
+VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, token, description, max_uses, expires_at, created_at, preset, math_center_id
 `
 
 type CreateInvitationTokenParams struct {
-	Token       string          `json:"token"`
-	Description string          `json:"description"`
-	MaxUses     int32           `json:"max_uses"`
-	ExpiresAt   time.Time       `json:"expires_at"`
-	Preset      json.RawMessage `json:"preset"`
+	Token        string          `json:"token"`
+	Description  string          `json:"description"`
+	MaxUses      int32           `json:"max_uses"`
+	ExpiresAt    time.Time       `json:"expires_at"`
+	Preset       json.RawMessage `json:"preset"`
+	MathCenterID *int64          `json:"math_center_id"`
 }
 
 func (q *Queries) CreateInvitationToken(ctx context.Context, arg CreateInvitationTokenParams) (InvitationToken, error) {
@@ -31,6 +32,7 @@ func (q *Queries) CreateInvitationToken(ctx context.Context, arg CreateInvitatio
 		arg.MaxUses,
 		arg.ExpiresAt,
 		arg.Preset,
+		arg.MathCenterID,
 	)
 	var i InvitationToken
 	err := row.Scan(
@@ -41,12 +43,35 @@ func (q *Queries) CreateInvitationToken(ctx context.Context, arg CreateInvitatio
 		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.Preset,
+		&i.MathCenterID,
+	)
+	return i, err
+}
+
+const getInvitationTokenByID = `-- name: GetInvitationTokenByID :one
+SELECT id, token, description, max_uses, expires_at, created_at, preset, math_center_id
+FROM invitation_tokens
+WHERE id = $1
+`
+
+func (q *Queries) GetInvitationTokenByID(ctx context.Context, id int64) (InvitationToken, error) {
+	row := q.db.QueryRow(ctx, getInvitationTokenByID, id)
+	var i InvitationToken
+	err := row.Scan(
+		&i.ID,
+		&i.Token,
+		&i.Description,
+		&i.MaxUses,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.Preset,
+		&i.MathCenterID,
 	)
 	return i, err
 }
 
 const getInvitationTokenByValue = `-- name: GetInvitationTokenByValue :one
-SELECT id, token, description, max_uses, expires_at, created_at, preset
+SELECT id, token, description, max_uses, expires_at, created_at, preset, math_center_id
 FROM invitation_tokens
 WHERE token = $1
 `
@@ -62,12 +87,13 @@ func (q *Queries) GetInvitationTokenByValue(ctx context.Context, token string) (
 		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.Preset,
+		&i.MathCenterID,
 	)
 	return i, err
 }
 
 const getInvitationTokenByValueForUpdate = `-- name: GetInvitationTokenByValueForUpdate :one
-SELECT id, token, description, max_uses, expires_at, created_at, preset
+SELECT id, token, description, max_uses, expires_at, created_at, preset, math_center_id
 FROM invitation_tokens
 WHERE token = $1 FOR UPDATE
 `
@@ -83,12 +109,13 @@ func (q *Queries) GetInvitationTokenByValueForUpdate(ctx context.Context, token 
 		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.Preset,
+		&i.MathCenterID,
 	)
 	return i, err
 }
 
 const listInvitationTokens = `-- name: ListInvitationTokens :many
-SELECT id, token, description, max_uses, expires_at, created_at, preset
+SELECT id, token, description, max_uses, expires_at, created_at, preset, math_center_id
 FROM invitation_tokens
 ORDER BY created_at DESC
 `
@@ -110,6 +137,43 @@ func (q *Queries) ListInvitationTokens(ctx context.Context) ([]InvitationToken, 
 			&i.ExpiresAt,
 			&i.CreatedAt,
 			&i.Preset,
+			&i.MathCenterID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInvitationTokensForCenter = `-- name: ListInvitationTokensForCenter :many
+SELECT id, token, description, max_uses, expires_at, created_at, preset, math_center_id
+FROM invitation_tokens
+WHERE math_center_id = $1
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListInvitationTokensForCenter(ctx context.Context, mathCenterID *int64) ([]InvitationToken, error) {
+	rows, err := q.db.Query(ctx, listInvitationTokensForCenter, mathCenterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []InvitationToken{}
+	for rows.Next() {
+		var i InvitationToken
+		if err := rows.Scan(
+			&i.ID,
+			&i.Token,
+			&i.Description,
+			&i.MaxUses,
+			&i.ExpiresAt,
+			&i.CreatedAt,
+			&i.Preset,
+			&i.MathCenterID,
 		); err != nil {
 			return nil, err
 		}

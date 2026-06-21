@@ -115,15 +115,18 @@ export function TeacherProblemStats({ stats, series, centerId }: TeacherProblemS
       : undefined
 
   return (
-    <div className="flex items-start">
-      {/* Left: разбор of the pressed problem — slides in/out smoothly. */}
+    // Side-by-side master-detail on ≥md; on phones the разбор preview stacks
+    // above the list (no cramped horizontal split).
+    <div className="flex flex-col gap-4 md:flex-row md:items-start md:gap-0">
+      {/* разбор of the pressed problem. Desktop: a sliding left pane. Mobile: a
+          full-width block shown above the list, hidden when nothing is open. */}
       <div
         className={cn(
-          'shrink-0 overflow-hidden transition-all duration-300 ease-out',
-          previewSub ? 'w-1/2 opacity-100' : 'w-0 opacity-0',
+          'overflow-hidden md:shrink-0 md:transition-all md:duration-300 md:ease-out',
+          previewSub ? 'md:w-1/2 md:opacity-100' : 'hidden md:block md:w-0 md:opacity-0',
         )}
       >
-        <div className="pr-4">
+        <div className="md:pr-4">
           {previewSub ? (
             <RazborPreview
               centerId={centerId}
@@ -134,7 +137,7 @@ export function TeacherProblemStats({ stats, series, centerId }: TeacherProblemS
         </div>
       </div>
 
-      {/* Right: the statistics list + batch разбор bar. */}
+      {/* The statistics list + batch разбор bar. */}
       <div className="flex min-w-0 flex-1 flex-col gap-3">
         <BatchRazborBar
           centerId={centerId}

@@ -14,7 +14,7 @@ import (
 // invitationTokenColumns matches `SELECT * FROM invitation_tokens` / the
 // CreateInvitationToken RETURNING list after sqlc; keep aligned with the
 // migrations and store/models.go.
-var invitationTokenColumns = []string{"id", "token", "description", "max_uses", "expires_at", "created_at", "preset"}
+var invitationTokenColumns = []string{"id", "token", "description", "max_uses", "expires_at", "created_at", "preset", "math_center_id"}
 
 // TestCreateToken_WithValidPreset verifies the handler validates a teacher
 // preset against the DB, then stores the marshaled (version-stamped) preset in
@@ -33,9 +33,9 @@ func TestCreateToken_WithValidPreset(t *testing.T) {
 	// compares the json.RawMessage argument byte-for-byte.
 	wantPreset := json.RawMessage(`{"version":1,"mathcenter_teacher":{"center_id":7,"is_head_teacher":true}}`)
 	mock.ExpectQuery(`INSERT INTO invitation_tokens`).
-		WithArgs(pgxmock.AnyArg(), "Head teacher invite", int32(1), pgxmock.AnyArg(), wantPreset).
+		WithArgs(pgxmock.AnyArg(), "Head teacher invite", int32(1), pgxmock.AnyArg(), wantPreset, (*int64)(nil)).
 		WillReturnRows(mock.NewRows(invitationTokenColumns).
-			AddRow(int64(10), "tok-value", "Head teacher invite", int32(1), now.Add(72*time.Hour), now, wantPreset))
+			AddRow(int64(10), "tok-value", "Head teacher invite", int32(1), now.Add(72*time.Hour), now, wantPreset, nil))
 
 	router, access := newAdminRouter(t, mock)
 
@@ -100,9 +100,9 @@ func TestCreateToken_NoPreset(t *testing.T) {
 
 	now := time.Now()
 	mock.ExpectQuery(`INSERT INTO invitation_tokens`).
-		WithArgs(pgxmock.AnyArg(), "plain", int32(5), pgxmock.AnyArg(), json.RawMessage(`{"version":1}`)).
+		WithArgs(pgxmock.AnyArg(), "plain", int32(5), pgxmock.AnyArg(), json.RawMessage(`{"version":1}`), (*int64)(nil)).
 		WillReturnRows(mock.NewRows(invitationTokenColumns).
-			AddRow(int64(11), "tok", "plain", int32(5), now.Add(72*time.Hour), now, []byte(`{"version":1}`)))
+			AddRow(int64(11), "tok", "plain", int32(5), now.Add(72*time.Hour), now, []byte(`{"version":1}`), nil))
 
 	router, access := newAdminRouter(t, mock)
 

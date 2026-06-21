@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   APIErrorImpl,
   registerSchema,
+  useInviteContext,
   useRegister,
   type RegisterValues,
 } from '@my239/shared'
@@ -16,6 +17,12 @@ export function RegisterPage() {
   const registerMutation = useRegister()
   const [formError, setFormError] = useState<string | null>(null)
 
+  // An invite link (/register?token=…) prefills and locks the token field and
+  // shows what the invitee is about to join.
+  const [params] = useSearchParams()
+  const urlToken = params.get('token') ?? ''
+  const fromLink = urlToken.length > 0
+
   const {
     register,
     handleSubmit,
@@ -26,7 +33,7 @@ export function RegisterPage() {
     defaultValues: {
       username: '',
       password: '',
-      invitation_token: '',
+      invitation_token: urlToken,
       first_name: '',
       middle_name: '',
       last_name: '',
@@ -78,9 +85,16 @@ export function RegisterPage() {
       }
     >
       <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+        {fromLink ? <InviteBanner token={urlToken} /> : null}
         <Field label="Код приглашения" error={errors.invitation_token?.message}>
           {({ id, invalid }) => (
-            <Input id={id} invalid={invalid} autoFocus {...register('invitation_token')} />
+            <Input
+              id={id}
+              invalid={invalid}
+              autoFocus={!fromLink}
+              readOnly={fromLink}
+              {...register('invitation_token')}
+            />
           )}
         </Field>
 
@@ -137,5 +151,47 @@ export function RegisterPage() {
         </Button>
       </form>
     </AuthLayout>
+  )
+}
+
+// InviteBanner describes what an invite link grants, so the registrant knows
+// which center/role/group they are joining before they submit.
+function InviteBanner({ token }: { token: string }) {
+  const { data, isPending, isError } = useInviteContext(token)
+
+  if (isPending) return null
+  if (isError || !data || !data.valid) {
+    return (
+      <p className="rounded-lg bg-surface-muted px-3 py-2 text-sm text-muted">
+        Приглашение недействительно или истекло. Проверьте ссылку.
+      </p>
+    )
+  }
+
+  const roleLabel =
+    data.role === 'teacher'
+      ? 'преподавателем'
+      : data.role === 'student'
+        ? 'учеником'
+        : null
+
+  return (
+    <div className="rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-sm text-ink">
+      {data.center_name && roleLabel ? (
+        <p>
+          Вы вступаете в <span className="font-medium">«{data.center_name}»</span>{' '}
+          {roleLabel}
+          {data.group_name ? (
+            <>
+              {' '}
+              в группу <span className="font-medium">{data.group_name}</span>
+            </>
+          ) : null}
+          .
+        </p>
+      ) : (
+        <p>Приглашение принято — заполните данные ниже.</p>
+      )}
+    </div>
   )
 }

@@ -169,3 +169,42 @@ FROM math_center_students s
          JOIN users u ON u.id = s.user_id
 WHERE g.math_center_id = ANY(@center_ids::bigint[])
 ORDER BY g.math_center_id ASC, g.name ASC, u.last_name ASC, u.first_name ASC;
+
+-- name: IsHeadTeacherInCenter :one
+SELECT EXISTS (
+    SELECT 1
+    FROM math_center_teachers
+    WHERE user_id = $1
+      AND math_center_id = $2
+      AND is_head_teacher = TRUE
+) AS is_head_teacher;
+
+-- name: CountHeadTeachersForCenter :one
+SELECT COUNT(*)
+FROM math_center_teachers
+WHERE math_center_id = $1
+  AND is_head_teacher = TRUE;
+
+-- name: GetTeacher :one
+SELECT *
+FROM math_center_teachers
+WHERE id = $1;
+
+-- name: GetStudent :one
+SELECT *
+FROM math_center_students
+WHERE id = $1;
+
+-- name: SetStudentGroup :execrows
+UPDATE math_center_students
+SET group_id = $2
+WHERE id = $1;
+
+-- name: SearchUsers :many
+SELECT id, username, first_name, middle_name, last_name
+FROM users
+WHERE username ILIKE '%' || @q::text || '%'
+   OR first_name ILIKE '%' || @q::text || '%'
+   OR last_name ILIKE '%' || @q::text || '%'
+ORDER BY username ASC
+LIMIT 20;

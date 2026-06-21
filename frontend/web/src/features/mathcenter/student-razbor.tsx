@@ -6,7 +6,6 @@ import {
   type Series,
   type Subproblem,
 } from '@my239/shared'
-import { Card, CardContent } from '../../design/ui'
 import { cn } from '../../design/cn'
 import { SolutionContent } from './solution-content'
 
@@ -120,20 +119,18 @@ function RazborBody({
 }) {
   const texQuery = useSubproblemSolutionTex(sub.id, sub.has_solution_tex)
   return (
-    <Card>
-      <CardContent>
-        <p className="mb-3 text-sm text-muted">
-          Разбор · {coveredTokens.length > 1 ? 'задачи ' : 'задача '}
-          <span className="font-medium text-ink">{coveredTokens.join(', ')}</span>
-        </p>
-        <SolutionContent
-          hasTex={sub.has_solution_tex}
-          hasPdf={sub.has_solution_pdf}
-          link={sub.solution_link}
-          pdfPath={'/mathcenter/subproblems/' + sub.id + '/solution/pdf'}
-          texQuery={texQuery}
-        />
-      </CardContent>
-    </Card>
+    <div className="flex flex-col">
+      <p className="mb-3 text-sm text-muted">
+        Разбор · {coveredTokens.length > 1 ? 'задачи ' : 'задача '}
+        <span className="font-medium text-ink">{coveredTokens.join(', ')}</span>
+      </p>
+      <SolutionContent
+        hasTex={sub.has_solution_tex}
+        hasPdf={sub.has_solution_pdf}
+        link={sub.solution_link}
+        pdfPath={'/mathcenter/subproblems/' + sub.id + '/solution/pdf'}
+        texQuery={texQuery}
+      />
+    </div>
   )
 }

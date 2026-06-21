@@ -28,3 +28,4 @@ export {
 } from './dialog'
 export { Table, THead, TBody, Tr, Th, Td } from './table'
 export { StatusTile, StatusLegend, type StatusTileProps } from './status-tile'
+export { PillTabs, type PillTabOption } from './pill-tabs'
