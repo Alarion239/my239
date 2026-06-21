@@ -12,6 +12,7 @@ export function useNavModules(): ModuleDef[] {
 
   const seen = new Set<number>()
   const teacherCenters = new Set<number>()
+  const headTeacherCenters = new Set<number>()
   const centers: { id: number; graduationYear: number }[] = []
   const push = (id: number, graduationYear: number) => {
     if (seen.has(id)) return
@@ -21,6 +22,7 @@ export function useNavModules(): ModuleDef[] {
 
   for (const c of me.data?.teacher?.centers ?? []) {
     teacherCenters.add(c.id)
+    if (c.is_head_teacher) headTeacherCenters.add(c.id)
     push(c.id, c.graduation_year)
   }
   const student = me.data?.student?.center
@@ -41,6 +43,10 @@ export function useNavModules(): ModuleDef[] {
       // «Кондуит» (the center-wide accept matrix) is a teacher-only tool.
       ...(teacherCenters.has(c.id)
         ? [{ label: 'Кондуит', path: '/mathcenter/' + c.id + '/conduit' }]
+        : []),
+      // «Управление» (the management panel) is a head-teacher self-service tool.
+      ...(headTeacherCenters.has(c.id)
+        ? [{ label: 'Управление', path: '/mathcenter/' + c.id + '/manage' }]
         : []),
     ],
   }))
