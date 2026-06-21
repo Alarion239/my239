@@ -61,11 +61,14 @@ export function SeriesStrip({
   }, [centerId, ordered.length])
 
   return (
-    // px/py padding keeps the selected card's 2px ring from being clipped by the
-    // scroll container (overflow-x:auto also clips the cross axis).
+    // Horizontal scroll only: overflow-y is pinned to hidden (otherwise the
+    // browser computes it to `auto` when overflow-x is `auto`, which let the
+    // strip be dragged a few px vertically). The scrollbar is hidden in all
+    // engines — scrolling still works via wheel/trackpad/drag. px/py padding
+    // keeps the selected card's 2px ring from being clipped.
     <div
       ref={scrollerRef}
-      className="flex gap-3 overflow-x-auto px-1 py-2"
+      className="flex gap-3 overflow-x-auto overflow-y-hidden px-1 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       role="tablist"
       aria-label="Серии"
     >
