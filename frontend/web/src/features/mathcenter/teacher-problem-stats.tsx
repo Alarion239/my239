@@ -1,13 +1,17 @@
+import { useState } from 'react'
 import { Skull } from 'lucide-react'
 import {
   coffinOpen,
   formatDateTime,
   useMarkCoffin,
   usePutSubproblemSolutionTex,
+  usePutSubproblemSolutionTexBatch,
   useReleaseCoffin,
   useSetSubproblemSolutionLink,
+  useSetSubproblemSolutionLinkBatch,
   useUnmarkCoffin,
   useUploadSubproblemSolutionPdf,
+  useUploadSubproblemSolutionPdfBatch,
   type SeriesProblemStat,
   type SeriesProblemStats,
   type Subproblem,
@@ -69,6 +73,16 @@ export function TeacherProblemStats({ stats, series, centerId }: TeacherProblemS
   const release = useReleaseCoffin(centerId)
   const busy = mark.isPending || unmark.isPending || release.isPending
 
+  // Subproblems selected for a shared разбор (attach one source to several).
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const toggleSelect = (id: number) =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
   // Per-subproblem разбор/coffin metadata, keyed by subproblem id.
   const metaById = new Map<number, Subproblem>()
   for (const p of series.problems) {
@@ -79,8 +93,17 @@ export function TeacherProblemStats({ stats, series, centerId }: TeacherProblemS
     return <p className="py-6 text-sm text-muted">В этой серии пока нет задач.</p>
   }
 
+  const selectedIds = stats.problems
+    .map((p) => p.subproblem_id)
+    .filter((id) => selected.has(id))
+
   return (
     <div className="flex flex-col gap-3">
+      <BatchRazborBar
+        centerId={centerId}
+        subproblemIds={selectedIds}
+        onClear={() => setSelected(new Set())}
+      />
       {stats.problems.map((p) => (
         <ProblemStatRow
           key={p.subproblem_id}
@@ -88,6 +111,8 @@ export function TeacherProblemStats({ stats, series, centerId }: TeacherProblemS
           meta={metaById.get(p.subproblem_id)}
           centerId={centerId}
           busy={busy}
+          isSelected={selected.has(p.subproblem_id)}
+          onToggleSelect={() => toggleSelect(p.subproblem_id)}
           onMark={() => mark.mutate(p.subproblem_id)}
           onUnmark={() => unmark.mutate(p.subproblem_id)}
           onRelease={() => release.mutate(p.subproblem_id)}
@@ -97,11 +122,62 @@ export function TeacherProblemStats({ stats, series, centerId }: TeacherProblemS
   )
 }
 
+// BatchRazborBar lets a teacher attach ONE разбор (TeX/PDF/link) to all the
+// subproblems they've ticked — so a shared solution covers several problems.
+function BatchRazborBar({
+  centerId,
+  subproblemIds,
+  onClear,
+}: {
+  centerId: number
+  subproblemIds: number[]
+  onClear: () => void
+}) {
+  const putTex = usePutSubproblemSolutionTexBatch(centerId)
+  const uploadPdf = useUploadSubproblemSolutionPdfBatch(centerId)
+  const setLink = useSetSubproblemSolutionLinkBatch(centerId)
+
+  if (subproblemIds.length === 0) {
+    return (
+      <p className="text-xs text-muted">
+        Отметьте несколько подзадач галочкой, чтобы прикрепить один разбор
+        (PDF / LaTeX / ссылку) сразу ко всем.
+      </p>
+    )
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-accent/40 bg-accent-soft px-3 py-2">
+      <span className="text-sm font-medium text-accent-ink">
+        Выбрано подзадач: {subproblemIds.length}
+      </span>
+      <SolutionEditor
+        title={'Общий разбор для выбранных (' + subproblemIds.length + ')'}
+        hasTex={false}
+        hasPdf={false}
+        link={null}
+        onPutTex={(tex) => putTex.mutateAsync({ subproblemIds, tex })}
+        onUploadPdf={(file) => uploadPdf.mutateAsync({ subproblemIds, file })}
+        onSetLink={(link) => setLink.mutateAsync({ subproblemIds, link })}
+        trigger={
+          <Button type="button" size="sm">
+            Прикрепить общий разбор
+          </Button>
+        }
+      />
+      <Button type="button" size="sm" variant="ghost" onClick={onClear}>
+        Снять выбор
+      </Button>
+    </div>
+  )
+}
+
 function ProblemStatRow({
   stat,
   meta,
   centerId,
   busy,
+  isSelected,
+  onToggleSelect,
   onMark,
   onUnmark,
   onRelease,
@@ -110,6 +186,8 @@ function ProblemStatRow({
   meta: Subproblem | undefined
   centerId: number
   busy: boolean
+  isSelected: boolean
+  onToggleSelect: () => void
   onMark: () => void
   onUnmark: () => void
   onRelease: () => void
@@ -123,11 +201,20 @@ function ProblemStatRow({
     <div
       className={cn(
         'rounded-xl border bg-surface px-4 py-3',
-        isCoffin ? 'border-status-checking' : 'border-line',
+        isSelected ? 'border-accent ring-1 ring-accent/40' : isCoffin ? 'border-status-checking' : 'border-line',
       )}
     >
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <span className="font-medium text-ink">{subStatLabel(stat)}</span>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={onToggleSelect}
+            className="h-4 w-4 rounded border-line-strong accent-accent"
+            aria-label={'Выбрать для общего разбора: ' + subStatLabel(stat)}
+          />
+          <span className="font-medium text-ink">{subStatLabel(stat)}</span>
+        </label>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <span className="text-xs text-muted">{total} учеников</span>
           {isCoffin && open ? (

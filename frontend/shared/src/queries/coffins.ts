@@ -152,3 +152,92 @@ function invalidate(qc: ReturnType<typeof useQueryClient>, centerId: number) {
   // so the Разбор tab badges + student gating update.
   qc.invalidateQueries({ queryKey: queryKeys.seriesList(centerId) })
 }
+
+// --- batch «Разбор» (attach one source to several subproblems) ---------------
+// Fan out the same разбор content to every selected subproblem, reusing the
+// per-subproblem endpoints, then invalidate once. Lets a teacher post one PDF /
+// LaTeX / link as the solution for multiple problems at once.
+
+export function usePutSubproblemSolutionTexBatch(centerId: number) {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      subproblemIds,
+      tex,
+    }: {
+      subproblemIds: number[]
+      tex: string
+    }) => {
+      await Promise.all(
+        subproblemIds.map((id) =>
+          client.request<CoffinAction>(
+            '/mathcenter/subproblems/' + id + '/solution/tex',
+            { method: 'PUT', body: { tex } },
+          ),
+        ),
+      )
+    },
+    onSuccess: () => invalidate(qc, centerId),
+  })
+}
+
+export function useSetSubproblemSolutionLinkBatch(centerId: number) {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      subproblemIds,
+      link,
+    }: {
+      subproblemIds: number[]
+      link: string
+    }) => {
+      await Promise.all(
+        subproblemIds.map((id) =>
+          client.request<CoffinAction>(
+            '/mathcenter/subproblems/' + id + '/solution/link',
+            { method: 'PUT', body: { link } },
+          ),
+        ),
+      )
+    },
+    onSuccess: () => invalidate(qc, centerId),
+  })
+}
+
+export function useUploadSubproblemSolutionPdfBatch(centerId: number) {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      subproblemIds,
+      file,
+    }: {
+      subproblemIds: number[]
+      file: Blob
+    }) => {
+      // One presigned upload + publish per subproblem (each owns its object
+      // key); the same in-memory file is re-sent so the teacher uploads once.
+      for (const id of subproblemIds) {
+        const { object_key, upload_url } = await client.request<PdfUploadURL>(
+          '/mathcenter/subproblems/' + id + '/solution/pdf/upload-url',
+          { method: 'POST' },
+        )
+        const put = await fetch(upload_url, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/pdf' },
+          body: file,
+        })
+        if (!put.ok) {
+          throw new Error('PDF upload failed (' + put.status + ')')
+        }
+        await client.request<CoffinAction>(
+          '/mathcenter/subproblems/' + id + '/solution/pdf/publish',
+          { method: 'POST', body: { object_key } },
+        )
+      }
+    },
+    onSuccess: () => invalidate(qc, centerId),
+  })
+}
