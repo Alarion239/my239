@@ -707,6 +707,7 @@ SELECT
     p.id                                   AS problem_id,
     p.number                               AS problem_number,
     COALESCE(ss.is_coffin, false)::boolean AS is_coffin,
+    ss.released_at                         AS coffin_released_at,
     COALESCE(t.id, 0)::bigint              AS thread_id,
     COALESCE(t.current_status, 'ungraded') AS current_status,
     t.last_grader_user_id                  AS last_grader_user_id,
@@ -745,6 +746,7 @@ type TeacherCenterGridRow struct {
 	ProblemID         int64      `json:"problem_id"`
 	ProblemNumber     int32      `json:"problem_number"`
 	IsCoffin          bool       `json:"is_coffin"`
+	CoffinReleasedAt  *time.Time `json:"coffin_released_at"`
 	ThreadID          int64      `json:"thread_id"`
 	CurrentStatus     string     `json:"current_status"`
 	LastGraderUserID  *int64     `json:"last_grader_user_id"`
@@ -783,6 +785,7 @@ func (q *Queries) TeacherCenterGrid(ctx context.Context, mathCenterID int64) ([]
 			&i.ProblemID,
 			&i.ProblemNumber,
 			&i.IsCoffin,
+			&i.CoffinReleasedAt,
 			&i.ThreadID,
 			&i.CurrentStatus,
 			&i.LastGraderUserID,
@@ -814,6 +817,7 @@ SELECT
     p.id                                   AS problem_id,
     p.number                               AS problem_number,
     COALESCE(ss.is_coffin, false)::boolean AS is_coffin,
+    ss.released_at                         AS coffin_released_at,
     COALESCE(t.id, 0)::bigint              AS thread_id,
     COALESCE(t.current_status, 'ungraded') AS current_status,
     t.last_grader_user_id                  AS last_grader_user_id,
@@ -846,6 +850,7 @@ type TeacherSeriesGridRow struct {
 	ProblemID         int64      `json:"problem_id"`
 	ProblemNumber     int32      `json:"problem_number"`
 	IsCoffin          bool       `json:"is_coffin"`
+	CoffinReleasedAt  *time.Time `json:"coffin_released_at"`
 	ThreadID          int64      `json:"thread_id"`
 	CurrentStatus     string     `json:"current_status"`
 	LastGraderUserID  *int64     `json:"last_grader_user_id"`
@@ -880,6 +885,7 @@ func (q *Queries) TeacherSeriesGrid(ctx context.Context, id int64) ([]TeacherSer
 			&i.ProblemID,
 			&i.ProblemNumber,
 			&i.IsCoffin,
+			&i.CoffinReleasedAt,
 			&i.ThreadID,
 			&i.CurrentStatus,
 			&i.LastGraderUserID,

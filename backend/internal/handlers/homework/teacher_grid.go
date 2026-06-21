@@ -44,12 +44,13 @@ type gridCell struct {
 // response so the frontend can render problem-grouped column headers
 // without inferring them from row data.
 type gridSubproblemHeader struct {
-	SubproblemID    int64  `json:"subproblem_id"`
-	SubproblemLabel string `json:"subproblem_label"`
-	ProblemID       int64  `json:"problem_id"`
-	ProblemNumber   int    `json:"problem_number"`
-	ProblemDisplay  string `json:"problem_display"`
-	IsCoffin        bool   `json:"is_coffin"`
+	SubproblemID     int64      `json:"subproblem_id"`
+	SubproblemLabel  string     `json:"subproblem_label"`
+	ProblemID        int64      `json:"problem_id"`
+	ProblemNumber    int        `json:"problem_number"`
+	ProblemDisplay   string     `json:"problem_display"`
+	IsCoffin         bool       `json:"is_coffin"`
+	CoffinReleasedAt *time.Time `json:"coffin_released_at,omitempty"`
 }
 
 // gridResponse pairs the column headers with the student rows. Rows are
@@ -124,12 +125,13 @@ func buildGridColumns(rows []store.TeacherSeriesGridRow) []gridSubproblemHeader 
 		}
 		seen[row.SubproblemID] = true
 		cols = append(cols, gridSubproblemHeader{
-			SubproblemID:    row.SubproblemID,
-			SubproblemLabel: row.SubproblemLabel,
-			ProblemID:       row.ProblemID,
-			ProblemNumber:   int(row.ProblemNumber),
-			ProblemDisplay:  mc.ProblemDisplayName(int(row.ProblemNumber)),
-			IsCoffin:        row.IsCoffin,
+			SubproblemID:     row.SubproblemID,
+			SubproblemLabel:  row.SubproblemLabel,
+			ProblemID:        row.ProblemID,
+			ProblemNumber:    int(row.ProblemNumber),
+			ProblemDisplay:   mc.ProblemDisplayName(int(row.ProblemNumber)),
+			IsCoffin:         row.IsCoffin,
+			CoffinReleasedAt: row.CoffinReleasedAt,
 		})
 	}
 	return cols

@@ -14,6 +14,7 @@ var gridRowColumns = []string{
 	"student_user_id", "student_first_name", "student_middle_name", "student_last_name",
 	"group_id", "group_name",
 	"subproblem_id", "subproblem_label", "problem_id", "problem_number", "is_coffin",
+	"coffin_released_at",
 	"thread_id", "current_status", "last_grader_user_id",
 	"claim_holder_user_id", "claim_expires_at", "thread_updated_at",
 }
@@ -38,19 +39,19 @@ func TestTeacherGrid_HappyPath(t *testing.T) {
 		WillReturnRows(mock.NewRows(gridRowColumns).
 			// Student A, subproblem a, submitted
 			AddRow(int64(7), "Аня", (*string)(nil), "Иванова", int64(10), "А",
-				int64(900), "a", int64(500), int32(1), true,
+				int64(900), "a", int64(500), int32(1), true, (*time.Time)(nil),
 				int64(1), "submitted", (*int64)(nil), (*int64)(nil), (*time.Time)(nil), &now).
 			// Student A, subproblem b, ungraded
 			AddRow(int64(7), "Аня", (*string)(nil), "Иванова", int64(10), "А",
-				int64(901), "b", int64(500), int32(1), false,
+				int64(901), "b", int64(500), int32(1), false, (*time.Time)(nil),
 				int64(0), "ungraded", (*int64)(nil), (*int64)(nil), (*time.Time)(nil), (*time.Time)(nil)).
 			// Student B, subproblem a, ungraded
 			AddRow(int64(8), "Боря", (*string)(nil), "Петров", int64(10), "А",
-				int64(900), "a", int64(500), int32(1), true,
+				int64(900), "a", int64(500), int32(1), true, (*time.Time)(nil),
 				int64(0), "ungraded", (*int64)(nil), (*int64)(nil), (*time.Time)(nil), (*time.Time)(nil)).
 			// Student B, subproblem b, ungraded
 			AddRow(int64(8), "Боря", (*string)(nil), "Петров", int64(10), "А",
-				int64(901), "b", int64(500), int32(1), false,
+				int64(901), "b", int64(500), int32(1), false, (*time.Time)(nil),
 				int64(0), "ungraded", (*int64)(nil), (*int64)(nil), (*time.Time)(nil), (*time.Time)(nil)))
 
 	req := authedRequest(t, access, 3, false, http.MethodGet, "/series/100/grid", nil)

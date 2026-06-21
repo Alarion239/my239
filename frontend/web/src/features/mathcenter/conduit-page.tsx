@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import {
+  coffinOpen,
   useCenterGrid,
   type CenterGridColumn,
   type CenterGridResponse,
@@ -167,23 +168,35 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
                 Решено
               </th>
             </tr>
-            {/* Per-subproblem column labels (coffins get a darker tint). */}
+            {/* Per-subproblem column labels. Coffins are tinted — amber while
+                open for submission, gray once разобрана (solved). */}
             <tr>
-              {cols.map(({ col, firstInSeries }) => (
-                <th
-                  key={col.subproblem_id}
-                  title={col.is_coffin ? 'Гроб' : undefined}
-                  className={cn(
-                    'sticky top-9 z-20 min-w-9 px-1.5 py-1 text-center text-xs font-medium',
-                    col.is_coffin
-                      ? 'bg-faint text-white'
-                      : 'bg-surface-muted text-muted',
-                    firstInSeries && divider,
-                  )}
-                >
-                  {col.column_label}
-                </th>
-              ))}
+              {cols.map(({ col, firstInSeries }) => {
+                const open = col.is_coffin && coffinOpen(col.coffin_released_at)
+                return (
+                  <th
+                    key={col.subproblem_id}
+                    title={
+                      col.is_coffin
+                        ? open
+                          ? 'Гроб — открыт'
+                          : 'Гроб — разобран'
+                        : undefined
+                    }
+                    className={cn(
+                      'sticky top-9 z-20 min-w-9 px-1.5 py-1 text-center text-xs font-medium',
+                      open
+                        ? 'bg-status-checking text-white'
+                        : col.is_coffin
+                          ? 'bg-faint text-white'
+                          : 'bg-surface-muted text-muted',
+                      firstInSeries && divider,
+                    )}
+                  >
+                    {col.column_label}
+                  </th>
+                )
+              })}
             </tr>
           </thead>
           <tbody>
@@ -203,6 +216,7 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
                     </td>
                     {cols.map(({ col, firstInSeries }) => {
                       const acc = accepted(st.user_id, col.subproblem_id)
+                      const open = col.is_coffin && coffinOpen(col.coffin_released_at)
                       return (
                         <td
                           key={col.subproblem_id}
@@ -211,9 +225,11 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
                             firstInSeries && divider,
                             acc
                               ? 'bg-status-accepted-soft font-medium text-status-accepted'
-                              : col.is_coffin
-                                ? 'bg-faint/35 text-faint'
-                                : 'text-faint',
+                              : open
+                                ? 'bg-status-checking/25 text-faint'
+                                : col.is_coffin
+                                  ? 'bg-faint/35 text-faint'
+                                  : 'text-faint',
                           )}
                         >
                           {acc ? cellInitials(st.user_id, col.subproblem_id) : ''}
