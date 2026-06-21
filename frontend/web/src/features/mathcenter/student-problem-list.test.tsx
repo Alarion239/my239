@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import type { MyRollup } from '@my239/shared'
+import type { MyRollup, Series, Subproblem } from '@my239/shared'
 import { StudentProblemList } from './student-problem-list'
 
 // One problem with an untouched subproblem (no thread) and a rejected one.
@@ -20,17 +20,45 @@ const rollup: MyRollup = {
   ],
 }
 
-function renderList(closed: boolean) {
+const PAST = '2020-01-01T00:00:00Z'
+const FUTURE = '2999-01-01T00:00:00Z'
+
+function sub(over: Partial<Subproblem> & { id: number; label: string }): Subproblem {
+  return {
+    display: 'Задача 1 (' + over.label + ')',
+    is_coffin: false,
+    has_solution_tex: false,
+    has_solution_pdf: false,
+    ...over,
+  }
+}
+
+function makeSeries(dueAt: string, subproblems: Subproblem[]): Series {
+  return {
+    id: 7,
+    math_center_id: 1,
+    number: 1,
+    name: 'S',
+    display_name: 'Серия 1',
+    due_at: dueAt,
+    published: true,
+    has_pdf: false,
+    has_tex: false,
+    problems: [{ id: 1, number: 1, display_name: 'Задача 1', subproblems }],
+  }
+}
+
+function renderList(series: Series) {
   render(
     <MemoryRouter>
-      <StudentProblemList centerId={1} seriesId={7} rollup={rollup} closed={closed} />
+      <StudentProblemList centerId={1} seriesId={7} rollup={rollup} series={series} />
     </MemoryRouter>,
   )
 }
 
-describe('StudentProblemList — deadline gating', () => {
+describe('StudentProblemList — per-subproblem deadline gating', () => {
   it('keeps "Сдать" active and links untouched subproblems while open', () => {
-    renderList(false)
+    renderList(makeSeries(FUTURE, [sub({ id: 10, label: 'а' }), sub({ id: 11, label: 'б' })]))
     const submit = screen.getByRole('link', { name: 'Сдать' })
     expect(submit).toHaveAttribute('href', '/mathcenter/1/series/7/submit/10')
     // Untouched subproblem 'а' links to the submit form.
@@ -43,7 +71,7 @@ describe('StudentProblemList — deadline gating', () => {
   // submission — "Сдать" is disabled and the untouched tile is no longer a
   // submit link. The rejected subproblem's thread link stays (to appeal).
   it('disables submission after the deadline but keeps thread links', () => {
-    renderList(true)
+    renderList(makeSeries(PAST, [sub({ id: 10, label: 'а' }), sub({ id: 11, label: 'б' })]))
     const submit = screen.getByRole('button', { name: 'Сдать' })
     expect(submit).toBeDisabled()
     expect(
@@ -53,5 +81,18 @@ describe('StudentProblemList — deadline gating', () => {
     expect(
       document.querySelector('a[href="/mathcenter/1/series/7/thread/55"]'),
     ).not.toBeNull()
+  })
+
+  // Regression: an OPEN coffin stays submittable from the series page past the
+  // deadline, even though its sibling normal subproblems are closed.
+  it('keeps an open coffin submittable after the deadline', () => {
+    renderList(
+      makeSeries(PAST, [
+        sub({ id: 10, label: 'а', is_coffin: true, released_at: null }),
+        sub({ id: 11, label: 'б' }),
+      ]),
+    )
+    const submit = screen.getByRole('link', { name: 'Сдать' })
+    expect(submit).toHaveAttribute('href', '/mathcenter/1/series/7/submit/10')
   })
 })

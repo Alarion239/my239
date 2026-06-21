@@ -43,27 +43,20 @@ func Router(database *db.DB, tokens *internalAuth.TokenService, blobs objectstor
 		r.Get("/tex", GetSeriesTex(database))
 		r.Put("/tex", PutSeriesTex(database))
 		r.Delete("/tex", DeleteSeriesTex(database))
-		// Series-level разбор (official solutions): TeX / PDF / external link.
-		r.Get("/solution/tex", GetSeriesSolutionTex(database))
-		r.Put("/solution/tex", PutSeriesSolutionTex(database))
-		r.Delete("/solution/tex", DeleteSeriesSolutionTex(database))
-		r.Post("/solution/pdf/upload-url", IssueSolutionPDFUploadURL(database, blobs, uploadTTL))
-		r.Post("/solution/pdf/publish", FinalizeSolutionPDFPublish(database, blobs))
-		r.Get("/solution/pdf", DownloadSeriesSolutionPDF(database, blobs, downloadTTL))
-		r.Put("/solution/link", SetSeriesSolutionLinkHandler(database))
 	})
 
-	// Coffin mark/unmark is keyed by the problem; release + разбор by coffin id.
-	r.Post("/problems/{problemID}/coffin", MarkCoffin(database))
-	r.Delete("/problems/{problemID}/coffin", UnmarkCoffin(database, blobs))
-	r.Route("/coffins/{coffinID}", func(r chi.Router) {
-		r.Post("/release", ReleaseCoffin(database))
-		r.Get("/solution/tex", GetCoffinSolutionTex(database))
-		r.Put("/solution/tex", PutCoffinSolutionTex(database))
-		r.Post("/solution/pdf/upload-url", IssueCoffinSolutionPDFUploadURL(database, blobs, uploadTTL))
-		r.Post("/solution/pdf/publish", FinalizeCoffinSolutionPDFPublish(database, blobs))
-		r.Get("/solution/pdf", DownloadCoffinSolutionPDF(database, blobs, downloadTTL))
-		r.Put("/solution/link", SetCoffinSolutionLinkHandler(database))
+	// Per-subproblem coffins ("гробы") + официальный «Разбор». The subproblem is
+	// the unit: mark/unmark/release + разбор (TeX/PDF/link) all key on it.
+	r.Route("/subproblems/{subproblemID}", func(r chi.Router) {
+		r.Post("/coffin", MarkCoffin(database))
+		r.Delete("/coffin", UnmarkCoffin(database, blobs))
+		r.Post("/solution/release", ReleaseCoffin(database))
+		r.Get("/solution/tex", GetSubproblemSolutionTex(database))
+		r.Put("/solution/tex", PutSubproblemSolutionTex(database))
+		r.Post("/solution/pdf/upload-url", IssueSubproblemSolutionPDFUploadURL(database, blobs, uploadTTL))
+		r.Post("/solution/pdf/publish", FinalizeSubproblemSolutionPDFPublish(database, blobs))
+		r.Get("/solution/pdf", DownloadSubproblemSolutionPDF(database, blobs, downloadTTL))
+		r.Put("/solution/link", SetSubproblemSolutionLinkHandler(database))
 	})
 	return r
 }

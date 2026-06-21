@@ -10,8 +10,11 @@ import {
   useSeries,
   useSubmitAttempt,
   useSubproblemContext,
+  useSubproblemSolutionTex,
   useThread,
   userNameFromThread,
+  type Series,
+  type Subproblem,
   type SubproblemContext,
   type ThreadView,
 } from '@my239/shared'
@@ -19,6 +22,7 @@ import { Card, Spinner } from '../../design/ui'
 import { cn } from '../../design/cn'
 import { statusPillClasses } from './status-style'
 import { StatementPanel } from './statement-panel'
+import { SolutionContent } from './solution-content'
 import { SubmissionForm } from './submission-form'
 import { ThreadTimeline } from './thread-timeline'
 import { ThreadActionPanel } from './thread-action-panel'
@@ -151,6 +155,11 @@ function ThreadMode({
     <>
       <ThreadHeader thread={thread} ctx={ctx.data} userId={roleInfo.userId} />
       <Statement seriesId={seriesId} />
+      <Razbor
+        seriesId={seriesId}
+        subproblemId={thread.subproblem_id}
+        visible={isGrader || closed}
+      />
       <Card className="p-5">
         <h2 className="mb-3 font-display text-lg font-medium text-ink">Диалог</h2>
         <ThreadTimeline
@@ -193,6 +202,7 @@ function SubmitMode({
   }
 
   const closed = submissionClosedFor(ctx)
+  const isGrader = roleInfo.role === 'teacher' || roleInfo.role === 'admin'
   return (
     <>
       <Card className="p-5">
@@ -206,6 +216,11 @@ function SubmitMode({
         </p>
       </Card>
       <Statement seriesId={seriesId} />
+      <Razbor
+        seriesId={seriesId}
+        subproblemId={subproblemId}
+        visible={isGrader || closed}
+      />
       {closed ? (
         <Card className="px-6 py-10 text-center">
           <p className="text-sm text-muted">
@@ -316,6 +331,70 @@ function Statement({ seriesId }: { seriesId: number }) {
       </button>
       {open ? (
         <StatementPanel series={series} className="rounded-none border-0 border-t border-line" />
+      ) : null}
+    </Card>
+  )
+}
+
+function findSubproblem(
+  series: Series | undefined,
+  subproblemId: number,
+): Subproblem | undefined {
+  if (!series) return undefined
+  for (const p of series.problems) {
+    for (const sub of p.subproblems) {
+      if (sub.id === subproblemId) return sub
+    }
+  }
+  return undefined
+}
+
+// Razbor is the collapsible per-subproblem «Разбор» (official solution),
+// available to a student only once it's released (`visible`) and to teachers
+// always. Hidden entirely until then or when no разбор exists.
+function Razbor({
+  seriesId,
+  subproblemId,
+  visible,
+}: {
+  seriesId: number
+  subproblemId: number
+  visible: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const { data: series } = useSeries(seriesId)
+  const sub = findSubproblem(series, subproblemId)
+  const texQuery = useSubproblemSolutionTex(
+    subproblemId,
+    !!sub?.has_solution_tex && open,
+  )
+  if (!sub) return null
+  const has = sub.has_solution_tex || sub.has_solution_pdf || !!sub.solution_link
+  if (!visible || !has) return null
+  return (
+    <Card className="overflow-hidden">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-3 px-5 py-3 text-sm font-medium text-ink hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      >
+        <span>Разбор</span>
+        <ChevronDown
+          className={cn('h-4 w-4 text-muted transition-transform', open && 'rotate-180')}
+          aria-hidden
+        />
+      </button>
+      {open ? (
+        <div className="border-t border-line px-5 py-4">
+          <SolutionContent
+            hasTex={sub.has_solution_tex}
+            hasPdf={sub.has_solution_pdf}
+            link={sub.solution_link}
+            pdfPath={'/mathcenter/subproblems/' + subproblemId + '/solution/pdf'}
+            texQuery={texQuery}
+          />
+        </div>
       ) : null}
     </Card>
   )

@@ -5,14 +5,13 @@ import {
   displayStatusMeta,
   formatDateTime,
   useCenterCoffins,
-  useCoffinSolutionTex,
-  usePutCoffinSolutionTex,
+  usePutSubproblemSolutionTex,
   useReleaseCoffin,
-  useSetCoffinSolutionLink,
+  useSetSubproblemSolutionLink,
+  useSubproblemSolutionTex,
   useUnmarkCoffin,
-  useUploadCoffinSolutionPdf,
+  useUploadSubproblemSolutionPdf,
   type Coffin,
-  type CoffinSubproblem,
 } from '@my239/shared'
 import { Button, Card, Spinner, StatusTile } from '../../design/ui'
 import { cn } from '../../design/cn'
@@ -66,7 +65,7 @@ function CoffinList({ centerId, isManager }: { centerId: number; isManager: bool
         <p className="text-muted">Гробов пока нет.</p>
         {isManager ? (
           <p className="mt-2 text-sm text-muted">
-            Отметить задачу гробом можно в разделе «Статистика» серии.
+            Отметить подзадачу гробом можно в разделе «Разбор» серии.
           </p>
         ) : null}
       </Card>
@@ -90,7 +89,7 @@ function CoffinList({ centerId, isManager }: { centerId: number; isManager: bool
         <section key={g.key} className="flex flex-col gap-3">
           <h2 className="font-display text-lg font-medium text-ink">{g.label}</h2>
           {g.coffins.map((c) => (
-            <CoffinCard key={c.id} centerId={centerId} coffin={c} isManager={isManager} />
+            <CoffinCard key={c.subproblem_id} centerId={centerId} coffin={c} isManager={isManager} />
           ))}
         </section>
       ))}
@@ -112,13 +111,16 @@ function CoffinCard({
   // Students see разбор once released; teachers always (to verify).
   const canSeeSolution = (isManager || !open) && hasSolution
   const [showSolution, setShowSolution] = useState(false)
-  const texQuery = useCoffinSolutionTex(coffin.id, coffin.has_solution_tex && showSolution)
+  const texQuery = useSubproblemSolutionTex(
+    coffin.subproblem_id,
+    coffin.has_solution_tex && showSolution,
+  )
 
   return (
     <Card className="p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <div className="font-medium text-ink">{coffin.problem_display}</div>
+          <div className="font-medium text-ink">{coffin.display}</div>
           <div className="mt-0.5">
             {open ? (
               <span className="rounded-full bg-status-checking-soft px-2.5 py-0.5 text-xs font-medium text-status-checking">
@@ -142,12 +144,10 @@ function CoffinCard({
         </div>
       </div>
 
-      {/* Student subproblem tiles + submit shortcut. */}
-      {!isManager && coffin.subproblems && coffin.subproblems.length > 0 ? (
-        <div className="mt-3 flex flex-wrap items-center gap-1.5">
-          {coffin.subproblems.map((sub) => (
-            <SubTile key={sub.subproblem_id} centerId={centerId} coffin={coffin} sub={sub} open={open} />
-          ))}
+      {/* Student status tile + submit shortcut for this coffin subproblem. */}
+      {!isManager ? (
+        <div className="mt-3">
+          <SubTile centerId={centerId} coffin={coffin} open={open} />
         </div>
       ) : null}
 
@@ -157,7 +157,7 @@ function CoffinCard({
             hasTex={coffin.has_solution_tex}
             hasPdf={coffin.has_solution_pdf}
             link={coffin.solution_link}
-            pdfPath={'/mathcenter/coffins/' + coffin.id + '/solution/pdf'}
+            pdfPath={'/mathcenter/subproblems/' + coffin.subproblem_id + '/solution/pdf'}
             texQuery={texQuery}
           />
         </div>
@@ -169,35 +169,35 @@ function CoffinCard({
 function SubTile({
   centerId,
   coffin,
-  sub,
   open,
 }: {
   centerId: number
   coffin: Coffin
-  sub: CoffinSubproblem
   open: boolean
 }) {
-  const meta = displayStatusMeta(sub.current_status, sub.being_graded)
-  const label = (sub.subproblem_label ? sub.subproblem_label + ': ' : '') + meta.label
+  const status = coffin.current_status ?? 'ungraded'
+  const beingGraded = coffin.being_graded ?? false
+  const threadId = coffin.thread_id ?? 0
+  const meta = displayStatusMeta(status, beingGraded)
   const base = '/mathcenter/' + centerId + '/series/' + coffin.series_id
   // Link to the existing thread, else (only while open) to the submit form.
   const to =
-    sub.thread_id > 0
-      ? base + '/thread/' + sub.thread_id
+    threadId > 0
+      ? base + '/thread/' + threadId
       : open
-        ? base + '/submit/' + sub.subproblem_id
+        ? base + '/submit/' + coffin.subproblem_id
         : null
-  const tile = <StatusTile status={sub.current_status} beingGraded={sub.being_graded} label={label} />
+  const tile = <StatusTile status={status} beingGraded={beingGraded} label={meta.label} />
   return to ? (
     <Link
       to={to}
-      title={label}
-      className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      title={meta.label}
+      className="inline-flex rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
     >
       {tile}
     </Link>
   ) : (
-    <span title={label}>{tile}</span>
+    <span title={meta.label}>{tile}</span>
   )
 }
 
@@ -212,14 +212,14 @@ function ManagerControls({
 }) {
   const release = useReleaseCoffin(centerId)
   const unmark = useUnmarkCoffin(centerId)
-  const putTex = usePutCoffinSolutionTex(coffin.id, centerId)
-  const uploadPdf = useUploadCoffinSolutionPdf(coffin.id, centerId)
-  const setLink = useSetCoffinSolutionLink(coffin.id, centerId)
+  const putTex = usePutSubproblemSolutionTex(coffin.subproblem_id, centerId)
+  const uploadPdf = useUploadSubproblemSolutionPdf(coffin.subproblem_id, centerId)
+  const setLink = useSetSubproblemSolutionLink(coffin.subproblem_id, centerId)
 
   return (
     <>
       <SolutionEditor
-        title={'Разбор · ' + coffin.problem_display}
+        title={'Разбор · ' + coffin.display}
         hasTex={coffin.has_solution_tex}
         hasPdf={coffin.has_solution_pdf}
         link={coffin.solution_link}
@@ -236,7 +236,7 @@ function ManagerControls({
         <Button
           type="button"
           size="sm"
-          onClick={() => release.mutate(coffin.id)}
+          onClick={() => release.mutate(coffin.subproblem_id)}
           disabled={release.isPending}
           title="Закрыть сдачу и опубликовать разбор"
         >
@@ -247,7 +247,7 @@ function ManagerControls({
         type="button"
         size="sm"
         variant="ghost"
-        onClick={() => unmark.mutate(coffin.problem_id)}
+        onClick={() => unmark.mutate(coffin.subproblem_id)}
         disabled={unmark.isPending}
         className={cn('text-muted')}
         title="Снять пометку гроба"

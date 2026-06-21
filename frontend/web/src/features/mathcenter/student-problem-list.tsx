@@ -3,9 +3,12 @@ import {
   displayStatusMeta,
   homeworkStatusMeta,
   problemStateFromSubproblems,
+  submissionClosedFor,
   type MyRollup,
   type RollupProblem,
   type RollupSubproblem,
+  type Series,
+  type Subproblem,
 } from '@my239/shared'
 import { Button, StatusLegend, StatusTile } from '../../design/ui'
 import { cn } from '../../design/cn'
@@ -14,10 +17,29 @@ export interface StudentProblemListProps {
   centerId: number
   seriesId: number
   rollup: MyRollup
-  // After the series deadline, submitting a new/resubmitted solution is blocked
-  // server-side, so the "Сдать" shortcut and the submit links for untouched
-  // subproblems are disabled. Existing threads stay reachable (to appeal).
-  closed: boolean
+  // The series view carries each subproblem's coffin/release metadata so
+  // submission is gated PER SUBPROBLEM: a normal subproblem closes at the
+  // deadline, but an open coffin stays submittable past it. Existing threads
+  // stay reachable regardless (to appeal).
+  series: Series
+}
+
+// closedForSub computes the per-subproblem submission gate from the series
+// metadata: normal subproblems close at the deadline, open coffins stay open.
+function closedForSub(meta: Subproblem | undefined, dueAt: string): boolean {
+  return submissionClosedFor({
+    is_coffin: meta?.is_coffin ?? false,
+    coffin_released_at: meta?.released_at,
+    series_due_at: dueAt,
+  })
+}
+
+function subMetaMap(series: Series): Map<number, Subproblem> {
+  const m = new Map<number, Subproblem>()
+  for (const p of series.problems) {
+    for (const sub of p.subproblems) m.set(sub.id, sub)
+  }
+  return m
 }
 
 // subproblemPath routes to the existing thread when the student has already
@@ -41,11 +63,12 @@ export function StudentProblemList({
   centerId,
   seriesId,
   rollup,
-  closed,
+  series,
 }: StudentProblemListProps) {
   if (rollup.problems.length === 0) {
     return <p className="py-6 text-sm text-muted">В этой серии пока нет задач.</p>
   }
+  const meta = subMetaMap(series)
 
   return (
     <div className="flex flex-col gap-3">
@@ -55,7 +78,8 @@ export function StudentProblemList({
           centerId={centerId}
           seriesId={seriesId}
           problem={problem}
-          closed={closed}
+          meta={meta}
+          dueAt={series.due_at}
         />
       ))}
       <StatusLegend className="mt-2" />
@@ -67,19 +91,30 @@ function ProblemRow({
   centerId,
   seriesId,
   problem,
-  closed,
+  meta,
+  dueAt,
 }: {
   centerId: number
   seriesId: number
   problem: RollupProblem
-  closed: boolean
+  meta: Map<number, Subproblem>
+  dueAt: string
 }) {
   const summary = problemStateFromSubproblems(
     problem.subproblems.map((s) => s.current_status),
   )
   const summaryMeta = homeworkStatusMeta(summary)
-  // First subproblem that is not yet accepted — where "Сдать" should land.
-  const next = problem.subproblems.find((s) => s.current_status !== 'accepted')
+  // First not-yet-accepted subproblem that is still open for submission — where
+  // "Сдать" should land. An open coffin keeps the shortcut alive past the
+  // deadline; a closed normal subproblem doesn't.
+  const next = problem.subproblems.find(
+    (s) =>
+      s.current_status !== 'accepted' &&
+      !closedForSub(meta.get(s.subproblem_id), dueAt),
+  )
+  const allAccepted = problem.subproblems.every(
+    (s) => s.current_status === 'accepted',
+  )
 
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3">
@@ -101,8 +136,9 @@ function ProblemRow({
             />
           )
           // A tile links to its thread when one exists; an untouched subproblem
-          // links to the submit form only while the series is open.
-          const interactive = sub.thread_id > 0 || !closed
+          // links to the submit form only while THAT subproblem is open.
+          const interactive =
+            sub.thread_id > 0 || !closedForSub(meta.get(sub.subproblem_id), dueAt)
           return interactive ? (
             <Link
               key={sub.subproblem_id}
@@ -121,16 +157,16 @@ function ProblemRow({
           )
         })}
       </div>
-      {closed ? (
-        <Button size="sm" variant="secondary" disabled title="Серия закрыта">
-          Сдать
-        </Button>
-      ) : next ? (
+      {next ? (
         <Button size="sm" variant="secondary" asChild>
           <Link to={subproblemPath(centerId, seriesId, next)}>Сдать</Link>
         </Button>
-      ) : (
+      ) : allAccepted ? (
         <Button size="sm" variant="secondary" disabled title="Все подзадачи приняты">
+          Сдать
+        </Button>
+      ) : (
+        <Button size="sm" variant="secondary" disabled title="Срок сдачи прошёл">
           Сдать
         </Button>
       )}

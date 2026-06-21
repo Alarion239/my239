@@ -145,13 +145,13 @@ SELECT sp.id            AS subproblem_id,
        s.due_at         AS series_due_at,
        s.published_at   AS series_published_at,
        -- Coffin state, so the submit handler can keep a coffin open past the
-       -- series deadline until its solution is released.
-       (cof.id IS NOT NULL)::boolean AS is_coffin,
-       cof.released_at               AS coffin_released_at
+       -- series deadline until its solution is released. Per-subproblem now.
+       COALESCE(ss.is_coffin, false)::boolean AS is_coffin,
+       ss.released_at                         AS coffin_released_at
 FROM math_center_subproblems sp
          JOIN math_center_problems p ON p.id = sp.problem_id
          JOIN math_center_series   s ON s.id = p.series_id
-         LEFT JOIN math_center_coffins cof ON cof.problem_id = p.id
+         LEFT JOIN math_center_subproblem_solutions ss ON ss.subproblem_id = sp.id
 WHERE sp.id = $1
 `
 

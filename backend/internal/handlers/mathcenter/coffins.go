@@ -18,72 +18,74 @@ import (
 	"github.com/Alarion239/my239/backend/pkg/objectstore"
 )
 
-// Coffins ("гробы"): hard problems kept open for submission past the series
-// deadline until their own разбор is released. See migration 000010 +
-// internal/homework.SubmissionClosed for the submission-window rule.
+// Coffins ("гробы") + per-subproblem официальный «Разбор». The subproblem is the
+// atomic unit: each subproblem has its own разбор (TeX/PDF/link) and its own
+// release timing. A coffin is a subproblem kept OPEN for submission past the
+// series deadline until its разбор is released (released_at). See migration
+// 000011 + internal/homework.SubmissionClosed for the submission-window rule.
 
-func coffinSolutionPDFKey(coffinID int64) string {
-	return fmt.Sprintf("mathcenter/coffin/%d.pdf", coffinID)
+func subproblemSolutionPDFKey(subproblemID int64) string {
+	return fmt.Sprintf("mathcenter/subproblem/%d.solution.pdf", subproblemID)
 }
 
-// coffinSubproblemView is one subpart of a coffin with the calling student's
-// status, so the Гробы tab can show tiles + a "Сдать" shortcut.
-type coffinSubproblemView struct {
-	SubproblemID    int64  `json:"subproblem_id"`
-	SubproblemLabel string `json:"subproblem_label"`
-	ThreadID        int64  `json:"thread_id"`
-	CurrentStatus   string `json:"current_status"`
-	BeingGraded     bool   `json:"being_graded"`
-}
-
-// coffinView is the rich list row (with series/problem labels) for the Гробы tab.
-// Subproblems is populated only for student callers (their own thread status).
+// coffinView is one coffin subproblem (with series/problem labels) for the
+// center-wide Гробы tab. The trailing thread fields are populated only for
+// student callers (their own status), so they can submit straight from the tab.
 type coffinView struct {
-	ID             int64                  `json:"id"`
-	ProblemID      int64                  `json:"problem_id"`
-	SeriesID       int64                  `json:"series_id"`
-	SeriesNumber   int                    `json:"series_number"`
-	SeriesName     string                 `json:"series_name"`
-	MathCenterID   int64                  `json:"math_center_id"`
-	ProblemNumber  int                    `json:"problem_number"`
-	ProblemDisplay string                 `json:"problem_display"`
-	ReleasedAt     *time.Time             `json:"released_at,omitempty"`
-	HasSolutionTex bool                   `json:"has_solution_tex"`
-	HasSolutionPDF bool                   `json:"has_solution_pdf"`
-	SolutionLink   *string                `json:"solution_link,omitempty"`
-	Subproblems    []coffinSubproblemView `json:"subproblems,omitempty"`
+	SubproblemID    int64      `json:"subproblem_id"`
+	SubproblemLabel string     `json:"subproblem_label"`
+	ProblemID       int64      `json:"problem_id"`
+	ProblemNumber   int        `json:"problem_number"`
+	Display         string     `json:"display"`
+	SeriesID        int64      `json:"series_id"`
+	SeriesNumber    int        `json:"series_number"`
+	SeriesName      string     `json:"series_name"`
+	MathCenterID    int64      `json:"math_center_id"`
+	IsCoffin        bool       `json:"is_coffin"`
+	ReleasedAt      *time.Time `json:"released_at,omitempty"`
+	HasSolutionTex  bool       `json:"has_solution_tex"`
+	HasSolutionPDF  bool       `json:"has_solution_pdf"`
+	SolutionLink    *string    `json:"solution_link,omitempty"`
+	// Student-only thread status (zero for teachers).
+	ThreadID      int64  `json:"thread_id,omitempty"`
+	CurrentStatus string `json:"current_status,omitempty"`
+	BeingGraded   bool   `json:"being_graded,omitempty"`
 }
 
 // coffinActionView is the lean response for mark/release/solution actions; the
-// client refetches the list for labels.
+// client refetches the list/series view for labels.
 type coffinActionView struct {
-	ID             int64      `json:"id"`
-	ProblemID      int64      `json:"problem_id"`
+	SubproblemID   int64      `json:"subproblem_id"`
+	IsCoffin       bool       `json:"is_coffin"`
 	ReleasedAt     *time.Time `json:"released_at,omitempty"`
 	HasSolutionTex bool       `json:"has_solution_tex"`
 	HasSolutionPDF bool       `json:"has_solution_pdf"`
 	SolutionLink   *string    `json:"solution_link,omitempty"`
 }
 
-func toCoffinActionView(c store.MathCenterCoffin) coffinActionView {
+func toCoffinActionView(s store.MathCenterSubproblemSolution) coffinActionView {
 	return coffinActionView{
-		ID:             c.ID,
-		ProblemID:      c.ProblemID,
-		ReleasedAt:     c.ReleasedAt,
-		HasSolutionTex: c.SolutionTexSource != nil,
-		HasSolutionPDF: c.SolutionPdfObjectKey != nil,
-		SolutionLink:   c.SolutionLink,
+		SubproblemID:   s.SubproblemID,
+		IsCoffin:       s.IsCoffin,
+		ReleasedAt:     s.ReleasedAt,
+		HasSolutionTex: s.SolutionTexSource != nil,
+		HasSolutionPDF: s.SolutionPdfObjectKey != nil,
+		SolutionLink:   s.SolutionLink,
 	}
 }
 
-// coffinReleased reports whether a coffin's solution is released (and visible
-// to students): released_at set and not in the future.
-func coffinReleased(c store.MathCenterCoffin, now time.Time) bool {
-	return c.ReleasedAt != nil && !now.Before(*c.ReleasedAt)
+// solutionReleasedToStudent reports whether a non-teacher may see a subproblem's
+// разбор (and, for coffins, whether submission has closed): a coffin is released
+// once released_at is set and past; a normal subproblem at the series deadline.
+func solutionReleasedToStudent(s store.MathCenterSubproblemSolution, seriesDueAt, now time.Time) bool {
+	if s.IsCoffin {
+		return s.ReleasedAt != nil && !now.Before(*s.ReleasedAt)
+	}
+	return !now.Before(seriesDueAt)
 }
 
-// ListCenterCoffins — any member of the center. Returns every coffin with
-// series/problem labels for the center-wide Гробы tab.
+// ListCenterCoffins — any member of the center. Returns every coffin subproblem
+// with series/problem labels for the center-wide Гробы tab.
 func ListCenterCoffins(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -114,9 +116,9 @@ func ListCenterCoffins(database *db.DB) http.HandlerFunc {
 			return
 		}
 
-		// Students get the per-coffin subproblem grid (their own thread status)
-		// so they can submit from the tab. Teachers manage + grade elsewhere.
-		subsByCoffin := map[int64][]coffinSubproblemView{}
+		// Students get their own thread status per coffin subproblem so they can
+		// submit from the tab. Teachers manage + grade elsewhere.
+		statusBySub := map[int64]store.ListCoffinSubproblemsForStudentRow{}
 		if isStudent && !isTeacher {
 			spRows, err := q.ListCoffinSubproblemsForStudent(ctx, store.ListCoffinSubproblemsForStudentParams{
 				MathCenterID: centerID, StudentUserID: userID,
@@ -127,39 +129,97 @@ func ListCenterCoffins(database *db.DB) http.HandlerFunc {
 				return
 			}
 			for _, sp := range spRows {
-				subsByCoffin[sp.CoffinID] = append(subsByCoffin[sp.CoffinID], coffinSubproblemView{
-					SubproblemID:    sp.SubproblemID,
-					SubproblemLabel: sp.SubproblemLabel,
-					ThreadID:        sp.ThreadID,
-					CurrentStatus:   sp.CurrentStatus,
-					BeingGraded:     sp.BeingGraded,
-				})
+				statusBySub[sp.SubproblemID] = sp
 			}
 		}
 
 		out := make([]coffinView, 0, len(rows))
 		for _, c := range rows {
-			out = append(out, coffinView{
-				ID:             c.ID,
-				ProblemID:      c.ProblemID,
-				SeriesID:       c.SeriesID,
-				SeriesNumber:   int(c.SeriesNumber),
-				SeriesName:     c.SeriesName,
-				MathCenterID:   c.MathCenterID,
-				ProblemNumber:  int(c.ProblemNumber),
-				ProblemDisplay: mc.ProblemDisplayName(int(c.ProblemNumber)),
-				ReleasedAt:     c.ReleasedAt,
-				HasSolutionTex: c.SolutionTexSource != nil,
-				HasSolutionPDF: c.SolutionPdfObjectKey != nil,
-				SolutionLink:   c.SolutionLink,
-				Subproblems:    subsByCoffin[c.ID],
-			})
+			v := coffinView{
+				SubproblemID:    c.SubproblemID,
+				SubproblemLabel: c.SubproblemLabel,
+				ProblemID:       c.ProblemID,
+				ProblemNumber:   int(c.ProblemNumber),
+				Display:         mc.SubproblemDisplayName(int(c.ProblemNumber), c.SubproblemLabel),
+				SeriesID:        c.SeriesID,
+				SeriesNumber:    int(c.SeriesNumber),
+				SeriesName:      c.SeriesName,
+				MathCenterID:    c.MathCenterID,
+				IsCoffin:        c.IsCoffin,
+				ReleasedAt:      c.ReleasedAt,
+				HasSolutionTex:  c.SolutionTexSource != nil,
+				HasSolutionPDF:  c.SolutionPdfObjectKey != nil,
+				SolutionLink:    c.SolutionLink,
+			}
+			if st, ok := statusBySub[c.SubproblemID]; ok {
+				v.ThreadID = st.ThreadID
+				v.CurrentStatus = st.CurrentStatus
+				v.BeingGraded = st.BeingGraded
+			}
+			out = append(out, v)
 		}
 		httpx.WriteJSON(w, http.StatusOK, out)
 	}
 }
 
-// MarkCoffin — teacher-only. Marks a problem as a coffin (idempotent),
+// loadSubproblemForWrite resolves a subproblem id, authorizes the caller as a
+// teacher of its center, and returns the resolution row (subproblem→center +
+// series due_at). Writes 404/403/500 on failure.
+func loadSubproblemForWrite(ctx context.Context, w http.ResponseWriter, r *http.Request, q *store.Queries, userID, subproblemID int64) (store.GetSubproblemSolutionCenterRow, bool) {
+	sc, err := q.GetSubproblemSolutionCenter(ctx, subproblemID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "subproblem not found")
+			return store.GetSubproblemSolutionCenterRow{}, false
+		}
+		logger.LogErrorContext(ctx, "coffins: subproblem center", err)
+		httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+		return store.GetSubproblemSolutionCenterRow{}, false
+	}
+	if !requireTeacher(ctx, w, r, q, userID, sc.MathCenterID) {
+		return store.GetSubproblemSolutionCenterRow{}, false
+	}
+	return sc, true
+}
+
+// loadSubproblemForRead resolves a subproblem + its solution row and authorizes
+// any center member, also reporting whether the caller is a teacher (so reads
+// can gate students on release) and the series deadline. Writes 404/403/500.
+func loadSubproblemForRead(ctx context.Context, w http.ResponseWriter, r *http.Request, q *store.Queries, userID, subproblemID int64) (store.MathCenterSubproblemSolution, time.Time, bool, bool) {
+	sc, err := q.GetSubproblemSolutionCenter(ctx, subproblemID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "subproblem not found")
+			return store.MathCenterSubproblemSolution{}, time.Time{}, false, false
+		}
+		logger.LogErrorContext(ctx, "coffins: subproblem center", err)
+		httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+		return store.MathCenterSubproblemSolution{}, time.Time{}, false, false
+	}
+	isTeacher, isStudent, err := membership(ctx, r, q, userID, sc.MathCenterID)
+	if err != nil {
+		logger.LogErrorContext(ctx, "coffins: membership", err)
+		httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+		return store.MathCenterSubproblemSolution{}, time.Time{}, false, false
+	}
+	if !isTeacher && !isStudent {
+		httpx.WriteAPIError(w, r, http.StatusForbidden, httpx.CodeForbidden, "no access to this subproblem")
+		return store.MathCenterSubproblemSolution{}, time.Time{}, false, false
+	}
+	s, err := q.GetSubproblemSolution(ctx, subproblemID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "no разбор uploaded yet")
+			return store.MathCenterSubproblemSolution{}, time.Time{}, false, false
+		}
+		logger.LogErrorContext(ctx, "coffins: get solution", err)
+		httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+		return store.MathCenterSubproblemSolution{}, time.Time{}, false, false
+	}
+	return s, sc.SeriesDueAt, isTeacher, true
+}
+
+// MarkCoffin — teacher-only. Marks a subproblem as a coffin (idempotent),
 // re-opening it for submission past the series deadline.
 func MarkCoffin(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -168,37 +228,28 @@ func MarkCoffin(database *db.DB) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		problemID, err := pathInt64(r, "problemID")
+		subproblemID, err := pathInt64(r, "subproblemID")
 		if err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid problem id")
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid subproblem id")
 			return
 		}
 		q := store.New(database.Pool())
-		pc, err := q.GetProblemCenter(ctx, problemID)
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "problem not found")
-				return
-			}
-			logger.LogErrorContext(ctx, "coffins: problem center", err)
-			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+		if _, ok := loadSubproblemForWrite(ctx, w, r, q, userID, subproblemID); !ok {
 			return
 		}
-		if !requireTeacher(ctx, w, r, q, userID, pc.MathCenterID) {
-			return
-		}
-		c, err := q.MarkCoffin(ctx, problemID)
+		s, err := q.UpsertCoffinFlag(ctx, store.UpsertCoffinFlagParams{SubproblemID: subproblemID, IsCoffin: true})
 		if err != nil {
 			logger.LogErrorContext(ctx, "coffins: mark", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to mark coffin")
 			return
 		}
-		httpx.WriteJSON(w, http.StatusOK, toCoffinActionView(c))
+		httpx.WriteJSON(w, http.StatusOK, toCoffinActionView(s))
 	}
 }
 
-// UnmarkCoffin — teacher-only. Removes the coffin (problem reverts to the
-// normal series deadline). Best-effort deletes its разбор PDF.
+// UnmarkCoffin — teacher-only. Clears the coffin flag (the subproblem reverts to
+// the normal series deadline). If no разбор remains, the row + its PDF are
+// removed; otherwise the разбор is kept.
 func UnmarkCoffin(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -206,31 +257,44 @@ func UnmarkCoffin(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		problemID, err := pathInt64(r, "problemID")
+		subproblemID, err := pathInt64(r, "subproblemID")
 		if err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid problem id")
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid subproblem id")
 			return
 		}
 		q := store.New(database.Pool())
-		pc, err := q.GetProblemCenter(ctx, problemID)
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "problem not found")
-				return
-			}
-			logger.LogErrorContext(ctx, "coffins: problem center", err)
+		if _, ok := loadSubproblemForWrite(ctx, w, r, q, userID, subproblemID); !ok {
+			return
+		}
+		existing, err := q.GetSubproblemSolution(ctx, subproblemID)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			logger.LogErrorContext(ctx, "coffins: get for unmark", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
-		if !requireTeacher(ctx, w, r, q, userID, pc.MathCenterID) {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Not a coffin and no разбор — nothing to do.
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		if existing, err := q.GetCoffinByProblem(ctx, problemID); err == nil && existing.SolutionPdfObjectKey != nil {
+		hasSolution := existing.SolutionTexSource != nil || existing.SolutionPdfObjectKey != nil || existing.SolutionLink != nil
+		if hasSolution {
+			// Keep the разбор; just clear the coffin flag.
+			if _, err := q.UpsertCoffinFlag(ctx, store.UpsertCoffinFlagParams{SubproblemID: subproblemID, IsCoffin: false}); err != nil {
+				logger.LogErrorContext(ctx, "coffins: clear flag", err)
+				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to unmark coffin")
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		// No разбор content — drop the row entirely (and any stray PDF).
+		if existing.SolutionPdfObjectKey != nil {
 			if err := blobs.Delete(ctx, *existing.SolutionPdfObjectKey); err != nil {
 				logger.LogErrorContext(ctx, "coffins: delete blob", err)
 			}
 		}
-		if _, err := q.UnmarkCoffin(ctx, problemID); err != nil {
+		if _, err := q.DeleteSubproblemSolution(ctx, subproblemID); err != nil {
 			logger.LogErrorContext(ctx, "coffins: unmark", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to unmark coffin")
 			return
@@ -239,33 +303,8 @@ func UnmarkCoffin(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 	}
 }
 
-// loadCoffinForWrite resolves a coffin id, authorizes the caller as a teacher of
-// its center, and returns the coffin row. Writes 404/403/500 on failure.
-func loadCoffinForWrite(ctx context.Context, w http.ResponseWriter, r *http.Request, q *store.Queries, userID, coffinID int64) (store.MathCenterCoffin, bool) {
-	cc, err := q.GetCoffinCenter(ctx, coffinID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "coffin not found")
-			return store.MathCenterCoffin{}, false
-		}
-		logger.LogErrorContext(ctx, "coffins: center", err)
-		httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
-		return store.MathCenterCoffin{}, false
-	}
-	if !requireTeacher(ctx, w, r, q, userID, cc.MathCenterID) {
-		return store.MathCenterCoffin{}, false
-	}
-	c, err := q.GetCoffin(ctx, coffinID)
-	if err != nil {
-		logger.LogErrorContext(ctx, "coffins: get", err)
-		httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
-		return store.MathCenterCoffin{}, false
-	}
-	return c, true
-}
-
-// ReleaseCoffin — teacher-only. Stamps released_at, closing submission and
-// making the coffin's разбор available.
+// ReleaseCoffin — teacher-only. Stamps released_at, closing a coffin's
+// submission window and making its разбор available.
 func ReleaseCoffin(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -273,37 +312,41 @@ func ReleaseCoffin(database *db.DB) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		coffinID, err := pathInt64(r, "coffinID")
+		subproblemID, err := pathInt64(r, "subproblemID")
 		if err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid coffin id")
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid subproblem id")
 			return
 		}
 		q := store.New(database.Pool())
-		if _, ok := loadCoffinForWrite(ctx, w, r, q, userID, coffinID); !ok {
+		if _, ok := loadSubproblemForWrite(ctx, w, r, q, userID, subproblemID); !ok {
 			return
 		}
-		c, err := q.ReleaseCoffin(ctx, coffinID)
+		s, err := q.ReleaseSubproblemSolution(ctx, subproblemID)
 		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "subproblem is not a coffin")
+				return
+			}
 			logger.LogErrorContext(ctx, "coffins: release", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to release coffin")
 			return
 		}
-		httpx.WriteJSON(w, http.StatusOK, toCoffinActionView(c))
+		httpx.WriteJSON(w, http.StatusOK, toCoffinActionView(s))
 	}
 }
 
-// --- coffin разбор: TeX ----------------------------------------------------
+// --- per-subproblem разбор: TeX ---------------------------------------------
 
-func PutCoffinSolutionTex(database *db.DB) http.HandlerFunc {
+func PutSubproblemSolutionTex(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		userID, ok := requireUser(w, r)
 		if !ok {
 			return
 		}
-		coffinID, err := pathInt64(r, "coffinID")
+		subproblemID, err := pathInt64(r, "subproblemID")
 		if err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid coffin id")
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid subproblem id")
 			return
 		}
 		var req texPayload
@@ -315,114 +358,81 @@ func PutCoffinSolutionTex(database *db.DB) http.HandlerFunc {
 			return
 		}
 		q := store.New(database.Pool())
-		if _, ok := loadCoffinForWrite(ctx, w, r, q, userID, coffinID); !ok {
+		if _, ok := loadSubproblemForWrite(ctx, w, r, q, userID, subproblemID); !ok {
 			return
 		}
 		tex := req.Tex
-		c, err := q.SetCoffinSolutionTex(ctx, store.SetCoffinSolutionTexParams{ID: coffinID, SolutionTexSource: &tex})
+		s, err := q.SetSubproblemSolutionTex(ctx, store.SetSubproblemSolutionTexParams{SubproblemID: subproblemID, SolutionTexSource: &tex})
 		if err != nil {
 			logger.LogErrorContext(ctx, "coffins: set solution tex", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to save разбор")
 			return
 		}
-		httpx.WriteJSON(w, http.StatusOK, toCoffinActionView(c))
+		httpx.WriteJSON(w, http.StatusOK, toCoffinActionView(s))
 	}
 }
 
-func GetCoffinSolutionTex(database *db.DB) http.HandlerFunc {
+func GetSubproblemSolutionTex(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		userID, ok := requireUser(w, r)
 		if !ok {
 			return
 		}
-		coffinID, err := pathInt64(r, "coffinID")
+		subproblemID, err := pathInt64(r, "subproblemID")
 		if err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid coffin id")
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid subproblem id")
 			return
 		}
 		q := store.New(database.Pool())
-		c, isTeacher, ok := loadCoffinForRead(ctx, w, r, q, userID, coffinID)
+		s, dueAt, isTeacher, ok := loadSubproblemForRead(ctx, w, r, q, userID, subproblemID)
 		if !ok {
 			return
 		}
-		if !isTeacher && !coffinReleased(c, time.Now()) {
+		if !isTeacher && !solutionReleasedToStudent(s, dueAt, time.Now()) {
 			httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "разбор not available yet")
 			return
 		}
-		if c.SolutionTexSource == nil {
+		if s.SolutionTexSource == nil {
 			httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "no разбор tex uploaded yet")
 			return
 		}
-		httpx.WriteJSON(w, http.StatusOK, texPayload{Tex: *c.SolutionTexSource})
+		httpx.WriteJSON(w, http.StatusOK, texPayload{Tex: *s.SolutionTexSource})
 	}
 }
 
-// loadCoffinForRead resolves a coffin and authorizes any center member, also
-// reporting whether the caller is a teacher (so reads can gate студенты on
-// release). Writes 404/403/500 on failure.
-func loadCoffinForRead(ctx context.Context, w http.ResponseWriter, r *http.Request, q *store.Queries, userID, coffinID int64) (store.MathCenterCoffin, bool, bool) {
-	cc, err := q.GetCoffinCenter(ctx, coffinID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "coffin not found")
-			return store.MathCenterCoffin{}, false, false
-		}
-		logger.LogErrorContext(ctx, "coffins: center", err)
-		httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
-		return store.MathCenterCoffin{}, false, false
-	}
-	isTeacher, isStudent, err := membership(ctx, r, q, userID, cc.MathCenterID)
-	if err != nil {
-		logger.LogErrorContext(ctx, "coffins: membership", err)
-		httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
-		return store.MathCenterCoffin{}, false, false
-	}
-	if !isTeacher && !isStudent {
-		httpx.WriteAPIError(w, r, http.StatusForbidden, httpx.CodeForbidden, "no access to this coffin")
-		return store.MathCenterCoffin{}, false, false
-	}
-	c, err := q.GetCoffin(ctx, coffinID)
-	if err != nil {
-		logger.LogErrorContext(ctx, "coffins: get", err)
-		httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
-		return store.MathCenterCoffin{}, false, false
-	}
-	return c, isTeacher, true
-}
+// --- per-subproblem разбор: PDF ---------------------------------------------
 
-// --- coffin разбор: PDF ----------------------------------------------------
-
-func IssueCoffinSolutionPDFUploadURL(database *db.DB, blobs objectstore.Store, uploadTTL time.Duration) http.HandlerFunc {
+func IssueSubproblemSolutionPDFUploadURL(database *db.DB, blobs objectstore.Store, uploadTTL time.Duration) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		userID, ok := requireUser(w, r)
 		if !ok {
 			return
 		}
-		coffinID, err := pathInt64(r, "coffinID")
+		subproblemID, err := pathInt64(r, "subproblemID")
 		if err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid coffin id")
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid subproblem id")
 			return
 		}
 		q := store.New(database.Pool())
-		if _, ok := loadCoffinForWrite(ctx, w, r, q, userID, coffinID); !ok {
+		if _, ok := loadSubproblemForWrite(ctx, w, r, q, userID, subproblemID); !ok {
 			return
 		}
-		presignPDFUpload(ctx, w, r, blobs, coffinSolutionPDFKey(coffinID), uploadTTL)
+		presignPDFUpload(ctx, w, r, blobs, subproblemSolutionPDFKey(subproblemID), uploadTTL)
 	}
 }
 
-func FinalizeCoffinSolutionPDFPublish(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
+func FinalizeSubproblemSolutionPDFPublish(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		userID, ok := requireUser(w, r)
 		if !ok {
 			return
 		}
-		coffinID, err := pathInt64(r, "coffinID")
+		subproblemID, err := pathInt64(r, "subproblemID")
 		if err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid coffin id")
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid subproblem id")
 			return
 		}
 		var req pdfPublishRequest
@@ -430,68 +440,68 @@ func FinalizeCoffinSolutionPDFPublish(database *db.DB, blobs objectstore.Store) 
 			return
 		}
 		q := store.New(database.Pool())
-		if _, ok := loadCoffinForWrite(ctx, w, r, q, userID, coffinID); !ok {
+		if _, ok := loadSubproblemForWrite(ctx, w, r, q, userID, subproblemID); !ok {
 			return
 		}
-		key := coffinSolutionPDFKey(coffinID)
+		key := subproblemSolutionPDFKey(subproblemID)
 		if req.ObjectKey != key {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "object_key does not match this coffin")
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "object_key does not match this subproblem")
 			return
 		}
 		if !statValidatePDF(ctx, w, r, blobs, key) {
 			return
 		}
-		c, err := q.SetCoffinSolutionPdf(ctx, store.SetCoffinSolutionPdfParams{ID: coffinID, SolutionPdfObjectKey: &key})
+		s, err := q.SetSubproblemSolutionPdf(ctx, store.SetSubproblemSolutionPdfParams{SubproblemID: subproblemID, SolutionPdfObjectKey: &key})
 		if err != nil {
 			logger.LogErrorContext(ctx, "coffins: set solution pdf", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to publish разбор")
 			return
 		}
-		httpx.WriteJSON(w, http.StatusOK, toCoffinActionView(c))
+		httpx.WriteJSON(w, http.StatusOK, toCoffinActionView(s))
 	}
 }
 
-func DownloadCoffinSolutionPDF(database *db.DB, blobs objectstore.Store, ttl time.Duration) http.HandlerFunc {
+func DownloadSubproblemSolutionPDF(database *db.DB, blobs objectstore.Store, ttl time.Duration) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		userID, ok := requireUser(w, r)
 		if !ok {
 			return
 		}
-		coffinID, err := pathInt64(r, "coffinID")
+		subproblemID, err := pathInt64(r, "subproblemID")
 		if err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid coffin id")
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid subproblem id")
 			return
 		}
 		q := store.New(database.Pool())
-		c, isTeacher, ok := loadCoffinForRead(ctx, w, r, q, userID, coffinID)
+		s, dueAt, isTeacher, ok := loadSubproblemForRead(ctx, w, r, q, userID, subproblemID)
 		if !ok {
 			return
 		}
-		if !isTeacher && !coffinReleased(c, time.Now()) {
+		if !isTeacher && !solutionReleasedToStudent(s, dueAt, time.Now()) {
 			httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "разбор not available yet")
 			return
 		}
-		if c.SolutionPdfObjectKey == nil {
+		if s.SolutionPdfObjectKey == nil {
 			httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "no разбор pdf uploaded yet")
 			return
 		}
-		redirectToPDF(ctx, w, r, blobs, *c.SolutionPdfObjectKey, ttl)
+		redirectToPDF(ctx, w, r, blobs, *s.SolutionPdfObjectKey, ttl)
 	}
 }
 
-// --- coffin разбор: external link ------------------------------------------
+// --- per-subproblem разбор: external link -----------------------------------
 
-func SetCoffinSolutionLinkHandler(database *db.DB) http.HandlerFunc {
+func SetSubproblemSolutionLinkHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		userID, ok := requireUser(w, r)
 		if !ok {
 			return
 		}
-		coffinID, err := pathInt64(r, "coffinID")
+		subproblemID, err := pathInt64(r, "subproblemID")
 		if err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid coffin id")
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid subproblem id")
 			return
 		}
 		var req solutionLinkPayload
@@ -504,19 +514,19 @@ func SetCoffinSolutionLinkHandler(database *db.DB) http.HandlerFunc {
 			return
 		}
 		q := store.New(database.Pool())
-		if _, ok := loadCoffinForWrite(ctx, w, r, q, userID, coffinID); !ok {
+		if _, ok := loadSubproblemForWrite(ctx, w, r, q, userID, subproblemID); !ok {
 			return
 		}
 		var linkPtr *string
 		if link != "" {
 			linkPtr = &link
 		}
-		c, err := q.SetCoffinSolutionLink(ctx, store.SetCoffinSolutionLinkParams{ID: coffinID, SolutionLink: linkPtr})
+		s, err := q.SetSubproblemSolutionLink(ctx, store.SetSubproblemSolutionLinkParams{SubproblemID: subproblemID, SolutionLink: linkPtr})
 		if err != nil {
 			logger.LogErrorContext(ctx, "coffins: set solution link", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to save link")
 			return
 		}
-		httpx.WriteJSON(w, http.StatusOK, toCoffinActionView(c))
+		httpx.WriteJSON(w, http.StatusOK, toCoffinActionView(s))
 	}
 }
