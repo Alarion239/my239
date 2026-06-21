@@ -4,13 +4,10 @@ import {
   coffinOpen,
   formatDateTime,
   useMarkCoffin,
-  usePutSubproblemSolutionTex,
   usePutSubproblemSolutionTexBatch,
   useReleaseCoffin,
-  useSetSubproblemSolutionLink,
   useSetSubproblemSolutionLinkBatch,
   useUnmarkCoffin,
-  useUploadSubproblemSolutionPdf,
   useUploadSubproblemSolutionPdfBatch,
   type SeriesProblemStat,
   type SeriesProblemStats,
@@ -109,7 +106,6 @@ export function TeacherProblemStats({ stats, series, centerId }: TeacherProblemS
           key={p.subproblem_id}
           stat={p}
           meta={metaById.get(p.subproblem_id)}
-          centerId={centerId}
           busy={busy}
           isSelected={selected.has(p.subproblem_id)}
           onToggleSelect={() => toggleSelect(p.subproblem_id)}
@@ -140,8 +136,8 @@ function BatchRazborBar({
   if (subproblemIds.length === 0) {
     return (
       <p className="text-xs text-muted">
-        Отметьте несколько подзадач галочкой, чтобы прикрепить один разбор
-        (PDF / LaTeX / ссылку) сразу ко всем.
+        Нажмите на одну или несколько подзадач, чтобы выбрать их, затем
+        прикрепите общий разбор (PDF / LaTeX / ссылку) сразу ко всем.
       </p>
     )
   }
@@ -174,7 +170,6 @@ function BatchRazborBar({
 function ProblemStatRow({
   stat,
   meta,
-  centerId,
   busy,
   isSelected,
   onToggleSelect,
@@ -184,7 +179,6 @@ function ProblemStatRow({
 }: {
   stat: SeriesProblemStat
   meta: Subproblem | undefined
-  centerId: number
   busy: boolean
   isSelected: boolean
   onToggleSelect: () => void
@@ -196,27 +190,48 @@ function ProblemStatRow({
     stat.accepted + stat.submitted + stat.rejected + stat.appealed + stat.unsolved
   const isCoffin = meta?.is_coffin ?? false
   const open = isCoffin && coffinOpen(meta?.released_at)
+  const hasSolution = !!(
+    meta &&
+    (meta.has_solution_tex || meta.has_solution_pdf || meta.solution_link)
+  )
 
+  // The whole row toggles selection (press the problems you want, then attach a
+  // shared разбор). The right-hand controls stop propagation so they don't also
+  // select the row.
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-pressed={isSelected}
+      onClick={onToggleSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onToggleSelect()
+        }
+      }}
       className={cn(
-        'rounded-xl border bg-surface px-4 py-3',
-        isSelected ? 'border-accent ring-1 ring-accent/40' : isCoffin ? 'border-status-checking' : 'border-line',
+        'cursor-pointer rounded-xl border bg-surface px-4 py-3 transition-colors',
+        'hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+        isSelected
+          ? 'border-accent ring-2 ring-accent/50'
+          : isCoffin
+            ? 'border-status-checking'
+            : 'border-line',
       )}
     >
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={onToggleSelect}
-            className="h-4 w-4 rounded border-line-strong accent-accent"
-            aria-label={'Выбрать для общего разбора: ' + subStatLabel(stat)}
-          />
-          <span className="font-medium text-ink">{subStatLabel(stat)}</span>
-        </label>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <span className="font-medium text-ink">{subStatLabel(stat)}</span>
+        <div
+          className="flex shrink-0 flex-wrap items-center gap-2"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          role="presentation"
+        >
           <span className="text-xs text-muted">{total} учеников</span>
+          {hasSolution ? (
+            <span className="text-xs font-medium text-status-accepted">Разбор ✓</span>
+          ) : null}
           {isCoffin && open ? (
             <Button
               type="button"
@@ -229,16 +244,16 @@ function ProblemStatRow({
               Освободить
             </Button>
           ) : null}
-          {meta ? (
-            <RazborEditor centerId={centerId} sub={meta} />
+          {/* Coffin marking is for problems WITHOUT a разбор yet. */}
+          {!hasSolution ? (
+            <CoffinBadge
+              problemDisplay={subStatLabel(stat)}
+              isCoffin={isCoffin}
+              busy={busy}
+              onMark={onMark}
+              onUnmark={onUnmark}
+            />
           ) : null}
-          <CoffinBadge
-            problemDisplay={subStatLabel(stat)}
-            isCoffin={isCoffin}
-            busy={busy}
-            onMark={onMark}
-            onUnmark={onUnmark}
-          />
         </div>
       </div>
 
@@ -282,34 +297,9 @@ function ProblemStatRow({
   )
 }
 
-// RazborEditor wires the per-subproblem «Разбор» authoring (TeX/PDF/link) for one
-// subproblem — it owns the subproblem-scoped mutation hooks.
-function RazborEditor({ centerId, sub }: { centerId: number; sub: Subproblem }) {
-  const putTex = usePutSubproblemSolutionTex(sub.id, centerId)
-  const uploadPdf = useUploadSubproblemSolutionPdf(sub.id, centerId)
-  const setLink = useSetSubproblemSolutionLink(sub.id, centerId)
-  const has = sub.has_solution_tex || sub.has_solution_pdf || !!sub.solution_link
-  return (
-    <SolutionEditor
-      title={'Разбор · ' + sub.display}
-      hasTex={sub.has_solution_tex}
-      hasPdf={sub.has_solution_pdf}
-      link={sub.solution_link}
-      onPutTex={(tex) => putTex.mutateAsync(tex)}
-      onUploadPdf={(file) => uploadPdf.mutateAsync(file)}
-      onSetLink={(link) => setLink.mutateAsync(link)}
-      trigger={
-        <Button type="button" size="sm" variant="secondary">
-          {has ? 'Разбор ✓' : 'Разбор'}
-        </Button>
-      }
-    />
-  )
-}
-
-// CoffinBadge is the per-subproblem гроб toggle. Clicking it opens a small
-// confirmation menu (marking re-opens the subproblem for submission after the
-// deadline until its разбор is released).
+// CoffinBadge is the per-subproblem гроб toggle: a big, square icon button that
+// opens a small confirmation menu (marking re-opens the subproblem for
+// submission after the deadline until its разбор is released).
 function CoffinBadge({
   problemDisplay,
   isCoffin,
@@ -332,15 +322,14 @@ function CoffinBadge({
           title={isCoffin ? 'Гроб — нажмите, чтобы снять' : 'Отметить гробом'}
           aria-label={isCoffin ? 'Гроб: снять пометку' : 'Отметить гробом'}
           className={cn(
-            'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-colors disabled:opacity-55',
+            'inline-flex h-10 w-10 items-center justify-center rounded-xl border transition-colors disabled:opacity-55',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
             isCoffin
               ? 'border-status-checking bg-status-checking-soft text-status-checking'
-              : 'border-line-strong bg-surface text-muted hover:text-ink',
+              : 'border-line-strong bg-surface text-muted hover:border-status-checking hover:text-status-checking',
           )}
         >
-          <Skull className="h-3.5 w-3.5" aria-hidden />
-          {isCoffin ? 'Гроб' : null}
+          <Skull className="h-5 w-5" aria-hidden />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-56">
