@@ -134,7 +134,7 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
     <Card className="overflow-hidden p-0">
       <div
         ref={scrollerRef}
-        className="max-h-[calc(100vh-11rem)] overflow-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="max-h-[calc(100vh-11rem)] overflow-auto overscroll-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         <table className="border-collapse text-sm [&_td]:border [&_td]:border-line [&_th]:border [&_th]:border-line">
           <thead>
@@ -194,7 +194,7 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
                 </tr>
                 {g.students.map((st) => (
                   <tr key={st.user_id} className="hover:bg-surface-muted/40">
-                    <td className="sticky left-0 z-10 min-w-44 whitespace-nowrap bg-surface px-3 py-1.5 text-ink">
+                    <td className="sticky left-0 z-10 min-w-44 whitespace-nowrap bg-surface-muted px-3 py-1.5 text-ink">
                       {st.name}
                     </td>
                     {cols.map(({ col, firstInSeries }) => {
