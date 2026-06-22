@@ -1,0 +1,6 @@
+# Frontend service (nginx serving the Vite SPA + reverse-proxying /api/ to the
+# backend). Build from the Dockerfile at this directory's root. Set the Railway
+# service's Root Directory to /frontend and its config-file path to
+# /frontend/railway.toml.
+[build]
+builder = "DOCKERFILE"

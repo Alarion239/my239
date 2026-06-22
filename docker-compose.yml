@@ -126,10 +126,17 @@ services:
       # the multi-stage Dockerfile can install the npm workspace with
       # shared/ symlinked in alongside web/.
       context: ./frontend
-      dockerfile: web/Dockerfile
+      dockerfile: Dockerfile
     restart: unless-stopped
     depends_on:
       - backend
+    # The nginx config is now templated (web/nginx.conf.template) so the same
+    # image runs in Compose and on Railway. These are the Compose values:
+    # Docker's embedded DNS resolver + the compose service name.
+    environment:
+      NGINX_RESOLVER: 127.0.0.11
+      BACKEND_HOST: backend
+      BACKEND_PORT: "8080"
     ports:
       - "3000:80"
 
