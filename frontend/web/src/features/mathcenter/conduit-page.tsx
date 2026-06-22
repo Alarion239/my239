@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   coffinOpen,
@@ -7,9 +7,19 @@ import {
   type CenterGridResponse,
   type CenterGridSeries,
 } from '@my239/shared'
-import { Card, Spinner } from '../../design/ui'
+import { Card, Input, Spinner } from '../../design/ui'
 import { cn } from '../../design/cn'
 import { useSeriesContext } from './use-series-context'
+import {
+  coffinCellClasses,
+  coffinColumnClasses,
+  cornerHeaderCell,
+  gridScrollerWithHeight,
+  gridTable,
+  groupLabel,
+  nameCell,
+  vert,
+} from './grid-style'
 
 export function ConduitPage() {
   const { centerId: centerIdParam } = useParams<{ centerId: string }>()
@@ -84,6 +94,8 @@ function currentSeriesId(series: CenterGridSeries[]): number | null {
 }
 
 function ConduitTable({ data }: { data: CenterGridResponse }) {
+  const [query, setQuery] = useState('')
+
   const cols: FlatCol[] = useMemo(() => {
     const out: FlatCol[] = []
     for (const s of data.series) {
@@ -94,9 +106,29 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
     return out
   }, [data.series])
 
+  // All students — totals are always computed over the full cohort; search only
+  // hides rows, it never changes the Решили/Решено/итого numbers.
   const students = useMemo(
     () => data.groups.flatMap((g) => g.students),
     [data.groups],
+  )
+
+  // Filtered groups for rendering: students whose name matches the query, with
+  // empty groups dropped.
+  const filteredGroups = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return data.groups
+    return data.groups
+      .map((g) => ({
+        ...g,
+        students: g.students.filter((s) => s.name.toLowerCase().includes(q)),
+      }))
+      .filter((g) => g.students.length > 0)
+  }, [data.groups, query])
+
+  const shown = useMemo(
+    () => filteredGroups.reduce((n, g) => n + g.students.length, 0),
+    [filteredGroups],
   )
 
   const accepted = (studentId: number, subId: number): boolean =>
@@ -129,23 +161,31 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
     scroller.scrollLeft += elRect.left - scRect.left - 200
   }, [currentId])
 
-  const divider = 'border-l-2 border-l-line-strong'
-
   return (
     <Card className="overflow-hidden p-0">
       <div
         ref={scrollerRef}
-        className="max-h-[calc(100vh-11rem)] overflow-auto overscroll-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className={gridScrollerWithHeight('max-h-[calc(100vh-11rem)]')}
       >
-        <table className="border-collapse text-sm [&_td]:border [&_td]:border-line [&_th]:border [&_th]:border-line">
+        <table className={gridTable}>
           <thead>
             {/* Series band — one header spanning each series' columns. */}
             <tr>
-              <th
-                rowSpan={2}
-                className="sticky left-0 top-0 z-40 min-w-44 bg-surface-muted px-3 py-2 text-left font-medium text-ink"
-              >
-                Ученик
+              {/* Corner cell — holds the student search filter. */}
+              <th rowSpan={2} className={cornerHeaderCell}>
+                <div className="flex flex-col gap-1">
+                  <Input
+                    type="search"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Ученик…"
+                    className="h-8 w-full min-w-40"
+                    aria-label="Поиск ученика"
+                  />
+                  <span className="text-[0.65rem] font-normal text-faint">
+                    {shown} из {students.length}
+                  </span>
+                </div>
               </th>
               {data.series.map((s) => (
                 <th
@@ -154,7 +194,7 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
                   colSpan={s.columns.length}
                   className={cn(
                     'sticky top-0 z-20 h-9 whitespace-nowrap bg-surface-muted px-3 text-center font-medium text-ink',
-                    divider,
+                    vert(true),
                   )}
                   title={s.display_name}
                 >
@@ -185,12 +225,8 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
                     }
                     className={cn(
                       'sticky top-9 z-20 min-w-9 px-1.5 py-1 text-center text-xs font-medium',
-                      open
-                        ? 'bg-status-checking text-white'
-                        : col.is_coffin
-                          ? 'bg-faint text-white'
-                          : 'bg-surface-muted text-muted',
-                      firstInSeries && divider,
+                      coffinColumnClasses(col.is_coffin, open),
+                      firstInSeries && vert(true),
                     )}
                   >
                     {col.column_label}
@@ -200,20 +236,16 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
             </tr>
           </thead>
           <tbody>
-            {data.groups.map((g) => (
+            {filteredGroups.map((g) => (
               <Fragment key={g.group_id}>
                 <tr className="bg-surface-muted/60">
                   <td colSpan={cols.length + 2} className="p-0">
-                    <div className="sticky left-0 inline-block px-3 py-1 text-xs font-medium text-muted">
-                      {g.name}
-                    </div>
+                    <div className={groupLabel}>{g.name}</div>
                   </td>
                 </tr>
                 {g.students.map((st) => (
                   <tr key={st.user_id} className="hover:bg-surface-muted/40">
-                    <td className="sticky left-0 z-10 min-w-44 whitespace-nowrap bg-surface-muted px-3 py-1.5 text-ink">
-                      {st.name}
-                    </td>
+                    <td className={nameCell}>{st.name}</td>
                     {cols.map(({ col, firstInSeries }) => {
                       const acc = accepted(st.user_id, col.subproblem_id)
                       const open = col.is_coffin && coffinOpen(col.coffin_released_at)
@@ -222,14 +254,10 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
                           key={col.subproblem_id}
                           className={cn(
                             'px-1.5 py-1.5 text-center',
-                            firstInSeries && divider,
+                            firstInSeries && vert(true),
                             acc
                               ? 'bg-status-accepted-soft font-medium text-status-accepted'
-                              : open
-                                ? 'bg-status-checking/25 text-faint'
-                                : col.is_coffin
-                                  ? 'bg-faint/35 text-faint'
-                                  : 'text-faint',
+                              : cn(coffinCellClasses(col.is_coffin, open), 'text-faint'),
                           )}
                         >
                           {acc ? cellInitials(st.user_id, col.subproblem_id) : ''}
@@ -254,7 +282,7 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
                   key={col.subproblem_id}
                   className={cn(
                     'sticky bottom-0 z-20 bg-surface-muted px-1.5 py-1.5 text-center font-medium text-ink',
-                    firstInSeries && divider,
+                    firstInSeries && vert(true),
                   )}
                 >
                   {colTotal(col.subproblem_id)}
