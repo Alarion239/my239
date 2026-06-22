@@ -34,6 +34,9 @@ FROM nginx:1.27-alpine
 # with zero resolver config in both Docker Compose (127.0.0.11) and on Railway
 # (the internal IPv6 DNS) — only BACKEND_HOST/BACKEND_PORT must be supplied.
 ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
+# Default listen port for Compose; Railway overrides PORT and routes its public
+# domain to it, so the same image works without setting a target port by hand.
+ENV PORT=80
 
 # Our config is a template: the nginx image's entrypoint runs envsubst on
 # /etc/nginx/templates/*.template at start, writing /etc/nginx/conf.d/default.conf.

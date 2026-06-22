@@ -19,7 +19,12 @@
 resolver ${NGINX_LOCAL_RESOLVERS} valid=10s;
 
 server {
-    listen 80 default_server;
+    # Listen on ${PORT} (Railway injects it; defaults to 80 via the Dockerfile)
+    # on BOTH IPv4 and IPv6 — Railway's edge connects to the container over IPv6,
+    # and the image's IPv6-listen helper is overwritten by this template, so we
+    # add the v6 socket explicitly.
+    listen ${PORT} default_server;
+    listen [::]:${PORT} default_server;
     server_name _;
 
     root /usr/share/nginx/html;
