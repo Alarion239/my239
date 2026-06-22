@@ -8,6 +8,7 @@ import (
 
 	"github.com/Alarion239/my239/backend/internal/homework"
 	"github.com/Alarion239/my239/backend/internal/httpx"
+	"github.com/Alarion239/my239/backend/internal/live"
 	"github.com/Alarion239/my239/backend/internal/logger"
 	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/pkg/db"
@@ -22,7 +23,7 @@ import (
 // Unlike SubmitAttempt, appeals are NOT blocked by series.due_at — a
 // rejection may have landed after due, and the student still deserves a
 // channel.
-func AppealGrade(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
+func AppealGrade(database *db.DB, hub *live.Hub, blobs objectstore.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		userID, ok := requireUser(w, r)
@@ -89,6 +90,7 @@ func AppealGrade(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to record appeal")
 			return
 		}
+		live.Publish(ctx, database.Pool(), live.Event{CenterID: thread.MathCenterID, Kind: live.KindGrading, SeriesID: thread.SeriesID})
 		writeThreadView(ctx, w, r, database, blobs, thread.ID)
 	}
 }

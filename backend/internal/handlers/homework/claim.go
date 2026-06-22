@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/Alarion239/my239/backend/internal/httpx"
+	"github.com/Alarion239/my239/backend/internal/live"
 	"github.com/Alarion239/my239/backend/internal/logger"
 	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/pkg/db"
@@ -18,7 +19,7 @@ import (
 // full threadView (same shape as the GET endpoint) so the client can
 // re-render in place without a follow-up fetch. Returns 409 if another
 // grader holds a live claim.
-func Claim(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
+func Claim(database *db.DB, hub *live.Hub, blobs objectstore.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		userID, ok := requireUser(w, r)
@@ -58,6 +59,7 @@ func Claim(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
+		live.Publish(ctx, database.Pool(), live.Event{CenterID: thread.MathCenterID, Kind: live.KindGrading, SeriesID: thread.SeriesID})
 		// Same response shape as /grade, /retract, /submit, /appeal — the
 		// frontend's claimThread() is typed as ThreadView and uses
 		// thread.events for the timeline; returning the raw store row
@@ -115,7 +117,7 @@ func Heartbeat(database *db.DB) http.HandlerFunc {
 
 // Release — must be the current claim holder. Idempotent: a no-op release
 // still returns 204 so clients can fire-and-forget on unmount.
-func Release(database *db.DB) http.HandlerFunc {
+func Release(database *db.DB, hub *live.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		userID, ok := requireUser(w, r)
@@ -151,6 +153,7 @@ func Release(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
+		live.Publish(ctx, database.Pool(), live.Event{CenterID: thread.MathCenterID, Kind: live.KindGrading, SeriesID: thread.SeriesID})
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

@@ -12,6 +12,7 @@ import (
 
 	internalAuth "github.com/Alarion239/my239/backend/internal/auth"
 	hwHandlers "github.com/Alarion239/my239/backend/internal/handlers/homework"
+	"github.com/Alarion239/my239/backend/internal/live"
 	"github.com/Alarion239/my239/backend/pkg/db"
 	"github.com/Alarion239/my239/backend/pkg/objectstore"
 )
@@ -99,7 +100,7 @@ func newRouter(t *testing.T, mock pgxmock.PgxPoolIface) (http.Handler, *internal
 		t.Fatalf("token service: %v", err)
 	}
 	blobs := objectstore.NewMemory()
-	return hwHandlers.Router(database, tokens, blobs, time.Minute, time.Minute), access, blobs
+	return hwHandlers.Router(database, live.NewHub(), tokens, blobs, time.Minute, time.Minute), access, blobs
 }
 
 // expectTeacherCheck adds the standard "is this user a teacher of this
