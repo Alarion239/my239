@@ -50,3 +50,6 @@ frontend/**/.next/
 frontend/**/build/
 frontend/**/*.tsbuildinfo
 frontend/**/coverage/
+
+# Brainstorming/spec docs — local only, not committed
+docs/superpowers/
