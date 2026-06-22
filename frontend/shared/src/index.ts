@@ -8,6 +8,7 @@
 export * from './types'
 export * from './api/http'
 export * from './api/client'
+export * from './api/sse'
 export * from './ports/token-store'
 export * from './domain/user'
 export * from './domain/capabilities'
