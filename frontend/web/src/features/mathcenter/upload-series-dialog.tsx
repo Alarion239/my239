@@ -91,13 +91,15 @@ export function UploadSeriesDialog({ centerId, series, trigger }: UploadSeriesDi
   const [open, setOpen] = useState(false)
   // The series we're attaching to: the edited one, or the freshly created one.
   const [attachTo, setAttachTo] = useState<Series | null>(series ?? null)
-  const [step, setStep] = useState<'details' | 'attach'>(isEdit ? 'attach' : 'details')
+  // Both create and edit open on the details step (metadata + problem list) —
+  // editing must reach the problem editor, not jump straight to the statement.
+  const [step, setStep] = useState<'details' | 'attach'>('details')
 
   function reset(nextOpen: boolean) {
     setOpen(nextOpen)
     if (!nextOpen) {
       setAttachTo(series ?? null)
-      setStep(isEdit ? 'attach' : 'details')
+      setStep('details')
     }
   }
 
@@ -124,7 +126,14 @@ export function UploadSeriesDialog({ centerId, series, trigger }: UploadSeriesDi
             }}
           />
         ) : attachTo ? (
-          <AttachStep series={attachTo} onDone={() => reset(false)} />
+          <AttachStep
+            series={attachTo}
+            onDone={() => reset(false)}
+            // Editing an existing series can step back to the problem editor;
+            // creation can't (the series already exists, going back would
+            // re-create it).
+            onBack={isEdit ? () => setStep('details') : undefined}
+          />
         ) : null}
       </DialogContent>
     </Dialog>
@@ -302,7 +311,15 @@ function DetailsStep({
 
 type AttachMode = 'tex' | 'pdf'
 
-function AttachStep({ series, onDone }: { series: Series; onDone: () => void }) {
+function AttachStep({
+  series,
+  onDone,
+  onBack,
+}: {
+  series: Series
+  onDone: () => void
+  onBack?: () => void
+}) {
   const [mode, setMode] = useState<AttachMode>(series.has_pdf && !series.has_tex ? 'pdf' : 'tex')
   const [tex, setTex] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -401,9 +418,18 @@ function AttachStep({ series, onDone }: { series: Series; onDone: () => void }) 
 
       {error ? <p className="text-sm text-danger" role="alert">{error}</p> : null}
 
-      <Button type="button" variant="ghost" onClick={onDone} disabled={busy}>
-        Готово
-      </Button>
+      <div className="flex items-center justify-between gap-2">
+        {onBack ? (
+          <Button type="button" variant="ghost" onClick={onBack} disabled={busy}>
+            ← Задачи
+          </Button>
+        ) : (
+          <span />
+        )}
+        <Button type="button" variant="ghost" onClick={onDone} disabled={busy}>
+          Готово
+        </Button>
+      </div>
     </div>
   )
 }

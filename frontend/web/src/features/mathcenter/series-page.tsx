@@ -1,9 +1,11 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
-import { Pencil, Plus } from 'lucide-react'
+import { Pencil, Plus, Trash2 } from 'lucide-react'
 import {
+  APIErrorImpl,
   currentSeries,
   isClosed,
+  useDeleteSeries,
   useMathCenterMe,
   useMySeriesRollup,
   useSeriesList,
@@ -11,7 +13,17 @@ import {
   type MyRollup,
   type Series,
 } from '@my239/shared'
-import { Card, PillTabs, Spinner } from '../../design/ui'
+import {
+  Button,
+  Card,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTrigger,
+  PillTabs,
+  Spinner,
+} from '../../design/ui'
 import { cn } from '../../design/cn'
 import { useAuth } from '../../auth/auth-context'
 import { StatementPanel } from './statement-panel'
@@ -398,7 +410,10 @@ function TeacherSeriesView({
           ariaLabel="Раздел проверки"
           className="min-w-0"
         />
-        <EditSeriesButton centerId={centerId} series={series} />
+        <div className="flex shrink-0 items-center gap-2">
+          <EditSeriesButton centerId={centerId} series={series} />
+          <DeleteSeriesButton centerId={centerId} series={series} year={year} />
+        </div>
       </div>
       {tab === 'statement' ? (
         <StatementPanel series={series} bare />
@@ -440,6 +455,89 @@ function EditSeriesButton({ centerId, series }: { centerId: number; series: Seri
         </button>
       }
     />
+  )
+}
+
+// DeleteSeriesButton is the icon-only destructive control next to the edit
+// button. Deleting a series cascades to its problems, subproblems and ALL
+// student work, so it goes through a confirm dialog. On success we leave the
+// (now-gone) series route back to the center, which resolves to the current
+// series or the empty state.
+function DeleteSeriesButton({
+  centerId,
+  series,
+  year,
+}: {
+  centerId: number
+  series: Series
+  year: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const navigate = useNavigate()
+  const del = useDeleteSeries(centerId)
+
+  function onConfirm() {
+    setError(null)
+    del.mutate(series.id, {
+      onSuccess: () => {
+        setOpen(false)
+        navigate('/mathcenter/' + year)
+      },
+      onError: (e) =>
+        setError(e instanceof APIErrorImpl ? e.message : 'Не удалось удалить серию.'),
+    })
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (!next) setError(null)
+      }}
+    >
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          aria-label="Удалить серию"
+          title="Удалить серию"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-line-strong bg-surface text-muted transition-colors hover:bg-danger-soft hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/40"
+        >
+          <Trash2 className="h-4 w-4" aria-hidden />
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-w-md">
+        <DialogTitle>Удалить серию?</DialogTitle>
+        <DialogDescription>
+          Серия «{series.display_name}» и все связанные данные — задачи, разборы и
+          вся проверка студентов — будут удалены безвозвратно.
+        </DialogDescription>
+        {error ? (
+          <p className="mt-2 text-sm text-danger" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <div className="mt-4 flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setOpen(false)}
+            disabled={del.isPending}
+          >
+            Отмена
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            onClick={onConfirm}
+            disabled={del.isPending}
+          >
+            {del.isPending ? 'Удаление…' : 'Удалить'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

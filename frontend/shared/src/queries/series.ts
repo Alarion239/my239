@@ -115,6 +115,24 @@ export function useUpdateSeries(seriesId: number) {
   })
 }
 
+// useDeleteSeries removes a series (cascading to its problems, subproblems and
+// all student work) and invalidates the center list. The backend replies 204
+// with no body, so the center id is supplied by the caller for invalidation.
+export function useDeleteSeries(centerId: number) {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (seriesId: number) =>
+      client.request<void>('/mathcenter/series/' + seriesId, {
+        method: 'DELETE',
+      }),
+    onSuccess: (_data, seriesId) => {
+      qc.invalidateQueries({ queryKey: queryKeys.seriesList(centerId) })
+      qc.removeQueries({ queryKey: queryKeys.series(seriesId) })
+    },
+  })
+}
+
 // usePutSeriesTex replaces the series LaTeX source (the backend auto-publishes).
 export function usePutSeriesTex(seriesId: number) {
   const client = useApiClient()
