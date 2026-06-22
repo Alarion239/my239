@@ -8,14 +8,15 @@
 // plus any non-admin user whose username starts with "demo-". Nothing else is
 // touched.
 //
-// The 10 series form a realistic timeline: the first 8 are in the past, fully
-// graded, with разбор (solutions) posted; series 9 is the current one (open,
-// actively being graded — in-queue / under-review statuses appear here); series
-// 10 is prepared for the future (published, no submissions yet). Submissions and
-// gradings carry spread-out timestamps. Each run is randomized: students have a
-// latent ability and subproblems a difficulty (harder later), so the solve grid
-// has real spread, different teachers grade different work, and any subproblem
-// solved by fewer than coffinThreshold students becomes a coffin.
+// The 5 series form a realistic timeline: the first 3 are in the past, fully
+// graded, with разбор (solutions) posted (though some coffins are left open);
+// the 4th is the current one (open, actively being graded — in-queue /
+// under-review statuses appear here); the 5th is prepared for the future
+// (published, no submissions yet). Submissions and gradings carry spread-out
+// timestamps. Each run is randomized: students have a latent ability and
+// subproblems a difficulty (harder later, 6-8 problems per series), so the
+// solve grid has real spread, different teachers grade different work, and any
+// subproblem solved by fewer than coffinThreshold students becomes a coffin.
 package seed
 
 import (
@@ -48,18 +49,22 @@ const (
 	demoHeadTeachers     = 2
 	demoRegularTeachers  = 10
 
-	// Timeline: of the 10 series, the first pastSeriesCount are finished, the
-	// next is the current/open one, and the rest are prepared for the future.
-	pastSeriesCount = 8
+	// Timeline: of the 5 series, the first pastSeriesCount are finished, the next
+	// is the current/open one, and the rest are prepared for the future.
+	pastSeriesCount = 3
+
+	// openPastCoffinChance: fraction of a past series' coffins left OPEN (разбор
+	// not yet posted, still accepting submissions) instead of released/closed.
+	openPastCoffinChance = 0.5
 
 	// Day spans shaping the timeline.
 	seriesSpacingDays    = 14 // gap between consecutive past series' deadlines
 	recentPastGapDays    = 5  // how long ago the most recent past series closed
 	submissionWindowDays = 10 // open → due
 	gradingWindowDays    = 4  // due → last grade posted (past series)
-	currentOpenDaysAgo   = 5  // series 9 opened this many days ago
-	currentDueInDays     = 5  // series 9 is due this many days from now
-	futureOpenInDays     = 9  // series 10 opens this many days from now
+	currentOpenDaysAgo   = 5  // the current series opened this many days ago
+	currentDueInDays     = 5  // the current series is due this many days from now
+	futureOpenInDays     = 9  // the future series opens this many days from now
 
 	// coffinThreshold: a subproblem solved (accepted) by fewer than this many
 	// students is left as a coffin.
@@ -73,7 +78,7 @@ const (
 	// problem of each series gets an extra "finale" penalty (the brutal one).
 	// Per-student ability shifts the rate; per-subproblem jitter adds spread.
 	baseSolveRate    = 0.90
-	dropPerProblem   = 0.20
+	dropPerProblem   = 0.13
 	dropPerSubpart   = 0.08
 	finalePenalty    = 0.40
 	difficultyJitter = 0.08
@@ -105,6 +110,7 @@ type Result struct {
 	Problems       int     `json:"problems"`
 	Subproblems    int     `json:"subproblems"`
 	Coffins        int     `json:"coffins"`
+	OpenCoffins    int     `json:"open_coffins"` // coffins still open (разбор not released)
 	Submissions    int     `json:"submissions"`
 	StudentCount   int     `json:"student_count"` // total students (logins list is capped)
 	Password       string  `json:"password"`
@@ -294,16 +300,11 @@ var seriesSpecs = []struct {
 	name     string
 	subparts []int
 }{
-	{"Алгебра. Многочлены", []int{0, 0, 2}},
-	{"Геометрия. Треугольники", []int{0, 0, 1, 3}},
-	{"Комбинаторика", []int{0, 0, 2}},
-	{"Теория чисел", []int{0, 1, 0, 3}},
-	{"Неравенства", []int{0, 0, 2}},
-	{"Графы и сети", []int{0, 0, 1}},
-	{"Тригонометрия", []int{0, 2}},
-	{"Делимость и остатки", []int{0, 0, 3}},
-	{"Функциональные уравнения", []int{0, 2}},
-	{"Комбинаторная вероятность", []int{0, 0, 2}},
+	{"Алгебра и многочлены", []int{0, 0, 0, 1, 2, 2, 3}},     // 7 problems, 11 subproblems
+	{"Планиметрия", []int{0, 0, 0, 0, 1, 2, 0, 3}},           // 8 problems, 11 subproblems
+	{"Теория чисел", []int{0, 0, 1, 2, 0, 3}},                // 6 problems, 9 subproblems
+	{"Комбинаторика и графы", []int{0, 0, 0, 1, 2, 0, 3}},    // 7 problems, 10 subproblems
+	{"Неравенства и функции", []int{0, 0, 0, 1, 0, 2, 2, 3}}, // 8 problems, 12 subproblems
 }
 
 // timingFor places series i on the timeline.
@@ -448,23 +449,36 @@ func (s *seeder) seedSubmissions(ctx context.Context) error {
 func (s *seeder) postSolution(ctx context.Context, sub subInfo, t seriesTiming, isCoffin bool) error {
 	switch t.phase {
 	case phasePast:
+		// Keep some past coffins OPEN: their разбор isn't posted yet, so they
+		// stay accepting submissions. Everything else gets разбор released.
+		if isCoffin && mrand.Float64() < openPastCoffinChance {
+			if err := s.upsertSolution(ctx, sub.id, true, nil, nil, t.dueAt); err != nil {
+				return err
+			}
+			s.res.Coffins++
+			s.res.OpenCoffins++
+			return nil
+		}
 		released := randTimeBetween(t.dueAt, t.dueAt.AddDate(0, 0, gradingWindowDays))
 		tex := demoRazborTex
 		if err := s.upsertSolution(ctx, sub.id, isCoffin, &tex, &released, t.dueAt); err != nil {
 			return err
 		}
+		if isCoffin {
+			s.res.Coffins++
+		}
 	case phaseCurrent:
 		if !isCoffin {
 			return nil
 		}
+		// The current series is open — its coffins are not yet released.
 		if err := s.upsertSolution(ctx, sub.id, true, nil, nil, s.now); err != nil {
 			return err
 		}
+		s.res.Coffins++
+		s.res.OpenCoffins++
 	default:
 		return nil
-	}
-	if isCoffin {
-		s.res.Coffins++
 	}
 	return nil
 }

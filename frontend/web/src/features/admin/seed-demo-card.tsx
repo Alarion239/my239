@@ -32,9 +32,10 @@ export function SeedDemoCard() {
     <div className="flex flex-col gap-3">
       <p className="text-sm text-muted">
         Создаёт тестовый матцентр (выпуск 2099): 3 группы по 30 учеников, 12
-        преподавателей и 10 серий — 8 прошедших с разборами, текущая (9-я) и одна
-        будущая. Сдачи и проверки распределены по времени и статусам. Каждый
-        запуск сначала удаляет предыдущие демо-данные, затем создаёт их заново.
+        преподавателей и 5 серий по 6–8 задач — 3 прошедших с разборами (часть
+        гробов оставлена открытыми), текущая и одна будущая. Сдачи и проверки
+        распределены по времени и статусам. Каждый запуск сначала удаляет
+        предыдущие демо-данные, затем создаёт их заново.
       </p>
       <Dialog
         open={open}
@@ -97,6 +98,7 @@ function SeedResultView({ result, onClose }: { result: SeedResult; onClose: () =
     { label: 'Задачи', value: result.problems },
     { label: 'Подзадачи', value: result.subproblems },
     { label: 'Гробы', value: result.coffins },
+    { label: 'Открытые гробы', value: result.open_coffins },
     { label: 'Сдачи', value: result.submissions },
   ]
   return (

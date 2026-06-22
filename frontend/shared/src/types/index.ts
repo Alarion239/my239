@@ -150,6 +150,7 @@ export interface SeedResult {
   problems: number
   subproblems: number
   coffins: number
+  open_coffins: number
   submissions: number
   // Total students seeded; the logins list is capped, so this may exceed it.
   student_count: number
