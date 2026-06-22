@@ -131,6 +131,18 @@ export interface InvitationToken {
   math_center_id?: number | null
 }
 
+// TokenPreset mirrors the backend tokenpreset.Preset: the roles/grants applied
+// to whoever registers with the token. All grants are optional; an omitted
+// preset mints a plain invite. version is stamped server-side, so the frontend
+// may omit it. A user can't be both teacher and student of the same center —
+// the backend rejects that at creation.
+export interface TokenPreset {
+  version?: number
+  grants_admin?: boolean
+  mathcenter_teacher?: { center_id: number; is_head_teacher: boolean }
+  mathcenter_student?: { group_id: number }
+}
+
 // MathCenter is a cohort grouped by graduation year.
 export interface MathCenter {
   id: number

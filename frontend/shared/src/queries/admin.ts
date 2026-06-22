@@ -9,6 +9,7 @@ import type {
   MathCenterGroup,
   MathCenterStudent,
   MathCenterTeacher,
+  TokenPreset,
   User,
   UserEnrollments,
 } from '../types'
@@ -192,6 +193,9 @@ export function useCreateToken() {
       description: string
       max_uses: number
       expires_in_hours: number
+      // Optional role/grants applied at registration (admin / teacher / student).
+      // Omitted entirely for a plain invite.
+      preset?: TokenPreset
     }) =>
       client.request<InvitationToken>('/admin/tokens', {
         method: 'POST',
