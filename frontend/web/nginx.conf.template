@@ -4,16 +4,19 @@
 # own lowercase runtime variables ($host, $uri, $request_uri, …) are left
 # untouched (envsubst is case-sensitive, env vars are UPPERCASE).
 #
-# Two deploy targets, same file:
-#   - Docker Compose: NGINX_RESOLVER=127.0.0.11 (Docker's embedded DNS),
-#     BACKEND_HOST=backend.
-#   - Railway: NGINX_RESOLVER=[fd12::10] (Railway's internal IPv6 DNS),
-#     BACKEND_HOST=backend.railway.internal.
-# A variable upstream + an explicit resolver force nginx to re-resolve the
-# backend on every request, which is required on Railway's private network
-# (the backend's IPv6 address changes on each redeploy) and harmless in Compose.
+# ${NGINX_LOCAL_RESOLVERS} is set automatically by the image's
+# 15-local-resolvers.envsh from /etc/resolv.conf, so the resolver below is the
+# container's real DNS server with zero config: Docker's embedded DNS
+# (127.0.0.11) in Compose, Railway's internal IPv6 resolver on Railway. A
+# variable upstream + this resolver force nginx to re-resolve the backend on
+# every request (required on Railway's private network, where the backend's
+# IPv6 address changes on each redeploy; harmless in Compose).
+#
+# Only BACKEND_HOST / BACKEND_PORT must be provided by the environment:
+#   - Docker Compose: BACKEND_HOST=backend
+#   - Railway:        BACKEND_HOST=backend.railway.internal
 
-resolver ${NGINX_RESOLVER} ipv6=on valid=10s;
+resolver ${NGINX_LOCAL_RESOLVERS} valid=10s;
 
 server {
     listen 80 default_server;

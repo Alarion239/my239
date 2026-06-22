@@ -28,10 +28,17 @@ RUN npm run build
 # ---- runtime stage ----
 FROM nginx:1.27-alpine
 
+# Opt into the image's 15-local-resolvers.envsh: it reads the container's DNS
+# server from /etc/resolv.conf into ${NGINX_LOCAL_RESOLVERS}, which the template
+# uses for its `resolver` directive. This makes the backend reverse-proxy work
+# with zero resolver config in both Docker Compose (127.0.0.11) and on Railway
+# (the internal IPv6 DNS) — only BACKEND_HOST/BACKEND_PORT must be supplied.
+ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
+
 # Our config is a template: the nginx image's entrypoint runs envsubst on
 # /etc/nginx/templates/*.template at start, writing /etc/nginx/conf.d/default.conf.
-# Values (backend host/port, DNS resolver) come from env so the same image runs
-# in Docker Compose and on Railway. SPA fallback + /api proxy + SSE passthrough.
+# The backend host/port come from env so the same image runs in Docker Compose
+# and on Railway. SPA fallback + /api proxy + SSE passthrough.
 COPY web/nginx.conf.template /etc/nginx/templates/default.conf.template
 
 # Copy the prebuilt static assets.
