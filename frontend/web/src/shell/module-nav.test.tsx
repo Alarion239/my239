@@ -156,9 +156,10 @@ describe('module navigation', () => {
   it('exposes the per-center module tabs in the top bar', async () => {
     const member = makeUser({ is_admin: false })
     mockFetch(member)
-    renderShell(<TopBar user={member} />, '/mathcenter/8')
+    // Centers are addressed by graduation year: center 8 -> /mathcenter/2025.
+    renderShell(<TopBar user={member} />, '/mathcenter/2025/series')
 
-    // The active module's "Серии" tab for center 8 shows in the bar.
+    // The active module's "Серии" tab for center 8 (year 2025) shows in the bar.
     expect(await screen.findByRole('link', { name: 'Серии' })).toBeInTheDocument()
   })
 })

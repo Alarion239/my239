@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import {
   displayStatusMeta,
   homeworkStatusMeta,
@@ -14,7 +14,6 @@ import { StatusLegend, StatusTile } from '../../design/ui'
 import { cn } from '../../design/cn'
 
 export interface StudentProblemListProps {
-  centerId: number
   seriesId: number
   rollup: MyRollup
   // The series view carries each subproblem's coffin/release metadata so
@@ -46,11 +45,11 @@ function subMetaMap(series: Series): Map<number, Subproblem> {
 // submitted (thread_id > 0), otherwise to the first-submission form keyed by
 // subproblem id.
 function subproblemPath(
-  centerId: number,
+  year: string,
   seriesId: number,
   sub: RollupSubproblem,
 ): string {
-  const base = '/mathcenter/' + centerId + '/series/' + seriesId
+  const base = '/mathcenter/' + year + '/series/' + seriesId
   return sub.thread_id > 0
     ? base + '/thread/' + sub.thread_id
     : base + '/submit/' + sub.subproblem_id
@@ -60,11 +59,11 @@ function subproblemPath(
 // problem with a clickable status tile per subproblem, a problem-level summary
 // badge, and a "Сдать" shortcut to the first not-yet-accepted subproblem.
 export function StudentProblemList({
-  centerId,
   seriesId,
   rollup,
   series,
 }: StudentProblemListProps) {
+  const { year } = useParams<{ year: string }>()
   if (rollup.problems.length === 0) {
     return <p className="py-6 text-sm text-muted">В этой серии пока нет задач.</p>
   }
@@ -75,7 +74,7 @@ export function StudentProblemList({
       {rollup.problems.map((problem) => (
         <ProblemRow
           key={problem.problem_id}
-          centerId={centerId}
+          year={year ?? ''}
           seriesId={seriesId}
           problem={problem}
           meta={meta}
@@ -88,13 +87,13 @@ export function StudentProblemList({
 }
 
 function ProblemRow({
-  centerId,
+  year,
   seriesId,
   problem,
   meta,
   dueAt,
 }: {
-  centerId: number
+  year: string
   seriesId: number
   problem: RollupProblem
   meta: Map<number, Subproblem>
@@ -134,7 +133,7 @@ function ProblemRow({
           return interactive ? (
             <Link
               key={sub.subproblem_id}
-              to={subproblemPath(centerId, seriesId, sub)}
+              to={subproblemPath(year, seriesId, sub)}
               title={tileLabel}
               className={cn(
                 'rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',

@@ -10,6 +10,7 @@ import { CoffinsPage } from '../features/mathcenter/coffins-page'
 import { ConduitPage } from '../features/mathcenter/conduit-page'
 import { ManagePage } from '../features/mathcenter/manage/manage-page'
 import { ThreadPage } from '../features/mathcenter/thread-page'
+import { CenterLayout } from '../features/mathcenter/center-layout'
 import { UsersPage } from '../features/admin/users-page'
 import { UserDetailPage } from '../features/admin/user-detail-page'
 import { MathCentersPage } from '../features/admin/math-centers-page'
@@ -31,17 +32,32 @@ export const router = createBrowserRouter([
           { index: true, element: <HomePage /> },
           { path: 'profile', element: <ProfilePage /> },
           { path: 'mathcenter', element: <MathCenterIndex /> },
-          { path: 'mathcenter/:centerId', element: <SeriesPage /> },
-          { path: 'mathcenter/:centerId/coffins', element: <CoffinsPage /> },
-          { path: 'mathcenter/:centerId/conduit', element: <ConduitPage /> },
-          { path: 'mathcenter/:centerId/manage', element: <ManagePage /> },
           {
-            path: 'mathcenter/:centerId/series/:seriesId/submit/:subproblemId',
-            element: <ThreadPage />,
-          },
-          {
-            path: 'mathcenter/:centerId/series/:seriesId/thread/:threadId',
-            element: <ThreadPage />,
+            // Per-center shell: :year -> center id, access gate, single SSE
+            // stream, URL-driven tabs. Legacy /mathcenter/{id}/... URLs are
+            // rewritten to the year URL inside CenterLayout.
+            path: 'mathcenter/:year',
+            element: <CenterLayout />,
+            children: [
+              { index: true, element: <Navigate to="series" replace /> },
+              // Bare `series` resolves the current series + default tab inside
+              // SeriesPage, then redirects to series/:seriesId/:tab.
+              { path: 'series', element: <SeriesPage /> },
+              { path: 'series/:seriesId/:tab', element: <SeriesPage /> },
+              {
+                path: 'series/:seriesId/submit/:subproblemId',
+                element: <ThreadPage />,
+              },
+              {
+                path: 'series/:seriesId/thread/:threadId',
+                element: <ThreadPage />,
+              },
+              { path: 'coffins', element: <Navigate to="current" replace /> },
+              { path: 'coffins/:tab', element: <CoffinsPage /> },
+              { path: 'conduit', element: <ConduitPage /> },
+              { path: 'manage', element: <Navigate to="groups" replace /> },
+              { path: 'manage/:tab', element: <ManagePage /> },
+            ],
           },
           {
             element: <RequireRole roles={['admin']} />,

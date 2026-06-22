@@ -1,5 +1,4 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
 import {
   coffinOpen,
   useCenterGrid,
@@ -10,6 +9,7 @@ import {
 import { Card, Input, Spinner } from '../../design/ui'
 import { cn } from '../../design/cn'
 import { useSeriesContext } from './use-series-context'
+import { useCenterIdContext } from './center-id-context'
 import {
   coffinCellClasses,
   coffinColumnClasses,
@@ -22,8 +22,7 @@ import {
 } from './grid-style'
 
 export function ConduitPage() {
-  const { centerId: centerIdParam } = useParams<{ centerId: string }>()
-  const centerId = Number(centerIdParam)
+  const centerId = useCenterIdContext()
   const ctx = useSeriesContext(centerId)
 
   if (!Number.isFinite(centerId) || centerId <= 0) {

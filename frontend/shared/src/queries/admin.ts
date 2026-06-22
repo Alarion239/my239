@@ -213,11 +213,16 @@ export function useRevokeToken() {
 
 // --- Math centers ------------------------------------------------------------
 
-export function useMathCenters() {
+// useMathCenters lists every math center (admin-gated). `enabled` lets callers
+// gate the request so non-admins (who'd get a 403) never fire it — e.g. the
+// year->id resolver only needs this fallback for admins viewing a center they
+// don't belong to. Defaults to true for backward compatibility.
+export function useMathCenters(enabled = true) {
   const client = useApiClient()
   return useQuery<MathCenter[]>({
     queryKey: queryKeys.adminCenters,
     queryFn: () => client.request<MathCenter[]>('/admin/mathcenter'),
+    enabled,
   })
 }
 

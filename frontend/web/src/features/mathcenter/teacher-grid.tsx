@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import {
   claimIsLive,
   coffinOpen,
@@ -23,12 +23,11 @@ import {
 } from './grid-style'
 
 export interface TeacherGridProps {
-  centerId: number
   seriesId: number
 }
 
-function threadPath(centerId: number, seriesId: number, threadId: number): string {
-  return '/mathcenter/' + centerId + '/series/' + seriesId + '/thread/' + threadId
+function threadPath(year: string, seriesId: number, threadId: number): string {
+  return '/mathcenter/' + year + '/series/' + seriesId + '/thread/' + threadId
 }
 
 // columnHeader renders a compact column label like "3" / "3б", with the full
@@ -43,7 +42,8 @@ function columnHeader(col: GridColumn): string {
 // header look, coffin tint) with the «Кондуит» via grid-style.ts, but stays a
 // single header row with no totals (those are conduit-only) and keeps its
 // clickable cells. The student filter lives in the corner «Ученик» cell.
-export function TeacherGrid({ centerId, seriesId }: TeacherGridProps) {
+export function TeacherGrid({ seriesId }: TeacherGridProps) {
+  const { year } = useParams<{ year: string }>()
   const { data, isPending, isError } = useTeacherGrid(seriesId)
   const [query, setQuery] = useState('')
 
@@ -146,7 +146,7 @@ export function TeacherGrid({ centerId, seriesId }: TeacherGridProps) {
                 group={group}
                 columns={data.columns}
                 colCount={colCount}
-                centerId={centerId}
+                year={year ?? ''}
                 seriesId={seriesId}
               />
             ))
@@ -161,13 +161,13 @@ function GroupRows({
   group,
   columns,
   colCount,
-  centerId,
+  year,
   seriesId,
 }: {
   group: { name: string; students: GridStudent[] }
   columns: GridColumn[]
   colCount: number
-  centerId: number
+  year: string
   seriesId: number
 }) {
   return (
@@ -204,7 +204,7 @@ function GroupRows({
                 >
                   {cell && cell.thread_id > 0 ? (
                     <Link
-                      to={threadPath(centerId, seriesId, cell.thread_id)}
+                      to={threadPath(year, seriesId, cell.thread_id)}
                       className="inline-block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                     >
                       <StatusTile status={status} beingGraded={beingGraded} label={label} />
