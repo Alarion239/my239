@@ -10,6 +10,17 @@ import {
 } from '@my239/shared'
 import { Input, Spinner, StatusTile } from '../../design/ui'
 import { cn } from '../../design/cn'
+import {
+  coffinCellClasses,
+  coffinColumnClasses,
+  cornerHeaderCell,
+  dataCell,
+  gridScrollerWithHeight,
+  gridTable,
+  groupLabel,
+  nameCell,
+  vert,
+} from './grid-style'
 
 export interface TeacherGridProps {
   centerId: number
@@ -26,11 +37,12 @@ function columnHeader(col: GridColumn): string {
   return col.problem_number + (col.subproblem_label ?? '')
 }
 
-// TeacherGrid is the students × subproblems status spreadsheet. Each filled
-// cell is a StatusTile linking to that thread; empty cells (no submission yet)
-// render a non-interactive tile. Students are grouped by their group, the
-// header + name column stay pinned while scrolling, and a name filter keeps
-// large cohorts navigable.
+// TeacherGrid is the students × subproblems status spreadsheet for one series.
+// Each filled cell is a StatusTile linking to that thread; empty cells render a
+// non-interactive tile. It shares its visual language (borders, sticky rules,
+// header look, coffin tint) with the «Кондуит» via grid-style.ts, but stays a
+// single header row with no totals (those are conduit-only) and keeps its
+// clickable cells. The student filter lives in the corner «Ученик» cell.
 export function TeacherGrid({ centerId, seriesId }: TeacherGridProps) {
   const { data, isPending, isError } = useTeacherGrid(seriesId)
   const [query, setQuery] = useState('')
@@ -70,79 +82,77 @@ export function TeacherGrid({ centerId, seriesId }: TeacherGridProps) {
   const colCount = data.columns.length + 1
   const shown = groups.reduce((n, g) => n + g.students.length, 0)
 
+  // One full-width scroll surface (no nested rounded box), filling the area
+  // below the series tabs. Matches the «Кондуит».
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Поиск ученика…"
-          className="h-9 max-w-xs"
-          aria-label="Поиск ученика"
-        />
-        <span className="text-xs text-muted">
-          {shown} из {data.students.length}
-        </span>
-      </div>
-
-      {shown === 0 ? (
-        <p className="py-6 text-sm text-muted">Ученик не найден.</p>
-      ) : (
-        // Bounded scroll box so the sticky header/column pin within it rather
-        // than fighting the page + app bar.
-        <div className="max-h-[70vh] overflow-auto rounded-lg border border-line bg-surface">
-          <table className="border-separate border-spacing-0 text-sm">
-            <thead>
-              <tr>
-                <th className="sticky left-0 top-0 z-30 border-b border-line bg-surface px-3 py-2 text-left text-xs font-medium text-muted">
-                  Ученик
-                </th>
-                {data.columns.map((col) => {
-                  const open = col.is_coffin && coffinOpen(col.coffin_released_at)
-                  return (
-                    <th
-                      key={col.subproblem_id}
-                      title={
-                        (col.subproblem_label
-                          ? col.problem_display + ' (' + col.subproblem_label + ')'
-                          : col.problem_display) +
-                        (col.is_coffin
-                          ? open
-                            ? ' — гроб (открыт)'
-                            : ' — гроб (разобран)'
-                          : '')
-                      }
-                      className={cn(
-                        'sticky top-0 z-20 border-b border-line px-2 py-2 text-center text-xs font-medium',
-                        open
-                          ? 'bg-status-checking text-white'
-                          : col.is_coffin
-                            ? 'bg-faint text-white'
-                            : 'bg-surface text-muted',
-                      )}
-                    >
-                      {columnHeader(col)}
-                    </th>
-                  )
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {groups.map((group) => (
-                <GroupRows
-                  key={group.name}
-                  group={group}
-                  columns={data.columns}
-                  colCount={colCount}
-                  centerId={centerId}
-                  seriesId={seriesId}
+    <div className={gridScrollerWithHeight('max-h-[calc(100vh-14rem)]')}>
+      <table className={gridTable}>
+        <thead>
+          <tr>
+            {/* Corner cell — holds the student search filter. */}
+            <th className={cornerHeaderCell}>
+              <div className="flex flex-col gap-1">
+                <Input
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Ученик…"
+                  className="h-8 w-full min-w-40"
+                  aria-label="Поиск ученика"
                 />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+                <span className="text-[0.65rem] font-normal text-faint">
+                  {shown} из {data.students.length}
+                </span>
+              </div>
+            </th>
+            {data.columns.map((col) => {
+              const open = col.is_coffin && coffinOpen(col.coffin_released_at)
+              return (
+                <th
+                  key={col.subproblem_id}
+                  title={
+                    (col.subproblem_label
+                      ? col.problem_display + ' (' + col.subproblem_label + ')'
+                      : col.problem_display) +
+                    (col.is_coffin
+                      ? open
+                        ? ' — гроб (открыт)'
+                        : ' — гроб (разобран)'
+                      : '')
+                  }
+                  className={cn(
+                    'sticky top-0 z-20 min-w-9 border-b border-line px-2 py-2 text-center text-xs font-medium',
+                    vert(false),
+                    coffinColumnClasses(col.is_coffin, open),
+                  )}
+                >
+                  {columnHeader(col)}
+                </th>
+              )
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {shown === 0 ? (
+            <tr>
+              <td colSpan={colCount} className="px-3 py-6 text-sm text-muted">
+                Ученик не найден.
+              </td>
+            </tr>
+          ) : (
+            groups.map((group) => (
+              <GroupRows
+                key={group.name}
+                group={group}
+                columns={data.columns}
+                colCount={colCount}
+                centerId={centerId}
+                seriesId={seriesId}
+              />
+            ))
+          )}
+        </tbody>
+      </table>
     </div>
   )
 }
@@ -162,19 +172,16 @@ function GroupRows({
 }) {
   return (
     <>
-      <tr>
-        <td
-          colSpan={colCount}
-          className="sticky left-0 z-10 bg-surface-muted px-3 pt-2 pb-1 text-xs font-medium uppercase tracking-wide text-faint"
-        >
-          {group.name}
+      <tr className="bg-surface-muted/60">
+        <td colSpan={colCount} className="p-0">
+          <div className={groupLabel}>{group.name}</div>
         </td>
       </tr>
       {group.students.map((student) => {
         const byId = new Map(student.cells.map((c) => [c.subproblem_id, c]))
         return (
-          <tr key={student.student_user_id} className="hover:bg-surface-muted">
-            <td className="sticky left-0 z-10 max-w-44 truncate bg-surface px-3 py-1 text-ink">
+          <tr key={student.student_user_id} className="hover:bg-surface-muted/40">
+            <td className={cn(nameCell, 'max-w-44 truncate')}>
               {student.student_name}
             </td>
             {columns.map((col) => {
@@ -191,7 +198,8 @@ function GroupRows({
                   key={col.subproblem_id}
                   className={cn(
                     'px-2 py-1 text-center',
-                    open ? 'bg-status-checking/25' : col.is_coffin && 'bg-faint/35',
+                    dataCell(false),
+                    coffinCellClasses(col.is_coffin, open),
                   )}
                 >
                   {cell && cell.thread_id > 0 ? (
