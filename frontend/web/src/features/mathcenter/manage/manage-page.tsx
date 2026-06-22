@@ -1,8 +1,8 @@
-import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useMathCenterMe } from '@my239/shared'
 import { Card, PillTabs, Spinner, type PillTabOption } from '../../../design/ui'
 import { useAuth } from '../../../auth/auth-context'
+import { useCenterIdContext } from '../center-id-context'
 import { GroupsTab } from './groups-tab'
 import { TeachersTab } from './teachers-tab'
 import { StudentsTab } from './students-tab'
@@ -15,15 +15,18 @@ const TABS: PillTabOption<Tab>[] = [
   { id: 'students', label: 'Ученики' },
 ]
 
+const TAB_IDS = TABS.map((t) => t.id)
+
 // ManagePage is the head-teacher self-service panel for one center. Access is
 // limited to a head teacher of this center or a global admin; everyone else
-// sees "Нет доступа". The three tabs manage groups, teachers, and students.
+// sees "Нет доступа". The three URL-driven tabs manage groups, teachers, and
+// students.
 export function ManagePage() {
-  const { centerId: param } = useParams<{ centerId: string }>()
-  const centerId = Number(param)
+  const centerId = useCenterIdContext()
+  const { year, tab: tabParam } = useParams<{ year: string; tab?: string }>()
+  const navigate = useNavigate()
   const { user } = useAuth()
   const me = useMathCenterMe()
-  const [tab, setTab] = useState<Tab>('groups')
 
   if (!Number.isFinite(centerId) || centerId <= 0) {
     return <NoAccess />
@@ -40,11 +43,18 @@ export function ManagePage() {
     return <NoAccess />
   }
 
+  const tab = (TAB_IDS as string[]).includes(tabParam ?? '')
+    ? (tabParam as Tab)
+    : null
+  if (!tab) {
+    return <Navigate to={'/mathcenter/' + year + '/manage/groups'} replace />
+  }
+
   return (
     <div className="animate-rise flex flex-col gap-5">
       <PillTabs
         value={tab}
-        onChange={setTab}
+        onChange={(t) => navigate('/mathcenter/' + year + '/manage/' + t)}
         options={TABS}
         ariaLabel="Раздел управления"
         className="self-start"

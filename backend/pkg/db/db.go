@@ -110,3 +110,12 @@ func (db *DB) Close() {
 func (db *DB) Pool() Pool {
 	return db.pool
 }
+
+// Raw returns the concrete *pgxpool.Pool when the underlying pool is one (it is
+// in production; tests inject mocks and get nil). Used by the LISTEN/NOTIFY
+// listener, which needs a hijacked connection (Acquire) outside the Querier
+// surface.
+func (db *DB) Raw() *pgxpool.Pool {
+	p, _ := db.pool.(*pgxpool.Pool)
+	return p
+}

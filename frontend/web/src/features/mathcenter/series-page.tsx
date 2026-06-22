@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Link, Navigate, useParams } from 'react-router-dom'
+import { useMemo } from 'react'
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { Pencil, Plus } from 'lucide-react'
 import {
   currentSeries,
@@ -23,10 +23,15 @@ import { GraderQueue } from './grader-queue'
 import { TeacherGrid } from './teacher-grid'
 import { UploadSeriesDialog } from './upload-series-dialog'
 import { useSeriesContext } from './use-series-context'
+import { useCenterIdContext } from './center-id-context'
+
+// Allowed tab ids per view, with the default first. The route carries the tab
+// (e.g. /mathcenter/2027/series/42/razbor) so it survives reload + back/forward.
+const STUDENT_TAB_IDS = ['progress', 'statement', 'razbor'] as const
+const TEACHER_TAB_IDS = ['razbor', 'statement', 'queue', 'grid'] as const
 
 export function SeriesPage() {
-  const { centerId: centerIdParam } = useParams<{ centerId: string }>()
-  const centerId = Number(centerIdParam)
+  const centerId = useCenterIdContext()
   const ctx = useSeriesContext(centerId)
 
   if (!Number.isFinite(centerId) || centerId <= 0) {
@@ -107,10 +112,12 @@ export function MathCenterIndex() {
 
   const teacherCenters = me.data?.teacher?.centers ?? []
   const studentCenter = me.data?.student?.center ?? null
-  const firstId = teacherCenters[0]?.id ?? studentCenter?.id ?? null
+  // Address centers by graduation year in the URL (the canonical scheme).
+  const firstYear =
+    teacherCenters[0]?.graduation_year ?? studentCenter?.graduation_year ?? null
 
-  if (firstId !== null) {
-    return <Navigate to={'/mathcenter/' + firstId} replace />
+  if (firstYear !== null) {
+    return <Navigate to={'/mathcenter/' + firstYear} replace />
   }
 
   return (
@@ -132,8 +139,10 @@ export function MathCenterIndex() {
   )
 }
 
-// CenterSeries holds the per-center list + selection. Remounted (via key) when
-// the center changes so the selected-series state resets cleanly.
+// CenterSeries holds the per-center list + URL-driven selection/tab. The active
+// series + tab live in the route (series/:seriesId/:tab) so reload and
+// back/forward restore them; bare `series` resolves to the current series'
+// default tab.
 function CenterSeries({
   centerId,
   isStudentView,
@@ -141,9 +150,14 @@ function CenterSeries({
   centerId: number
   isStudentView: boolean
 }) {
+  const { year, seriesId: seriesIdParam, tab } = useParams<{
+    year: string
+    seriesId?: string
+    tab?: string
+  }>()
+  const navigate = useNavigate()
   const { data: list, isPending, isError } = useSeriesList(centerId)
   const current = useMemo(() => (list ? currentSeries(list) : undefined), [list])
-  const [selectedId, setSelectedId] = useState<number | null>(null)
 
   if (isPending) {
     return (
@@ -156,8 +170,8 @@ function CenterSeries({
     return <p className="py-10 text-sm text-danger">Не удалось загрузить серии.</p>
   }
 
-  const selected =
-    list.find((s) => s.id === selectedId) ?? current ?? list[0]
+  const allowedTabs = isStudentView ? STUDENT_TAB_IDS : TEACHER_TAB_IDS
+  const defaultTab = allowedTabs[0]
   const createCard = !isStudentView ? (
     <CreateSeriesCard centerId={centerId} />
   ) : undefined
@@ -172,30 +186,67 @@ function CenterSeries({
     )
   }
 
+  // Bare `series` (no :seriesId): redirect to the current series' default tab.
+  const seriesIdNum = seriesIdParam ? Number(seriesIdParam) : 0
+  const selected =
+    list.find((s) => s.id === seriesIdNum) ?? current ?? list[0]
+  if (!seriesIdParam || !list.some((s) => s.id === seriesIdNum)) {
+    return (
+      <Navigate
+        to={'/mathcenter/' + year + '/series/' + selected.id + '/' + defaultTab}
+        replace
+      />
+    )
+  }
+  // Validate the tab against this view's allowed set; default-redirect on miss.
+  const activeTab = (allowedTabs as readonly string[]).includes(tab ?? '')
+    ? (tab as string)
+    : null
+  if (!activeTab) {
+    return (
+      <Navigate
+        to={'/mathcenter/' + year + '/series/' + selected.id + '/' + defaultTab}
+        replace
+      />
+    )
+  }
+
+  const selectSeries = (id: number) => {
+    // Preserve the active tab when switching series.
+    navigate('/mathcenter/' + year + '/series/' + id + '/' + activeTab)
+  }
+
   return (
     <>
       <SeriesStrip
         series={list}
-        selectedId={selected?.id ?? null}
+        selectedId={selected.id}
         currentId={current?.id ?? null}
-        onSelect={setSelectedId}
+        onSelect={selectSeries}
         trailing={createCard}
       />
 
-      {selected ? (
-        isStudentView ? (
-          <StudentSeriesView centerId={centerId} series={selected} />
-        ) : (
-          // Teachers get Условие / Разбор / Очередь / Таблица as full-width
-          // tabs; разбор carries the statistics + coffin handling.
-          <TeacherSeriesView centerId={centerId} series={selected} />
-        )
-      ) : null}
+      {isStudentView ? (
+        <StudentSeriesView
+          series={selected}
+          year={year ?? ''}
+          tab={activeTab as StudentTab}
+        />
+      ) : (
+        // Teachers get Условие / Разбор / Очередь / Таблица as full-width
+        // tabs; разбор carries the statistics + coffin handling.
+        <TeacherSeriesView
+          centerId={centerId}
+          series={selected}
+          year={year ?? ''}
+          tab={activeTab as TeacherTab}
+        />
+      )}
     </>
   )
 }
 
-type StudentTab = 'statement' | 'progress' | 'razbor'
+type StudentTab = (typeof STUDENT_TAB_IDS)[number]
 
 const STUDENT_TABS: { id: StudentTab; label: string }[] = [
   { id: 'statement', label: 'Условие' },
@@ -205,14 +256,24 @@ const STUDENT_TABS: { id: StudentTab; label: string }[] = [
 
 // StudentSeriesView gives students the same tabbed layout as teachers: the
 // statement, their own progress, and a read-only «Разбор» of the released
-// solutions.
-function StudentSeriesView({ centerId, series }: { centerId: number; series: Series }) {
-  const [tab, setTab] = useState<StudentTab>('progress')
+// solutions. The active tab comes from the URL and switching pushes a new route.
+function StudentSeriesView({
+  series,
+  year,
+  tab,
+}: {
+  series: Series
+  year: string
+  tab: StudentTab
+}) {
+  const navigate = useNavigate()
   return (
     <div className="flex flex-col gap-4">
       <PillTabs
         value={tab}
-        onChange={setTab}
+        onChange={(t) =>
+          navigate('/mathcenter/' + year + '/series/' + series.id + '/' + t)
+        }
         options={STUDENT_TABS}
         ariaLabel="Раздел серии"
         className="self-start"
@@ -220,7 +281,7 @@ function StudentSeriesView({ centerId, series }: { centerId: number; series: Ser
       {tab === 'statement' ? (
         <StatementPanel series={series} bare />
       ) : tab === 'progress' ? (
-        <StudentSide centerId={centerId} series={series} />
+        <StudentSide series={series} />
       ) : (
         <StudentRazbor series={series} />
       )}
@@ -228,14 +289,13 @@ function StudentSeriesView({ centerId, series }: { centerId: number; series: Ser
   )
 }
 
-function StudentSide({ centerId, series }: { centerId: number; series: Series }) {
+function StudentSide({ series }: { series: Series }) {
   const { data, isPending, isError } = useMySeriesRollup(series.id)
   const closed = isClosed(series.due_at)
   return (
     <AsyncGate isPending={isPending} isError={isError} hasData={!!data}>
       {data ? (
         <StudentProblemListWithCounts
-          centerId={centerId}
           series={series}
           rollup={data}
           closed={closed}
@@ -246,12 +306,10 @@ function StudentSide({ centerId, series }: { centerId: number; series: Series })
 }
 
 function StudentProblemListWithCounts({
-  centerId,
   series,
   rollup,
   closed,
 }: {
-  centerId: number
   series: Series
   rollup: MyRollup
   closed: boolean
@@ -300,7 +358,6 @@ function StudentProblemListWithCounts({
         </p>
       ) : null}
       <StudentProblemList
-        centerId={centerId}
         seriesId={series.id}
         rollup={rollup}
         series={series}
@@ -309,7 +366,7 @@ function StudentProblemListWithCounts({
   )
 }
 
-type TeacherTab = 'statement' | 'razbor' | 'queue' | 'grid'
+type TeacherTab = (typeof TEACHER_TAB_IDS)[number]
 
 // TeacherSeriesView gives teachers full-width tabs: «Условие» (the statement),
 // «Разбор» (official solutions + statistics + coffin handling), and the grading
@@ -318,11 +375,15 @@ type TeacherTab = 'statement' | 'razbor' | 'queue' | 'grid'
 function TeacherSeriesView({
   centerId,
   series,
+  year,
+  tab,
 }: {
   centerId: number
   series: Series
+  year: string
+  tab: TeacherTab
 }) {
-  const [tab, setTab] = useState<TeacherTab>('razbor')
+  const navigate = useNavigate()
   return (
     <div className="flex flex-col gap-4">
       {/* Tab switch on the left; the edit-series icon pinned to the right of the
@@ -330,7 +391,9 @@ function TeacherSeriesView({
       <div className="flex items-center justify-between gap-2">
         <PillTabs
           value={tab}
-          onChange={setTab}
+          onChange={(t) =>
+            navigate('/mathcenter/' + year + '/series/' + series.id + '/' + t)
+          }
           options={TEACHER_TABS}
           ariaLabel="Раздел проверки"
           className="min-w-0"
@@ -342,9 +405,9 @@ function TeacherSeriesView({
       ) : tab === 'razbor' ? (
         <StatsTab series={series} centerId={centerId} />
       ) : tab === 'queue' ? (
-        <GraderQueue centerId={centerId} seriesId={series.id} />
+        <GraderQueue seriesId={series.id} />
       ) : (
-        <TeacherGrid centerId={centerId} seriesId={series.id} />
+        <TeacherGrid seriesId={series.id} />
       )}
     </div>
   )

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import {
   claimIsLive,
   coffinOpen,
@@ -18,13 +18,13 @@ import {
 import { Button, Card, Spinner, StatusTile } from '../../design/ui'
 import { cn } from '../../design/cn'
 import { useSeriesContext } from './use-series-context'
+import { useCenterIdContext } from './center-id-context'
 import { SolutionContent } from './solution-content'
 import { SolutionEditor } from './solution-editor'
 import { displayPill } from './status-style'
 
 export function CoffinsPage() {
-  const { centerId: centerIdParam } = useParams<{ centerId: string }>()
-  const centerId = Number(centerIdParam)
+  const centerId = useCenterIdContext()
   const ctx = useSeriesContext(centerId)
 
   if (!Number.isFinite(centerId) || centerId <= 0 || (!ctx.isLoading && !ctx.hasAccess)) {
@@ -48,8 +48,24 @@ export function CoffinsPage() {
 type Tab = 'current' | 'solved' | 'queue'
 
 function CoffinsView({ centerId, isManager }: { centerId: number; isManager: boolean }) {
+  const { year, tab: tabParam } = useParams<{ year: string; tab?: string }>()
+  const navigate = useNavigate()
   const { data, isPending, isError } = useCenterCoffins(centerId)
-  const [tab, setTab] = useState<Tab>('current')
+
+  const tabs: { id: Tab; label: string }[] = [
+    { id: 'current', label: 'Текущие' },
+    { id: 'solved', label: 'Разобранные' },
+    ...(isManager ? [{ id: 'queue' as Tab, label: 'Очередь' }] : []),
+  ]
+  // Validate the URL tab against what this role may see. «Очередь» is
+  // manager-only, so a student landing on coffins/queue bounces to current.
+  const allowed = tabs.map((t) => t.id)
+  const tab = (allowed as string[]).includes(tabParam ?? '')
+    ? (tabParam as Tab)
+    : null
+  if (!tab) {
+    return <Navigate to={'/mathcenter/' + year + '/coffins/current'} replace />
+  }
 
   if (isPending) return <CenteredSpinner />
   if (isError || !data) {
@@ -58,11 +74,6 @@ function CoffinsView({ centerId, isManager }: { centerId: number; isManager: boo
 
   const open = data.filter((c) => coffinOpen(c.released_at))
   const solved = data.filter((c) => !coffinOpen(c.released_at))
-  const tabs: { id: Tab; label: string }[] = [
-    { id: 'current', label: 'Текущие' },
-    { id: 'solved', label: 'Разобранные' },
-    ...(isManager ? [{ id: 'queue' as Tab, label: 'Очередь' }] : []),
-  ]
 
   return (
     <div className="flex flex-col gap-4">
@@ -77,7 +88,7 @@ function CoffinsView({ centerId, isManager }: { centerId: number; isManager: boo
             type="button"
             role="tab"
             aria-selected={tab === t.id}
-            onClick={() => setTab(t.id)}
+            onClick={() => navigate('/mathcenter/' + year + '/coffins/' + t.id)}
             className={cn(
               'rounded-full px-3 py-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
               tab === t.id ? 'bg-accent-soft text-accent-ink' : 'text-muted hover:text-ink',
@@ -215,7 +226,7 @@ function CoffinCard({
       {/* Student submit tile (only while the coffin is open). */}
       {!isManager && !solved ? (
         <div className="mt-3">
-          <SubTile centerId={centerId} coffin={coffin} />
+          <SubTile coffin={coffin} />
         </div>
       ) : null}
 
@@ -290,12 +301,13 @@ function ManagerControls({
   )
 }
 
-function SubTile({ centerId, coffin }: { centerId: number; coffin: Coffin }) {
+function SubTile({ coffin }: { coffin: Coffin }) {
+  const { year } = useParams<{ year: string }>()
   const status = coffin.current_status ?? 'ungraded'
   const beingGraded = coffin.being_graded ?? false
   const threadId = coffin.thread_id ?? 0
   const meta = displayStatusMeta(status, beingGraded)
-  const base = '/mathcenter/' + centerId + '/series/' + coffin.series_id
+  const base = '/mathcenter/' + year + '/series/' + coffin.series_id
   const to =
     threadId > 0
       ? base + '/thread/' + threadId
@@ -328,14 +340,15 @@ function CoffinQueueList({ centerId }: { centerId: number }) {
     <ul className="flex flex-col gap-2">
       {data.map((item) => (
         <li key={item.thread_id}>
-          <CoffinQueueRow centerId={centerId} item={item} />
+          <CoffinQueueRow item={item} />
         </li>
       ))}
     </ul>
   )
 }
 
-function CoffinQueueRow({ centerId, item }: { centerId: number; item: CoffinQueueItem }) {
+function CoffinQueueRow({ item }: { item: CoffinQueueItem }) {
+  const { year } = useParams<{ year: string }>()
   const locked = claimIsLive(item)
   const { meta, className } = displayPill(item.current_status, locked)
   const label = item.subproblem_label
@@ -343,7 +356,7 @@ function CoffinQueueRow({ centerId, item }: { centerId: number; item: CoffinQueu
     : item.problem_display
   return (
     <Link
-      to={'/mathcenter/' + centerId + '/series/' + item.series_id + '/thread/' + item.thread_id}
+      to={'/mathcenter/' + year + '/series/' + item.series_id + '/thread/' + item.thread_id}
       className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
     >
       <div className="min-w-0 flex-1">

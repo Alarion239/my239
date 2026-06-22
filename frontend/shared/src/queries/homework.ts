@@ -108,6 +108,7 @@ function applyThread(qc: QueryClient, thread: ThreadView): void {
   qc.invalidateQueries({ queryKey: queryKeys.myRollup(thread.series_id) })
   qc.invalidateQueries({ queryKey: queryKeys.problemStats(thread.series_id) })
   qc.invalidateQueries({ queryKey: queryKeys.teacherGrid(thread.series_id) })
+  qc.invalidateQueries({ queryKey: queryKeys.centerGrid(thread.math_center_id) })
   qc.invalidateQueries({ queryKey: queryKeys.graderStats(thread.math_center_id) })
   // Both `mine=true|false` queue variants share this prefix.
   qc.invalidateQueries({

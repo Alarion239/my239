@@ -1,5 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef } from 'react'
-import { useParams } from 'react-router-dom'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import {
   coffinOpen,
   useCenterGrid,
@@ -7,13 +6,23 @@ import {
   type CenterGridResponse,
   type CenterGridSeries,
 } from '@my239/shared'
-import { Card, Spinner } from '../../design/ui'
+import { Card, Input, Spinner } from '../../design/ui'
 import { cn } from '../../design/cn'
 import { useSeriesContext } from './use-series-context'
+import { useCenterIdContext } from './center-id-context'
+import {
+  coffinCellClasses,
+  coffinColumnClasses,
+  cornerHeaderCell,
+  gridScrollerWithHeight,
+  gridTable,
+  groupLabel,
+  nameCell,
+  vert,
+} from './grid-style'
 
 export function ConduitPage() {
-  const { centerId: centerIdParam } = useParams<{ centerId: string }>()
-  const centerId = Number(centerIdParam)
+  const centerId = useCenterIdContext()
   const ctx = useSeriesContext(centerId)
 
   if (!Number.isFinite(centerId) || centerId <= 0) {
@@ -27,8 +36,10 @@ export function ConduitPage() {
     return <NoAccess />
   }
 
+  // Fills the full-bleed content region; the grid below is the single scroll
+  // surface (see AppShell's full-bleed branch).
   return (
-    <div className="flex flex-col gap-4">
+    <div className="h-full">
       <Conduit centerId={centerId} />
     </div>
   )
@@ -84,6 +95,8 @@ function currentSeriesId(series: CenterGridSeries[]): number | null {
 }
 
 function ConduitTable({ data }: { data: CenterGridResponse }) {
+  const [query, setQuery] = useState('')
+
   const cols: FlatCol[] = useMemo(() => {
     const out: FlatCol[] = []
     for (const s of data.series) {
@@ -94,9 +107,29 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
     return out
   }, [data.series])
 
+  // All students — totals are always computed over the full cohort; the search
+  // only hides rows, it never changes the Решили/Решено/итого numbers.
   const students = useMemo(
     () => data.groups.flatMap((g) => g.students),
     [data.groups],
+  )
+
+  // Filtered groups for rendering: students whose name matches the query, with
+  // empty groups dropped.
+  const filteredGroups = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return data.groups
+    return data.groups
+      .map((g) => ({
+        ...g,
+        students: g.students.filter((s) => s.name.toLowerCase().includes(q)),
+      }))
+      .filter((g) => g.students.length > 0)
+  }, [data.groups, query])
+
+  const shown = useMemo(
+    () => filteredGroups.reduce((n, g) => n + g.students.length, 0),
+    [filteredGroups],
   )
 
   const accepted = (studentId: number, subId: number): boolean =>
@@ -129,145 +162,140 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
     scroller.scrollLeft += elRect.left - scRect.left - 200
   }, [currentId])
 
-  const divider = 'border-l-2 border-l-line-strong'
-
+  // The grid IS the page: it fills the full-bleed region and is the single
+  // scroll surface (both axes), like a spreadsheet — no Card, no nested box.
+  // Borders / sticky rules / coffin tint are shared with «Таблица» via
+  // grid-style so the two grids can't drift apart.
   return (
-    <Card className="overflow-hidden p-0">
-      <div
-        ref={scrollerRef}
-        className="max-h-[calc(100vh-11rem)] overflow-auto overscroll-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        <table className="border-collapse text-sm [&_td]:border [&_td]:border-line [&_th]:border [&_th]:border-line">
-          <thead>
-            {/* Series band — one header spanning each series' columns. */}
-            <tr>
+    <div ref={scrollerRef} className={gridScrollerWithHeight('h-full')}>
+      <table className={gridTable}>
+        <thead>
+          {/* Series band — one header spanning each series' columns. */}
+          <tr>
+            {/* Corner cell — holds the student search filter. */}
+            <th rowSpan={2} className={cornerHeaderCell}>
+              <div className="flex flex-col gap-1">
+                <Input
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Ученик…"
+                  className="h-8 w-full min-w-40"
+                  aria-label="Поиск ученика"
+                />
+                <span className="text-[0.65rem] font-normal text-faint">
+                  {shown} из {students.length}
+                </span>
+              </div>
+            </th>
+            {data.series.map((s) => (
               <th
-                rowSpan={2}
-                className="sticky left-0 top-0 z-40 min-w-44 bg-surface-muted px-3 py-2 text-left font-medium text-ink"
+                key={s.series_id}
+                ref={s.series_id === currentId ? currentThRef : undefined}
+                colSpan={s.columns.length}
+                className={cn(
+                  'sticky top-0 z-20 h-9 whitespace-nowrap border-b border-t border-line bg-surface-muted px-3 text-center font-medium text-ink',
+                  vert(true),
+                )}
+                title={s.display_name}
               >
-                Ученик
+                Серия {s.number}
               </th>
-              {data.series.map((s) => (
+            ))}
+            <th
+              rowSpan={2}
+              className="sticky right-0 top-0 z-40 border-b border-l border-r border-t border-line bg-surface-muted px-3 py-2 text-center font-medium text-ink"
+            >
+              Решено
+            </th>
+          </tr>
+          {/* Per-subproblem column labels. Coffins are tinted — amber while
+              open for submission, gray once разобрана (solved). */}
+          <tr>
+            {cols.map(({ col, firstInSeries }) => {
+              const open = col.is_coffin && coffinOpen(col.coffin_released_at)
+              return (
                 <th
-                  key={s.series_id}
-                  ref={s.series_id === currentId ? currentThRef : undefined}
-                  colSpan={s.columns.length}
+                  key={col.subproblem_id}
+                  title={
+                    col.is_coffin
+                      ? open
+                        ? 'Гроб — открыт'
+                        : 'Гроб — разобран'
+                      : undefined
+                  }
                   className={cn(
-                    'sticky top-0 z-20 h-9 whitespace-nowrap bg-surface-muted px-3 text-center font-medium text-ink',
-                    divider,
+                    'sticky top-9 z-20 min-w-9 border-b border-line px-1.5 py-1 text-center text-xs font-medium',
+                    vert(firstInSeries),
+                    coffinColumnClasses(col.is_coffin, open),
                   )}
-                  title={s.display_name}
                 >
-                  Серия {s.number}
+                  {col.column_label}
                 </th>
-              ))}
-              <th
-                rowSpan={2}
-                className="sticky right-0 top-0 z-40 bg-surface-muted px-3 py-2 text-center font-medium text-ink"
-              >
-                Решено
-              </th>
-            </tr>
-            {/* Per-subproblem column labels. Coffins are tinted — amber while
-                open for submission, gray once разобрана (solved). */}
-            <tr>
-              {cols.map(({ col, firstInSeries }) => {
-                const open = col.is_coffin && coffinOpen(col.coffin_released_at)
-                return (
-                  <th
-                    key={col.subproblem_id}
-                    title={
-                      col.is_coffin
-                        ? open
-                          ? 'Гроб — открыт'
-                          : 'Гроб — разобран'
-                        : undefined
-                    }
-                    className={cn(
-                      'sticky top-9 z-20 min-w-9 px-1.5 py-1 text-center text-xs font-medium',
-                      open
-                        ? 'bg-status-checking text-white'
-                        : col.is_coffin
-                          ? 'bg-faint text-white'
-                          : 'bg-surface-muted text-muted',
-                      firstInSeries && divider,
-                    )}
-                  >
-                    {col.column_label}
-                  </th>
-                )
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {data.groups.map((g) => (
-              <Fragment key={g.group_id}>
-                <tr className="bg-surface-muted/60">
-                  <td colSpan={cols.length + 2} className="p-0">
-                    <div className="sticky left-0 inline-block px-3 py-1 text-xs font-medium text-muted">
-                      {g.name}
-                    </div>
+              )
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {filteredGroups.map((g) => (
+            <Fragment key={g.group_id}>
+              <tr className="bg-surface-muted/60">
+                <td colSpan={cols.length + 2} className="border-b border-line p-0">
+                  <div className={groupLabel}>{g.name}</div>
+                </td>
+              </tr>
+              {g.students.map((st) => (
+                <tr key={st.user_id} className="hover:bg-surface-muted/40">
+                  <td className={nameCell}>{st.name}</td>
+                  {cols.map(({ col, firstInSeries }) => {
+                    const acc = accepted(st.user_id, col.subproblem_id)
+                    const open = col.is_coffin && coffinOpen(col.coffin_released_at)
+                    return (
+                      <td
+                        key={col.subproblem_id}
+                        className={cn(
+                          'border-b border-line px-1.5 py-1.5 text-center',
+                          vert(firstInSeries),
+                          acc
+                            ? 'bg-status-accepted-soft font-medium text-status-accepted'
+                            : cn(coffinCellClasses(col.is_coffin, open), 'text-faint'),
+                        )}
+                      >
+                        {acc ? cellInitials(st.user_id, col.subproblem_id) : ''}
+                      </td>
+                    )
+                  })}
+                  <td className="sticky right-0 z-10 border-b border-l border-r border-line bg-surface px-3 py-1.5 text-center font-medium text-ink">
+                    {rowTotal(st.user_id)}
                   </td>
                 </tr>
-                {g.students.map((st) => (
-                  <tr key={st.user_id} className="hover:bg-surface-muted/40">
-                    <td className="sticky left-0 z-10 min-w-44 whitespace-nowrap bg-surface-muted px-3 py-1.5 text-ink">
-                      {st.name}
-                    </td>
-                    {cols.map(({ col, firstInSeries }) => {
-                      const acc = accepted(st.user_id, col.subproblem_id)
-                      const open = col.is_coffin && coffinOpen(col.coffin_released_at)
-                      return (
-                        <td
-                          key={col.subproblem_id}
-                          className={cn(
-                            'px-1.5 py-1.5 text-center',
-                            firstInSeries && divider,
-                            acc
-                              ? 'bg-status-accepted-soft font-medium text-status-accepted'
-                              : open
-                                ? 'bg-status-checking/25 text-faint'
-                                : col.is_coffin
-                                  ? 'bg-faint/35 text-faint'
-                                  : 'text-faint',
-                          )}
-                        >
-                          {acc ? cellInitials(st.user_id, col.subproblem_id) : ''}
-                        </td>
-                      )
-                    })}
-                    <td className="sticky right-0 z-10 bg-surface px-3 py-1.5 text-center font-medium text-ink">
-                      {rowTotal(st.user_id)}
-                    </td>
-                  </tr>
-                ))}
-              </Fragment>
-            ))}
-            {/* Column totals: people who solved each problem — pinned to the
-                bottom so it's always on screen. */}
-            <tr>
-              <td className="sticky bottom-0 left-0 z-30 bg-surface-muted px-3 py-1.5 font-medium text-ink">
-                Решили
-              </td>
-              {cols.map(({ col, firstInSeries }) => (
-                <td
-                  key={col.subproblem_id}
-                  className={cn(
-                    'sticky bottom-0 z-20 bg-surface-muted px-1.5 py-1.5 text-center font-medium text-ink',
-                    firstInSeries && divider,
-                  )}
-                >
-                  {colTotal(col.subproblem_id)}
-                </td>
               ))}
-              <td className="sticky bottom-0 right-0 z-30 bg-surface-muted px-3 py-1.5 text-center font-medium text-ink">
-                {grandTotal}
+            </Fragment>
+          ))}
+          {/* Column totals: people who solved each problem — pinned to the
+              bottom so it's always on screen. Always over ALL students. */}
+          <tr>
+            <td className="sticky bottom-0 left-0 z-30 border-b border-l border-r border-t border-line bg-surface-muted px-3 py-1.5 font-medium text-ink">
+              Решили
+            </td>
+            {cols.map(({ col, firstInSeries }) => (
+              <td
+                key={col.subproblem_id}
+                className={cn(
+                  'sticky bottom-0 z-20 border-b border-t border-line bg-surface-muted px-1.5 py-1.5 text-center font-medium text-ink',
+                  vert(firstInSeries),
+                )}
+              >
+                {colTotal(col.subproblem_id)}
               </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </Card>
+            ))}
+            <td className="sticky bottom-0 right-0 z-30 border-b border-l border-r border-t border-line bg-surface-muted px-3 py-1.5 text-center font-medium text-ink">
+              {grandTotal}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   )
 }
 

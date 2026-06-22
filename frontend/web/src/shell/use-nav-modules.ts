@@ -30,26 +30,33 @@ export function useNavModules(): ModuleDef[] {
 
   centers.sort((a, b) => b.graduationYear - a.graduationYear)
 
-  const mathModules: ModuleDef[] = centers.map((c) => ({
-    id: 'mc-' + c.id,
-    label: 'Матцентр ' + c.graduationYear,
-    description: 'Серии задач и проверка',
-    path: '/mathcenter/' + c.id,
-    icon: FunctionSquare,
-    status: 'active',
-    pages: [
-      { label: 'Серии', path: '/mathcenter/' + c.id, end: true },
-      { label: 'Гробы', path: '/mathcenter/' + c.id + '/coffins' },
-      // «Кондуит» (the center-wide accept matrix) is a teacher-only tool.
-      ...(teacherCenters.has(c.id)
-        ? [{ label: 'Кондуит', path: '/mathcenter/' + c.id + '/conduit' }]
-        : []),
-      // «Управление» (the management panel) is a head-teacher self-service tool.
-      ...(headTeacherCenters.has(c.id)
-        ? [{ label: 'Управление', path: '/mathcenter/' + c.id + '/manage' }]
-        : []),
-    ],
-  }))
+  const mathModules: ModuleDef[] = centers.map((c) => {
+    // Centers are addressed by graduation YEAR in the URL (the canonical
+    // scheme); the module base path is /mathcenter/{year}.
+    const base = '/mathcenter/' + c.graduationYear
+    return {
+      id: 'mc-' + c.id,
+      label: 'Матцентр ' + c.graduationYear,
+      description: 'Серии задач и проверка',
+      path: base,
+      icon: FunctionSquare,
+      status: 'active',
+      pages: [
+        // «Серии» now nests series/:id/:tab routes, so it must NOT use `end`:
+        // it stays highlighted on deeper series paths via NavLink prefix match.
+        { label: 'Серии', path: base + '/series' },
+        { label: 'Гробы', path: base + '/coffins' },
+        // «Кондуит» (the center-wide accept matrix) is a teacher-only tool.
+        ...(teacherCenters.has(c.id)
+          ? [{ label: 'Кондуит', path: base + '/conduit' }]
+          : []),
+        // «Управление» (the management panel) is a head-teacher self-service tool.
+        ...(headTeacherCenters.has(c.id)
+          ? [{ label: 'Управление', path: base + '/manage' }]
+          : []),
+      ],
+    }
+  })
 
   return [...mathModules, ...modules]
 }

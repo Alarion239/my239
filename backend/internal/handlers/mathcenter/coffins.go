@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/Alarion239/my239/backend/internal/httpx"
+	"github.com/Alarion239/my239/backend/internal/live"
 	"github.com/Alarion239/my239/backend/internal/logger"
 	mc "github.com/Alarion239/my239/backend/internal/mathcenter"
 	"github.com/Alarion239/my239/backend/internal/store"
@@ -307,7 +308,7 @@ func loadSubproblemForRead(ctx context.Context, w http.ResponseWriter, r *http.R
 
 // MarkCoffin — teacher-only. Marks a subproblem as a coffin (idempotent),
 // re-opening it for submission past the series deadline.
-func MarkCoffin(database *db.DB) http.HandlerFunc {
+func MarkCoffin(database *db.DB, hub *live.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		userID, ok := requireUser(w, r)
@@ -320,7 +321,8 @@ func MarkCoffin(database *db.DB) http.HandlerFunc {
 			return
 		}
 		q := store.New(database.Pool())
-		if _, ok := loadSubproblemForWrite(ctx, w, r, q, userID, subproblemID); !ok {
+		sc, ok := loadSubproblemForWrite(ctx, w, r, q, userID, subproblemID)
+		if !ok {
 			return
 		}
 		s, err := q.UpsertCoffinFlag(ctx, store.UpsertCoffinFlagParams{SubproblemID: subproblemID, IsCoffin: true})
@@ -329,6 +331,7 @@ func MarkCoffin(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to mark coffin")
 			return
 		}
+		live.Publish(ctx, database.Pool(), live.Event{CenterID: sc.MathCenterID, Kind: live.KindCoffins})
 		httpx.WriteJSON(w, http.StatusOK, toCoffinActionView(s))
 	}
 }
@@ -336,7 +339,7 @@ func MarkCoffin(database *db.DB) http.HandlerFunc {
 // UnmarkCoffin — teacher-only. Clears the coffin flag (the subproblem reverts to
 // the normal series deadline). If no разбор remains, the row + its PDF are
 // removed; otherwise the разбор is kept.
-func UnmarkCoffin(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
+func UnmarkCoffin(database *db.DB, hub *live.Hub, blobs objectstore.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		userID, ok := requireUser(w, r)
@@ -349,7 +352,8 @@ func UnmarkCoffin(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 			return
 		}
 		q := store.New(database.Pool())
-		if _, ok := loadSubproblemForWrite(ctx, w, r, q, userID, subproblemID); !ok {
+		sc, ok := loadSubproblemForWrite(ctx, w, r, q, userID, subproblemID)
+		if !ok {
 			return
 		}
 		existing, err := q.GetSubproblemSolution(ctx, subproblemID)
@@ -371,6 +375,7 @@ func UnmarkCoffin(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to unmark coffin")
 				return
 			}
+			live.Publish(ctx, database.Pool(), live.Event{CenterID: sc.MathCenterID, Kind: live.KindCoffins})
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
@@ -385,13 +390,14 @@ func UnmarkCoffin(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to unmark coffin")
 			return
 		}
+		live.Publish(ctx, database.Pool(), live.Event{CenterID: sc.MathCenterID, Kind: live.KindCoffins})
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
 // ReleaseCoffin — teacher-only. Stamps released_at, closing a coffin's
 // submission window and making its разбор available.
-func ReleaseCoffin(database *db.DB) http.HandlerFunc {
+func ReleaseCoffin(database *db.DB, hub *live.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		userID, ok := requireUser(w, r)
@@ -404,7 +410,8 @@ func ReleaseCoffin(database *db.DB) http.HandlerFunc {
 			return
 		}
 		q := store.New(database.Pool())
-		if _, ok := loadSubproblemForWrite(ctx, w, r, q, userID, subproblemID); !ok {
+		sc, ok := loadSubproblemForWrite(ctx, w, r, q, userID, subproblemID)
+		if !ok {
 			return
 		}
 		s, err := q.ReleaseSubproblemSolution(ctx, subproblemID)
@@ -417,13 +424,14 @@ func ReleaseCoffin(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to release coffin")
 			return
 		}
+		live.Publish(ctx, database.Pool(), live.Event{CenterID: sc.MathCenterID, Kind: live.KindCoffins})
 		httpx.WriteJSON(w, http.StatusOK, toCoffinActionView(s))
 	}
 }
 
 // --- per-subproblem разбор: TeX ---------------------------------------------
 
-func PutSubproblemSolutionTex(database *db.DB) http.HandlerFunc {
+func PutSubproblemSolutionTex(database *db.DB, hub *live.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		userID, ok := requireUser(w, r)
@@ -444,7 +452,8 @@ func PutSubproblemSolutionTex(database *db.DB) http.HandlerFunc {
 			return
 		}
 		q := store.New(database.Pool())
-		if _, ok := loadSubproblemForWrite(ctx, w, r, q, userID, subproblemID); !ok {
+		sc, ok := loadSubproblemForWrite(ctx, w, r, q, userID, subproblemID)
+		if !ok {
 			return
 		}
 		tex := req.Tex
@@ -454,6 +463,7 @@ func PutSubproblemSolutionTex(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to save разбор")
 			return
 		}
+		live.Publish(ctx, database.Pool(), live.Event{CenterID: sc.MathCenterID, Kind: live.KindCoffins})
 		httpx.WriteJSON(w, http.StatusOK, toCoffinActionView(s))
 	}
 }
@@ -509,7 +519,7 @@ func IssueSubproblemSolutionPDFUploadURL(database *db.DB, blobs objectstore.Stor
 	}
 }
 
-func FinalizeSubproblemSolutionPDFPublish(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
+func FinalizeSubproblemSolutionPDFPublish(database *db.DB, hub *live.Hub, blobs objectstore.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		userID, ok := requireUser(w, r)
@@ -526,7 +536,8 @@ func FinalizeSubproblemSolutionPDFPublish(database *db.DB, blobs objectstore.Sto
 			return
 		}
 		q := store.New(database.Pool())
-		if _, ok := loadSubproblemForWrite(ctx, w, r, q, userID, subproblemID); !ok {
+		sc, ok := loadSubproblemForWrite(ctx, w, r, q, userID, subproblemID)
+		if !ok {
 			return
 		}
 		key := subproblemSolutionPDFKey(subproblemID)
@@ -543,6 +554,7 @@ func FinalizeSubproblemSolutionPDFPublish(database *db.DB, blobs objectstore.Sto
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to publish разбор")
 			return
 		}
+		live.Publish(ctx, database.Pool(), live.Event{CenterID: sc.MathCenterID, Kind: live.KindCoffins})
 		httpx.WriteJSON(w, http.StatusOK, toCoffinActionView(s))
 	}
 }
@@ -626,7 +638,7 @@ func AssignSolutionGroup(database *db.DB) http.HandlerFunc {
 
 // --- per-subproblem разбор: external link -----------------------------------
 
-func SetSubproblemSolutionLinkHandler(database *db.DB) http.HandlerFunc {
+func SetSubproblemSolutionLinkHandler(database *db.DB, hub *live.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		userID, ok := requireUser(w, r)
@@ -648,7 +660,8 @@ func SetSubproblemSolutionLinkHandler(database *db.DB) http.HandlerFunc {
 			return
 		}
 		q := store.New(database.Pool())
-		if _, ok := loadSubproblemForWrite(ctx, w, r, q, userID, subproblemID); !ok {
+		sc, ok := loadSubproblemForWrite(ctx, w, r, q, userID, subproblemID)
+		if !ok {
 			return
 		}
 		var linkPtr *string
@@ -661,6 +674,7 @@ func SetSubproblemSolutionLinkHandler(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to save link")
 			return
 		}
+		live.Publish(ctx, database.Pool(), live.Event{CenterID: sc.MathCenterID, Kind: live.KindCoffins})
 		httpx.WriteJSON(w, http.StatusOK, toCoffinActionView(s))
 	}
 }

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ApiClient, ApiClientProvider, type TokenStore } from '@my239/shared'
 import { GraderQueue } from './grader-queue'
@@ -58,7 +58,7 @@ function stubFetch(items: unknown[]) {
 }
 
 function Harness() {
-  return <GraderQueue centerId={1} seriesId={7} />
+  return <GraderQueue seriesId={7} />
 }
 
 function renderQueue() {
@@ -69,8 +69,14 @@ function renderQueue() {
   render(
     <QueryClientProvider client={queryClient}>
       <ApiClientProvider client={client}>
-        <MemoryRouter>
-          <Harness />
+        {/* The queue builds thread links from the :year route segment. */}
+        <MemoryRouter initialEntries={['/mathcenter/2026/series/7/queue']}>
+          <Routes>
+            <Route
+              path="/mathcenter/:year/series/:seriesId/:tab"
+              element={<Harness />}
+            />
+          </Routes>
         </MemoryRouter>
       </ApiClientProvider>
     </QueryClientProvider>,
@@ -89,7 +95,7 @@ describe('GraderQueue', () => {
     expect(await screen.findByText('Аня Смирнова')).toBeInTheDocument()
     expect(screen.getByText('Задача 3 (б)')).toBeInTheDocument()
     // The row links to the thread page.
-    const link = document.querySelector('a[href="/mathcenter/1/series/7/thread/55"]')
+    const link = document.querySelector('a[href="/mathcenter/2026/series/7/thread/55"]')
     expect(link).not.toBeNull()
     // No "только мои" filter any more.
     expect(screen.queryByLabelText('Только мои')).toBeNull()

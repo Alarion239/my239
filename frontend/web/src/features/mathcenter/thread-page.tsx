@@ -29,18 +29,19 @@ import { ThreadActionPanel } from './thread-action-panel'
 import { useClaimHeartbeat } from './use-claim-heartbeat'
 import { useThreadRole } from './use-thread-role'
 import { useSeriesContext } from './use-series-context'
+import { useCenterIdContext } from './center-id-context'
 
-function seriesPath(centerId: number): string {
-  return '/mathcenter/' + centerId
+function seriesPath(year: string): string {
+  return '/mathcenter/' + year + '/series'
 }
 
 function threadPath(
-  centerId: number,
+  year: string,
   seriesId: number,
   threadId: number,
 ): string {
   return (
-    '/mathcenter/' + centerId + '/series/' + seriesId + '/thread/' + threadId
+    '/mathcenter/' + year + '/series/' + seriesId + '/thread/' + threadId
   )
 }
 
@@ -57,7 +58,7 @@ function taskTitle(ctx: SubproblemContext | undefined): string {
 // cleanly across navigations (including submit → thread after the first send).
 export function ThreadPage() {
   const params = useParams<{
-    centerId: string
+    year: string
     seriesId: string
     threadId?: string
     subproblemId?: string
@@ -65,18 +66,19 @@ export function ThreadPage() {
   const key =
     (params.threadId ? 't:' + params.threadId : 'n:' + params.subproblemId) +
     '@' +
-    params.centerId
+    params.year
   return <ThreadPageInner key={key} />
 }
 
 function ThreadPageInner() {
   const params = useParams<{
-    centerId: string
+    year: string
     seriesId: string
     threadId?: string
     subproblemId?: string
   }>()
-  const centerId = Number(params.centerId)
+  const year = params.year ?? ''
+  const centerId = useCenterIdContext()
   const seriesId = Number(params.seriesId)
   const threadId = params.threadId ? Number(params.threadId) : 0
   const subproblemId = params.subproblemId ? Number(params.subproblemId) : 0
@@ -85,19 +87,19 @@ function ThreadPageInner() {
   const ctx = useSeriesContext(centerId)
 
   if (!Number.isFinite(centerId) || centerId <= 0) {
-    return <NotFound centerId={centerId} />
+    return <NotFound year={year} centerId={centerId} />
   }
   if (ctx.isLoading) {
     return <CenteredSpinner />
   }
   if (!ctx.hasAccess) {
-    return <NotFound centerId={centerId} />
+    return <NotFound year={year} centerId={centerId} />
   }
 
   return (
     <div className="animate-rise mx-auto flex w-full max-w-3xl flex-col gap-4">
       <Link
-        to={seriesPath(centerId)}
+        to={seriesPath(year)}
         className="inline-flex items-center gap-1.5 self-start text-sm font-medium text-accent underline-offset-4 hover:underline"
       >
         <ArrowLeft className="h-4 w-4" aria-hidden />
@@ -115,6 +117,7 @@ function ThreadPageInner() {
           centerId={centerId}
           seriesId={seriesId}
           subproblemId={subproblemId}
+          year={year}
         />
       )}
     </div>
@@ -182,10 +185,12 @@ function SubmitMode({
   centerId,
   seriesId,
   subproblemId,
+  year,
 }: {
   centerId: number
   seriesId: number
   subproblemId: number
+  year: string
 }) {
   const navigate = useNavigate()
   const { data: ctx, isPending, isError } = useSubproblemContext(subproblemId)
@@ -243,7 +248,7 @@ function SubmitMode({
                 body: args.body,
                 object_keys: args.object_keys,
               })
-              navigate(threadPath(centerId, seriesId, t.id), { replace: true })
+              navigate(threadPath(year, seriesId, t.id), { replace: true })
             }}
           />
         </Card>
@@ -408,13 +413,13 @@ function CenteredSpinner() {
   )
 }
 
-function NotFound({ centerId }: { centerId: number }) {
+function NotFound({ year, centerId }: { year: string; centerId: number }) {
   return (
     <Card className="animate-rise px-6 py-16 text-center">
       <p className="text-muted">Нет доступа к этой задаче.</p>
-      {Number.isFinite(centerId) && centerId > 0 ? (
+      {year && Number.isFinite(centerId) && centerId > 0 ? (
         <Link
-          to={seriesPath(centerId)}
+          to={seriesPath(year)}
           className="mt-2 inline-block text-sm font-medium text-accent underline-offset-4 hover:underline"
         >
           Назад к серии

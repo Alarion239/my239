@@ -16,6 +16,7 @@ import (
 
 	"github.com/Alarion239/my239/backend/internal/ctxcache"
 	"github.com/Alarion239/my239/backend/internal/httpx"
+	"github.com/Alarion239/my239/backend/internal/live"
 	"github.com/Alarion239/my239/backend/internal/logger"
 	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/internal/tokenpreset"
@@ -26,22 +27,22 @@ import (
 // /centers/{centerID}/manage. Every handler re-checks head-teacher access (or
 // admin) and that the target row belongs to {centerID}, so a head teacher of
 // one center can never touch another center's rows via a guessed id.
-func ManageRouter(database *db.DB) chi.Router {
+func ManageRouter(database *db.DB, hub *live.Hub) chi.Router {
 	r := chi.NewRouter()
 
 	r.Get("/groups", manageListGroups(database))
-	r.Post("/groups", manageCreateGroup(database))
-	r.Delete("/groups/{groupID}", manageDeleteGroup(database))
+	r.Post("/groups", manageCreateGroup(database, hub))
+	r.Delete("/groups/{groupID}", manageDeleteGroup(database, hub))
 
 	r.Get("/teachers", manageListTeachers(database))
-	r.Post("/teachers", manageAddTeacher(database))
-	r.Patch("/teachers/{teacherID}/head", manageSetTeacherHead(database))
-	r.Delete("/teachers/{teacherID}", manageRemoveTeacher(database))
+	r.Post("/teachers", manageAddTeacher(database, hub))
+	r.Patch("/teachers/{teacherID}/head", manageSetTeacherHead(database, hub))
+	r.Delete("/teachers/{teacherID}", manageRemoveTeacher(database, hub))
 
 	r.Get("/students", manageListStudents(database))
-	r.Post("/students", manageAddStudent(database))
-	r.Patch("/students/{studentID}/group", manageSetStudentGroup(database))
-	r.Delete("/students/{studentID}", manageRemoveStudent(database))
+	r.Post("/students", manageAddStudent(database, hub))
+	r.Patch("/students/{studentID}/group", manageSetStudentGroup(database, hub))
+	r.Delete("/students/{studentID}", manageRemoveStudent(database, hub))
 
 	r.Get("/user-search", manageUserSearch(database))
 
@@ -117,7 +118,7 @@ type manageCreateGroupRequest struct {
 	Name string `json:"name"`
 }
 
-func manageCreateGroup(database *db.DB) http.HandlerFunc {
+func manageCreateGroup(database *db.DB, hub *live.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := store.New(database.Pool())
 		centerID, _, ok := manageGate(w, r, q)
@@ -145,11 +146,12 @@ func manageCreateGroup(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to create group")
 			return
 		}
+		live.Publish(r.Context(), database.Pool(), live.Event{CenterID: centerID, Kind: live.KindMembership})
 		httpx.WriteJSON(w, http.StatusCreated, group)
 	}
 }
 
-func manageDeleteGroup(database *db.DB) http.HandlerFunc {
+func manageDeleteGroup(database *db.DB, hub *live.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := store.New(database.Pool())
 		centerID, _, ok := manageGate(w, r, q)
@@ -169,6 +171,7 @@ func manageDeleteGroup(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to delete group")
 			return
 		}
+		live.Publish(r.Context(), database.Pool(), live.Event{CenterID: centerID, Kind: live.KindMembership})
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -204,7 +207,7 @@ func manageListTeachers(database *db.DB) http.HandlerFunc {
 // manageAddTeacher enrolls an existing user as a teacher of {centerID}. Mirrors
 // admin.AddTeacher: per-center exclusivity (no student+teacher of the same
 // center) inside one transaction.
-func manageAddTeacher(database *db.DB) http.HandlerFunc {
+func manageAddTeacher(database *db.DB, hub *live.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		centerID, _, ok := manageGate(w, r, store.New(database.Pool()))
@@ -263,11 +266,12 @@ func manageAddTeacher(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
+		live.Publish(ctx, database.Pool(), live.Event{CenterID: centerID, Kind: live.KindMembership})
 		httpx.WriteJSON(w, http.StatusCreated, t)
 	}
 }
 
-func manageSetTeacherHead(database *db.DB) http.HandlerFunc {
+func manageSetTeacherHead(database *db.DB, hub *live.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := store.New(database.Pool())
 		centerID, _, ok := manageGate(w, r, q)
@@ -299,11 +303,12 @@ func manageSetTeacherHead(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to update teacher")
 			return
 		}
+		live.Publish(r.Context(), database.Pool(), live.Event{CenterID: centerID, Kind: live.KindMembership})
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
-func manageRemoveTeacher(database *db.DB) http.HandlerFunc {
+func manageRemoveTeacher(database *db.DB, hub *live.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := store.New(database.Pool())
 		centerID, _, ok := manageGate(w, r, q)
@@ -327,6 +332,7 @@ func manageRemoveTeacher(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to remove teacher")
 			return
 		}
+		live.Publish(r.Context(), database.Pool(), live.Event{CenterID: centerID, Kind: live.KindMembership})
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -361,7 +367,7 @@ func manageListStudents(database *db.DB) http.HandlerFunc {
 
 // manageAddStudent enrolls an existing user into a group of {centerID}. Mirrors
 // admin.AddStudent, plus a guard that the target group belongs to this center.
-func manageAddStudent(database *db.DB) http.HandlerFunc {
+func manageAddStudent(database *db.DB, hub *live.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		centerID, _, ok := manageGate(w, r, store.New(database.Pool()))
@@ -435,12 +441,13 @@ func manageAddStudent(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
+		live.Publish(ctx, database.Pool(), live.Event{CenterID: centerID, Kind: live.KindMembership})
 		httpx.WriteJSON(w, http.StatusCreated, s)
 	}
 }
 
 // manageSetStudentGroup moves a student to another group within the SAME center.
-func manageSetStudentGroup(database *db.DB) http.HandlerFunc {
+func manageSetStudentGroup(database *db.DB, hub *live.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := store.New(database.Pool())
 		centerID, _, ok := manageGate(w, r, q)
@@ -475,11 +482,12 @@ func manageSetStudentGroup(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to move student")
 			return
 		}
+		live.Publish(r.Context(), database.Pool(), live.Event{CenterID: centerID, Kind: live.KindMembership})
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
-func manageRemoveStudent(database *db.DB) http.HandlerFunc {
+func manageRemoveStudent(database *db.DB, hub *live.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := store.New(database.Pool())
 		centerID, _, ok := manageGate(w, r, q)
@@ -499,6 +507,7 @@ func manageRemoveStudent(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to remove student")
 			return
 		}
+		live.Publish(r.Context(), database.Pool(), live.Event{CenterID: centerID, Kind: live.KindMembership})
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

@@ -24,6 +24,7 @@ import (
 	"github.com/Alarion239/my239/backend/internal/handlers/health"
 	hwHandlers "github.com/Alarion239/my239/backend/internal/handlers/homework"
 	mcHandlers "github.com/Alarion239/my239/backend/internal/handlers/mathcenter"
+	"github.com/Alarion239/my239/backend/internal/live"
 	"github.com/Alarion239/my239/backend/internal/logger"
 	"github.com/Alarion239/my239/backend/internal/metrics"
 	"github.com/Alarion239/my239/backend/internal/middleware"
@@ -98,6 +99,11 @@ func run() error {
 		return err
 	}
 
+	// Live push: one in-process hub fed by a single LISTEN goroutine on a
+	// dedicated pool connection. The goroutine stops when rootCtx is cancelled.
+	liveHub := live.NewHub()
+	go live.Run(rootCtx, database.Raw(), liveHub)
+
 	r := chi.NewRouter()
 
 	r.Use(chiMiddleware.RequestID)
@@ -114,8 +120,8 @@ func run() error {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Mount("/auth", authHandlers.Router(database, tokens, limiter))
 		r.Mount("/admin", adminHandlers.Router(database, tokens))
-		r.Mount("/mathcenter", mcHandlers.Router(database, tokens, blobs, cfg.S3.UploadTTL, cfg.S3.DownloadTTL))
-		r.Mount("/homework", hwHandlers.Router(database, tokens, blobs, cfg.S3.UploadTTL, cfg.S3.DownloadTTL))
+		r.Mount("/mathcenter", mcHandlers.Router(database, liveHub, tokens, blobs, cfg.S3.UploadTTL, cfg.S3.DownloadTTL))
+		r.Mount("/homework", hwHandlers.Router(database, liveHub, tokens, blobs, cfg.S3.UploadTTL, cfg.S3.DownloadTTL))
 	})
 
 	srv := &http.Server{
@@ -205,7 +211,8 @@ func buildObjectStore(ctx context.Context, cfg *config.Config) (objectstore.Stor
 	if err != nil {
 		return nil, err
 	}
-	logger.LogInfo("object store: s3",
+	logger.LogInfo(
+		"object store: s3",
 		"endpoint", cfg.S3.Endpoint,
 		"public_endpoint", cfg.S3.PublicEndpoint,
 		"bucket", cfg.S3.Bucket,

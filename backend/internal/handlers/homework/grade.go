@@ -10,6 +10,7 @@ import (
 
 	"github.com/Alarion239/my239/backend/internal/homework"
 	"github.com/Alarion239/my239/backend/internal/httpx"
+	"github.com/Alarion239/my239/backend/internal/live"
 	"github.com/Alarion239/my239/backend/internal/logger"
 	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/pkg/db"
@@ -32,7 +33,7 @@ type gradeRequest struct {
 // stickiness, and clears the claim — all atomically. For 'appealed'
 // threads, only the original grader (last_grader_user_id) or an admin may
 // grade.
-func Grade(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
+func Grade(database *db.DB, hub *live.Hub, blobs objectstore.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		userID, ok := requireUser(w, r)
@@ -101,6 +102,7 @@ func Grade(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to record grade")
 			return
 		}
+		live.Publish(ctx, database.Pool(), live.Event{CenterID: thread.MathCenterID, Kind: live.KindGrading, SeriesID: thread.SeriesID})
 		writeThreadView(ctx, w, r, database, blobs, thread.ID)
 	}
 }

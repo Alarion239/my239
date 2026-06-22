@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   ApiClient,
@@ -13,7 +14,9 @@ import {
   type User,
 } from '@my239/shared'
 import { AuthProvider } from '../../auth/auth-context'
+import { CenterLayout } from './center-layout'
 import { SeriesPage } from './series-page'
+import { ThreadPage } from './thread-page'
 
 const noopStore: TokenStore = {
   getRefreshToken: async () => null,
@@ -23,6 +26,9 @@ const noopStore: TokenStore = {
 
 const CENTER_ID = 7
 const SERIES_ID = 42
+// Centers are addressed by graduation year in the URL; the mocked `me` below
+// gives center 7 graduation year 2026, so its canonical base is /mathcenter/2026.
+const GRAD_YEAR = 2026
 
 function makeUser(overrides: Partial<User> = {}): User {
   return {
@@ -148,16 +154,32 @@ function mockFetch(me: MeResponse, user: User) {
   )
 }
 
-function renderPage() {
+// renderPage mounts the real nested center routes (CenterLayout resolves the
+// :year segment to a center id and provides it via context), so the page reads
+// its center + active tab from the URL exactly as in production. `entry` lets a
+// test start on a specific tab.
+function renderPage(entry = '/mathcenter/' + GRAD_YEAR) {
   const client = new ApiClient({ baseURL: '/api/v1', tokenStore: noopStore })
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={queryClient}>
       <ApiClientProvider client={client}>
         <AuthProvider>
-          <MemoryRouter initialEntries={['/mathcenter/' + CENTER_ID]}>
+          <MemoryRouter initialEntries={[entry]}>
             <Routes>
-              <Route path="/mathcenter/:centerId" element={<SeriesPage />} />
+              <Route path="/mathcenter/:year" element={<CenterLayout />}>
+                <Route index element={<Navigate to="series" replace />} />
+                <Route path="series" element={<SeriesPage />} />
+                <Route path="series/:seriesId/:tab" element={<SeriesPage />} />
+                <Route
+                  path="series/:seriesId/submit/:subproblemId"
+                  element={<ThreadPage />}
+                />
+                <Route
+                  path="series/:seriesId/thread/:threadId"
+                  element={<ThreadPage />}
+                />
+              </Route>
             </Routes>
           </MemoryRouter>
         </AuthProvider>
@@ -225,5 +247,34 @@ describe('SeriesPage — teacher view', () => {
     // full-width — no separate "Статистика" panel heading/container.
     expect(await screen.findByText('Принято:', { exact: false })).toBeInTheDocument()
     expect(screen.getByText('5')).toBeInTheDocument()
+  })
+
+  it('drives tab switching through the URL (push navigation)', async () => {
+    const me: MeResponse = {
+      teacher: {
+        centers: [
+          {
+            id: CENTER_ID,
+            graduation_year: GRAD_YEAR,
+            grade: 9,
+            is_head_teacher: true,
+            teachers: [],
+            groups: [],
+          },
+        ],
+      },
+    }
+    mockFetch(me, makeUser())
+    // Land directly on the teacher Разбор tab via its real URL.
+    renderPage('/mathcenter/' + GRAD_YEAR + '/series/' + SERIES_ID + '/razbor')
+
+    // Разбор content is present at the start.
+    expect(await screen.findByText('Принято:', { exact: false })).toBeInTheDocument()
+
+    // Clicking «Очередь» navigates to series/:id/queue and swaps the content.
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('tab', { name: 'Очередь' }))
+    expect(await screen.findByText('Очередь пуста.')).toBeInTheDocument()
+    expect(screen.queryByText('Принято:', { exact: false })).not.toBeInTheDocument()
   })
 })

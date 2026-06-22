@@ -8,6 +8,7 @@
 // TokenStore implementation. Everything below is shared verbatim.
 
 import { APIErrorImpl, request } from './http'
+import { openEventStream } from './sse'
 import type { TokenStore } from '../ports/token-store'
 import type {
   AuthResult,
@@ -110,6 +111,24 @@ export class ApiClient {
     if (extraHeaders) Object.assign(headers, extraHeaders)
     // `redirect: 'follow'` (the default) lets fetch chase the 302 to storage.
     return fetch(`${this.baseURL}${path}`, { headers, redirect: 'follow' })
+  }
+
+  // streamEvents opens an authed SSE stream and invokes onEvent for each parsed
+  // frame until aborted. Handles 401 -> refresh -> reconnect and backoff, and
+  // carries the act-as header (when impersonating) on every (re)connect.
+  async streamEvents(
+    path: string,
+    onEvent: (kind: string, data: string) => void,
+    signal: AbortSignal,
+  ): Promise<void> {
+    await openEventStream({
+      url: `${this.baseURL}${path}`,
+      getToken: () => this.accessToken,
+      refresh: () => this.refresh(),
+      onEvent,
+      signal,
+      extraHeaders: () => this.actingAsHeaders(),
+    })
   }
 
   private async refresh(): Promise<string | null> {
