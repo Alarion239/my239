@@ -39,7 +39,14 @@ func expectSeriesForStats(mock pgxmock.PgxPoolIface, seriesID, centerID int64, n
 }
 
 func statRow(studentID, problemID int64, problemNumber int32, subproblemID int64, label, status string) []any {
-	return []any{studentID, problemID, problemNumber, subproblemID, label, status}
+	sid := studentID
+	return []any{&sid, problemID, problemNumber, subproblemID, label, status}
+}
+
+// emptyRosterRow is the placeholder row the SQL emits for a subproblem when the
+// center has no enrolled students: student_user_id is NULL, status 'ungraded'.
+func emptyRosterRow(problemID int64, problemNumber int32, subproblemID int64, label string) []any {
+	return []any{(*int64)(nil), problemID, problemNumber, subproblemID, label, "ungraded"}
 }
 
 // Each subproblem (1а, 1б) is reported as its own line — statuses are counted
@@ -58,7 +65,7 @@ func TestProblemStats_PerSubproblemCounts(t *testing.T) {
 	// five students. Counted per subproblem:
 	//   900 (а): accepted/appealed/rejected/submitted/ungraded -> 1/1/1/1/1
 	//   901 (б): accepted x2, rejected x1, ungraded x2          -> 2/0/1/0/2
-	mock.ExpectQuery(`FROM math_center_students mcs\s+JOIN math_center_groups`).
+	mock.ExpectQuery(`FROM math_center_subproblems sp\s+JOIN math_center_problems`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(problemStatsRowColumns).
 			AddRow(statRow(1, 500, 1, 900, "a", "accepted")...).
@@ -126,7 +133,7 @@ func TestProblemStats_MultipleProblemsOrdered(t *testing.T) {
 	// Problem 1 (id 500) has subproblems a=900, b=901; problem 2 (id 501) has a
 	// single sentinel subproblem 950 (label ''). Two students. Rows arrive in
 	// (problem number, subproblem label) order from SQL.
-	mock.ExpectQuery(`FROM math_center_students mcs\s+JOIN math_center_groups`).
+	mock.ExpectQuery(`FROM math_center_subproblems sp\s+JOIN math_center_problems`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(problemStatsRowColumns).
 			AddRow(statRow(1, 500, 1, 900, "a", "accepted")...).
@@ -175,6 +182,50 @@ func TestProblemStats_MultipleProblemsOrdered(t *testing.T) {
 	}
 }
 
+// A teacher must see the full problem structure before any student is enrolled:
+// the SQL emits one placeholder row per subproblem (student_user_id NULL), and
+// the handler reports them with zero counts and total_students 0.
+func TestProblemStats_EmptyRosterShowsProblems(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	expectSeriesForStats(mock, 100, 42, now)
+	expectTeacherCheck(mock, 3, 42, true)
+
+	// Two subproblems, no roster: one placeholder row each.
+	mock.ExpectQuery(`FROM math_center_subproblems sp\s+JOIN math_center_problems`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(problemStatsRowColumns).
+			AddRow(emptyRosterRow(500, 1, 900, "a")...).
+			AddRow(emptyRosterRow(500, 1, 901, "b")...))
+
+	req := authedRequest(t, access, 3, false, http.MethodGet, "/series/100/problem-stats", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+
+	var resp problemStatsResp
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.TotalStudents != 0 {
+		t.Errorf("total_students = %d, want 0", resp.TotalStudents)
+	}
+	if len(resp.Problems) != 2 {
+		t.Fatalf("want 2 subproblem lines even with no students, got %d", len(resp.Problems))
+	}
+	for _, p := range resp.Problems {
+		if p.Accepted+p.Appealed+p.Rejected+p.Submitted+p.Unsolved != 0 {
+			t.Errorf("subproblem %d should have all-zero buckets: %+v", p.SubproblemID, p)
+		}
+	}
+}
+
 func TestProblemStats_AdminAllowed(t *testing.T) {
 	t.Parallel()
 	mock, _ := pgxmock.NewPool()
@@ -184,7 +235,7 @@ func TestProblemStats_AdminAllowed(t *testing.T) {
 	now := time.Now()
 	expectSeriesForStats(mock, 100, 42, now)
 	// No teacher check: admin short-circuits requireTeacher via the JWT claim.
-	mock.ExpectQuery(`FROM math_center_students mcs\s+JOIN math_center_groups`).
+	mock.ExpectQuery(`FROM math_center_subproblems sp\s+JOIN math_center_problems`).
 		WithArgs(int64(100)).
 		WillReturnRows(mock.NewRows(problemStatsRowColumns).
 			AddRow(statRow(1, 500, 1, 900, "a", "accepted")...))

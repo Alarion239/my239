@@ -85,14 +85,18 @@ func ProblemStats(database *db.DB) http.HandlerFunc {
 	}
 }
 
-// aggregateProblemStats counts the flat (student × subproblem) rows directly
+// aggregateProblemStats counts the flat (subproblem × student) rows directly
 // into per-subproblem bucket counts plus the distinct student total.
 //
 // Each input row carries one subproblem's status for one student; we tally that
 // status straight into the subproblem's bucket. Subproblems are NOT folded into
 // a parent problem — 1а and 1б are two independent lines. Every student of the
-// center appears for every subproblem (the SQL crosses roster × subproblems), so
+// center appears for every subproblem (the SQL crosses subproblems × roster), so
 // the five buckets per subproblem always sum to the distinct student count.
+//
+// When the center has no enrolled students the SQL still emits one placeholder
+// row per subproblem with StudentUserID == nil; we register the subproblem (so
+// the teacher sees the structure) but count no student and no status bucket.
 func aggregateProblemStats(rows []store.SeriesProblemStatsRow) (totalStudents int, problems []problemStat) {
 	type subKey = int64
 
@@ -101,8 +105,6 @@ func aggregateProblemStats(rows []store.SeriesProblemStatsRow) (totalStudents in
 	students := make(map[int64]struct{})
 
 	for _, row := range rows {
-		students[row.StudentUserID] = struct{}{}
-
 		s, ok := bySub[row.SubproblemID]
 		if !ok {
 			s = &problemStat{
@@ -115,6 +117,13 @@ func aggregateProblemStats(rows []store.SeriesProblemStatsRow) (totalStudents in
 			bySub[row.SubproblemID] = s
 			order = append(order, row.SubproblemID)
 		}
+
+		// Placeholder row for an empty roster: the subproblem is now registered
+		// with zero counts; there's no student to tally.
+		if row.StudentUserID == nil {
+			continue
+		}
+		students[*row.StudentUserID] = struct{}{}
 
 		switch row.CurrentStatus {
 		case hw.StatusAccepted:

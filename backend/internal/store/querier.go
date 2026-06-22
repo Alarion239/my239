@@ -154,12 +154,14 @@ type Querier interface {
 	RevokeRefreshTokenByID(ctx context.Context, id int64) error
 	RotateRefreshToken(ctx context.Context, arg RotateRefreshTokenParams) error
 	SearchUsers(ctx context.Context, q_ string) ([]SearchUsersRow, error)
-	// One row per (student × subproblem) for a whole series: the center roster
-	// crossed with the series's subproblems, LEFT JOINed to that student's thread
-	// so untouched subproblems still appear with status='ungraded'. The handler
-	// counts these per subproblem (each subproblem — e.g. 1а, 1б — is reported as a
-	// distinct line). Roster scoping mirrors TeacherSeriesGrid: every student of a
-	// group in the series's math center.
+	// One row per (subproblem × roster student) for a whole series. The series's
+	// subproblems are the spine, so EVERY subproblem appears even before anyone is
+	// enrolled: the roster (students of a group in the series's center) is
+	// LEFT JOINed, yielding a single placeholder row with student_user_id = NULL
+	// when the roster is empty. Each student's thread is LEFT JOINed so untouched
+	// subproblems read 'ungraded'. The handler tallies each subproblem into its own
+	// line (1а, 1б are distinct); placeholder rows register the subproblem with
+	// zero counts. Roster scoping mirrors TeacherSeriesGrid.
 	SeriesProblemStats(ctx context.Context, id int64) ([]SeriesProblemStatsRow, error)
 	// Renumber a problem in place (used by the diff-based series update so existing
 	// problems keep their id — and thus their subproblems/threads/разборы/coffins).

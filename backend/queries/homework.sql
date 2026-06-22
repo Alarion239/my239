@@ -306,12 +306,14 @@ WHERE g.math_center_id = $1
 ORDER BY g.name ASC, u.last_name ASC, u.first_name ASC, s.number ASC, p.number ASC, sp.label ASC;
 
 -- name: SeriesProblemStats :many
--- One row per (student × subproblem) for a whole series: the center roster
--- crossed with the series's subproblems, LEFT JOINed to that student's thread
--- so untouched subproblems still appear with status='ungraded'. The handler
--- counts these per subproblem (each subproblem — e.g. 1а, 1б — is reported as a
--- distinct line). Roster scoping mirrors TeacherSeriesGrid: every student of a
--- group in the series's math center.
+-- One row per (subproblem × roster student) for a whole series. The series's
+-- subproblems are the spine, so EVERY subproblem appears even before anyone is
+-- enrolled: the roster (students of a group in the series's center) is
+-- LEFT JOINed, yielding a single placeholder row with student_user_id = NULL
+-- when the roster is empty. Each student's thread is LEFT JOINed so untouched
+-- subproblems read 'ungraded'. The handler tallies each subproblem into its own
+-- line (1а, 1б are distinct); placeholder rows register the subproblem with
+-- zero counts. Roster scoping mirrors TeacherSeriesGrid.
 SELECT
     mcs.user_id                            AS student_user_id,
     p.id                                   AS problem_id,
@@ -319,16 +321,16 @@ SELECT
     sp.id                                  AS subproblem_id,
     sp.label                               AS subproblem_label,
     COALESCE(t.current_status, 'ungraded') AS current_status
-FROM math_center_students mcs
-         JOIN math_center_groups g ON g.id = mcs.group_id
-         CROSS JOIN math_center_subproblems sp
+FROM math_center_subproblems sp
          JOIN math_center_problems p ON p.id = sp.problem_id
+         LEFT JOIN math_center_groups g
+                   ON g.math_center_id = (SELECT s.math_center_id FROM math_center_series s WHERE s.id = $1)
+         LEFT JOIN math_center_students mcs ON mcs.group_id = g.id
          LEFT JOIN homework_thread t
                    ON t.student_user_id = mcs.user_id
                   AND t.subproblem_id   = sp.id
-WHERE g.math_center_id = (SELECT s.math_center_id FROM math_center_series s WHERE s.id = $1)
-  AND p.series_id = $1
-ORDER BY p.number ASC, p.id ASC, sp.label ASC, mcs.user_id ASC;
+WHERE p.series_id = $1
+ORDER BY p.number ASC, p.id ASC, sp.label ASC, mcs.user_id ASC NULLS LAST;
 
 -- name: GetSubproblemContext :one
 -- One-shot fetch of "what center/series/problem does this subproblem belong
