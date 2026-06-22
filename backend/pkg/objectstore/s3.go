@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -20,13 +19,7 @@ import (
 // Empty Endpoint means "use AWS defaults"; for Yandex set it to
 // https://storage.yandexcloud.net.
 type S3Config struct {
-	Endpoint string
-	// PublicEndpoint, if non-empty, is substituted into presigned URLs in
-	// place of Endpoint. Needed for dev with MinIO inside Docker, where the
-	// backend reaches the API via http://minio:9000 but the browser must use
-	// http://localhost:9000. Leave empty in prod (Yandex returns
-	// browser-reachable hostnames already).
-	PublicEndpoint  string
+	Endpoint        string
 	Region          string
 	Bucket          string
 	AccessKeyID     string
@@ -76,44 +69,15 @@ func NewS3(ctx context.Context, cfg S3Config) (*S3Store, error) {
 		o.UsePathStyle = cfg.UsePathStyle
 	})
 
-	// When a separate public endpoint is configured, build a parallel client
-	// for presigning so the signed URL's host matches what the browser will
-	// actually request. Presigning is purely client-side — this client never
-	// makes a network call, so it doesn't matter that "localhost:9000" isn't
-	// reachable from inside the backend container.
-	//
-	// If we instead string-rewrote the URL after signing, the Host header on
-	// the browser's request wouldn't match what the SDK signed over, and
-	// SigV4 verification on the bucket would 403.
-	presignSource := client
-	if cfg.PublicEndpoint != "" {
-		if err := validatePublicEndpoint(cfg.PublicEndpoint); err != nil {
-			return nil, fmt.Errorf("objectstore: invalid public endpoint: %w", err)
-		}
-		presignSource = s3.NewFromConfig(loaded, func(o *s3.Options) {
-			o.BaseEndpoint = aws.String(cfg.PublicEndpoint)
-			o.UsePathStyle = cfg.UsePathStyle
-		})
-	}
-
+	// Presigning is purely client-side. The signed URL's host is whatever the
+	// client targets (the configured Endpoint, or the bucket's real host on
+	// AWS defaults), which is browser-reachable for Yandex Object Storage — so
+	// the same client both calls the API and signs URLs.
 	return &S3Store{
 		client:    client,
-		presigner: s3.NewPresignClient(presignSource),
+		presigner: s3.NewPresignClient(client),
 		bucket:    cfg.Bucket,
 	}, nil
-}
-
-// validatePublicEndpoint rejects values that don't parse as scheme+host so a
-// misconfiguration fails at startup rather than producing broken URLs later.
-func validatePublicEndpoint(raw string) error {
-	u, err := url.Parse(raw)
-	if err != nil {
-		return err
-	}
-	if u.Scheme == "" || u.Host == "" {
-		return fmt.Errorf("missing scheme or host in %q", raw)
-	}
-	return nil
 }
 
 func (s *S3Store) Put(ctx context.Context, key string, body io.Reader, size int64, contentType string) error {

@@ -81,7 +81,7 @@ setup is required for development or tests.
 | `S3_BUCKET`                | (empty → MemoryStore)                | Set this to enable real S3.                    |
 | `S3_ACCESS_KEY_ID`         | —                                    | Required when `S3_BUCKET` is set.              |
 | `S3_SECRET_ACCESS_KEY`     | —                                    | Required when `S3_BUCKET` is set.              |
-| `S3_ENDPOINT`              | `https://storage.yandexcloud.net`    | Override for AWS / MinIO / other S3.           |
+| `S3_ENDPOINT`              | `https://storage.yandexcloud.net`    | Override for another S3-compatible endpoint.   |
 | `S3_REGION`                | `ru-central1`                        | Yandex's only region.                          |
 | `S3_USE_PATH_STYLE`        | `true`                               | Path-style addressing; safest across buckets.  |
 | `S3_DOWNLOAD_TTL_MINUTES`  | `15`                                 | Lifetime of presigned download URLs.           |

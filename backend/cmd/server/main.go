@@ -201,7 +201,6 @@ func buildObjectStore(ctx context.Context, cfg *config.Config) (objectstore.Stor
 	}
 	store, err := objectstore.NewS3(ctx, objectstore.S3Config{
 		Endpoint:        cfg.S3.Endpoint,
-		PublicEndpoint:  cfg.S3.PublicEndpoint,
 		Region:          cfg.S3.Region,
 		Bucket:          cfg.S3.Bucket,
 		AccessKeyID:     cfg.S3.AccessKeyID,
@@ -214,7 +213,6 @@ func buildObjectStore(ctx context.Context, cfg *config.Config) (objectstore.Stor
 	logger.LogInfo(
 		"object store: s3",
 		"endpoint", cfg.S3.Endpoint,
-		"public_endpoint", cfg.S3.PublicEndpoint,
 		"bucket", cfg.S3.Bucket,
 	)
 	return store, nil

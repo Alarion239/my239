@@ -32,41 +32,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # MinIO is an S3-compatible object store used in dev to mirror the prod
-  # presigned-redirect flow (Yandex Object Storage in real deployments).
-  # Default CORS is "*", so the browser can follow the redirect from the
-  # backend to a presigned URL on localhost:9000 without extra config.
-  minio:
-    image: minio/minio:latest
-    restart: unless-stopped
-    command: [ "server", "/data", "--console-address", ":9001" ]
-    environment:
-      MINIO_ROOT_USER: minio
-      MINIO_ROOT_PASSWORD: minio12345
-    ports:
-      - "9000:9000"  # S3 API
-      - "9001:9001"  # Web console
-    volumes:
-      - miniodata:/data
-
-  # One-shot bucket bootstrap: waits for MinIO to come up, then creates the
-  # dev bucket if it doesn't exist. Exits with 0 on success so the backend
-  # can gate startup on it via service_completed_successfully.
-  minio-init:
-    image: minio/mc:latest
-    depends_on:
-      - minio
-    restart: "no"
-    entrypoint: >
-      /bin/sh -c "
-      until mc alias set local http://minio:9000 minio minio12345 >/dev/null 2>&1; do
-        echo 'waiting for minio...';
-        sleep 1;
-      done;
-      mc mb --ignore-existing local/my239-dev;
-      echo 'minio bucket ready';
-      "
-
   backend:
     build:
       context: ./backend
@@ -77,8 +42,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio-init:
-        condition: service_completed_successfully
     ports:
       - "8080:8080"
     environment:
@@ -99,22 +62,16 @@ services:
       # in-memory to Redis-backed. Leave empty for the memory fallback.
       REDIS_URL: redis://redis:6379/0
 
-      # Object storage (MinIO in dev, Yandex Object Storage in prod).
-      # Setting S3_BUCKET switches the backend off the in-memory fallback
-      # and onto a real S3-compatible client.
-      #
-      # S3_ENDPOINT is the address the backend uses to talk to MinIO inside
-      # the Docker network; S3_PUBLIC_ENDPOINT is what gets stamped into
-      # presigned URLs so the BROWSER can reach the same bucket via
-      # localhost. Without the rewrite the browser would try to resolve
-      # "minio" and fail with ERR_NAME_NOT_RESOLVED.
-      S3_ENDPOINT: http://minio:9000
-      S3_PUBLIC_ENDPOINT: http://localhost:9000
-      S3_REGION: us-east-1
-      S3_BUCKET: my239-dev
-      S3_ACCESS_KEY_ID: minio
-      S3_SECRET_ACCESS_KEY: minio12345
-      S3_USE_PATH_STYLE: "true"
+      # Object storage. With S3_BUCKET unset the backend uses its in-process
+      # in-memory store, so local Compose needs zero object-storage setup
+      # (browser PDF download/upload is unavailable in that mode, which is
+      # fine for local work). To exercise real storage locally, point these
+      # at a Yandex Object Storage bucket:
+      #   S3_BUCKET: <bucket>
+      #   S3_ACCESS_KEY_ID: <key>
+      #   S3_SECRET_ACCESS_KEY: <secret>
+      # Defaults handle the rest (endpoint storage.yandexcloud.net, region
+      # ru-central1, path-style addressing).
 
   # The frontend container is nginx-only at runtime: a multi-stage build
   # compiles the Vite bundle inside a node image and the final image just
@@ -142,4 +99,3 @@ services:
 volumes:
   pgdata:
   redisdata:
-  miniodata:

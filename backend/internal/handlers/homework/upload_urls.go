@@ -44,9 +44,9 @@ type uploadURLsResponse struct {
 // IssueStudentUploadURLs — student of the subproblem's center. Used before
 // /submit (first attempt or resubmission) and /appeal. Mints one presigned
 // PUT URL per requested content_type. We don't reveal the bucket name to
-// the client; the URL host comes from S3.PublicEndpoint (or the bucket's
-// real host in prod) and is signed for the exact ContentType the client
-// commits to, so the browser PUT must include that header verbatim.
+// the client; the URL host is the bucket's (browser-reachable) host and the
+// URL is signed for the exact ContentType the client commits to, so the
+// browser PUT must include that header verbatim.
 func IssueStudentUploadURLs(database *db.DB, blobs objectstore.Store, uploadTTL time.Duration) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
