@@ -149,7 +149,10 @@ export interface SeedResult {
   series: number
   problems: number
   subproblems: number
+  coffins: number
   submissions: number
+  // Total students seeded; the logins list is capped, so this may exceed it.
+  student_count: number
   password: string
   logins: SeedLogin[]
 }

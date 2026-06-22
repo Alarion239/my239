@@ -25,18 +25,42 @@ func TestLabelsFor(t *testing.T) {
 	}
 }
 
-// The demo is only useful if it exercises every homework status, so the cycle
-// must contain each one (including the untouched no-thread case).
-func TestStateCycleCoversEveryStatus(t *testing.T) {
+// Difficulty must rise (solver count must fall) as problems and subparts get
+// later, and stay within [0, cohort]. This is what produces coffins on the
+// hardest subproblems.
+func TestAcceptedTargetIsHarderLater(t *testing.T) {
 	t.Parallel()
-	seen := map[subState]bool{}
-	for _, st := range stateCycle {
-		seen[st] = true
-	}
-	for _, want := range []subState{stUntouched, stSubmitted, stUnderReview, stAccepted, stRejected, stAppealed} {
-		if !seen[want] {
-			t.Errorf("stateCycle missing status %d", want)
+
+	// Later problems are solved by no more students than earlier ones.
+	prev := acceptedTarget(0, 0)
+	for pi := 1; pi < 8; pi++ {
+		got := acceptedTarget(pi, 0)
+		if got > prev {
+			t.Errorf("acceptedTarget(%d,0)=%d > acceptedTarget(%d,0)=%d: should not increase", pi, got, pi-1, prev)
 		}
+		prev = got
+	}
+
+	// Later subparts within a problem are no easier than earlier ones.
+	if a, b := acceptedTarget(2, 0), acceptedTarget(2, 2); b > a {
+		t.Errorf("subpart c (%d) easier than subpart a (%d)", b, a)
+	}
+
+	// Bounds: never negative, never above the cohort.
+	for pi := range 12 {
+		for spi := range 4 {
+			got := acceptedTarget(pi, spi)
+			if got < 0 || got > demoStudents {
+				t.Errorf("acceptedTarget(%d,%d)=%d out of [0,%d]", pi, spi, got, demoStudents)
+			}
+		}
+	}
+
+	// The gradient must actually reach the coffin band somewhere in the range,
+	// or the demo would never produce a coffin.
+	if acceptedTarget(7, 2) >= coffinThreshold {
+		t.Errorf("hardest subproblem solved by %d students, want < %d (a coffin)",
+			acceptedTarget(7, 2), coffinThreshold)
 	}
 }
 

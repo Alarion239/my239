@@ -7,6 +7,9 @@
 // "Demo data" is anything under the sentinel graduation year DemoGraduationYear
 // plus any non-admin user whose username starts with "demo-". Nothing else is
 // touched.
+//
+// Problems get harder later in each series (fewer students solve them); any
+// subproblem solved by fewer than coffinThreshold students is marked a coffin.
 package seed
 
 import (
@@ -14,6 +17,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/Alarion239/my239/backend/internal/auth"
@@ -32,8 +36,28 @@ const (
 	// demoUsernamePrefix tags seeded users so teardown can find them.
 	demoUsernamePrefix = "demo-"
 
-	demoStudents = 6
-	demoGroups   = 2
+	demoGroups           = 3
+	demoStudentsPerGroup = 30
+	demoStudents         = demoGroups * demoStudentsPerGroup // 90
+	demoHeadTeachers     = 2
+	demoRegularTeachers  = 10
+
+	// coffinThreshold: a subproblem solved (accepted) by fewer than this many
+	// students is left as a coffin.
+	coffinThreshold = 5
+	// activeNonSolverCap bounds how many non-solving students get visible
+	// activity (rejected / in-queue / under-review / appealed) per subproblem;
+	// the rest leave the subproblem untouched.
+	activeNonSolverCap = 12
+	// studentLoginsShown caps how many student logins the result lists (they all
+	// follow the demo-student-N pattern with the shared password).
+	studentLoginsShown = 6
+
+	// Difficulty gradient: a subproblem's expected solve rate falls with its
+	// problem's position in the series and, slightly, with its subpart index.
+	rateMax        = 0.85
+	ratePerProblem = 0.16
+	ratePerSubpart = 0.07
 )
 
 // Login is one seeded account a tester can sign in as.
@@ -52,7 +76,9 @@ type Result struct {
 	Series         int     `json:"series"`
 	Problems       int     `json:"problems"`
 	Subproblems    int     `json:"subproblems"`
+	Coffins        int     `json:"coffins"`
 	Submissions    int     `json:"submissions"`
+	StudentCount   int     `json:"student_count"` // total students (logins list is capped)
 	Password       string  `json:"password"`
 	Logins         []Login `json:"logins"`
 }
@@ -61,23 +87,23 @@ type Result struct {
 type subState int
 
 const (
-	stUntouched subState = iota
-	stSubmitted
+	stSubmitted subState = iota
 	stUnderReview
-	stAccepted
 	stRejected
 	stAppealed
+	stAccepted
 )
 
-// stateCycle is walked deterministically across (student, subproblem) pairs so
-// every status is represented, including untouched (no thread at all).
-var stateCycle = []subState{stAccepted, stSubmitted, stRejected, stUnderReview, stAppealed, stUntouched}
+// activeStates is cycled across the non-solving students that get visible
+// activity on a subproblem (accepted students are handled separately).
+var activeStates = []subState{stRejected, stSubmitted, stUnderReview, stAppealed}
 
-// subInfo is a created subproblem plus the series it belongs to, for seeding
-// submissions against it.
+// subInfo is a created subproblem plus the series it belongs to and how many
+// students should solve (accept) it.
 type subInfo struct {
-	id       int64
-	seriesID int64
+	id             int64
+	seriesID       int64
+	acceptedTarget int
 }
 
 // seeder carries the per-run state. The transaction is supplied via db (used
@@ -86,8 +112,9 @@ type seeder struct {
 	db         store.DBTX
 	q          *store.Queries
 	pwHash     string
+	now        time.Time
 	centerID   int64
-	teacherID  int64   // the regular teacher, used as grader/actor on graded events
+	graderIDs  []int64 // regular teachers, used round-robin as graders
 	studentIDs []int64 // seeded students, in creation order
 	subs       []subInfo
 	res        Result
@@ -104,7 +131,12 @@ func Run(ctx context.Context, db store.DBTX) (*Result, error) {
 		db:     db,
 		q:      store.New(db),
 		pwHash: pwHash,
-		res:    Result{GraduationYear: DemoGraduationYear, Password: DemoPassword},
+		now:    time.Now(),
+		res: Result{
+			GraduationYear: DemoGraduationYear,
+			Password:       DemoPassword,
+			StudentCount:   demoStudents,
+		},
 	}
 	if err := s.teardown(ctx); err != nil {
 		return nil, err
@@ -164,29 +196,36 @@ func (s *seeder) build(ctx context.Context) error {
 }
 
 func (s *seeder) createTeachers(ctx context.Context) error {
-	head, err := s.createUser(ctx, demoUsernamePrefix+"teacher-head", "Глава", "Преподаватель")
-	if err != nil {
-		return err
+	for i := range demoHeadTeachers {
+		u, err := s.createUser(ctx,
+			fmt.Sprintf("%shead-%d", demoUsernamePrefix, i+1),
+			fmt.Sprintf("Старший %d", i+1), "Преподаватель")
+		if err != nil {
+			return err
+		}
+		if _, err := s.q.AddTeacherToCenter(ctx, store.AddTeacherToCenterParams{
+			UserID: u.ID, MathCenterID: s.centerID, IsHeadTeacher: true,
+		}); err != nil {
+			return fmt.Errorf("seed: add head teacher: %w", err)
+		}
+		s.addLogin(u, "старший преподаватель")
 	}
-	if _, err := s.q.AddTeacherToCenter(ctx, store.AddTeacherToCenterParams{
-		UserID: head.ID, MathCenterID: s.centerID, IsHeadTeacher: true,
-	}); err != nil {
-		return fmt.Errorf("seed: add head teacher: %w", err)
+	for i := range demoRegularTeachers {
+		u, err := s.createUser(ctx,
+			fmt.Sprintf("%steacher-%d", demoUsernamePrefix, i+1),
+			fmt.Sprintf("Преподаватель %d", i+1), "Демо")
+		if err != nil {
+			return err
+		}
+		if _, err := s.q.AddTeacherToCenter(ctx, store.AddTeacherToCenterParams{
+			UserID: u.ID, MathCenterID: s.centerID, IsHeadTeacher: false,
+		}); err != nil {
+			return fmt.Errorf("seed: add teacher: %w", err)
+		}
+		s.graderIDs = append(s.graderIDs, u.ID)
+		s.addLogin(u, "преподаватель")
 	}
-	s.addLogin(head, "старший преподаватель")
-
-	teacher, err := s.createUser(ctx, demoUsernamePrefix+"teacher", "Обычный", "Преподаватель")
-	if err != nil {
-		return err
-	}
-	if _, err := s.q.AddTeacherToCenter(ctx, store.AddTeacherToCenterParams{
-		UserID: teacher.ID, MathCenterID: s.centerID, IsHeadTeacher: false,
-	}); err != nil {
-		return fmt.Errorf("seed: add teacher: %w", err)
-	}
-	s.addLogin(teacher, "преподаватель")
-	s.teacherID = teacher.ID
-	s.res.Teachers = 2
+	s.res.Teachers = demoHeadTeachers + demoRegularTeachers
 	return nil
 }
 
@@ -199,25 +238,27 @@ func (s *seeder) createStudents(ctx context.Context, groups []int64) error {
 			return err
 		}
 		if _, err := s.q.AddStudentToGroup(ctx, store.AddStudentToGroupParams{
-			UserID: u.ID, GroupID: groups[i%len(groups)],
+			UserID: u.ID, GroupID: groups[i/demoStudentsPerGroup],
 		}); err != nil {
 			return fmt.Errorf("seed: enrol student: %w", err)
 		}
 		s.studentIDs = append(s.studentIDs, u.ID)
-		s.addLogin(u, "ученик")
+		if i < studentLoginsShown {
+			s.addLogin(u, "ученик")
+		}
 	}
 	s.res.Students = demoStudents
 	return nil
 }
 
 // seriesSpecs defines the demo series: a name and, per problem, its subpart
-// count (0 = a single unlabelled part).
+// count (0 = a single unlabelled part). Problems are ordered easy → hard.
 var seriesSpecs = []struct {
 	name     string
 	subparts []int
 }{
-	{"Вводная серия", []int{0, 2, 3}},
-	{"Основная серия", []int{2, 0}},
+	{"Вводная серия", []int{0, 0, 2, 1, 3, 2, 3}},
+	{"Основная серия", []int{0, 2, 1, 3, 2, 3}},
 }
 
 func (s *seeder) createSeries(ctx context.Context) error {
@@ -227,7 +268,7 @@ func (s *seeder) createSeries(ctx context.Context) error {
 			Number:       int32(i + 1),
 			Name:         spec.name,
 			// Stagger due dates so the demo shows both open and tight series.
-			DueAt: time.Now().Add(time.Duration(7*(i+1)) * 24 * time.Hour),
+			DueAt: s.now.Add(time.Duration(7*(i+1)) * 24 * time.Hour),
 		})
 		if err != nil {
 			return fmt.Errorf("seed: create series: %w", err)
@@ -240,14 +281,16 @@ func (s *seeder) createSeries(ctx context.Context) error {
 				return fmt.Errorf("seed: create problem: %w", err)
 			}
 			s.res.Problems++
-			for _, label := range labelsFor(count) {
+			for spi, label := range labelsFor(count) {
 				sub, err := s.q.CreateSubproblem(ctx, store.CreateSubproblemParams{
 					ProblemID: problem.ID, Label: label,
 				})
 				if err != nil {
 					return fmt.Errorf("seed: create subproblem: %w", err)
 				}
-				s.subs = append(s.subs, subInfo{id: sub.ID, seriesID: series.ID})
+				s.subs = append(s.subs, subInfo{
+					id: sub.ID, seriesID: series.ID, acceptedTarget: acceptedTarget(pi, spi),
+				})
 				s.res.Subproblems++
 			}
 		}
@@ -266,24 +309,77 @@ func (s *seeder) createSeries(ctx context.Context) error {
 	return nil
 }
 
-// seedSubmissions walks every (student, subproblem) pair and seeds a homework
-// thread in a deterministic status from stateCycle (untouched pairs get none).
+// acceptedTarget is how many of the cohort solve a subproblem at the given
+// problem index (0-based, within its series) and subpart index. Later problems
+// and later subparts are harder, so fewer students solve them.
+func acceptedTarget(problemIdx, subpartIdx int) int {
+	rate := rateMax - float64(problemIdx)*ratePerProblem - float64(subpartIdx)*ratePerSubpart
+	if rate < 0 {
+		rate = 0
+	}
+	if rate > 1 {
+		rate = 1
+	}
+	return int(math.Round(rate * float64(demoStudents)))
+}
+
+// seedSubmissions assigns each subproblem `acceptedTarget` solvers plus a
+// bounded band of active non-solvers, leaving the rest untouched. Solver windows
+// rotate across the cohort so students vary. Sub-threshold subproblems become
+// coffins.
 func (s *seeder) seedSubmissions(ctx context.Context) error {
-	for si, studentID := range s.studentIDs {
-		for gi, sub := range s.subs {
-			state := stateCycle[(si+gi)%len(stateCycle)]
-			if err := s.seedSubmission(ctx, state, studentID, sub); err != nil {
+	graderCursor := 0
+	for k, sub := range s.subs {
+		start := (k * 7) % demoStudents
+		active := activeNonSolverCap
+		if rem := demoStudents - sub.acceptedTarget; active > rem {
+			active = rem
+		}
+
+		for n := range sub.acceptedTarget {
+			studentID := s.studentIDs[(start+n)%demoStudents]
+			if err := s.seedSubmission(ctx, stAccepted, studentID, s.nextGrader(&graderCursor), sub); err != nil {
 				return err
 			}
+		}
+		for n := range active {
+			studentID := s.studentIDs[(start+sub.acceptedTarget+n)%demoStudents]
+			state := activeStates[n%len(activeStates)]
+			if err := s.seedSubmission(ctx, state, studentID, s.nextGrader(&graderCursor), sub); err != nil {
+				return err
+			}
+		}
+
+		if sub.acceptedTarget < coffinThreshold {
+			if _, err := s.q.UpsertCoffinFlag(ctx, store.UpsertCoffinFlagParams{
+				SubproblemID: sub.id, IsCoffin: true,
+			}); err != nil {
+				return fmt.Errorf("seed: mark coffin: %w", err)
+			}
+			s.res.Coffins++
 		}
 	}
 	return nil
 }
 
-func (s *seeder) seedSubmission(ctx context.Context, state subState, studentID int64, sub subInfo) error {
-	if state == stUntouched {
-		return nil
-	}
+func (s *seeder) nextGrader(cursor *int) int64 {
+	id := s.graderIDs[*cursor%len(s.graderIDs)]
+	*cursor++
+	return id
+}
+
+// finalState is the denormalized thread state written in one UPDATE after the
+// events are appended — cheaper than the per-action store mutations.
+type finalState struct {
+	status       string
+	attemptID    *int64
+	gradeID      *int64
+	graderID     *int64
+	claimHolder  *int64
+	claimExpires *time.Time
+}
+
+func (s *seeder) seedSubmission(ctx context.Context, state subState, studentID, graderID int64, sub subInfo) error {
 	thread, err := s.q.FindOrCreateThread(ctx, store.FindOrCreateThreadParams{
 		StudentUserID: studentID, SubproblemID: sub.id, SeriesID: sub.seriesID, MathCenterID: s.centerID,
 	})
@@ -294,67 +390,72 @@ func (s *seeder) seedSubmission(ctx context.Context, state subState, studentID i
 	if err != nil {
 		return err
 	}
-	if err := s.q.UpdateThreadAfterSubmit(ctx, store.UpdateThreadAfterSubmitParams{
-		ID: thread.ID, CurrentAttemptEventID: &submit.ID,
-	}); err != nil {
-		return fmt.Errorf("seed: after submit: %w", err)
-	}
-	s.res.Submissions++
 
+	f := finalState{status: hw.StatusSubmitted, attemptID: &submit.ID}
 	switch state {
 	case stSubmitted:
-		return nil
+		// In the grading queue, awaiting a grader.
 	case stUnderReview:
-		// Claim without grading: the thread reads as "На проверке".
-		if _, err := s.q.TryClaim(ctx, store.TryClaimParams{GraderUserID: s.teacherID, ID: thread.ID}); err != nil {
-			return fmt.Errorf("seed: claim: %w", err)
-		}
-		return nil
-	case stAccepted:
-		return s.grade(ctx, thread.ID, hw.VerdictAccepted)
+		exp := s.now.Add(15 * time.Minute)
+		f.claimHolder, f.claimExpires = &graderID, &exp
 	case stRejected:
-		return s.grade(ctx, thread.ID, hw.VerdictRejected)
+		grade, err := s.appendGrade(ctx, thread.ID, graderID, hw.VerdictRejected)
+		if err != nil {
+			return err
+		}
+		f.status, f.gradeID, f.graderID = hw.StatusRejected, &grade.ID, &graderID
 	case stAppealed:
-		if err := s.grade(ctx, thread.ID, hw.VerdictRejected); err != nil {
+		grade, err := s.appendGrade(ctx, thread.ID, graderID, hw.VerdictRejected)
+		if err != nil {
 			return err
 		}
 		appeal, err := s.append(ctx, thread.ID, hw.KindAppealed, studentID, "Прошу пересмотреть решение.", nil)
 		if err != nil {
 			return err
 		}
-		return s.q.UpdateThreadAfterAppeal(ctx, store.UpdateThreadAfterAppealParams{
-			ID: thread.ID, CurrentAttemptEventID: &appeal.ID,
-		})
-	default:
-		return nil
+		f.status, f.gradeID, f.graderID, f.attemptID = hw.StatusAppealed, &grade.ID, &graderID, &appeal.ID
+	case stAccepted:
+		grade, err := s.appendGrade(ctx, thread.ID, graderID, hw.VerdictAccepted)
+		if err != nil {
+			return err
+		}
+		f.status, f.gradeID, f.graderID = hw.StatusAccepted, &grade.ID, &graderID
 	}
+
+	if err := s.finalize(ctx, thread.ID, f); err != nil {
+		return err
+	}
+	s.res.Submissions++
+	return nil
 }
 
-// grade claims the thread (required by UpdateThreadAfterGrade's guard), appends
-// a graded event, then applies the verdict.
-func (s *seeder) grade(ctx context.Context, threadID int64, verdict string) error {
-	if _, err := s.q.TryClaim(ctx, store.TryClaimParams{GraderUserID: s.teacherID, ID: threadID}); err != nil {
-		return fmt.Errorf("seed: claim for grade: %w", err)
+// finalize writes the thread's denormalized columns directly. Equivalent to the
+// app's UpdateThreadAfter* / TryClaim mutations but in a single statement.
+func (s *seeder) finalize(ctx context.Context, threadID int64, f finalState) error {
+	_, err := s.db.Exec(ctx,
+		`UPDATE homework_thread
+		    SET current_status           = $1,
+		        current_attempt_event_id = $2,
+		        current_grade_event_id   = $3,
+		        last_grader_user_id      = $4,
+		        claim_holder_user_id     = $5,
+		        claim_expires_at         = $6,
+		        updated_at               = NOW()
+		  WHERE id = $7`,
+		f.status, f.attemptID, f.gradeID, f.graderID, f.claimHolder, f.claimExpires, threadID)
+	if err != nil {
+		return fmt.Errorf("seed: finalize thread: %w", err)
 	}
+	return nil
+}
+
+func (s *seeder) appendGrade(ctx context.Context, threadID, graderID int64, verdict string) (store.HomeworkThreadEvent, error) {
 	body := "Принято, отличная работа."
 	if verdict == hw.VerdictRejected {
 		body = "Есть недочёты, посмотрите ещё раз."
 	}
 	v := verdict
-	graded, err := s.append(ctx, threadID, hw.KindGraded, s.teacherID, body, &v)
-	if err != nil {
-		return err
-	}
-	n, err := s.q.UpdateThreadAfterGrade(ctx, store.UpdateThreadAfterGradeParams{
-		Verdict: verdict, GradeEventID: graded.ID, GraderUserID: s.teacherID, ID: threadID,
-	})
-	if err != nil {
-		return fmt.Errorf("seed: after grade: %w", err)
-	}
-	if n != 1 {
-		return fmt.Errorf("seed: grade affected %d rows, want 1", n)
-	}
-	return nil
+	return s.append(ctx, threadID, hw.KindGraded, graderID, body, &v)
 }
 
 func (s *seeder) append(ctx context.Context, threadID int64, kind string, actorID int64, body string, verdict *string) (store.HomeworkThreadEvent, error) {

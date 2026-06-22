@@ -39,19 +39,19 @@ func TestSeedRun_Integration(t *testing.T) {
 			t.Fatalf("run %d: commit: %v", run, err)
 		}
 
-		if res.Groups != 2 || res.Teachers != 2 || res.Students != 6 {
-			t.Errorf("run %d: roster = groups %d, teachers %d, students %d; want 2/2/6",
+		if res.Groups != 3 || res.Teachers != 12 || res.Students != 90 {
+			t.Errorf("run %d: roster = groups %d, teachers %d, students %d; want 3/12/90",
 				run, res.Groups, res.Teachers, res.Students)
 		}
-		if res.Series != 2 || res.Problems != 5 || res.Subproblems != 9 {
-			t.Errorf("run %d: structure = series %d, problems %d, subproblems %d; want 2/5/9",
+		if res.Series != 2 || res.Problems != 13 || res.Subproblems != 25 {
+			t.Errorf("run %d: structure = series %d, problems %d, subproblems %d; want 2/13/25",
 				run, res.Series, res.Problems, res.Subproblems)
 		}
 		if res.Submissions == 0 {
 			t.Errorf("run %d: no submissions seeded", run)
 		}
-		if len(res.Logins) != 8 {
-			t.Errorf("run %d: logins = %d, want 8", run, len(res.Logins))
+		if res.Coffins == 0 {
+			t.Errorf("run %d: no coffins created; the difficulty gradient should leave some", run)
 		}
 		if res.Password != seed.DemoPassword {
 			t.Errorf("run %d: password = %q, want %q", run, res.Password, seed.DemoPassword)

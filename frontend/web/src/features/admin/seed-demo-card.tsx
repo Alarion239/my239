@@ -95,6 +95,7 @@ function SeedResultView({ result, onClose }: { result: SeedResult; onClose: () =
     { label: 'Серии', value: result.series },
     { label: 'Задачи', value: result.problems },
     { label: 'Подзадачи', value: result.subproblems },
+    { label: 'Гробы', value: result.coffins },
     { label: 'Сдачи', value: result.submissions },
   ]
   return (
@@ -112,6 +113,13 @@ function SeedResultView({ result, onClose }: { result: SeedResult; onClose: () =
           </span>
         ))}
       </div>
+
+      <p className="text-xs text-muted">
+        Показаны преподаватели и первые ученики. Всего учеников:{' '}
+        <span className="font-medium text-ink">{result.student_count}</span> —
+        логины <code>demo-student-1</code> … <code>demo-student-{result.student_count}</code>,
+        пароль тот же.
+      </p>
 
       <div className="max-h-64 overflow-y-auto rounded-lg border border-line">
         <table className="w-full text-sm">
