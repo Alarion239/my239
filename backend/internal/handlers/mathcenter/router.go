@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	internalAuth "github.com/Alarion239/my239/backend/internal/auth"
+	"github.com/Alarion239/my239/backend/internal/live"
 	"github.com/Alarion239/my239/backend/internal/middleware"
 	"github.com/Alarion239/my239/backend/pkg/db"
 	"github.com/Alarion239/my239/backend/pkg/objectstore"
@@ -17,7 +18,7 @@ import (
 // blobs is used by the series PDF endpoints; uploadTTL signs PUT URLs the
 // client uses to upload directly to Yandex; downloadTTL signs GET URLs for
 // the redirect download.
-func Router(database *db.DB, tokens *internalAuth.TokenService, blobs objectstore.Store, uploadTTL, downloadTTL time.Duration) chi.Router {
+func Router(database *db.DB, hub *live.Hub, tokens *internalAuth.TokenService, blobs objectstore.Store, uploadTTL, downloadTTL time.Duration) chi.Router {
 	r := chi.NewRouter()
 	r.Use(middleware.AuthMiddleware(tokens.Access()))
 	// Act-as impersonation runs right after auth: an admin may carry the
@@ -25,6 +26,9 @@ func Router(database *db.DB, tokens *internalAuth.TokenService, blobs objectstor
 	r.Use(middleware.ImpersonationMiddleware(database))
 
 	r.Get("/me", Me(database))
+
+	// Live SSE stream of center-change signals (grading/coffins/membership).
+	r.Get("/centers/{centerID}/events", Events(hub, database))
 
 	r.Route("/centers/{centerID}/series", func(r chi.Router) {
 		r.Get("/", ListSeriesForCenter(database))
@@ -34,7 +38,7 @@ func Router(database *db.DB, tokens *internalAuth.TokenService, blobs objectstor
 	r.Get("/centers/{centerID}/coffins", ListCenterCoffins(database))
 	r.Get("/centers/{centerID}/coffin-queue", ListCoffinQueue(database))
 	// Head-teacher self-service management panel ("Управление").
-	r.Mount("/centers/{centerID}/manage", ManageRouter(database))
+	r.Mount("/centers/{centerID}/manage", ManageRouter(database, hub))
 	// Group a set of subproblems under one shared разбор (teacher).
 	r.Post("/subproblem-solutions/group", AssignSolutionGroup(database))
 
@@ -53,15 +57,15 @@ func Router(database *db.DB, tokens *internalAuth.TokenService, blobs objectstor
 	// Per-subproblem coffins ("гробы") + официальный «Разбор». The subproblem is
 	// the unit: mark/unmark/release + разбор (TeX/PDF/link) all key on it.
 	r.Route("/subproblems/{subproblemID}", func(r chi.Router) {
-		r.Post("/coffin", MarkCoffin(database))
-		r.Delete("/coffin", UnmarkCoffin(database, blobs))
-		r.Post("/solution/release", ReleaseCoffin(database))
+		r.Post("/coffin", MarkCoffin(database, hub))
+		r.Delete("/coffin", UnmarkCoffin(database, hub, blobs))
+		r.Post("/solution/release", ReleaseCoffin(database, hub))
 		r.Get("/solution/tex", GetSubproblemSolutionTex(database))
-		r.Put("/solution/tex", PutSubproblemSolutionTex(database))
+		r.Put("/solution/tex", PutSubproblemSolutionTex(database, hub))
 		r.Post("/solution/pdf/upload-url", IssueSubproblemSolutionPDFUploadURL(database, blobs, uploadTTL))
-		r.Post("/solution/pdf/publish", FinalizeSubproblemSolutionPDFPublish(database, blobs))
+		r.Post("/solution/pdf/publish", FinalizeSubproblemSolutionPDFPublish(database, hub, blobs))
 		r.Get("/solution/pdf", DownloadSubproblemSolutionPDF(database, blobs, downloadTTL))
-		r.Put("/solution/link", SetSubproblemSolutionLinkHandler(database))
+		r.Put("/solution/link", SetSubproblemSolutionLinkHandler(database, hub))
 	})
 	return r
 }

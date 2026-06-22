@@ -17,6 +17,7 @@ import (
 
 	internalAuth "github.com/Alarion239/my239/backend/internal/auth"
 	mcHandlers "github.com/Alarion239/my239/backend/internal/handlers/mathcenter"
+	"github.com/Alarion239/my239/backend/internal/live"
 	"github.com/Alarion239/my239/backend/pkg/db"
 	"github.com/Alarion239/my239/backend/pkg/objectstore"
 )
@@ -102,7 +103,7 @@ func newRouter(t *testing.T, mock pgxmock.PgxPoolIface) (http.Handler, *internal
 		t.Fatalf("token service: %v", err)
 	}
 	blobs := objectstore.NewMemory()
-	return mcHandlers.Router(database, tokens, blobs, time.Minute, time.Minute), access, blobs
+	return mcHandlers.Router(database, live.NewHub(), tokens, blobs, time.Minute, time.Minute), access, blobs
 }
 
 func TestRouter_RequiresAuth(t *testing.T) {

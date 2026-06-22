@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	internalAuth "github.com/Alarion239/my239/backend/internal/auth"
+	"github.com/Alarion239/my239/backend/internal/live"
 	"github.com/Alarion239/my239/backend/internal/middleware"
 	"github.com/Alarion239/my239/backend/pkg/db"
 	"github.com/Alarion239/my239/backend/pkg/objectstore"
@@ -20,7 +21,7 @@ import (
 // admin) happen inside each handler against the math_center_* membership
 // tables. uploadTTL is the lifetime of presigned PUT URLs (short — minutes);
 // downloadTTL is for presigned GETs returned when serving photo URLs.
-func Router(database *db.DB, tokens *internalAuth.TokenService, blobs objectstore.Store, uploadTTL, downloadTTL time.Duration) chi.Router {
+func Router(database *db.DB, hub *live.Hub, tokens *internalAuth.TokenService, blobs objectstore.Store, uploadTTL, downloadTTL time.Duration) chi.Router {
 	r := chi.NewRouter()
 	r.Use(middleware.AuthMiddleware(tokens.Access()))
 	// Act-as impersonation runs right after auth: an admin may carry the
@@ -32,8 +33,8 @@ func Router(database *db.DB, tokens *internalAuth.TokenService, blobs objectstor
 	// the thread atomically.
 	r.Route("/threads/{subproblemID}", func(r chi.Router) {
 		r.Post("/upload-urls", IssueStudentUploadURLs(database, blobs, uploadTTL))
-		r.Post("/submit", SubmitAttempt(database, blobs))
-		r.Post("/appeal", AppealGrade(database, blobs))
+		r.Post("/submit", SubmitAttempt(database, hub, blobs))
+		r.Post("/appeal", AppealGrade(database, hub, blobs))
 	})
 
 	// Grader-target routes operate on an existing thread by id. The
@@ -41,11 +42,11 @@ func Router(database *db.DB, tokens *internalAuth.TokenService, blobs objectstor
 	r.Route("/threads/by-id/{threadID}", func(r chi.Router) {
 		r.Get("/", GetThread(database, blobs, downloadTTL))
 		r.Post("/upload-urls", IssueGraderUploadURLs(database, blobs, uploadTTL))
-		r.Post("/claim", Claim(database, blobs))
+		r.Post("/claim", Claim(database, hub, blobs))
 		r.Post("/claim/heartbeat", Heartbeat(database))
-		r.Post("/claim/release", Release(database))
-		r.Post("/grade", Grade(database, blobs))
-		r.Post("/retract", Retract(database, blobs))
+		r.Post("/claim/release", Release(database, hub))
+		r.Post("/grade", Grade(database, hub, blobs))
+		r.Post("/retract", Retract(database, hub, blobs))
 	})
 
 	// Subproblem metadata — used by the new-submission page (when no
