@@ -5,6 +5,7 @@ import {
   type StatusMeta,
   type StatusTone,
 } from '@my239/shared'
+import { Loader2 } from 'lucide-react'
 import { cn } from '../cn'
 
 // toneClasses maps an abstract status `tone` to its colour-token utility pair.
@@ -59,7 +60,11 @@ export function StatusTile({ status, beingGraded, label, className }: StatusTile
         className,
       )}
     >
-      <span aria-hidden>{meta.glyph}</span>
+      {meta.tone === 'grading' ? (
+        <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
+      ) : (
+        <span aria-hidden>{meta.glyph}</span>
+      )}
     </span>
   )
 }
@@ -79,7 +84,10 @@ const LEGEND_ITEMS: { status: HomeworkStatus; beingGraded?: boolean }[] = [
 export function StatusLegend({ className }: { className?: string }) {
   return (
     <ul
-      className={cn('flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted', className)}
+      className={cn(
+        'grid grid-cols-[auto_auto] justify-start gap-x-5 gap-y-2 text-sm text-muted sm:flex sm:flex-wrap sm:items-center',
+        className,
+      )}
       aria-label="Обозначения статусов"
     >
       {LEGEND_ITEMS.map((item) => {
