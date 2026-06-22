@@ -64,7 +64,7 @@ func TestEvents_NonMemberForbidden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("got %d, want 403", resp.StatusCode)
 	}
@@ -90,7 +90,7 @@ func TestEvents_MemberStreamsConnectedThenEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("got %d, want 200", resp.StatusCode)
