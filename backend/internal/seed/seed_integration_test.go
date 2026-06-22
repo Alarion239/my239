@@ -43,8 +43,8 @@ func TestSeedRun_Integration(t *testing.T) {
 			t.Errorf("run %d: roster = groups %d, teachers %d, students %d; want 3/12/90",
 				run, res.Groups, res.Teachers, res.Students)
 		}
-		if res.Series != 2 || res.Problems != 13 || res.Subproblems != 25 {
-			t.Errorf("run %d: structure = series %d, problems %d, subproblems %d; want 2/13/25",
+		if res.Series != 10 || res.Problems != 30 || res.Subproblems != 42 {
+			t.Errorf("run %d: structure = series %d, problems %d, subproblems %d; want 10/30/42",
 				run, res.Series, res.Problems, res.Subproblems)
 		}
 		if res.Submissions == 0 {

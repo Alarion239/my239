@@ -25,42 +25,55 @@ func TestLabelsFor(t *testing.T) {
 	}
 }
 
-// Difficulty must rise (solver count must fall) as problems and subparts get
-// later, and stay within [0, cohort]. This is what produces coffins on the
-// hardest subproblems.
-func TestAcceptedTargetIsHarderLater(t *testing.T) {
+// Difficulty must rise (base solve rate must fall) as non-final problems get
+// later, the final problem must be the hardest, and later subparts must be no
+// easier than earlier ones.
+func TestSolveBaseIsHarderLater(t *testing.T) {
 	t.Parallel()
 
-	// Later problems are solved by no more students than earlier ones.
-	prev := acceptedTarget(0, 0)
-	for pi := 1; pi < 8; pi++ {
-		got := acceptedTarget(pi, 0)
-		if got > prev {
-			t.Errorf("acceptedTarget(%d,0)=%d > acceptedTarget(%d,0)=%d: should not increase", pi, got, pi-1, prev)
+	const problemCount = 5
+
+	// Non-final problems get strictly harder with position.
+	prev := solveBase(problemCount, 0, 0)
+	for pi := 1; pi < problemCount-1; pi++ {
+		got := solveBase(problemCount, pi, 0)
+		if got >= prev {
+			t.Errorf("solveBase(pi=%d)=%.2f not harder than pi=%d (%.2f)", pi, got, pi-1, prev)
 		}
 		prev = got
 	}
 
-	// Later subparts within a problem are no easier than earlier ones.
-	if a, b := acceptedTarget(2, 0), acceptedTarget(2, 2); b > a {
-		t.Errorf("subpart c (%d) easier than subpart a (%d)", b, a)
-	}
-
-	// Bounds: never negative, never above the cohort.
-	for pi := range 12 {
-		for spi := range 4 {
-			got := acceptedTarget(pi, spi)
-			if got < 0 || got > demoStudents {
-				t.Errorf("acceptedTarget(%d,%d)=%d out of [0,%d]", pi, spi, got, demoStudents)
-			}
+	// The final problem is the hardest of all (finale penalty).
+	last := solveBase(problemCount, problemCount-1, 0)
+	for pi := range problemCount - 1 {
+		if last >= solveBase(problemCount, pi, 0) {
+			t.Errorf("final problem base %.2f not below problem %d", last, pi)
 		}
 	}
 
-	// The gradient must actually reach the coffin band somewhere in the range,
-	// or the demo would never produce a coffin.
-	if acceptedTarget(7, 2) >= coffinThreshold {
-		t.Errorf("hardest subproblem solved by %d students, want < %d (a coffin)",
-			acceptedTarget(7, 2), coffinThreshold)
+	// Later subparts are no easier than earlier ones.
+	if a, c := solveBase(problemCount, 1, 0), solveBase(problemCount, 1, 2); c >= a {
+		t.Errorf("subpart c base %.2f not below subpart a %.2f", c, a)
+	}
+
+	// The hardest subproblems must reach a near-zero solve base so the cohort
+	// leaves coffins; with a positive ability cap they shouldn't be unsolvable.
+	if got := solveBase(problemCount, problemCount-1, 2); got > 0.1 {
+		t.Errorf("hardest subproblem base %.2f too high to yield a coffin", got)
+	}
+}
+
+func TestClampF(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ v, lo, hi, want float64 }{
+		{-0.5, 0, 1, 0},
+		{1.5, 0, 1, 1},
+		{0.4, 0, 1, 0.4},
+	}
+	for _, c := range cases {
+		if got := clampF(c.v, c.lo, c.hi); got != c.want {
+			t.Errorf("clampF(%v,%v,%v)=%v, want %v", c.v, c.lo, c.hi, got, c.want)
+		}
 	}
 }
 

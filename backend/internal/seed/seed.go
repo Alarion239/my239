@@ -8,8 +8,11 @@
 // plus any non-admin user whose username starts with "demo-". Nothing else is
 // touched.
 //
-// Problems get harder later in each series (fewer students solve them); any
-// subproblem solved by fewer than coffinThreshold students is marked a coffin.
+// Submissions are randomized (different each run): each student has a latent
+// ability and each subproblem a difficulty (harder later in the series), so the
+// solve grid has realistic spread. Different teachers grade different
+// students/problems. Any subproblem actually solved by fewer than coffinThreshold
+// students is marked a coffin.
 package seed
 
 import (
@@ -17,7 +20,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"math"
+	mrand "math/rand/v2"
 	"time"
 
 	"github.com/Alarion239/my239/backend/internal/auth"
@@ -45,19 +48,26 @@ const (
 	// coffinThreshold: a subproblem solved (accepted) by fewer than this many
 	// students is left as a coffin.
 	coffinThreshold = 5
-	// activeNonSolverCap bounds how many non-solving students get visible
-	// activity (rejected / in-queue / under-review / appealed) per subproblem;
-	// the rest leave the subproblem untouched.
-	activeNonSolverCap = 12
 	// studentLoginsShown caps how many student logins the result lists (they all
 	// follow the demo-student-N pattern with the shared password).
 	studentLoginsShown = 6
 
-	// Difficulty gradient: a subproblem's expected solve rate falls with its
-	// problem's position in the series and, slightly, with its subpart index.
-	rateMax        = 0.85
-	ratePerProblem = 0.16
-	ratePerSubpart = 0.07
+	// Difficulty model (solve probability, before clamping). A subproblem's base
+	// solve rate falls with its problem's position and subpart index; the last
+	// problem of each series gets an extra "finale" penalty (the brutal one).
+	// Per-student ability shifts the rate; per-subproblem jitter adds spread.
+	baseSolveRate    = 0.90
+	dropPerProblem   = 0.20
+	dropPerSubpart   = 0.08
+	finalePenalty    = 0.40
+	difficultyJitter = 0.08
+	abilityMin       = -0.30
+	abilityMax       = 0.35
+	maxSolveProb     = 0.98
+	// attemptRate: chance a non-solving student still has visible activity
+	// (in-queue / under-review / rejected / appealed) rather than leaving the
+	// subproblem untouched.
+	attemptRate = 0.30
 )
 
 // Login is one seeded account a tester can sign in as.
@@ -94,16 +104,12 @@ const (
 	stAccepted
 )
 
-// activeStates is cycled across the non-solving students that get visible
-// activity on a subproblem (accepted students are handled separately).
-var activeStates = []subState{stRejected, stSubmitted, stUnderReview, stAppealed}
-
-// subInfo is a created subproblem plus the series it belongs to and how many
-// students should solve (accept) it.
+// subInfo is a created subproblem plus the series it belongs to and its base
+// solve rate (before per-student ability / clamping).
 type subInfo struct {
-	id             int64
-	seriesID       int64
-	acceptedTarget int
+	id        int64
+	seriesID  int64
+	solveBase float64
 }
 
 // seeder carries the per-run state. The transaction is supplied via db (used
@@ -114,7 +120,7 @@ type seeder struct {
 	pwHash     string
 	now        time.Time
 	centerID   int64
-	graderIDs  []int64 // regular teachers, used round-robin as graders
+	graderIDs  []int64 // regular teachers, used as graders
 	studentIDs []int64 // seeded students, in creation order
 	subs       []subInfo
 	res        Result
@@ -197,9 +203,7 @@ func (s *seeder) build(ctx context.Context) error {
 
 func (s *seeder) createTeachers(ctx context.Context) error {
 	for i := range demoHeadTeachers {
-		u, err := s.createUser(ctx,
-			fmt.Sprintf("%shead-%d", demoUsernamePrefix, i+1),
-			fmt.Sprintf("Старший %d", i+1), "Преподаватель")
+		u, err := s.createUser(ctx, fmt.Sprintf("%shead-%d", demoUsernamePrefix, i+1))
 		if err != nil {
 			return err
 		}
@@ -211,9 +215,7 @@ func (s *seeder) createTeachers(ctx context.Context) error {
 		s.addLogin(u, "старший преподаватель")
 	}
 	for i := range demoRegularTeachers {
-		u, err := s.createUser(ctx,
-			fmt.Sprintf("%steacher-%d", demoUsernamePrefix, i+1),
-			fmt.Sprintf("Преподаватель %d", i+1), "Демо")
+		u, err := s.createUser(ctx, fmt.Sprintf("%steacher-%d", demoUsernamePrefix, i+1))
 		if err != nil {
 			return err
 		}
@@ -231,9 +233,7 @@ func (s *seeder) createTeachers(ctx context.Context) error {
 
 func (s *seeder) createStudents(ctx context.Context, groups []int64) error {
 	for i := range demoStudents {
-		u, err := s.createUser(ctx,
-			fmt.Sprintf("%sstudent-%d", demoUsernamePrefix, i+1),
-			fmt.Sprintf("Студент %d", i+1), "Демо")
+		u, err := s.createUser(ctx, fmt.Sprintf("%sstudent-%d", demoUsernamePrefix, i+1))
 		if err != nil {
 			return err
 		}
@@ -251,14 +251,22 @@ func (s *seeder) createStudents(ctx context.Context, groups []int64) error {
 	return nil
 }
 
-// seriesSpecs defines the demo series: a name and, per problem, its subpart
+// seriesSpecs defines the 10 demo series: a name and, per problem, its subpart
 // count (0 = a single unlabelled part). Problems are ordered easy → hard.
 var seriesSpecs = []struct {
 	name     string
 	subparts []int
 }{
-	{"Вводная серия", []int{0, 0, 2, 1, 3, 2, 3}},
-	{"Основная серия", []int{0, 2, 1, 3, 2, 3}},
+	{"Алгебра. Многочлены", []int{0, 0, 2}},
+	{"Геометрия. Треугольники", []int{0, 0, 1, 3}},
+	{"Комбинаторика", []int{0, 0, 2}},
+	{"Теория чисел", []int{0, 1, 0, 3}},
+	{"Неравенства", []int{0, 0, 2}},
+	{"Графы и сети", []int{0, 0, 1}},
+	{"Тригонометрия", []int{0, 2}},
+	{"Делимость и остатки", []int{0, 0, 3}},
+	{"Функциональные уравнения", []int{0, 2}},
+	{"Комбинаторная вероятность", []int{0, 0, 2}},
 }
 
 func (s *seeder) createSeries(ctx context.Context) error {
@@ -268,7 +276,7 @@ func (s *seeder) createSeries(ctx context.Context) error {
 			Number:       int32(i + 1),
 			Name:         spec.name,
 			// Stagger due dates so the demo shows both open and tight series.
-			DueAt: s.now.Add(time.Duration(7*(i+1)) * 24 * time.Hour),
+			DueAt: s.now.Add(time.Duration(3*(i+1)) * 24 * time.Hour),
 		})
 		if err != nil {
 			return fmt.Errorf("seed: create series: %w", err)
@@ -288,9 +296,9 @@ func (s *seeder) createSeries(ctx context.Context) error {
 				if err != nil {
 					return fmt.Errorf("seed: create subproblem: %w", err)
 				}
-				s.subs = append(s.subs, subInfo{
-					id: sub.ID, seriesID: series.ID, acceptedTarget: acceptedTarget(pi, spi),
-				})
+				base := solveBase(len(spec.subparts), pi, spi) +
+					(mrand.Float64()*2-1)*difficultyJitter
+				s.subs = append(s.subs, subInfo{id: sub.ID, seriesID: series.ID, solveBase: base})
 				s.res.Subproblems++
 			}
 		}
@@ -309,48 +317,46 @@ func (s *seeder) createSeries(ctx context.Context) error {
 	return nil
 }
 
-// acceptedTarget is how many of the cohort solve a subproblem at the given
-// problem index (0-based, within its series) and subpart index. Later problems
-// and later subparts are harder, so fewer students solve them.
-func acceptedTarget(problemIdx, subpartIdx int) int {
-	rate := rateMax - float64(problemIdx)*ratePerProblem - float64(subpartIdx)*ratePerSubpart
-	if rate < 0 {
-		rate = 0
+// solveBase is a subproblem's base solve rate (may be negative for the hardest;
+// it's clamped after adding a student's ability). Later problems and later
+// subparts are harder; the last problem of a series is hardest of all.
+func solveBase(problemCount, problemIdx, subpartIdx int) float64 {
+	rate := baseSolveRate - float64(problemIdx)*dropPerProblem - float64(subpartIdx)*dropPerSubpart
+	if problemIdx == problemCount-1 {
+		rate -= finalePenalty
 	}
-	if rate > 1 {
-		rate = 1
-	}
-	return int(math.Round(rate * float64(demoStudents)))
+	return rate
 }
 
-// seedSubmissions assigns each subproblem `acceptedTarget` solvers plus a
-// bounded band of active non-solvers, leaving the rest untouched. Solver windows
-// rotate across the cohort so students vary. Sub-threshold subproblems become
-// coffins.
+// seedSubmissions assigns, per subproblem, an outcome for each student drawn
+// from their ability + the subproblem's difficulty. Solvers get accepted
+// threads; a fraction of non-solvers get other statuses; the rest stay
+// untouched. Graders are chosen at random so different teachers grade different
+// students/problems. A subproblem solved by fewer than coffinThreshold students
+// becomes a coffin.
 func (s *seeder) seedSubmissions(ctx context.Context) error {
-	graderCursor := 0
-	for k, sub := range s.subs {
-		start := (k * 7) % demoStudents
-		active := activeNonSolverCap
-		if rem := demoStudents - sub.acceptedTarget; active > rem {
-			active = rem
-		}
+	abilities := make([]float64, demoStudents)
+	for i := range abilities {
+		abilities[i] = abilityMin + mrand.Float64()*(abilityMax-abilityMin)
+	}
 
-		for n := range sub.acceptedTarget {
-			studentID := s.studentIDs[(start+n)%demoStudents]
-			if err := s.seedSubmission(ctx, stAccepted, studentID, s.nextGrader(&graderCursor), sub); err != nil {
-				return err
+	for _, sub := range s.subs {
+		accepted := 0
+		for i, studentID := range s.studentIDs {
+			p := clampF(sub.solveBase+abilities[i], 0, maxSolveProb)
+			switch {
+			case mrand.Float64() < p:
+				if err := s.seedSubmission(ctx, stAccepted, studentID, s.randomGrader(), sub); err != nil {
+					return err
+				}
+				accepted++
+			case mrand.Float64() < attemptRate:
+				if err := s.seedSubmission(ctx, s.randomActiveState(), studentID, s.randomGrader(), sub); err != nil {
+					return err
+				}
 			}
 		}
-		for n := range active {
-			studentID := s.studentIDs[(start+sub.acceptedTarget+n)%demoStudents]
-			state := activeStates[n%len(activeStates)]
-			if err := s.seedSubmission(ctx, state, studentID, s.nextGrader(&graderCursor), sub); err != nil {
-				return err
-			}
-		}
-
-		if sub.acceptedTarget < coffinThreshold {
+		if accepted < coffinThreshold {
 			if _, err := s.q.UpsertCoffinFlag(ctx, store.UpsertCoffinFlagParams{
 				SubproblemID: sub.id, IsCoffin: true,
 			}); err != nil {
@@ -362,10 +368,23 @@ func (s *seeder) seedSubmissions(ctx context.Context) error {
 	return nil
 }
 
-func (s *seeder) nextGrader(cursor *int) int64 {
-	id := s.graderIDs[*cursor%len(s.graderIDs)]
-	*cursor++
-	return id
+func (s *seeder) randomGrader() int64 {
+	return s.graderIDs[mrand.IntN(len(s.graderIDs))]
+}
+
+// randomActiveState picks a non-accepted status for a student who engaged with a
+// subproblem but hasn't solved it: weighted toward the in-queue/rejected states.
+func (s *seeder) randomActiveState() subState {
+	switch r := mrand.Float64(); {
+	case r < 0.35:
+		return stSubmitted
+	case r < 0.65:
+		return stRejected
+	case r < 0.85:
+		return stUnderReview
+	default:
+		return stAppealed
+	}
 }
 
 // finalState is the denormalized thread state written in one UPDATE after the
@@ -472,9 +491,13 @@ func (s *seeder) append(ctx context.Context, threadID int64, kind string, actorI
 	return ev, nil
 }
 
-func (s *seeder) createUser(ctx context.Context, username, first, last string) (store.User, error) {
+// createUser makes a demo user with the given (login) username and a random
+// realistic Russian name. The username stays predictable for sign-in + teardown.
+func (s *seeder) createUser(ctx context.Context, username string) (store.User, error) {
+	first, last, middle := randomPerson()
+	mid := middle
 	u, err := s.q.CreateUser(ctx, store.CreateUserParams{
-		Username: username, PasswordHash: s.pwHash, FirstName: first, LastName: last,
+		Username: username, PasswordHash: s.pwHash, FirstName: first, LastName: last, MiddleName: &mid,
 	})
 	if err != nil {
 		return store.User{}, fmt.Errorf("seed: create user %s: %w", username, err)
@@ -483,11 +506,11 @@ func (s *seeder) createUser(ctx context.Context, username, first, last string) (
 }
 
 func (s *seeder) addLogin(u store.User, role string) {
-	s.res.Logins = append(s.res.Logins, Login{
-		Username: u.Username,
-		Role:     role,
-		Name:     fmt.Sprintf("%s %s", u.FirstName, u.LastName),
-	})
+	name := fmt.Sprintf("%s %s", u.FirstName, u.LastName)
+	if u.MiddleName != nil {
+		name = fmt.Sprintf("%s %s %s", u.LastName, u.FirstName, *u.MiddleName)
+	}
+	s.res.Logins = append(s.res.Logins, Login{Username: u.Username, Role: role, Name: name})
 }
 
 // labelsFor maps a subpart count to subproblem labels, mirroring the series
@@ -498,6 +521,16 @@ func labelsFor(count int) []string {
 		return []string{""}
 	}
 	return labels
+}
+
+func clampF(v, lo, hi float64) float64 {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
 }
 
 func newEventUUID() (string, error) {
