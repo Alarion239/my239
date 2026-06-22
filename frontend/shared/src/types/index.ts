@@ -131,6 +131,29 @@ export interface InvitationToken {
   math_center_id?: number | null
 }
 
+// SeedLogin is one demo account created by the seeder, with its shared password
+// carried separately on SeedResult.
+export interface SeedLogin {
+  username: string
+  role: string
+  name: string
+}
+
+// SeedResult mirrors the backend seed.Result: counts of what was created plus
+// the demo login list and the password they all share.
+export interface SeedResult {
+  graduation_year: number
+  groups: number
+  teachers: number
+  students: number
+  series: number
+  problems: number
+  subproblems: number
+  submissions: number
+  password: string
+  logins: SeedLogin[]
+}
+
 // TokenPreset mirrors the backend tokenpreset.Preset: the roles/grants applied
 // to whoever registers with the token. All grants are optional; an omitted
 // preset mints a plain invite. version is stamped server-side, so the frontend

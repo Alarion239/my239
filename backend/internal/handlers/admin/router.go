@@ -26,6 +26,9 @@ func Router(database *db.DB, tokens *internalAuth.TokenService) chi.Router {
 	r.Post("/tokens", CreateToken(database))
 	r.Delete("/tokens/{id}", RevokeToken(database))
 
+	// Demo data: reset + reseed a fictional center with submissions, for testing.
+	r.Post("/seed", SeedDemo(database))
+
 	r.Route("/mathcenter", func(r chi.Router) {
 		r.Get("/", ListMathCenters(database))
 		r.Post("/", CreateMathCenter(database))

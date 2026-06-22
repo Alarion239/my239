@@ -18,6 +18,7 @@ import {
 import { ConfirmButton, SectionHeader } from './_shared'
 import { CenterGroups } from './center-groups'
 import { CreateMathCenterDialog } from './create-math-center-dialog'
+import { SeedDemoCard } from './seed-demo-card'
 
 function CentersTable() {
   const { data: centers, isPending, isError } = useMathCenters()
@@ -108,6 +109,16 @@ export function MathCentersPage() {
         />
         <Card className="p-2">
           <CentersTable />
+        </Card>
+      </section>
+
+      <section>
+        <SectionHeader
+          title="Демо-данные"
+          description="Тестовый матцентр со сдачами для проверки интерфейса."
+        />
+        <Card className="p-4">
+          <SeedDemoCard />
         </Card>
       </section>
     </div>

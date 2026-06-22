@@ -9,6 +9,7 @@ import type {
   MathCenterGroup,
   MathCenterStudent,
   MathCenterTeacher,
+  SeedResult,
   TokenPreset,
   User,
   UserEnrollments,
@@ -292,5 +293,23 @@ export function useDeleteGroup(centerId: number) {
       ),
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: queryKeys.centerGroups(centerId) }),
+  })
+}
+
+// --- Demo data ---------------------------------------------------------------
+
+// useSeedDemo resets and regenerates the demo dataset (fictional center, users,
+// series, submissions). Invalidates the centers + users lists so the new demo
+// data shows up immediately.
+export function useSeedDemo() {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () =>
+      client.request<SeedResult>('/admin/seed', { method: 'POST' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.adminCenters })
+      qc.invalidateQueries({ queryKey: queryKeys.adminUsers })
+    },
   })
 }
