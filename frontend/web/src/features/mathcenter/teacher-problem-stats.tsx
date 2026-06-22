@@ -320,11 +320,16 @@ function ProblemStatRow({
       className={cn(
         'cursor-pointer rounded-xl border bg-surface px-4 py-3 transition-colors',
         'hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-        active
-          ? 'border-accent ring-2 ring-accent/50'
+        // A green frame marks a subproblem that already has a разбор, and stays
+        // visible while it's being previewed (the accent ring layers on top).
+        hasSolution
+          ? 'border-status-accepted'
           : isCoffin
             ? 'border-status-checking'
-            : 'border-line',
+            : active
+              ? 'border-accent'
+              : 'border-line',
+        active ? 'ring-2 ring-accent/50' : '',
       )}
     >
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">

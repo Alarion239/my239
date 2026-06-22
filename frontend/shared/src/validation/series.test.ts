@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { countToSubparts, createSeriesSchema, subpartsToCount } from './series'
+import { createSeriesSchema, toSeriesBody } from './series'
 
 function validInput() {
   return {
@@ -7,8 +7,8 @@ function validInput() {
     name: 'Серия 1',
     due_at: '2026-09-01T18:00',
     problems: [
-      { number: 1, subparts: 'c' }, // 3 subparts a,b,c
-      { number: 2, subparts: '' }, // single-part problem
+      { number: 1, subproblem_count: 3 },
+      { number: 2, subproblem_count: 0 }, // single-part problem
     ],
   }
 }
@@ -21,7 +21,7 @@ describe('createSeriesSchema', () => {
   it('accepts an optional problem id (round-tripped for diff updates)', () => {
     const result = createSeriesSchema.safeParse({
       ...validInput(),
-      problems: [{ id: 42, number: 1, subparts: '3' }],
+      problems: [{ id: 42, number: 1, subproblem_count: 3 }],
     })
     expect(result.success).toBe(true)
     if (result.success) expect(result.data.problems[0].id).toBe(42)
@@ -48,28 +48,37 @@ describe('createSeriesSchema', () => {
     ).toBe(false)
   })
 
-  it('rejects a series with no problems', () => {
+  it('accepts a series with no problems (statement-first creation)', () => {
     expect(
       createSeriesSchema.safeParse({ ...validInput(), problems: [] }).success,
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('rejects duplicate problem numbers', () => {
     const result = createSeriesSchema.safeParse({
       ...validInput(),
       problems: [
-        { number: 1, subparts: 'a' },
-        { number: 1, subparts: 'b' },
+        { number: 1, subproblem_count: 1 },
+        { number: 1, subproblem_count: 2 },
       ],
     })
     expect(result.success).toBe(false)
   })
 
-  it('rejects an unparseable subparts value', () => {
+  it('rejects a subproblem count above the alphabet', () => {
     expect(
       createSeriesSchema.safeParse({
         ...validInput(),
-        problems: [{ number: 1, subparts: 'zz' }],
+        problems: [{ number: 1, subproblem_count: 27 }],
+      }).success,
+    ).toBe(false)
+  })
+
+  it('rejects a negative subproblem count', () => {
+    expect(
+      createSeriesSchema.safeParse({
+        ...validInput(),
+        problems: [{ number: 1, subproblem_count: -1 }],
       }).success,
     ).toBe(false)
   })
@@ -78,7 +87,7 @@ describe('createSeriesSchema', () => {
     expect(
       createSeriesSchema.safeParse({
         ...validInput(),
-        problems: [{ number: 1.5, subparts: 'a' }],
+        problems: [{ number: 1.5, subproblem_count: 1 }],
       }).success,
     ).toBe(false)
   })
@@ -90,49 +99,36 @@ describe('createSeriesSchema', () => {
   })
 })
 
-// The "subparts" field accepts a count OR the last Latin letter; empty = no
-// subparts. Round-tripping count↔letter must use Latin letters (a..z), never
-// Cyrillic.
-describe('subpartsToCount', () => {
-  it('treats empty as zero (single-part problem)', () => {
-    expect(subpartsToCount('')).toBe(0)
-    expect(subpartsToCount('   ')).toBe(0)
+describe('toSeriesBody', () => {
+  it('passes counts and ids straight through with the ISO due date', () => {
+    const body = toSeriesBody(
+      {
+        number: 4,
+        name: 'Серия 4',
+        due_at: '2026-09-01T18:00',
+        problems: [
+          { id: 7, number: 1, subproblem_count: 3 },
+          { number: 2, subproblem_count: 0 },
+        ],
+      },
+      '2026-09-01T15:00:00.000Z',
+    )
+    expect(body).toEqual({
+      number: 4,
+      name: 'Серия 4',
+      due_at: '2026-09-01T15:00:00.000Z',
+      problems: [
+        { id: 7, number: 1, subproblem_count: 3 },
+        { id: undefined, number: 2, subproblem_count: 0 },
+      ],
+    })
   })
 
-  it('parses a plain count', () => {
-    expect(subpartsToCount('0')).toBe(0)
-    expect(subpartsToCount('3')).toBe(3)
-    expect(subpartsToCount('26')).toBe(26)
-  })
-
-  it('parses a Latin last-letter into its position', () => {
-    expect(subpartsToCount('a')).toBe(1)
-    expect(subpartsToCount('c')).toBe(3)
-    expect(subpartsToCount('C')).toBe(3) // case-insensitive
-    expect(subpartsToCount('z')).toBe(26)
-  })
-
-  it('rejects out-of-range counts and bad input', () => {
-    expect(subpartsToCount('27')).toBeNull()
-    expect(subpartsToCount('ab')).toBeNull()
-    expect(subpartsToCount('3c')).toBeNull()
-    // Cyrillic letters are not valid subpart labels.
-    expect(subpartsToCount('а')).toBeNull() // Cyrillic 'а'
-    expect(subpartsToCount('-')).toBeNull()
-  })
-})
-
-describe('countToSubparts', () => {
-  it('renders the last Latin letter, or empty for none', () => {
-    expect(countToSubparts(0)).toBe('')
-    expect(countToSubparts(1)).toBe('a')
-    expect(countToSubparts(3)).toBe('c')
-    expect(countToSubparts(26)).toBe('z')
-  })
-
-  it('round-trips with subpartsToCount', () => {
-    for (let n = 0; n <= 26; n++) {
-      expect(subpartsToCount(countToSubparts(n))).toBe(n)
-    }
+  it('serialises an empty problem set', () => {
+    const body = toSeriesBody(
+      { number: 4, name: 'x', due_at: 'x', problems: [] },
+      '2026-09-01T15:00:00.000Z',
+    )
+    expect(body.problems).toEqual([])
   })
 })

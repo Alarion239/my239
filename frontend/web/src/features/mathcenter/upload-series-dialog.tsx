@@ -1,17 +1,16 @@
 import { useState } from 'react'
-import { useFieldArray, useForm } from 'react-hook-form'
+import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Plus, Trash2 } from 'lucide-react'
+import { z } from 'zod'
 import {
   APIErrorImpl,
-  countToSubparts,
-  createSeriesSchema,
-  toSeriesBody,
+  nextMathcenterDueAt,
+  toDatetimeLocalValue,
   useCreateSeries,
   usePutSeriesTex,
   useUpdateSeries,
   useUploadSeriesPdf,
-  type CreateSeriesValues,
+  type CreateSeriesBody,
   type Series,
 } from '@my239/shared'
 import {
@@ -25,6 +24,13 @@ import {
   Input,
 } from '../../design/ui'
 import { cn } from '../../design/cn'
+import { StatementPanel } from './statement-panel'
+import { ProblemBuilder } from './problem-builder'
+import {
+  DEFAULT_PROBLEMS,
+  seedProblems,
+  type ProblemDraft,
+} from './problem-builder-model'
 
 // Maximum series PDF size accepted by the backend (1 MiB).
 const MAX_PDF_BYTES = 1024 * 1024
@@ -33,106 +39,116 @@ export interface UploadSeriesDialogProps {
   centerId: number
   // When present the dialog edits an existing series; otherwise it creates one.
   series?: Series
+  // Pre-filled series number for a fresh series (max existing + 1). Defaults 1.
+  defaultNumber?: number
   // Custom trigger (defaults to a "Загрузить серию" button).
   trigger?: React.ReactNode
 }
 
-// toLocalInput converts an ISO timestamp into the value a datetime-local input
-// expects (YYYY-MM-DDTHH:mm in local time). Empty/invalid -> ''.
-function toLocalInput(iso: string | null | undefined): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return (
-    d.getFullYear() +
-    '-' +
-    pad(d.getMonth() + 1) +
-    '-' +
-    pad(d.getDate()) +
-    'T' +
-    pad(d.getHours()) +
-    ':' +
-    pad(d.getMinutes())
-  )
+type Step = 'meta' | 'statement' | 'problems'
+
+const STEP_HINT: Record<Step, string> = {
+  meta: 'метаданные серии',
+  statement: 'условие (TeX или PDF)',
+  problems: 'задачи и подзадачи',
 }
 
-function defaultsFor(series: Series | undefined): CreateSeriesValues {
-  if (!series) {
-    return { number: 1, name: '', due_at: '', problems: [{ number: 1, subparts: 'a' }] }
-  }
-  return {
-    number: series.number,
-    name: series.name,
-    due_at: toLocalInput(series.due_at),
-    problems:
-      series.problems.length > 0
-        ? series.problems.map((p) => ({
-            // Carry the existing problem id so the backend keeps it in place
-            // (diff update) instead of rebuilding the whole series.
-            id: p.id,
-            number: p.number,
-            // Show the last subpart letter; count only REAL subparts (a
-            // single-part problem has one sentinel subproblem labelled "").
-            subparts: countToSubparts(
-              p.subproblems.filter((s) => s.label !== '').length,
-            ),
-          }))
-        : [{ number: 1, subparts: 'a' }],
-  }
+// metaSchema validates step 1 only (number/name/due_at). Problems are entered in
+// step 3, so they are not part of this form.
+const metaSchema = z.object({
+  number: z
+    .number({ message: 'Введите число' })
+    .int('Целое число')
+    .min(0, 'Минимум 0')
+    .max(100000, 'Максимум 100000'),
+  name: z.string().trim().min(1, 'Введите название').max(200, 'Максимум 200 символов'),
+  due_at: z.string().trim().min(1, 'Укажите срок сдачи'),
+})
+type MetaValues = z.infer<typeof metaSchema>
+
+// problemsToDrafts maps an existing series' problems into builder drafts,
+// ordered by number and counting only REAL subparts (the single-part sentinel
+// subproblem has an empty label and is not a subpart).
+function problemsToDrafts(series: Series): ProblemDraft[] {
+  return [...series.problems]
+    .sort((a, b) => a.number - b.number)
+    .map((p) => ({
+      id: p.id,
+      number: p.number,
+      subproblem_count: p.subproblems.filter((s) => s.label !== '').length,
+    }))
 }
 
-// UploadSeriesDialog is the teacher/admin create-and-edit flow: step 1 captures
-// the metadata + problem list, step 2 attaches the statement (TeX or PDF). The
-// series must exist before it can be attached to, so create transitions into the
-// attach step on its own series, while edit starts already attached.
-export function UploadSeriesDialog({ centerId, series, trigger }: UploadSeriesDialogProps) {
+// draftsToBody serialises drafts into the wire problem list.
+function draftsToBody(drafts: ProblemDraft[]): CreateSeriesBody['problems'] {
+  return drafts.map((d) => ({
+    id: d.id,
+    number: d.number,
+    subproblem_count: d.subproblem_count,
+  }))
+}
+
+// UploadSeriesDialog is the teacher/admin create-and-edit flow as a 3-step
+// wizard: (1) metadata, (2) statement upload, (3) problems — with the rendered
+// statement shown beside the problem builder so problems can be marked off
+// against it. The series is created up front (with no problems) so the statement
+// can attach to it; problems are saved in step 3.
+export function UploadSeriesDialog({
+  centerId,
+  series,
+  defaultNumber,
+  trigger,
+}: UploadSeriesDialogProps) {
   const isEdit = !!series
   const [open, setOpen] = useState(false)
-  // The series we're attaching to: the edited one, or the freshly created one.
+  // The series we're working on: the edited one, or the freshly created one.
   const [attachTo, setAttachTo] = useState<Series | null>(series ?? null)
-  // Both create and edit open on the details step (metadata + problem list) —
-  // editing must reach the problem editor, not jump straight to the statement.
-  const [step, setStep] = useState<'details' | 'attach'>('details')
+  const [step, setStep] = useState<Step>('meta')
 
   function reset(nextOpen: boolean) {
     setOpen(nextOpen)
     if (!nextOpen) {
       setAttachTo(series ?? null)
-      setStep('details')
+      setStep('meta')
     }
   }
+
+  const stepNo = step === 'meta' ? 1 : step === 'statement' ? 2 : 3
 
   return (
     <Dialog open={open} onOpenChange={reset}>
       <DialogTrigger asChild>
         {trigger ?? <Button size="sm">Загрузить серию</Button>}
       </DialogTrigger>
-      <DialogContent className="max-w-lg">
+      <DialogContent className={step === 'problems' ? 'max-w-4xl' : 'max-w-lg'}>
         <DialogTitle>{isEdit ? 'Редактировать серию' : 'Загрузить серию'}</DialogTitle>
         <DialogDescription>
-          {step === 'details'
-            ? 'Шаг 1 из 2 — метаданные и список задач.'
-            : 'Шаг 2 из 2 — условие (TeX или PDF). Можно закрыть и вернуться позже.'}
+          Шаг {stepNo} из 3 — {STEP_HINT[step]}.
         </DialogDescription>
 
-        {step === 'details' ? (
-          <DetailsStep
+        {step === 'meta' ? (
+          <MetaStep
             centerId={centerId}
-            series={series}
+            series={attachTo ?? undefined}
+            defaultNumber={defaultNumber ?? 1}
             onSaved={(saved) => {
               setAttachTo(saved)
-              setStep('attach')
+              setStep('statement')
             }}
           />
-        ) : attachTo ? (
-          <AttachStep
+        ) : attachTo && step === 'statement' ? (
+          <StatementStep
             series={attachTo}
+            onAttached={setAttachTo}
+            onBack={() => setStep('meta')}
+            onNext={() => setStep('problems')}
+          />
+        ) : attachTo ? (
+          <ProblemsStep
+            series={attachTo}
+            onSaved={setAttachTo}
+            onBack={() => setStep('statement')}
             onDone={() => reset(false)}
-            // Editing an existing series can step back to the problem editor;
-            // creation can't (the series already exists, going back would
-            // re-create it).
-            onBack={isEdit ? () => setStep('details') : undefined}
           />
         ) : null}
       </DialogContent>
@@ -140,13 +156,15 @@ export function UploadSeriesDialog({ centerId, series, trigger }: UploadSeriesDi
   )
 }
 
-function DetailsStep({
+function MetaStep({
   centerId,
   series,
+  defaultNumber,
   onSaved,
 }: {
   centerId: number
   series: Series | undefined
+  defaultNumber: number
   onSaved: (saved: Series) => void
 }) {
   const isEdit = !!series
@@ -156,32 +174,42 @@ function DetailsStep({
 
   const {
     register,
-    control,
     handleSubmit,
     setError,
     formState: { errors, isSubmitting },
-  } = useForm<CreateSeriesValues>({
-    resolver: zodResolver(createSeriesSchema),
-    defaultValues: defaultsFor(series),
-  })
-  // keyName '_key' keeps RHF's internal render id from clobbering our own
-  // problem `id` field (which we round-trip for the diff-based update).
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: 'problems',
-    keyName: '_key',
+  } = useForm<MetaValues>({
+    resolver: zodResolver(metaSchema),
+    defaultValues: isEdit
+      ? {
+          number: series.number,
+          name: series.name,
+          due_at: toDatetimeLocalValue(new Date(series.due_at)),
+        }
+      : {
+          number: defaultNumber,
+          name: '',
+          // Sessions run Wed/Sat 16:00 Moscow time — pre-fill the next one.
+          due_at: toDatetimeLocalValue(nextMathcenterDueAt(new Date())),
+        },
   })
 
   const onSubmit = handleSubmit((values) => {
     setFormError(null)
-    // The datetime-local input yields local "YYYY-MM-DDTHH:mm"; the backend
-    // decodes due_at as RFC3339, so convert before sending (else: 400).
+    // datetime-local yields "YYYY-MM-DDTHH:mm" (local); the backend decodes
+    // due_at as RFC3339, so convert before sending (else: 400).
     const dueDate = new Date(values.due_at)
     if (Number.isNaN(dueDate.getTime())) {
       setError('due_at', { message: 'Укажите корректный срок' })
       return
     }
-    const payload = toSeriesBody(values, dueDate.toISOString())
+    // Edit keeps the existing problems untouched (they're managed in step 3);
+    // create starts with none — they're added in step 3 after the statement.
+    const payload: CreateSeriesBody = {
+      number: values.number,
+      name: values.name,
+      due_at: dueDate.toISOString(),
+      problems: isEdit ? draftsToBody(problemsToDrafts(series)) : [],
+    }
     const mutation = isEdit ? update : create
     return new Promise<void>((resolve) => {
       mutation.mutate(payload, {
@@ -192,7 +220,7 @@ function DetailsStep({
         onError: (e) => {
           if (e instanceof APIErrorImpl) {
             for (const [k, v] of Object.entries(e.fields ?? {})) {
-              setError(k as keyof CreateSeriesValues, { message: v })
+              setError(k as keyof MetaValues, { message: v })
             }
             setFormError(e.message)
           } else {
@@ -229,81 +257,10 @@ function DetailsStep({
         {({ id, invalid }) => <Input id={id} invalid={invalid} {...register('name')} />}
       </Field>
 
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-ink">Задачи</span>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={() => append({ number: fields.length + 1, subparts: 'a' })}
-          >
-            <Plus className="h-4 w-4" aria-hidden /> Добавить
-          </Button>
-        </div>
-        <p className="text-xs text-faint">
-          Подзадачи: число (3) или последняя буква (c). Пусто — без подзадач.
-        </p>
-
-        {fields.map((field, i) => (
-          <div key={field._key} className="flex items-start gap-2">
-            {/* Round-trip the existing problem id so edits keep it in place. */}
-            <input
-              type="hidden"
-              defaultValue={field.id ?? ''}
-              {...register(`problems.${i}.id`, {
-                setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-              })}
-            />
-            <div className="flex-1">
-              <Input
-                type="number"
-                min={0}
-                aria-label={'Номер задачи ' + (i + 1)}
-                invalid={!!errors.problems?.[i]?.number}
-                {...register(`problems.${i}.number`, { valueAsNumber: true })}
-              />
-              {errors.problems?.[i]?.number ? (
-                <p className="mt-1 text-xs text-danger">{errors.problems[i]?.number?.message}</p>
-              ) : null}
-            </div>
-            <div className="flex-1">
-              <Input
-                type="text"
-                aria-label={'Подзадачи задачи ' + (i + 1)}
-                placeholder="напр. c или 3"
-                invalid={!!errors.problems?.[i]?.subparts}
-                {...register(`problems.${i}.subparts`)}
-              />
-              {errors.problems?.[i]?.subparts ? (
-                <p className="mt-1 text-xs text-danger">
-                  {errors.problems[i]?.subparts?.message}
-                </p>
-              ) : null}
-            </div>
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              aria-label={'Удалить задачу ' + (i + 1)}
-              onClick={() => remove(i)}
-            >
-              <Trash2 className="h-4 w-4" aria-hidden />
-            </Button>
-          </div>
-        ))}
-        {errors.problems?.message ? (
-          <p className="text-sm text-danger">{errors.problems.message}</p>
-        ) : null}
-        {errors.problems?.root?.message ? (
-          <p className="text-sm text-danger">{errors.problems.root.message}</p>
-        ) : null}
-      </div>
-
       {formError ? <p className="text-sm text-danger">{formError}</p> : null}
 
       <Button type="submit" disabled={isSubmitting} className="mt-1">
-        {isSubmitting ? 'Сохранение…' : isEdit ? 'Сохранить и продолжить' : 'Создать и продолжить'}
+        {isSubmitting ? 'Сохранение…' : isEdit ? 'Сохранить и далее →' : 'Далее →'}
       </Button>
     </form>
   )
@@ -311,14 +268,16 @@ function DetailsStep({
 
 type AttachMode = 'tex' | 'pdf'
 
-function AttachStep({
+function StatementStep({
   series,
-  onDone,
+  onAttached,
   onBack,
+  onNext,
 }: {
   series: Series
-  onDone: () => void
-  onBack?: () => void
+  onAttached: (saved: Series) => void
+  onBack: () => void
+  onNext: () => void
 }) {
   const [mode, setMode] = useState<AttachMode>(series.has_pdf && !series.has_tex ? 'pdf' : 'tex')
   const [tex, setTex] = useState('')
@@ -333,7 +292,10 @@ function AttachStep({
       return
     }
     putTex.mutate(tex, {
-      onSuccess: () => onDone(),
+      onSuccess: (saved) => {
+        onAttached(saved)
+        onNext()
+      },
       onError: (e) => {
         setError(e instanceof APIErrorImpl ? e.message : 'Не удалось сохранить условие.')
       },
@@ -350,7 +312,10 @@ function AttachStep({
       return
     }
     uploadPdf.mutate(file, {
-      onSuccess: () => onDone(),
+      onSuccess: (saved) => {
+        onAttached(saved)
+        onNext()
+      },
       onError: (err) => {
         setError(err instanceof Error ? err.message : 'Не удалось загрузить PDF.')
       },
@@ -358,6 +323,7 @@ function AttachStep({
   }
 
   const busy = putTex.isPending || uploadPdf.isPending
+  const attached = series.has_tex || series.has_pdf
 
   return (
     <div className="mt-4 flex flex-col gap-4">
@@ -396,7 +362,7 @@ function AttachStep({
           />
           <p className="text-xs text-faint">Должен содержать \begin{'{document}'}.</p>
           <Button type="button" onClick={submitTex} disabled={busy}>
-            {putTex.isPending ? 'Сохранение…' : 'Сохранить условие'}
+            {putTex.isPending ? 'Сохранение…' : 'Сохранить условие и далее →'}
           </Button>
         </div>
       ) : (
@@ -419,15 +385,74 @@ function AttachStep({
       {error ? <p className="text-sm text-danger" role="alert">{error}</p> : null}
 
       <div className="flex items-center justify-between gap-2">
-        {onBack ? (
-          <Button type="button" variant="ghost" onClick={onBack} disabled={busy}>
-            ← Задачи
-          </Button>
-        ) : (
-          <span />
-        )}
-        <Button type="button" variant="ghost" onClick={onDone} disabled={busy}>
-          Готово
+        <Button type="button" variant="ghost" onClick={onBack} disabled={busy}>
+          ← Назад
+        </Button>
+        <Button type="button" variant="ghost" onClick={onNext} disabled={busy}>
+          {attached ? 'К задачам →' : 'Пропустить →'}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function ProblemsStep({
+  series,
+  onSaved,
+  onBack,
+  onDone,
+}: {
+  series: Series
+  onSaved: (saved: Series) => void
+  onBack: () => void
+  onDone: () => void
+}) {
+  const update = useUpdateSeries(series.id)
+  const [drafts, setDrafts] = useState<ProblemDraft[]>(() =>
+    series.problems.length > 0 ? problemsToDrafts(series) : seedProblems(DEFAULT_PROBLEMS),
+  )
+  const [error, setError] = useState<string | null>(null)
+
+  function save() {
+    setError(null)
+    const payload: CreateSeriesBody = {
+      number: series.number,
+      name: series.name,
+      due_at: series.due_at,
+      problems: draftsToBody(drafts),
+    }
+    update.mutate(payload, {
+      onSuccess: (saved) => {
+        onSaved(saved)
+        onDone()
+      },
+      onError: (e) => {
+        setError(e instanceof APIErrorImpl ? e.message : 'Не удалось сохранить задачи.')
+      },
+    })
+  }
+
+  return (
+    <div className="mt-4 flex flex-col gap-4">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start">
+        {/* Rendered statement to mark problems against. */}
+        <div className="max-h-[55vh] overflow-auto rounded-lg border border-line p-3 md:w-1/2">
+          <StatementPanel series={series} bare />
+        </div>
+        {/* The problem builder. */}
+        <div className="md:w-1/2">
+          <ProblemBuilder value={drafts} onChange={setDrafts} />
+        </div>
+      </div>
+
+      {error ? <p className="text-sm text-danger" role="alert">{error}</p> : null}
+
+      <div className="flex items-center justify-between gap-2">
+        <Button type="button" variant="ghost" onClick={onBack} disabled={update.isPending}>
+          ← Условие
+        </Button>
+        <Button type="button" onClick={save} disabled={update.isPending}>
+          {update.isPending ? 'Сохранение…' : 'Сохранить и готово'}
         </Button>
       </div>
     </div>
