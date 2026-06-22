@@ -71,3 +71,19 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 	rw.bytes += n
 	return n, err
 }
+
+// Flush forwards to the underlying ResponseWriter's Flusher so streaming
+// (text/event-stream) handlers keep working through this wrapper. Flush is not
+// part of http.ResponseWriter, so embedding alone does NOT promote it — without
+// this method `w.(http.Flusher)` in SSE handlers fails and the stream 500s.
+func (rw *responseWriter) Flush() {
+	if f, ok := rw.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// Unwrap lets http.ResponseController reach the underlying writer for any other
+// optional interfaces (e.g. Hijacker) this wrapper doesn't explicitly forward.
+func (rw *responseWriter) Unwrap() http.ResponseWriter {
+	return rw.ResponseWriter
+}

@@ -53,3 +53,29 @@ func TestResponseWriter_IgnoresDoubleWriteHeader(t *testing.T) {
 		t.Errorf("status: got %d, want 201", rw.statusCode)
 	}
 }
+
+// flushRecorder records whether Flush was called so we can assert the wrapper
+// forwards it to the underlying writer (httptest.ResponseRecorder.Flush exists
+// but exposes no flag we can read).
+type flushRecorder struct {
+	http.ResponseWriter
+	flushed bool
+}
+
+func (f *flushRecorder) Flush() { f.flushed = true }
+
+// SSE handlers do `w.(http.Flusher)`. The wrapper must satisfy http.Flusher and
+// delegate to the underlying writer, or text/event-stream endpoints 500.
+func TestResponseWriter_ForwardsFlush(t *testing.T) {
+	inner := &flushRecorder{ResponseWriter: httptest.NewRecorder()}
+	rw := &responseWriter{ResponseWriter: inner, statusCode: http.StatusOK}
+
+	f, ok := any(rw).(http.Flusher)
+	if !ok {
+		t.Fatal("responseWriter does not implement http.Flusher")
+	}
+	f.Flush()
+	if !inner.flushed {
+		t.Error("Flush was not forwarded to the underlying ResponseWriter")
+	}
+}
