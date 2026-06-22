@@ -85,10 +85,17 @@ function NotFoundState() {
 // CreateSeriesCard is the empty "+" card at the end of the series strip that
 // opens the create-series dialog — replacing the old toolbar button. It mirrors
 // the series cards' width and stretches to their height.
-function CreateSeriesCard({ centerId }: { centerId: number }) {
+function CreateSeriesCard({
+  centerId,
+  defaultNumber,
+}: {
+  centerId: number
+  defaultNumber: number
+}) {
   return (
     <UploadSeriesDialog
       centerId={centerId}
+      defaultNumber={defaultNumber}
       trigger={
         <button
           type="button"
@@ -184,8 +191,11 @@ function CenterSeries({
 
   const allowedTabs = isStudentView ? STUDENT_TAB_IDS : TEACHER_TAB_IDS
   const defaultTab = allowedTabs[0]
+  // Pre-fill the next series number: one past the highest existing number.
+  const nextNumber =
+    list.length > 0 ? Math.max(...list.map((s) => s.number)) + 1 : 1
   const createCard = !isStudentView ? (
-    <CreateSeriesCard centerId={centerId} />
+    <CreateSeriesCard centerId={centerId} defaultNumber={nextNumber} />
   ) : undefined
 
   if (list.length === 0) {
@@ -551,10 +561,8 @@ function StatsTab({ series, centerId }: { series: Series; centerId: number }) {
         ) : null}
       </AsyncGate>
       <p className="text-xs text-muted">
-        Каждая подзадача (5а, 5б, …) — самостоятельная единица: у неё свой разбор
-        и свой срок. Значок <span aria-hidden>☠</span> отмечает гроб (подзадача
-        остаётся открытой для сдачи после дедлайна, пока не выйдет разбор);
-        «Разбор» — чтобы прикрепить официальное решение.
+        Значок <span aria-hidden>☠</span> отмечает гроб; «Разбор» — чтобы
+        прикрепить официальное решение.
       </p>
     </div>
   )

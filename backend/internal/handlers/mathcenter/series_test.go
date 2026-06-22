@@ -258,6 +258,60 @@ func TestCreateSeries_TeacherSucceeds(t *testing.T) {
 	}
 }
 
+// TestCreateSeries_NoProblems proves a series can be created with an empty
+// problem set — the create wizard uploads the statement first and adds problems
+// in a later step. No problem/subproblem inserts run inside the transaction.
+func TestCreateSeries_NoProblems(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	due := now.Add(48 * time.Hour)
+
+	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
+		WithArgs(int64(7), int64(42)).
+		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(true))
+	mock.ExpectBegin()
+	mock.ExpectQuery(`INSERT INTO math_center_series`).
+		WithArgs(int64(42), int32(3), "Алгебра", pgxmock.AnyArg()).
+		WillReturnRows(mock.NewRows(seriesColumns).
+			AddRow(int64(100), int64(42), int32(3), "Алгебра", due, (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
+	mock.ExpectCommit()
+	// buildSeriesView still runs its three list queries against an empty series.
+	mock.ExpectQuery(`SELECT .* FROM math_center_problems WHERE series_id`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(problemColumns))
+	mock.ExpectQuery(`FROM math_center_subproblems s\s+JOIN math_center_problems`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(subproblemRowColumns))
+	mock.ExpectQuery(`FROM math_center_subproblem_solutions ss`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(subproblemSolutionMetaColumns))
+
+	body, _ := json.Marshal(map[string]any{
+		"number": 3, "name": "Алгебра", "due_at": due,
+		"problems": []map[string]int{},
+	})
+	req := authedRequest(t, access, 7, http.MethodPost, "/centers/42/series", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("got %d, want 201; body=%s", rr.Code, rr.Body.String())
+	}
+	var got map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	problems, _ := got["problems"].([]any)
+	if len(problems) != 0 {
+		t.Fatalf("problems: got %d, want 0", len(problems))
+	}
+}
+
 // TestCreateSeries_AdminBypassesEnrollment proves the admin teacher-superset:
 // an admin (is_admin via JWT) who is NOT enrolled as a teacher of the center
 // can still create a series. The proof is in the expectations — NO
@@ -595,7 +649,6 @@ func TestCreateSeries_ValidationErrors(t *testing.T) {
 		body map[string]any
 	}{
 		{"empty name", map[string]any{"number": 1, "name": "", "due_at": time.Now(), "problems": []map[string]int{{"number": 1}}}},
-		{"no problems", map[string]any{"number": 1, "name": "x", "due_at": time.Now(), "problems": []map[string]int{}}},
 		{"duplicate problem number", map[string]any{
 			"number": 1, "name": "x", "due_at": time.Now(),
 			"problems": []map[string]int{{"number": 1}, {"number": 1}},

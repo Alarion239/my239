@@ -918,9 +918,9 @@ func validateSeriesPayload(number int, name string, problems []problemSpec) stri
 	if len(name) > 200 {
 		return "name too long"
 	}
-	if len(problems) == 0 {
-		return "at least one problem is required"
-	}
+	// A series may have no problems yet: the create wizard uploads the statement
+	// first and adds problems in a later step, so an empty set is a valid
+	// (intermediate) state for an unpublished series.
 	seen := make(map[int]bool, len(problems))
 	for _, p := range problems {
 		if p.Number < 0 || p.Number > maxOrdinal {

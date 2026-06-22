@@ -14,45 +14,24 @@ const problemNumber = z
 // MAX_SUBPARTS mirrors the backend MaxSubproblemsPerProblem (the Latin alphabet).
 export const MAX_SUBPARTS = 26
 
-// subpartsToCount parses the "subparts" form field, which accepts EITHER a count
-// ("3") OR the last subproblem's Latin letter ("c" → 3). Empty/"0" means a
-// single-part problem (no lettered subparts). Returns null when unparseable so
-// the schema can reject it.
-export function subpartsToCount(raw: string): number | null {
-  const s = raw.trim()
-  if (s === '') return 0
-  if (/^\d+$/.test(s)) {
-    const n = Number(s)
-    return n >= 0 && n <= MAX_SUBPARTS ? n : null
-  }
-  if (/^[a-zA-Z]$/.test(s)) {
-    return s.toLowerCase().charCodeAt(0) - 96 // a=1 … z=26
-  }
-  return null
-}
-
-// countToSubparts renders a count back into the field's preferred display: the
-// last Latin letter (3 → "c"), or "" for a single-part problem.
-export function countToSubparts(count: number): string {
-  if (count <= 0) return ''
-  if (count > MAX_SUBPARTS) return String(count)
-  return String.fromCharCode(96 + count) // 1 → "a", 3 → "c"
-}
-
 const seriesProblem = z.object({
   // Echoed back for existing problems so the backend keeps them in place
   // (diff-based update); absent for newly-added problems.
   id: z.number().int().positive().optional(),
   number: problemNumber,
-  subparts: z
-    .string()
-    .trim()
-    .refine((s) => subpartsToCount(s) !== null, 'Число 0–26 или буква a–z'),
+  // Count of lettered subparts (a, b, c …). 0 means a single-part problem.
+  subproblem_count: z
+    .number({ message: 'Введите число' })
+    .int('Целое число')
+    .min(0, 'Минимум 0')
+    .max(MAX_SUBPARTS, 'Максимум ' + MAX_SUBPARTS),
 })
 
 // createSeriesSchema validates the FORM values for both POST (create) and PUT
 // (update). due_at is the raw datetime-local string from the form; the backend
-// parses it as ISO, so we only require it to be non-empty here.
+// parses it as ISO, so we only require it to be non-empty here. The problems
+// array may be empty — the create wizard uploads the statement first and adds
+// problems in a later step.
 export const createSeriesSchema = z
   .object({
     number: problemNumber,
@@ -62,7 +41,7 @@ export const createSeriesSchema = z
       .min(1, 'Введите название')
       .max(200, 'Максимум 200 символов'),
     due_at: z.string().trim().min(1, 'Укажите срок сдачи'),
-    problems: z.array(seriesProblem).min(1, 'Добавьте хотя бы одну задачу'),
+    problems: z.array(seriesProblem),
   })
   .refine(
     (v) => {
@@ -75,8 +54,7 @@ export type CreateSeriesValues = z.infer<typeof createSeriesSchema>
 
 // --- Wire body ---------------------------------------------------------------
 
-// SeriesProblemBody / CreateSeriesBody are what the backend actually receives:
-// the dual-format `subparts` is resolved to a numeric `subproblem_count`.
+// SeriesProblemBody / CreateSeriesBody are what the backend actually receives.
 export interface SeriesProblemBody {
   id?: number
   number: number
@@ -90,9 +68,8 @@ export interface CreateSeriesBody {
   problems: SeriesProblemBody[]
 }
 
-// toSeriesBody converts validated form values into the wire body (resolving the
-// subparts field to a count). `dueAtISO` is the form's local datetime converted
-// to RFC3339 by the caller.
+// toSeriesBody converts validated form values into the wire body. `dueAtISO` is
+// the form's local datetime converted to RFC3339 by the caller.
 export function toSeriesBody(
   values: CreateSeriesValues,
   dueAtISO: string,
@@ -104,7 +81,7 @@ export function toSeriesBody(
     problems: values.problems.map((p) => ({
       id: p.id,
       number: p.number,
-      subproblem_count: subpartsToCount(p.subparts) ?? 0,
+      subproblem_count: p.subproblem_count,
     })),
   }
 }
