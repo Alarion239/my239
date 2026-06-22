@@ -1,18 +1,21 @@
 // Package seed generates a self-contained demo dataset (a math center with
-// groups, teachers, students, published series, and homework submissions spread
-// across every status) so the app can be exercised end-to-end without manual
-// setup. It is admin-triggered (see handlers/admin) and resets itself: each run
-// deletes the previous demo data before recreating a fresh, deterministic set.
+// groups, teachers, students, series, and homework submissions spread across
+// every status) so the app can be exercised end-to-end without manual setup. It
+// is admin-triggered (see handlers/admin) and resets itself: each run deletes
+// the previous demo data before recreating a fresh set.
 //
 // "Demo data" is anything under the sentinel graduation year DemoGraduationYear
 // plus any non-admin user whose username starts with "demo-". Nothing else is
 // touched.
 //
-// Submissions are randomized (different each run): each student has a latent
-// ability and each subproblem a difficulty (harder later in the series), so the
-// solve grid has realistic spread. Different teachers grade different
-// students/problems. Any subproblem actually solved by fewer than coffinThreshold
-// students is marked a coffin.
+// The 10 series form a realistic timeline: the first 8 are in the past, fully
+// graded, with разбор (solutions) posted; series 9 is the current one (open,
+// actively being graded — in-queue / under-review statuses appear here); series
+// 10 is prepared for the future (published, no submissions yet). Submissions and
+// gradings carry spread-out timestamps. Each run is randomized: students have a
+// latent ability and subproblems a difficulty (harder later), so the solve grid
+// has real spread, different teachers grade different work, and any subproblem
+// solved by fewer than coffinThreshold students becomes a coffin.
 package seed
 
 import (
@@ -45,6 +48,19 @@ const (
 	demoHeadTeachers     = 2
 	demoRegularTeachers  = 10
 
+	// Timeline: of the 10 series, the first pastSeriesCount are finished, the
+	// next is the current/open one, and the rest are prepared for the future.
+	pastSeriesCount = 8
+
+	// Day spans shaping the timeline.
+	seriesSpacingDays    = 14 // gap between consecutive past series' deadlines
+	recentPastGapDays    = 5  // how long ago the most recent past series closed
+	submissionWindowDays = 10 // open → due
+	gradingWindowDays    = 4  // due → last grade posted (past series)
+	currentOpenDaysAgo   = 5  // series 9 opened this many days ago
+	currentDueInDays     = 5  // series 9 is due this many days from now
+	futureOpenInDays     = 9  // series 10 opens this many days from now
+
 	// coffinThreshold: a subproblem solved (accepted) by fewer than this many
 	// students is left as a coffin.
 	coffinThreshold = 5
@@ -64,10 +80,12 @@ const (
 	abilityMin       = -0.30
 	abilityMax       = 0.35
 	maxSolveProb     = 0.98
-	// attemptRate: chance a non-solving student still has visible activity
-	// (in-queue / under-review / rejected / appealed) rather than leaving the
-	// subproblem untouched.
+	// attemptRate: chance a non-solving student still has visible activity rather
+	// than leaving the subproblem untouched.
 	attemptRate = 0.30
+
+	demoRazborTex = `\documentclass{article}\begin{document}\section*{Разбор}` +
+		`Ключевая идея и аккуратное решение задачи приведены ниже.\end{document}`
 )
 
 // Login is one seeded account a tester can sign in as.
@@ -104,24 +122,43 @@ const (
 	stAccepted
 )
 
-// subInfo is a created subproblem plus the series it belongs to and its base
-// solve rate (before per-student ability / clamping).
+// seriesPhase places a series on the timeline.
+type seriesPhase int
+
+const (
+	phasePast    seriesPhase = iota // finished, graded, разбор posted
+	phaseCurrent                    // open, actively being graded
+	phaseFuture                     // prepared, not yet opened (no submissions)
+)
+
+// seriesTiming holds the time anchors for one series.
+type seriesTiming struct {
+	phase       seriesPhase
+	openedAt    time.Time // students could start submitting
+	dueAt       time.Time
+	submitClose time.Time // last moment a demo submission is dated (due, or now)
+	gradeCap    time.Time // last moment a demo grade is dated
+}
+
+// subInfo is a created subproblem plus its series and base solve rate.
 type subInfo struct {
 	id        int64
 	seriesID  int64
+	seriesIdx int
 	solveBase float64
 }
 
 // seeder carries the per-run state. The transaction is supplied via db (used
-// both for the generated store and for the few raw maintenance statements).
+// both for the generated store and for the raw maintenance/timestamp queries).
 type seeder struct {
 	db         store.DBTX
 	q          *store.Queries
 	pwHash     string
 	now        time.Time
 	centerID   int64
-	graderIDs  []int64 // regular teachers, used as graders
-	studentIDs []int64 // seeded students, in creation order
+	graderIDs  []int64        // regular teachers, used as graders
+	studentIDs []int64        // seeded students, in creation order
+	timings    []seriesTiming // per series, by index
 	subs       []subInfo
 	res        Result
 }
@@ -269,14 +306,44 @@ var seriesSpecs = []struct {
 	{"Комбинаторная вероятность", []int{0, 0, 2}},
 }
 
+// timingFor places series i on the timeline.
+func (s *seeder) timingFor(i int) seriesTiming {
+	switch {
+	case i < pastSeriesCount:
+		// Most recent past series closed recentPastGapDays ago; earlier ones step
+		// back seriesSpacingDays each.
+		due := s.now.AddDate(0, 0, -(recentPastGapDays + (pastSeriesCount-1-i)*seriesSpacingDays))
+		opened := due.AddDate(0, 0, -submissionWindowDays)
+		return seriesTiming{
+			phase: phasePast, openedAt: opened, dueAt: due,
+			submitClose: due, gradeCap: due.AddDate(0, 0, gradingWindowDays),
+		}
+	case i == pastSeriesCount:
+		return seriesTiming{
+			phase:    phaseCurrent,
+			openedAt: s.now.AddDate(0, 0, -currentOpenDaysAgo),
+			dueAt:    s.now.AddDate(0, 0, currentDueInDays),
+			// Demo "now" caps live submissions/grades for the open series.
+			submitClose: s.now, gradeCap: s.now,
+		}
+	default:
+		opened := s.now.AddDate(0, 0, futureOpenInDays)
+		return seriesTiming{
+			phase: phaseFuture, openedAt: opened, dueAt: opened.AddDate(0, 0, submissionWindowDays),
+		}
+	}
+}
+
 func (s *seeder) createSeries(ctx context.Context) error {
 	for i, spec := range seriesSpecs {
+		t := s.timingFor(i)
+		s.timings = append(s.timings, t)
+
 		series, err := s.q.CreateSeries(ctx, store.CreateSeriesParams{
 			MathCenterID: s.centerID,
 			Number:       int32(i + 1),
 			Name:         spec.name,
-			// Stagger due dates so the demo shows both open and tight series.
-			DueAt: s.now.Add(time.Duration(3*(i+1)) * 24 * time.Hour),
+			DueAt:        t.dueAt,
 		})
 		if err != nil {
 			return fmt.Errorf("seed: create series: %w", err)
@@ -298,18 +365,24 @@ func (s *seeder) createSeries(ctx context.Context) error {
 				}
 				base := solveBase(len(spec.subparts), pi, spi) +
 					(mrand.Float64()*2-1)*difficultyJitter
-				s.subs = append(s.subs, subInfo{id: sub.ID, seriesID: series.ID, solveBase: base})
+				s.subs = append(s.subs, subInfo{
+					id: sub.ID, seriesID: series.ID, seriesIdx: i, solveBase: base,
+				})
 				s.res.Subproblems++
 			}
 		}
-		// Publish so students see it (the rollup hides drafts) and give it a
-		// minimal statement so the "Условие" tab renders.
+		// Publish so students see it, give it a statement, and backdate the row
+		// to match the timeline (prepared a few days before opening).
+		publishedAt, createdAt := t.openedAt, t.openedAt.AddDate(0, 0, -3)
+		if t.phase == phaseFuture {
+			publishedAt, createdAt = s.now, s.now
+		}
 		tex := fmt.Sprintf(
 			`\documentclass{article}\begin{document}\section*{%s}Демонстрационное условие. Решите задачи 1–%d.\end{document}`,
 			spec.name, len(spec.subparts))
 		if _, err := s.db.Exec(ctx,
-			`UPDATE math_center_series SET published_at = NOW(), tex_source = $1 WHERE id = $2`,
-			tex, series.ID); err != nil {
+			`UPDATE math_center_series SET published_at = $1, tex_source = $2, created_at = $3 WHERE id = $4`,
+			publishedAt, tex, createdAt, series.ID); err != nil {
 			return fmt.Errorf("seed: publish series: %w", err)
 		}
 	}
@@ -329,11 +402,9 @@ func solveBase(problemCount, problemIdx, subpartIdx int) float64 {
 }
 
 // seedSubmissions assigns, per subproblem, an outcome for each student drawn
-// from their ability + the subproblem's difficulty. Solvers get accepted
-// threads; a fraction of non-solvers get other statuses; the rest stay
-// untouched. Graders are chosen at random so different teachers grade different
-// students/problems. A subproblem solved by fewer than coffinThreshold students
-// becomes a coffin.
+// from their ability + the subproblem's difficulty, with timestamps inside the
+// series' window. Future series get no submissions; past series get terminal
+// statuses + posted разбор; the current series gets the full status mix.
 func (s *seeder) seedSubmissions(ctx context.Context) error {
 	abilities := make([]float64, demoStudents)
 	for i := range abilities {
@@ -341,29 +412,76 @@ func (s *seeder) seedSubmissions(ctx context.Context) error {
 	}
 
 	for _, sub := range s.subs {
+		t := s.timings[sub.seriesIdx]
+		if t.phase == phaseFuture {
+			continue // prepared but not opened — no submissions yet
+		}
+
 		accepted := 0
 		for i, studentID := range s.studentIDs {
 			p := clampF(sub.solveBase+abilities[i], 0, maxSolveProb)
+			submitAt := randTimeBetween(t.openedAt, t.submitClose)
 			switch {
 			case mrand.Float64() < p:
-				if err := s.seedSubmission(ctx, stAccepted, studentID, s.randomGrader(), sub); err != nil {
+				if err := s.seedSubmission(ctx, stAccepted, studentID, s.randomGrader(), sub, t, submitAt); err != nil {
 					return err
 				}
 				accepted++
 			case mrand.Float64() < attemptRate:
-				if err := s.seedSubmission(ctx, s.randomActiveState(), studentID, s.randomGrader(), sub); err != nil {
+				state := s.randomActiveState(t.phase)
+				if err := s.seedSubmission(ctx, state, studentID, s.randomGrader(), sub, t, submitAt); err != nil {
 					return err
 				}
 			}
 		}
-		if accepted < coffinThreshold {
-			if _, err := s.q.UpsertCoffinFlag(ctx, store.UpsertCoffinFlagParams{
-				SubproblemID: sub.id, IsCoffin: true,
-			}); err != nil {
-				return fmt.Errorf("seed: mark coffin: %w", err)
-			}
-			s.res.Coffins++
+
+		if err := s.postSolution(ctx, sub, t, accepted < coffinThreshold); err != nil {
+			return err
 		}
+	}
+	return nil
+}
+
+// postSolution records разбор/coffin state for a subproblem. Past series get the
+// разбор posted and released; the current series only flags coffins (kept open,
+// разбор not yet released). isCoffin counts toward the result.
+func (s *seeder) postSolution(ctx context.Context, sub subInfo, t seriesTiming, isCoffin bool) error {
+	switch t.phase {
+	case phasePast:
+		released := randTimeBetween(t.dueAt, t.dueAt.AddDate(0, 0, gradingWindowDays))
+		tex := demoRazborTex
+		if err := s.upsertSolution(ctx, sub.id, isCoffin, &tex, &released, t.dueAt); err != nil {
+			return err
+		}
+	case phaseCurrent:
+		if !isCoffin {
+			return nil
+		}
+		if err := s.upsertSolution(ctx, sub.id, true, nil, nil, s.now); err != nil {
+			return err
+		}
+	default:
+		return nil
+	}
+	if isCoffin {
+		s.res.Coffins++
+	}
+	return nil
+}
+
+func (s *seeder) upsertSolution(ctx context.Context, subID int64, isCoffin bool, tex *string, releasedAt *time.Time, at time.Time) error {
+	_, err := s.db.Exec(ctx,
+		`INSERT INTO math_center_subproblem_solutions
+		     (subproblem_id, is_coffin, solution_tex_source, released_at, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $5)
+		 ON CONFLICT (subproblem_id) DO UPDATE
+		     SET is_coffin = EXCLUDED.is_coffin,
+		         solution_tex_source = EXCLUDED.solution_tex_source,
+		         released_at = EXCLUDED.released_at,
+		         updated_at = EXCLUDED.updated_at`,
+		subID, isCoffin, tex, releasedAt, at)
+	if err != nil {
+		return fmt.Errorf("seed: upsert solution: %w", err)
 	}
 	return nil
 }
@@ -373,14 +491,19 @@ func (s *seeder) randomGrader() int64 {
 }
 
 // randomActiveState picks a non-accepted status for a student who engaged with a
-// subproblem but hasn't solved it: weighted toward the in-queue/rejected states.
-func (s *seeder) randomActiveState() subState {
+// subproblem but hasn't solved it. Past series are fully resolved (rejected
+// only); the current series shows the live in-queue / under-review / appealed
+// states too.
+func (s *seeder) randomActiveState(phase seriesPhase) subState {
+	if phase == phasePast {
+		return stRejected
+	}
 	switch r := mrand.Float64(); {
 	case r < 0.35:
 		return stSubmitted
-	case r < 0.65:
+	case r < 0.60:
 		return stRejected
-	case r < 0.85:
+	case r < 0.80:
 		return stUnderReview
 	default:
 		return stAppealed
@@ -396,49 +519,56 @@ type finalState struct {
 	graderID     *int64
 	claimHolder  *int64
 	claimExpires *time.Time
+	createdAt    time.Time
+	updatedAt    time.Time
 }
 
-func (s *seeder) seedSubmission(ctx context.Context, state subState, studentID, graderID int64, sub subInfo) error {
+func (s *seeder) seedSubmission(ctx context.Context, state subState, studentID, graderID int64, sub subInfo, t seriesTiming, submitAt time.Time) error {
 	thread, err := s.q.FindOrCreateThread(ctx, store.FindOrCreateThreadParams{
 		StudentUserID: studentID, SubproblemID: sub.id, SeriesID: sub.seriesID, MathCenterID: s.centerID,
 	})
 	if err != nil {
 		return fmt.Errorf("seed: thread: %w", err)
 	}
-	submit, err := s.append(ctx, thread.ID, hw.KindSubmitted, studentID, "Демо-решение задачи.", nil)
+	submitID, err := s.appendAt(ctx, thread.ID, hw.KindSubmitted, studentID, "Демо-решение задачи.", nil, submitAt)
 	if err != nil {
 		return err
 	}
 
-	f := finalState{status: hw.StatusSubmitted, attemptID: &submit.ID}
+	f := finalState{status: hw.StatusSubmitted, attemptID: &submitID, createdAt: submitAt, updatedAt: submitAt}
 	switch state {
 	case stSubmitted:
 		// In the grading queue, awaiting a grader.
 	case stUnderReview:
+		// Claimed recently (only the current series reaches this state).
 		exp := s.now.Add(15 * time.Minute)
-		f.claimHolder, f.claimExpires = &graderID, &exp
+		f.claimHolder, f.claimExpires, f.updatedAt = &graderID, &exp, s.now
 	case stRejected:
-		grade, err := s.appendGrade(ctx, thread.ID, graderID, hw.VerdictRejected)
+		gradeAt := randTimeBetween(submitAt.Add(time.Hour), t.gradeCap)
+		gradeID, err := s.appendGrade(ctx, thread.ID, graderID, hw.VerdictRejected, gradeAt)
 		if err != nil {
 			return err
 		}
-		f.status, f.gradeID, f.graderID = hw.StatusRejected, &grade.ID, &graderID
+		f.status, f.gradeID, f.graderID, f.updatedAt = hw.StatusRejected, &gradeID, &graderID, gradeAt
 	case stAppealed:
-		grade, err := s.appendGrade(ctx, thread.ID, graderID, hw.VerdictRejected)
+		gradeAt := randTimeBetween(submitAt.Add(time.Hour), t.gradeCap)
+		gradeID, err := s.appendGrade(ctx, thread.ID, graderID, hw.VerdictRejected, gradeAt)
 		if err != nil {
 			return err
 		}
-		appeal, err := s.append(ctx, thread.ID, hw.KindAppealed, studentID, "Прошу пересмотреть решение.", nil)
+		appealAt := randTimeBetween(gradeAt.Add(time.Hour), t.gradeCap)
+		appealID, err := s.appendAt(ctx, thread.ID, hw.KindAppealed, studentID, "Прошу пересмотреть решение.", nil, appealAt)
 		if err != nil {
 			return err
 		}
-		f.status, f.gradeID, f.graderID, f.attemptID = hw.StatusAppealed, &grade.ID, &graderID, &appeal.ID
+		f.status, f.gradeID, f.graderID, f.attemptID, f.updatedAt = hw.StatusAppealed, &gradeID, &graderID, &appealID, appealAt
 	case stAccepted:
-		grade, err := s.appendGrade(ctx, thread.ID, graderID, hw.VerdictAccepted)
+		gradeAt := randTimeBetween(submitAt.Add(time.Hour), t.gradeCap)
+		gradeID, err := s.appendGrade(ctx, thread.ID, graderID, hw.VerdictAccepted, gradeAt)
 		if err != nil {
 			return err
 		}
-		f.status, f.gradeID, f.graderID = hw.StatusAccepted, &grade.ID, &graderID
+		f.status, f.gradeID, f.graderID, f.updatedAt = hw.StatusAccepted, &gradeID, &graderID, gradeAt
 	}
 
 	if err := s.finalize(ctx, thread.ID, f); err != nil {
@@ -448,8 +578,9 @@ func (s *seeder) seedSubmission(ctx context.Context, state subState, studentID, 
 	return nil
 }
 
-// finalize writes the thread's denormalized columns directly. Equivalent to the
-// app's UpdateThreadAfter* / TryClaim mutations but in a single statement.
+// finalize writes the thread's denormalized columns + timestamps directly.
+// Equivalent to the app's UpdateThreadAfter* / TryClaim mutations but in one
+// statement, and lets the demo control created_at/updated_at.
 func (s *seeder) finalize(ctx context.Context, threadID int64, f finalState) error {
 	_, err := s.db.Exec(ctx,
 		`UPDATE homework_thread
@@ -459,36 +590,44 @@ func (s *seeder) finalize(ctx context.Context, threadID int64, f finalState) err
 		        last_grader_user_id      = $4,
 		        claim_holder_user_id     = $5,
 		        claim_expires_at         = $6,
-		        updated_at               = NOW()
-		  WHERE id = $7`,
-		f.status, f.attemptID, f.gradeID, f.graderID, f.claimHolder, f.claimExpires, threadID)
+		        created_at               = $7,
+		        updated_at               = $8
+		  WHERE id = $9`,
+		f.status, f.attemptID, f.gradeID, f.graderID, f.claimHolder, f.claimExpires,
+		f.createdAt, f.updatedAt, threadID)
 	if err != nil {
 		return fmt.Errorf("seed: finalize thread: %w", err)
 	}
 	return nil
 }
 
-func (s *seeder) appendGrade(ctx context.Context, threadID, graderID int64, verdict string) (store.HomeworkThreadEvent, error) {
+func (s *seeder) appendGrade(ctx context.Context, threadID, graderID int64, verdict string, at time.Time) (int64, error) {
 	body := "Принято, отличная работа."
 	if verdict == hw.VerdictRejected {
 		body = "Есть недочёты, посмотрите ещё раз."
 	}
 	v := verdict
-	return s.append(ctx, threadID, hw.KindGraded, graderID, body, &v)
+	return s.appendAt(ctx, threadID, hw.KindGraded, graderID, body, &v, at)
 }
 
-func (s *seeder) append(ctx context.Context, threadID int64, kind string, actorID int64, body string, verdict *string) (store.HomeworkThreadEvent, error) {
+// appendAt inserts a thread event with an explicit created_at and returns its
+// id. (The store's AppendEvent always stamps NOW(), which would make every demo
+// event share a timestamp.)
+func (s *seeder) appendAt(ctx context.Context, threadID int64, kind string, actorID int64, body string, verdict *string, at time.Time) (int64, error) {
 	uuid, err := newEventUUID()
 	if err != nil {
-		return store.HomeworkThreadEvent{}, err
+		return 0, err
 	}
-	ev, err := s.q.AppendEvent(ctx, store.AppendEventParams{
-		ThreadID: threadID, EventUuid: uuid, Kind: kind, ActorUserID: actorID, Body: body, Verdict: verdict,
-	})
+	var id int64
+	err = s.db.QueryRow(ctx,
+		`INSERT INTO homework_thread_event
+		     (thread_id, event_uuid, kind, actor_user_id, body, verdict, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+		threadID, uuid, kind, actorID, body, verdict, at).Scan(&id)
 	if err != nil {
-		return store.HomeworkThreadEvent{}, fmt.Errorf("seed: append %s event: %w", kind, err)
+		return 0, fmt.Errorf("seed: append %s event: %w", kind, err)
 	}
-	return ev, nil
+	return id, nil
 }
 
 // createUser makes a demo user with the given (login) username and a random
@@ -531,6 +670,15 @@ func clampF(v, lo, hi float64) float64 {
 		return hi
 	}
 	return v
+}
+
+// randTimeBetween returns a uniformly random instant in [a, b], or a when b is
+// not after a.
+func randTimeBetween(a, b time.Time) time.Time {
+	if !b.After(a) {
+		return a
+	}
+	return a.Add(time.Duration(mrand.Float64() * float64(b.Sub(a))))
 }
 
 func newEventUUID() (string, error) {
