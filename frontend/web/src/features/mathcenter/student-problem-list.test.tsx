@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import type { MyRollup, Series, Subproblem } from '@my239/shared'
 import { StudentProblemList } from './student-problem-list'
+
+// Centers are addressed by graduation year; the list builds its links from the
+// :year route segment, so the harness mounts under /mathcenter/:year.
+const YEAR = 2026
 
 // One problem with an untouched subproblem (no thread) and a rejected one.
 const rollup: MyRollup = {
@@ -50,8 +54,15 @@ function makeSeries(dueAt: string, subproblems: Subproblem[]): Series {
 
 function renderList(series: Series) {
   render(
-    <MemoryRouter>
-      <StudentProblemList centerId={1} seriesId={7} rollup={rollup} series={series} />
+    <MemoryRouter initialEntries={['/mathcenter/' + YEAR + '/series/7/progress']}>
+      <Routes>
+        <Route
+          path="/mathcenter/:year/series/:seriesId/:tab"
+          element={
+            <StudentProblemList seriesId={7} rollup={rollup} series={series} />
+          }
+        />
+      </Routes>
     </MemoryRouter>,
   )
 }
@@ -62,7 +73,7 @@ describe('StudentProblemList — per-subproblem deadline gating', () => {
   it('links untouched subproblems to the submit form while open', () => {
     renderList(makeSeries(FUTURE, [sub({ id: 10, label: 'а' }), sub({ id: 11, label: 'б' })]))
     expect(
-      document.querySelector('a[href="/mathcenter/1/series/7/submit/10"]'),
+      document.querySelector('a[href="/mathcenter/2026/series/7/submit/10"]'),
     ).not.toBeNull()
     expect(screen.queryByRole('button', { name: 'Сдать' })).toBeNull()
   })
@@ -73,11 +84,11 @@ describe('StudentProblemList — per-subproblem deadline gating', () => {
   it('disables submission after the deadline but keeps thread links', () => {
     renderList(makeSeries(PAST, [sub({ id: 10, label: 'а' }), sub({ id: 11, label: 'б' })]))
     expect(
-      document.querySelector('a[href="/mathcenter/1/series/7/submit/10"]'),
+      document.querySelector('a[href="/mathcenter/2026/series/7/submit/10"]'),
     ).toBeNull()
     // The rejected subproblem keeps its thread link (appeal still possible).
     expect(
-      document.querySelector('a[href="/mathcenter/1/series/7/thread/55"]'),
+      document.querySelector('a[href="/mathcenter/2026/series/7/thread/55"]'),
     ).not.toBeNull()
   })
 
@@ -91,7 +102,7 @@ describe('StudentProblemList — per-subproblem deadline gating', () => {
       ]),
     )
     expect(
-      document.querySelector('a[href="/mathcenter/1/series/7/submit/10"]'),
+      document.querySelector('a[href="/mathcenter/2026/series/7/submit/10"]'),
     ).not.toBeNull()
   })
 })
