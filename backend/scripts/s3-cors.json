@@ -1,0 +1,13 @@
+{
+  "CORSRules": [
+    {
+      "AllowedOrigins": [
+        "https://frontend-development-a09e.up.railway.app"
+      ],
+      "AllowedMethods": ["GET", "PUT", "HEAD"],
+      "AllowedHeaders": ["*"],
+      "ExposeHeaders": ["ETag", "Content-Length", "Content-Type"],
+      "MaxAgeSeconds": 3600
+    }
+  ]
+}
