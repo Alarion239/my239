@@ -35,7 +35,8 @@ type Grant = 'none' | 'admin' | 'teacher' | 'student'
 export function CreateTokenDialog() {
   const [open, setOpen] = useState(false)
   const [created, setCreated] = useState<InvitationToken | null>(null)
-  const [copied, setCopied] = useState(false)
+  // Which of the two copyable values was last copied (for button feedback).
+  const [copied, setCopied] = useState<'none' | 'link' | 'token'>('none')
   const [formError, setFormError] = useState<string | null>(null)
 
   // Role/preset selection lives outside react-hook-form: it's a small dependent
@@ -66,7 +67,7 @@ export function CreateTokenDialog() {
   function resetAll() {
     reset()
     setCreated(null)
-    setCopied(false)
+    setCopied('none')
     setFormError(null)
     setGrant('none')
     setTeacherCenterId(0)
@@ -132,17 +133,21 @@ export function CreateTokenDialog() {
     })
   })
 
-  async function copyToken() {
-    if (!created) return
+  async function copy(text: string, which: 'link' | 'token') {
     try {
-      await navigator.clipboard.writeText(created.token)
-      setCopied(true)
+      await navigator.clipboard.writeText(text)
+      setCopied(which)
     } catch {
-      setCopied(false)
+      setCopied('none')
     }
   }
 
   const centerOptions = centers.data ?? []
+  // Full invite link the registrant can open directly: /register?token=…
+  // prefills and locks the token field (see RegisterPage).
+  const inviteLink = created
+    ? window.location.origin + '/register?token=' + created.token
+    : ''
 
   return (
     <Dialog
@@ -162,20 +167,50 @@ export function CreateTokenDialog() {
         </DialogDescription>
 
         {created ? (
-          <div className="mt-4 flex flex-col gap-3">
-            <Field label="Токен приглашения">
+          <div className="mt-4 flex flex-col gap-4">
+            <Field label="Ссылка-приглашение">
               {({ id }) => (
-                <Input id={id} readOnly value={created.token} onFocus={(e) => e.target.select()} />
+                <div className="flex items-center gap-2">
+                  <Input
+                    id={id}
+                    readOnly
+                    value={inviteLink}
+                    onFocus={(e) => e.target.select()}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="shrink-0"
+                    onClick={() => copy(inviteLink, 'link')}
+                  >
+                    {copied === 'link' ? 'Скопировано' : 'Скопировать'}
+                  </Button>
+                </div>
               )}
             </Field>
-            <div className="flex items-center gap-2">
-              <Button type="button" variant="secondary" onClick={copyToken}>
-                {copied ? 'Скопировано' : 'Скопировать'}
-              </Button>
-              <Button type="button" variant="ghost" onClick={resetAll}>
-                Создать ещё
-              </Button>
-            </div>
+            <Field label="Токен приглашения">
+              {({ id }) => (
+                <div className="flex items-center gap-2">
+                  <Input
+                    id={id}
+                    readOnly
+                    value={created.token}
+                    onFocus={(e) => e.target.select()}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="shrink-0"
+                    onClick={() => copy(created.token, 'token')}
+                  >
+                    {copied === 'token' ? 'Скопировано' : 'Скопировать'}
+                  </Button>
+                </div>
+              )}
+            </Field>
+            <Button type="button" variant="ghost" className="self-start" onClick={resetAll}>
+              Создать ещё
+            </Button>
           </div>
         ) : (
           <form onSubmit={onSubmit} className="mt-4 flex flex-col gap-4" noValidate>
