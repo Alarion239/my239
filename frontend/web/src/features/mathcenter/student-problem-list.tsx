@@ -119,11 +119,20 @@ function ProblemRow({
             sub.subproblem_label +
             ': ' +
             displayStatusMeta(sub.current_status, sub.being_graded).label
+          // Show the subproblem letter up front on an untouched subproblem, so a
+          // row of "a b c" reads as distinct subproblems rather than identical
+          // circles. Single-part problems (no letter) keep the ○; attempted
+          // subproblems show their status glyph.
+          const letterGlyph =
+            sub.current_status === 'ungraded' && sub.subproblem_label !== ''
+              ? sub.subproblem_label
+              : undefined
           const tile = (
             <StatusTile
               status={sub.current_status}
               beingGraded={sub.being_graded}
               label={tileLabel}
+              glyph={letterGlyph}
             />
           )
           // A tile links to its thread when one exists; an untouched subproblem
