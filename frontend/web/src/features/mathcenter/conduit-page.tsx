@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import {
   coffinOpen,
   useCenterGrid,
@@ -9,7 +9,7 @@ import {
 } from '@my239/shared'
 import { Card, Input, Spinner } from '../../design/ui'
 import { cn } from '../../design/cn'
-import { ThreadCommentMark } from './thread-comment-mark'
+import { ThreadCommentCell } from './cell-comment'
 import { useSeriesContext } from './use-series-context'
 import { useCenterIdContext } from './center-id-context'
 import {
@@ -97,6 +97,7 @@ function currentSeriesId(series: CenterGridSeries[]): number | null {
 }
 
 function ConduitTable({ data }: { data: CenterGridResponse }) {
+  const { year } = useParams<{ year: string }>()
   const [query, setQuery] = useState('')
 
   const cols: FlatCol[] = useMemo(() => {
@@ -264,26 +265,46 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
                       ) : null}
                     </Link>
                   </td>
-                  {cols.map(({ col, firstInSeries }) => {
+                  {cols.map(({ col, firstInSeries, seriesId }) => {
                     const acc = accepted(st.user_id, col.subproblem_id)
                     const open = col.is_coffin && coffinOpen(col.coffin_released_at)
                     const cell = data.cells[st.user_id + ':' + col.subproblem_id]
+                    const threadId = cell?.thread_id ?? 0
+                    const hasComment = !!cell?.has_internal_comment && threadId > 0
+                    // A solved (green) cell links to its submission thread.
+                    const href =
+                      acc && threadId > 0
+                        ? '/mathcenter/' + (year ?? '') + '/series/' + seriesId + '/thread/' + threadId
+                        : null
                     return (
-                      <td
+                      <ThreadCommentCell
                         key={col.subproblem_id}
+                        threadId={threadId}
+                        hasComment={hasComment}
                         className={cn(
-                          'relative border-b border-line px-1.5 py-1.5 text-center',
+                          'border-b border-line px-1.5 py-1.5 text-center',
                           vert(firstInSeries),
                           acc
                             ? 'bg-status-accepted-soft font-medium text-status-accepted'
                             : cn(coffinCellClasses(col.is_coffin, open), 'text-faint'),
                         )}
                       >
-                        {acc ? cellInitials(st.user_id, col.subproblem_id) : ''}
-                        {cell?.has_internal_comment && cell.thread_id > 0 ? (
-                          <ThreadCommentMark threadId={cell.thread_id} />
-                        ) : null}
-                      </td>
+                        {acc ? (
+                          href ? (
+                            <Link
+                              to={href}
+                              aria-label="Открыть проверку"
+                              className="block rounded hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                            >
+                              {cellInitials(st.user_id, col.subproblem_id)}
+                            </Link>
+                          ) : (
+                            cellInitials(st.user_id, col.subproblem_id)
+                          )
+                        ) : (
+                          ''
+                        )}
+                      </ThreadCommentCell>
                     )
                   })}
                   <td className="sticky right-0 z-10 border-b border-l border-r border-line bg-surface px-3 py-1.5 text-center font-medium text-ink">
