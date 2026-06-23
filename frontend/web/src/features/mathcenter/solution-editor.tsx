@@ -16,6 +16,9 @@ export interface SolutionEditorProps {
   hasTex: boolean
   hasPdf: boolean
   link?: string | null
+  // Existing LaTeX source to seed the textarea with on open, so the teacher can
+  // edit it in place rather than re-paste. Empty/undefined opens a blank editor.
+  initialTex?: string
   onPutTex: (tex: string) => Promise<unknown>
   onUploadPdf: (file: Blob) => Promise<unknown>
   onSetLink: (link: string) => Promise<unknown>
@@ -39,6 +42,7 @@ export function SolutionEditor({
   hasTex,
   hasPdf,
   link,
+  initialTex,
   onPutTex,
   onUploadPdf,
   onSetLink,
@@ -49,7 +53,7 @@ export function SolutionEditor({
   resolveLabel,
 }: SolutionEditorProps) {
   const [open, setOpen] = useState(false)
-  const [tex, setTex] = useState('')
+  const [tex, setTex] = useState(initialTex ?? '')
   const [linkValue, setLinkValue] = useState(link ?? '')
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -89,8 +93,20 @@ export function SolutionEditor({
     }
   }
 
+  // Seed the form from the current разбор each time the dialog opens, so the
+  // teacher edits the existing LaTeX/link rather than starting blank.
+  function onOpenChange(next: boolean) {
+    setOpen(next)
+    if (next) {
+      setTex(initialTex ?? '')
+      setLinkValue(link ?? '')
+      setError(null)
+      setDone(null)
+    }
+  }
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-w-lg">
         <DialogTitle>{title}</DialogTitle>
