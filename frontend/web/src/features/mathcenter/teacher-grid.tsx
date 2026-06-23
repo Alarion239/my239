@@ -10,7 +10,7 @@ import {
 } from '@my239/shared'
 import { Input, Spinner, StatusTile } from '../../design/ui'
 import { cn } from '../../design/cn'
-import { ThreadCommentMark } from './thread-comment-mark'
+import { ThreadCommentCell } from './cell-comment'
 import {
   coffinCellClasses,
   coffinColumnClasses,
@@ -207,11 +207,15 @@ function GroupRows({
                 ': ' +
                 displayStatusMeta(status, beingGraded).label
               const open = col.is_coffin && coffinOpen(col.coffin_released_at)
+              const threadId = cell?.thread_id ?? 0
+              const hasComment = !!cell?.has_internal_comment && threadId > 0
               return (
-                <td
+                <ThreadCommentCell
                   key={col.subproblem_id}
+                  threadId={threadId}
+                  hasComment={hasComment}
                   className={cn(
-                    'relative px-2 py-1 text-center',
+                    'px-2 py-1 text-center',
                     dataCell(false),
                     coffinCellClasses(col.is_coffin, open),
                   )}
@@ -226,10 +230,7 @@ function GroupRows({
                   ) : (
                     <StatusTile status={status} beingGraded={beingGraded} label={label} />
                   )}
-                  {cell?.has_internal_comment && cell.thread_id > 0 ? (
-                    <ThreadCommentMark threadId={cell.thread_id} />
-                  ) : null}
-                </td>
+                </ThreadCommentCell>
               )
             })}
           </tr>
