@@ -75,6 +75,12 @@ function handle(
     qc.invalidateQueries({ queryKey: queryKeys.centerCoffins(centerId) })
     qc.invalidateQueries({ queryKey: queryKeys.coffinQueue(centerId) })
     qc.invalidateQueries({ queryKey: queryKeys.seriesList(centerId) })
+  } else if (kind === 'comments') {
+    // An internal note was added/edited/removed: refresh the grid marks.
+    if (seriesId > 0) {
+      qc.invalidateQueries({ queryKey: queryKeys.teacherGrid(seriesId) })
+    }
+    qc.invalidateQueries({ queryKey: queryKeys.centerGrid(centerId) })
   } else if (kind === 'membership') {
     qc.invalidateQueries({ queryKey: queryKeys.manageGroups(centerId) })
     qc.invalidateQueries({ queryKey: queryKeys.manageTeachers(centerId) })

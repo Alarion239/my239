@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   coffinOpen,
   useCenterGrid,
@@ -8,6 +9,7 @@ import {
 } from '@my239/shared'
 import { Card, Input, Spinner } from '../../design/ui'
 import { cn } from '../../design/cn'
+import { ThreadCommentMark } from './thread-comment-mark'
 import { useSeriesContext } from './use-series-context'
 import { useCenterIdContext } from './center-id-context'
 import {
@@ -246,15 +248,31 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
               </tr>
               {g.students.map((st) => (
                 <tr key={st.user_id} className="hover:bg-surface-muted/40">
-                  <td className={nameCell}>{st.name}</td>
+                  <td className={nameCell}>
+                    <Link
+                      to={'../students/' + st.user_id}
+                      className="inline-flex items-center gap-1.5 underline-offset-2 hover:underline"
+                    >
+                      <span>{st.name}</span>
+                      {st.has_student_comment ? (
+                        <span
+                          tabIndex={0}
+                          title="Есть заметки об ученике"
+                          aria-label="Есть заметки об ученике"
+                          className="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-500"
+                        />
+                      ) : null}
+                    </Link>
+                  </td>
                   {cols.map(({ col, firstInSeries }) => {
                     const acc = accepted(st.user_id, col.subproblem_id)
                     const open = col.is_coffin && coffinOpen(col.coffin_released_at)
+                    const cell = data.cells[st.user_id + ':' + col.subproblem_id]
                     return (
                       <td
                         key={col.subproblem_id}
                         className={cn(
-                          'border-b border-line px-1.5 py-1.5 text-center',
+                          'relative border-b border-line px-1.5 py-1.5 text-center',
                           vert(firstInSeries),
                           acc
                             ? 'bg-status-accepted-soft font-medium text-status-accepted'
@@ -262,6 +280,9 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
                         )}
                       >
                         {acc ? cellInitials(st.user_id, col.subproblem_id) : ''}
+                        {cell?.has_internal_comment && cell.thread_id > 0 ? (
+                          <ThreadCommentMark threadId={cell.thread_id} />
+                        ) : null}
                       </td>
                     )
                   })}
