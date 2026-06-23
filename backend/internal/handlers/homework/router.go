@@ -47,6 +47,13 @@ func Router(database *db.DB, hub *live.Hub, tokens *internalAuth.TokenService, b
 		r.Post("/claim/release", Release(database, hub))
 		r.Post("/grade", Grade(database, hub, blobs))
 		r.Post("/retract", Retract(database, hub, blobs))
+
+		// Internal teacher-only notes on the solution thread (never shown to
+		// the student). Author-or-admin may edit/delete.
+		r.Get("/notes", ListThreadNotes(database))
+		r.Post("/notes", CreateThreadNote(database))
+		r.Patch("/notes/{noteID}", UpdateThreadNote(database))
+		r.Delete("/notes/{noteID}", DeleteThreadNote(database))
 	})
 
 	// Subproblem metadata — used by the new-submission page (when no

@@ -41,6 +41,9 @@ type centerGridGroup struct {
 type centerGridStudentEntry struct {
 	UserID int64  `json:"user_id"`
 	Name   string `json:"name"`
+	// HasStudentComment marks the student when at least one internal teacher
+	// note is attached to them.
+	HasStudentComment bool `json:"has_student_comment"`
 }
 
 type centerGridSeries struct {
@@ -72,6 +75,9 @@ type centerGridCell struct {
 	LastGraderUserID  *int64     `json:"last_grader_user_id,omitempty"`
 	ClaimHolderUserID *int64     `json:"claim_holder_user_id,omitempty"`
 	ClaimExpiresAt    *time.Time `json:"claim_expires_at,omitempty"`
+	// HasInternalComment marks the cell when its thread carries at least one
+	// internal teacher note.
+	HasInternalComment bool `json:"has_internal_comment"`
 }
 
 // GetCenterGrid — teacher of the center. Returns the matrix used by the
@@ -144,11 +150,12 @@ func buildCenterGridResponse(rows []store.TeacherCenterGridRow) centerGridRespon
 		}
 		key := cellKey(row.StudentUserID, row.SubproblemID)
 		cells[key] = centerGridCell{
-			ThreadID:          row.ThreadID,
-			CurrentStatus:     row.CurrentStatus,
-			LastGraderUserID:  row.LastGraderUserID,
-			ClaimHolderUserID: row.ClaimHolderUserID,
-			ClaimExpiresAt:    row.ClaimExpiresAt,
+			ThreadID:           row.ThreadID,
+			CurrentStatus:      row.CurrentStatus,
+			LastGraderUserID:   row.LastGraderUserID,
+			ClaimHolderUserID:  row.ClaimHolderUserID,
+			ClaimExpiresAt:     row.ClaimExpiresAt,
+			HasInternalComment: row.HasInternalComment,
 		}
 	}
 	return centerGridResponse{
@@ -233,8 +240,9 @@ func (b *groupBuilder) add(r store.TeacherCenterGridRow) {
 	if !b.stuByGroup[r.GroupID][r.StudentUserID] {
 		b.stuByGroup[r.GroupID][r.StudentUserID] = true
 		b.out[gIdx].Students = append(b.out[gIdx].Students, centerGridStudentEntry{
-			UserID: r.StudentUserID,
-			Name:   mc.StudentDisplayName(r.StudentFirstName, r.StudentLastName),
+			UserID:            r.StudentUserID,
+			Name:              mc.StudentDisplayName(r.StudentFirstName, r.StudentLastName),
+			HasStudentComment: r.HasStudentComment,
 		})
 	}
 }

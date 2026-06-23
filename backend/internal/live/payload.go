@@ -16,6 +16,7 @@ const (
 	KindGrading    Kind = "grading"    // submit/claim/grade/retract/release/appeal
 	KindCoffins    Kind = "coffins"    // mark/unmark/release/solution
 	KindMembership Kind = "membership" // groups/teachers/students changes
+	KindComments   Kind = "comments"   // internal teacher notes on threads/students
 )
 
 // Event is the JSON payload carried by pg_notify and pushed to SSE clients.

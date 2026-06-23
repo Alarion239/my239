@@ -46,6 +46,15 @@ type HomeworkThreadEventPhoto struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+type HomeworkThreadNote struct {
+	ID           int64     `json:"id"`
+	ThreadID     int64     `json:"thread_id"`
+	AuthorUserID int64     `json:"author_user_id"`
+	Body         string    `json:"body"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
 type InvitationToken struct {
 	ID           int64           `json:"id"`
 	Token        string          `json:"token"`
@@ -99,6 +108,16 @@ type MathCenterStudent struct {
 	UserID    int64     `json:"user_id"`
 	GroupID   int64     `json:"group_id"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+type MathCenterStudentNote struct {
+	ID            int64     `json:"id"`
+	StudentUserID int64     `json:"student_user_id"`
+	MathCenterID  int64     `json:"math_center_id"`
+	AuthorUserID  int64     `json:"author_user_id"`
+	Body          string    `json:"body"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 type MathCenterSubproblem struct {

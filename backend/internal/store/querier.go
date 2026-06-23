@@ -32,7 +32,13 @@ type Querier interface {
 	CreateSeries(ctx context.Context, arg CreateSeriesParams) (MathCenterSeries, error)
 	// Mint a fresh shared-разбор group id.
 	CreateSolutionGroup(ctx context.Context) (int64, error)
+	CreateStudentNote(ctx context.Context, arg CreateStudentNoteParams) (MathCenterStudentNote, error)
 	CreateSubproblem(ctx context.Context, arg CreateSubproblemParams) (MathCenterSubproblem, error)
+	// Internal teacher-only comments. Two analogous resources: thread notes
+	// (anchored to a homework_thread) and student notes (anchored to a student in a
+	// center). The *Authored variants join users so the handler can return the
+	// author's display name without an extra lookup.
+	CreateThreadNote(ctx context.Context, arg CreateThreadNoteParams) (HomeworkThreadNote, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteMathCenter(ctx context.Context, id int64) (int64, error)
 	DeleteMathCenterGroup(ctx context.Context, id int64) (int64, error)
@@ -41,11 +47,13 @@ type Querier interface {
 	DeleteProblem(ctx context.Context, id int64) error
 	DeleteProblemsForSeries(ctx context.Context, seriesID int64) error
 	DeleteSeries(ctx context.Context, id int64) (int64, error)
+	DeleteStudentNote(ctx context.Context, id int64) (int64, error)
 	// Delete one subproblem (cascades to its thread/solution). Used by the diff
 	// update when a problem's subparts shrink.
 	DeleteSubproblem(ctx context.Context, id int64) error
 	// Used when unmarking a coffin that carries no разбор content (clean up the row).
 	DeleteSubproblemSolution(ctx context.Context, subproblemID int64) (int64, error)
+	DeleteThreadNote(ctx context.Context, id int64) (int64, error)
 	// INSERT ... ON CONFLICT DO UPDATE always returns a row, regardless of
 	// whether we created it now or matched an existing one. The DO UPDATE bumps
 	// updated_at so we can see activity even on no-op upserts.
@@ -64,6 +72,8 @@ type Querier interface {
 	GetSeriesTex(ctx context.Context, id int64) (*string, error)
 	GetStudent(ctx context.Context, id int64) (MathCenterStudent, error)
 	GetStudentByUserID(ctx context.Context, userID int64) (GetStudentByUserIDRow, error)
+	GetStudentNote(ctx context.Context, id int64) (MathCenterStudentNote, error)
+	GetStudentNoteAuthored(ctx context.Context, id int64) (GetStudentNoteAuthoredRow, error)
 	// One-shot fetch of "what center/series/problem does this subproblem belong
 	// to", used at the start of every event-creating handler so we don't have to
 	// chain three queries.
@@ -76,6 +86,8 @@ type Querier interface {
 	GetTeacher(ctx context.Context, id int64) (MathCenterTeacher, error)
 	GetThread(ctx context.Context, id int64) (HomeworkThread, error)
 	GetThreadByStudentAndSubproblem(ctx context.Context, arg GetThreadByStudentAndSubproblemParams) (HomeworkThread, error)
+	GetThreadNote(ctx context.Context, id int64) (HomeworkThreadNote, error)
+	GetThreadNoteAuthored(ctx context.Context, id int64) (GetThreadNoteAuthoredRow, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	// Bulk lookup used by the homework thread view: it needs to translate
@@ -120,6 +132,7 @@ type Querier interface {
 	ListProblemsForSeriesIDs(ctx context.Context, seriesIds []int64) ([]MathCenterProblem, error)
 	ListPublishedSeriesForCenter(ctx context.Context, mathCenterID int64) ([]MathCenterSeries, error)
 	ListSeriesForCenter(ctx context.Context, mathCenterID int64) ([]MathCenterSeries, error)
+	ListStudentNotesAuthored(ctx context.Context, arg ListStudentNotesAuthoredParams) ([]ListStudentNotesAuthoredRow, error)
 	ListStudentsForCenter(ctx context.Context, mathCenterID int64) ([]ListStudentsForCenterRow, error)
 	ListStudentsForCenters(ctx context.Context, centerIds []int64) ([]ListStudentsForCentersRow, error)
 	// Per-subproblem разбор/coffin metadata for one series, so the teacher Разбор
@@ -137,6 +150,7 @@ type Querier interface {
 	ListTeachersForCenter(ctx context.Context, mathCenterID int64) ([]ListTeachersForCenterRow, error)
 	ListTeachersForCenters(ctx context.Context, centerIds []int64) ([]ListTeachersForCentersRow, error)
 	ListThreadEvents(ctx context.Context, threadID int64) ([]HomeworkThreadEvent, error)
+	ListThreadNotesAuthored(ctx context.Context, threadID int64) ([]ListThreadNotesAuthoredRow, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	// Sets the PDF object key and stamps published_at to NOW(). Used both for
 	// first-time publishing and re-uploads (we just overwrite; the caller is
@@ -202,6 +216,7 @@ type Querier interface {
 	// already holds it). Returns no rows when someone else holds a live claim.
 	TryClaim(ctx context.Context, arg TryClaimParams) (HomeworkThread, error)
 	UpdateSeries(ctx context.Context, arg UpdateSeriesParams) (MathCenterSeries, error)
+	UpdateStudentNote(ctx context.Context, arg UpdateStudentNoteParams) (int64, error)
 	UpdateThreadAfterAppeal(ctx context.Context, arg UpdateThreadAfterAppealParams) error
 	// One statement does all four things atomically: set new status from
 	// verdict, point the cache at the new grade event, record the grader for
@@ -214,6 +229,7 @@ type Querier interface {
 	// appeal. The handler passes that rollback status in $2.
 	UpdateThreadAfterRetract(ctx context.Context, arg UpdateThreadAfterRetractParams) error
 	UpdateThreadAfterSubmit(ctx context.Context, arg UpdateThreadAfterSubmitParams) error
+	UpdateThreadNote(ctx context.Context, arg UpdateThreadNoteParams) (int64, error)
 	// Per-subproblem official solutions ("Разбор") + coffin state. A row exists iff
 	// the subproblem is a coffin OR carries a разбор. See migration 000011.
 	// A "coffin" (гроб) is a subproblem kept open for submission past the series

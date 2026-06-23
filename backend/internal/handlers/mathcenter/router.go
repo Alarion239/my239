@@ -39,6 +39,15 @@ func Router(database *db.DB, hub *live.Hub, tokens *internalAuth.TokenService, b
 	r.Get("/centers/{centerID}/coffin-queue", ListCoffinQueue(database))
 	// Head-teacher self-service management panel ("Управление").
 	r.Mount("/centers/{centerID}/manage", ManageRouter(database, hub))
+	// Teacher-facing student profile + internal teacher-only notes on a student
+	// (any teacher of the center reads/writes; author-or-admin edits/deletes).
+	r.Route("/centers/{centerID}/students/{studentUserID}", func(r chi.Router) {
+		r.Get("/", GetStudentProfile(database))
+		r.Get("/notes", ListStudentNotes(database))
+		r.Post("/notes", CreateStudentNote(database))
+		r.Patch("/notes/{noteID}", UpdateStudentNote(database))
+		r.Delete("/notes/{noteID}", DeleteStudentNote(database))
+	})
 	// Group a set of subproblems under one shared разбор (teacher).
 	r.Post("/subproblem-solutions/group", AssignSolutionGroup(database))
 
