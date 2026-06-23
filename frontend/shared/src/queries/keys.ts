@@ -48,4 +48,12 @@ export const queryKeys = {
     ['homework', 'centers', centerId, 'grid'] as const,
   graderStats: (centerId: number) =>
     ['homework', 'centers', centerId, 'grader-stats'] as const,
+  // Internal teacher-only notes on a solution thread.
+  threadNotes: (threadId: number) =>
+    ['homework', 'thread', threadId, 'notes'] as const,
+  // Teacher-facing student profile + internal notes on a student.
+  studentProfile: (centerId: number, studentUserId: number) =>
+    ['mathcenter', 'centers', centerId, 'students', studentUserId] as const,
+  studentNotes: (centerId: number, studentUserId: number) =>
+    ['mathcenter', 'centers', centerId, 'students', studentUserId, 'notes'] as const,
 }

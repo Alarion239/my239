@@ -248,7 +248,11 @@ SELECT
     t.last_grader_user_id                  AS last_grader_user_id,
     t.claim_holder_user_id                 AS claim_holder_user_id,
     t.claim_expires_at                     AS claim_expires_at,
-    t.updated_at                           AS thread_updated_at
+    t.updated_at                           AS thread_updated_at,
+    EXISTS (SELECT 1 FROM homework_thread_note n WHERE n.thread_id = t.id)        AS has_internal_comment,
+    EXISTS (SELECT 1 FROM math_center_student_note csn
+            WHERE csn.student_user_id = mcs.user_id
+              AND csn.math_center_id  = g.math_center_id)                         AS has_student_comment
 FROM math_center_students mcs
          JOIN users u  ON u.id  = mcs.user_id
          JOIN math_center_groups g ON g.id = mcs.group_id
@@ -290,7 +294,11 @@ SELECT
     gu.first_name                          AS grader_first_name,
     gu.last_name                           AS grader_last_name,
     t.claim_holder_user_id                 AS claim_holder_user_id,
-    t.claim_expires_at                     AS claim_expires_at
+    t.claim_expires_at                     AS claim_expires_at,
+    EXISTS (SELECT 1 FROM homework_thread_note n WHERE n.thread_id = t.id)        AS has_internal_comment,
+    EXISTS (SELECT 1 FROM math_center_student_note csn
+            WHERE csn.student_user_id = mcs.user_id
+              AND csn.math_center_id  = g.math_center_id)                         AS has_student_comment
 FROM math_center_students mcs
          JOIN users u                       ON u.id = mcs.user_id
          JOIN math_center_groups g          ON g.id = mcs.group_id

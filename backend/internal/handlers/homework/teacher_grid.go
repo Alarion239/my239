@@ -23,6 +23,9 @@ type gridStudent struct {
 	GroupID       int64      `json:"group_id"`
 	GroupName     string     `json:"group_name"`
 	Cells         []gridCell `json:"cells"`
+	// HasStudentComment marks the student row when at least one internal
+	// teacher note is attached to this student.
+	HasStudentComment bool `json:"has_student_comment"`
 }
 
 // gridCell is one (student, subproblem) cell. ThreadID == 0 means no
@@ -38,6 +41,9 @@ type gridCell struct {
 	LastGraderUserID  *int64     `json:"last_grader_user_id,omitempty"`
 	ClaimHolderUserID *int64     `json:"claim_holder_user_id,omitempty"`
 	ClaimExpiresAt    *time.Time `json:"claim_expires_at,omitempty"`
+	// HasInternalComment marks the cell when its thread carries at least one
+	// internal teacher note.
+	HasInternalComment bool `json:"has_internal_comment"`
 }
 
 // gridSubproblemHeader is a column descriptor sent once at the top of the
@@ -151,11 +157,12 @@ func buildGridStudents(rows []store.TeacherSeriesGridRow, columns []gridSubprobl
 		idx, ok := studentIndex[row.StudentUserID]
 		if !ok {
 			out = append(out, gridStudent{
-				StudentUserID: row.StudentUserID,
-				StudentName:   mc.StudentDisplayName(row.StudentFirstName, row.StudentLastName),
-				GroupID:       row.GroupID,
-				GroupName:     row.GroupName,
-				Cells:         make([]gridCell, len(columns)),
+				StudentUserID:     row.StudentUserID,
+				StudentName:       mc.StudentDisplayName(row.StudentFirstName, row.StudentLastName),
+				GroupID:           row.GroupID,
+				GroupName:         row.GroupName,
+				Cells:             make([]gridCell, len(columns)),
+				HasStudentComment: row.HasStudentComment,
 			})
 			idx = len(out) - 1
 			studentIndex[row.StudentUserID] = idx
@@ -166,15 +173,16 @@ func buildGridStudents(rows []store.TeacherSeriesGridRow, columns []gridSubprobl
 		}
 		threadID := row.ThreadID
 		out[idx].Cells[col] = gridCell{
-			SubproblemID:      row.SubproblemID,
-			SubproblemLabel:   row.SubproblemLabel,
-			ProblemID:         row.ProblemID,
-			ProblemNumber:     int(row.ProblemNumber),
-			ThreadID:          threadID,
-			CurrentStatus:     row.CurrentStatus,
-			LastGraderUserID:  row.LastGraderUserID,
-			ClaimHolderUserID: row.ClaimHolderUserID,
-			ClaimExpiresAt:    row.ClaimExpiresAt,
+			SubproblemID:       row.SubproblemID,
+			SubproblemLabel:    row.SubproblemLabel,
+			ProblemID:          row.ProblemID,
+			ProblemNumber:      int(row.ProblemNumber),
+			ThreadID:           threadID,
+			CurrentStatus:      row.CurrentStatus,
+			LastGraderUserID:   row.LastGraderUserID,
+			ClaimHolderUserID:  row.ClaimHolderUserID,
+			ClaimExpiresAt:     row.ClaimExpiresAt,
+			HasInternalComment: row.HasInternalComment,
 		}
 	}
 	return out

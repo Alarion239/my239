@@ -7,11 +7,15 @@ import {
   formatDateTime,
   isClosed,
   submissionClosedFor,
+  useCreateThreadNote,
+  useDeleteThreadNote,
   useSeries,
   useSubmitAttempt,
   useSubproblemContext,
   useSubproblemSolutionTex,
   useThread,
+  useThreadNotes,
+  useUpdateThreadNote,
   userNameFromThread,
   type Series,
   type Subproblem,
@@ -26,6 +30,7 @@ import { SolutionContent } from './solution-content'
 import { SubmissionForm } from './submission-form'
 import { ThreadTimeline } from './thread-timeline'
 import { ThreadActionPanel } from './thread-action-panel'
+import { InternalNotesPanel } from './internal-notes-panel'
 import { useClaimHeartbeat } from './use-claim-heartbeat'
 import { useThreadRole } from './use-thread-role'
 import { useSeriesContext } from './use-series-context'
@@ -177,7 +182,37 @@ function ThreadMode({
         userId={roleInfo.userId}
         closed={closed}
       />
+      {isGrader ? (
+        <ThreadNotes threadId={thread.id} currentUserId={roleInfo.userId} />
+      ) : null}
     </>
+  )
+}
+
+// ThreadNotes is the teacher-only internal comment log on a solution thread,
+// shown under the grading dialogue. Never rendered for students.
+function ThreadNotes({
+  threadId,
+  currentUserId,
+}: {
+  threadId: number
+  currentUserId: number
+}) {
+  const { data, isPending } = useThreadNotes(threadId)
+  const create = useCreateThreadNote(threadId)
+  const update = useUpdateThreadNote(threadId)
+  const remove = useDeleteThreadNote(threadId)
+  return (
+    <InternalNotesPanel
+      notes={data}
+      isLoading={isPending}
+      currentUserId={currentUserId}
+      onCreate={(body) => create.mutateAsync(body)}
+      onUpdate={(noteId, body) => update.mutateAsync({ noteId, body })}
+      onDelete={(noteId) => remove.mutateAsync(noteId)}
+      title="Внутренние заметки"
+      hint="Видно только преподавателям — например, подозрения в списывании. Ученик их не видит."
+    />
   )
 }
 

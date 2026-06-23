@@ -10,6 +10,7 @@ import {
 } from '@my239/shared'
 import { Input, Spinner, StatusTile } from '../../design/ui'
 import { cn } from '../../design/cn'
+import { ThreadCommentMark } from './thread-comment-mark'
 import {
   coffinCellClasses,
   coffinColumnClasses,
@@ -181,8 +182,21 @@ function GroupRows({
         const byId = new Map(student.cells.map((c) => [c.subproblem_id, c]))
         return (
           <tr key={student.student_user_id} className="hover:bg-surface-muted/40">
-            <td className={cn(nameCell, 'max-w-44 truncate')}>
-              {student.student_name}
+            <td className={cn(nameCell, 'max-w-44')}>
+              <Link
+                to={'/mathcenter/' + year + '/students/' + student.student_user_id}
+                className="inline-flex items-center gap-1.5 truncate underline-offset-2 hover:underline"
+              >
+                <span className="truncate">{student.student_name}</span>
+                {student.has_student_comment ? (
+                  <span
+                    tabIndex={0}
+                    title="Есть заметки об ученике"
+                    aria-label="Есть заметки об ученике"
+                    className="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-500"
+                  />
+                ) : null}
+              </Link>
             </td>
             {columns.map((col) => {
               const cell = byId.get(col.subproblem_id)
@@ -197,7 +211,7 @@ function GroupRows({
                 <td
                   key={col.subproblem_id}
                   className={cn(
-                    'px-2 py-1 text-center',
+                    'relative px-2 py-1 text-center',
                     dataCell(false),
                     coffinCellClasses(col.is_coffin, open),
                   )}
@@ -212,6 +226,9 @@ function GroupRows({
                   ) : (
                     <StatusTile status={status} beingGraded={beingGraded} label={label} />
                   )}
+                  {cell?.has_internal_comment && cell.thread_id > 0 ? (
+                    <ThreadCommentMark threadId={cell.thread_id} />
+                  ) : null}
                 </td>
               )
             })}

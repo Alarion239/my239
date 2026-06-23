@@ -716,7 +716,11 @@ SELECT
     gu.first_name                          AS grader_first_name,
     gu.last_name                           AS grader_last_name,
     t.claim_holder_user_id                 AS claim_holder_user_id,
-    t.claim_expires_at                     AS claim_expires_at
+    t.claim_expires_at                     AS claim_expires_at,
+    EXISTS (SELECT 1 FROM homework_thread_note n WHERE n.thread_id = t.id)        AS has_internal_comment,
+    EXISTS (SELECT 1 FROM math_center_student_note csn
+            WHERE csn.student_user_id = mcs.user_id
+              AND csn.math_center_id  = g.math_center_id)                         AS has_student_comment
 FROM math_center_students mcs
          JOIN users u                       ON u.id = mcs.user_id
          JOIN math_center_groups g          ON g.id = mcs.group_id
@@ -733,29 +737,31 @@ ORDER BY g.name ASC, u.last_name ASC, u.first_name ASC, s.number ASC, p.number A
 `
 
 type TeacherCenterGridRow struct {
-	SeriesID          int64      `json:"series_id"`
-	SeriesNumber      int32      `json:"series_number"`
-	SeriesName        string     `json:"series_name"`
-	SeriesDueAt       time.Time  `json:"series_due_at"`
-	StudentUserID     int64      `json:"student_user_id"`
-	StudentFirstName  string     `json:"student_first_name"`
-	StudentMiddleName *string    `json:"student_middle_name"`
-	StudentLastName   string     `json:"student_last_name"`
-	GroupID           int64      `json:"group_id"`
-	GroupName         string     `json:"group_name"`
-	SubproblemID      int64      `json:"subproblem_id"`
-	SubproblemLabel   string     `json:"subproblem_label"`
-	ProblemID         int64      `json:"problem_id"`
-	ProblemNumber     int32      `json:"problem_number"`
-	IsCoffin          bool       `json:"is_coffin"`
-	CoffinReleasedAt  *time.Time `json:"coffin_released_at"`
-	ThreadID          int64      `json:"thread_id"`
-	CurrentStatus     string     `json:"current_status"`
-	LastGraderUserID  *int64     `json:"last_grader_user_id"`
-	GraderFirstName   *string    `json:"grader_first_name"`
-	GraderLastName    *string    `json:"grader_last_name"`
-	ClaimHolderUserID *int64     `json:"claim_holder_user_id"`
-	ClaimExpiresAt    *time.Time `json:"claim_expires_at"`
+	SeriesID           int64      `json:"series_id"`
+	SeriesNumber       int32      `json:"series_number"`
+	SeriesName         string     `json:"series_name"`
+	SeriesDueAt        time.Time  `json:"series_due_at"`
+	StudentUserID      int64      `json:"student_user_id"`
+	StudentFirstName   string     `json:"student_first_name"`
+	StudentMiddleName  *string    `json:"student_middle_name"`
+	StudentLastName    string     `json:"student_last_name"`
+	GroupID            int64      `json:"group_id"`
+	GroupName          string     `json:"group_name"`
+	SubproblemID       int64      `json:"subproblem_id"`
+	SubproblemLabel    string     `json:"subproblem_label"`
+	ProblemID          int64      `json:"problem_id"`
+	ProblemNumber      int32      `json:"problem_number"`
+	IsCoffin           bool       `json:"is_coffin"`
+	CoffinReleasedAt   *time.Time `json:"coffin_released_at"`
+	ThreadID           int64      `json:"thread_id"`
+	CurrentStatus      string     `json:"current_status"`
+	LastGraderUserID   *int64     `json:"last_grader_user_id"`
+	GraderFirstName    *string    `json:"grader_first_name"`
+	GraderLastName     *string    `json:"grader_last_name"`
+	ClaimHolderUserID  *int64     `json:"claim_holder_user_id"`
+	ClaimExpiresAt     *time.Time `json:"claim_expires_at"`
+	HasInternalComment bool       `json:"has_internal_comment"`
+	HasStudentComment  bool       `json:"has_student_comment"`
 }
 
 // The "all series for this center, every student" matrix used by the
@@ -795,6 +801,8 @@ func (q *Queries) TeacherCenterGrid(ctx context.Context, mathCenterID int64) ([]
 			&i.GraderLastName,
 			&i.ClaimHolderUserID,
 			&i.ClaimExpiresAt,
+			&i.HasInternalComment,
+			&i.HasStudentComment,
 		); err != nil {
 			return nil, err
 		}
@@ -825,7 +833,11 @@ SELECT
     t.last_grader_user_id                  AS last_grader_user_id,
     t.claim_holder_user_id                 AS claim_holder_user_id,
     t.claim_expires_at                     AS claim_expires_at,
-    t.updated_at                           AS thread_updated_at
+    t.updated_at                           AS thread_updated_at,
+    EXISTS (SELECT 1 FROM homework_thread_note n WHERE n.thread_id = t.id)        AS has_internal_comment,
+    EXISTS (SELECT 1 FROM math_center_student_note csn
+            WHERE csn.student_user_id = mcs.user_id
+              AND csn.math_center_id  = g.math_center_id)                         AS has_student_comment
 FROM math_center_students mcs
          JOIN users u  ON u.id  = mcs.user_id
          JOIN math_center_groups g ON g.id = mcs.group_id
@@ -841,24 +853,26 @@ ORDER BY g.name ASC, u.last_name ASC, u.first_name ASC, p.number ASC, sp.label A
 `
 
 type TeacherSeriesGridRow struct {
-	StudentUserID     int64      `json:"student_user_id"`
-	StudentFirstName  string     `json:"student_first_name"`
-	StudentMiddleName *string    `json:"student_middle_name"`
-	StudentLastName   string     `json:"student_last_name"`
-	GroupID           int64      `json:"group_id"`
-	GroupName         string     `json:"group_name"`
-	SubproblemID      int64      `json:"subproblem_id"`
-	SubproblemLabel   string     `json:"subproblem_label"`
-	ProblemID         int64      `json:"problem_id"`
-	ProblemNumber     int32      `json:"problem_number"`
-	IsCoffin          bool       `json:"is_coffin"`
-	CoffinReleasedAt  *time.Time `json:"coffin_released_at"`
-	ThreadID          int64      `json:"thread_id"`
-	CurrentStatus     string     `json:"current_status"`
-	LastGraderUserID  *int64     `json:"last_grader_user_id"`
-	ClaimHolderUserID *int64     `json:"claim_holder_user_id"`
-	ClaimExpiresAt    *time.Time `json:"claim_expires_at"`
-	ThreadUpdatedAt   *time.Time `json:"thread_updated_at"`
+	StudentUserID      int64      `json:"student_user_id"`
+	StudentFirstName   string     `json:"student_first_name"`
+	StudentMiddleName  *string    `json:"student_middle_name"`
+	StudentLastName    string     `json:"student_last_name"`
+	GroupID            int64      `json:"group_id"`
+	GroupName          string     `json:"group_name"`
+	SubproblemID       int64      `json:"subproblem_id"`
+	SubproblemLabel    string     `json:"subproblem_label"`
+	ProblemID          int64      `json:"problem_id"`
+	ProblemNumber      int32      `json:"problem_number"`
+	IsCoffin           bool       `json:"is_coffin"`
+	CoffinReleasedAt   *time.Time `json:"coffin_released_at"`
+	ThreadID           int64      `json:"thread_id"`
+	CurrentStatus      string     `json:"current_status"`
+	LastGraderUserID   *int64     `json:"last_grader_user_id"`
+	ClaimHolderUserID  *int64     `json:"claim_holder_user_id"`
+	ClaimExpiresAt     *time.Time `json:"claim_expires_at"`
+	ThreadUpdatedAt    *time.Time `json:"thread_updated_at"`
+	HasInternalComment bool       `json:"has_internal_comment"`
+	HasStudentComment  bool       `json:"has_student_comment"`
 }
 
 // The full (student × subproblem) matrix for one series. Used by the
@@ -894,6 +908,8 @@ func (q *Queries) TeacherSeriesGrid(ctx context.Context, id int64) ([]TeacherSer
 			&i.ClaimHolderUserID,
 			&i.ClaimExpiresAt,
 			&i.ThreadUpdatedAt,
+			&i.HasInternalComment,
+			&i.HasStudentComment,
 		); err != nil {
 			return nil, err
 		}

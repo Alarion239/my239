@@ -620,6 +620,8 @@ export interface GridCell {
   last_grader_user_id?: number | null
   claim_holder_user_id?: number | null
   claim_expires_at?: string | null
+  // True when the cell's thread carries at least one internal teacher note.
+  has_internal_comment?: boolean
 }
 
 export interface GridStudent {
@@ -628,6 +630,8 @@ export interface GridStudent {
   group_id: number
   group_name: string
   cells: GridCell[]
+  // True when the student carries at least one internal teacher note.
+  has_student_comment?: boolean
 }
 
 export interface GridResponse {
@@ -659,6 +663,8 @@ export interface CenterGridSeries {
 export interface CenterGridStudentEntry {
   user_id: number
   name: string
+  // True when the student carries at least one internal teacher note.
+  has_student_comment?: boolean
 }
 
 export interface CenterGridGroup {
@@ -673,6 +679,8 @@ export interface CenterGridCell {
   last_grader_user_id?: number | null
   claim_holder_user_id?: number | null
   claim_expires_at?: string | null
+  // True when the cell's thread carries at least one internal teacher note.
+  has_internal_comment?: boolean
 }
 
 // CenterGridResponse is the everything-at-once payload: cells are keyed
@@ -683,4 +691,29 @@ export interface CenterGridResponse {
   series: CenterGridSeries[]
   cells: Record<string, CenterGridCell>
   graders: Record<string, string>
+}
+
+// --- Internal teacher-only comments ------------------------------------------
+
+// InternalNote is one attributed, editable teacher comment. The same shape
+// serves both a solution-thread note and a student note.
+export interface InternalNote {
+  id: number
+  author_user_id: number
+  author_name: string
+  body: string
+  created_at: string
+  updated_at: string
+}
+
+// StudentProfile anchors the teacher-facing student page (identity + group).
+export interface StudentProfile {
+  user_id: number
+  first_name: string
+  middle_name?: string | null
+  last_name: string
+  display_name: string
+  group_id: number
+  group_name: string
+  graduation_year: number
 }
