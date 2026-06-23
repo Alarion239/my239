@@ -52,14 +52,14 @@ function makeSeries(dueAt: string, subproblems: Subproblem[]): Series {
   }
 }
 
-function renderList(series: Series) {
+function renderList(series: Series, withRollup: MyRollup = rollup) {
   render(
     <MemoryRouter initialEntries={['/mathcenter/' + YEAR + '/series/7/progress']}>
       <Routes>
         <Route
           path="/mathcenter/:year/series/:seriesId/:tab"
           element={
-            <StudentProblemList seriesId={7} rollup={rollup} series={series} />
+            <StudentProblemList seriesId={7} rollup={withRollup} series={series} />
           }
         />
       </Routes>
@@ -90,6 +90,35 @@ describe('StudentProblemList — per-subproblem deadline gating', () => {
     expect(
       document.querySelector('a[href="/mathcenter/2026/series/7/thread/55"]'),
     ).not.toBeNull()
+  })
+
+  // The untouched lettered subproblem 'а' shows its letter; the attempted 'б'
+  // shows a status glyph, not its letter.
+  it('shows the subproblem letter on an untouched tile', () => {
+    renderList(makeSeries(FUTURE, [sub({ id: 10, label: 'а' }), sub({ id: 11, label: 'б' })]))
+    expect(screen.getByRole('img', { name: 'а: Не решено' })).toHaveTextContent('а')
+    // The rejected sibling keeps a status glyph (✗), never its letter.
+    expect(screen.getByRole('img', { name: 'б: Отклонено' })).not.toHaveTextContent('б')
+  })
+
+  // A single-part problem (empty label) keeps the ○ rather than showing a
+  // (blank) letter.
+  it('keeps the circle for a single-part untouched problem', () => {
+    const single: MyRollup = {
+      counts: { accepted: 0, rejected: 0, pending: 1 },
+      problems: [
+        {
+          problem_id: 2,
+          problem_number: 2,
+          problem_display: 'Задача 2',
+          subproblems: [
+            { subproblem_id: 20, subproblem_label: '', thread_id: 0, current_status: 'ungraded', being_graded: false },
+          ],
+        },
+      ],
+    }
+    renderList(makeSeries(FUTURE, [sub({ id: 20, label: '' })]), single)
+    expect(screen.getByRole('img', { name: ': Не решено' })).toHaveTextContent('○')
   })
 
   // Regression: an OPEN coffin stays submittable from the series page past the

@@ -35,6 +35,10 @@ export interface StatusTileProps {
   beingGraded?: boolean
   // Optional override for the accessible label; defaults to the status label.
   label?: string
+  // Optional override for the visible character (e.g. a subproblem letter shown
+  // in place of the status glyph). The accessible label still describes the
+  // status. Ignored for the grading tone, which renders a spinner.
+  glyph?: string
   className?: string
 }
 
@@ -46,7 +50,7 @@ function metaFor(status: HomeworkStatus, beingGraded?: boolean): StatusMeta {
 
 // StatusTile is a ~28px rounded square showing a status glyph, tinted with the
 // status colour tokens. The Russian label is exposed as title + aria-label.
-export function StatusTile({ status, beingGraded, label, className }: StatusTileProps) {
+export function StatusTile({ status, beingGraded, label, glyph, className }: StatusTileProps) {
   const meta = metaFor(status, beingGraded)
   const text = label ?? meta.label
   return (
@@ -63,7 +67,7 @@ export function StatusTile({ status, beingGraded, label, className }: StatusTile
       {meta.tone === 'grading' ? (
         <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
       ) : (
-        <span aria-hidden>{meta.glyph}</span>
+        <span aria-hidden>{glyph ?? meta.glyph}</span>
       )}
     </span>
   )
