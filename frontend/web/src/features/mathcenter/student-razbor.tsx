@@ -99,38 +99,21 @@ export function StudentRazbor({ series }: { series: Series }) {
           Выберите задачу выше, чтобы посмотреть её разбор.
         </p>
       ) : (
-        <RazborBody
-          sub={selected}
-          coveredTokens={chips
-            .filter((c) => litIds.has(c.sub.id))
-            .map((c) => c.token)}
-        />
+        <RazborBody sub={selected} />
       )}
     </div>
   )
 }
 
-function RazborBody({
-  sub,
-  coveredTokens,
-}: {
-  sub: Subproblem
-  coveredTokens: string[]
-}) {
+function RazborBody({ sub }: { sub: Subproblem }) {
   const texQuery = useSubproblemSolutionTex(sub.id, sub.has_solution_tex)
   return (
-    <div className="flex flex-col">
-      <p className="mb-3 text-sm text-muted">
-        Разбор · {coveredTokens.length > 1 ? 'задачи ' : 'задача '}
-        <span className="font-medium text-ink">{coveredTokens.join(', ')}</span>
-      </p>
-      <SolutionContent
-        hasTex={sub.has_solution_tex}
-        hasPdf={sub.has_solution_pdf}
-        link={sub.solution_link}
-        pdfPath={'/mathcenter/subproblems/' + sub.id + '/solution/pdf'}
-        texQuery={texQuery}
-      />
-    </div>
+    <SolutionContent
+      hasTex={sub.has_solution_tex}
+      hasPdf={sub.has_solution_pdf}
+      link={sub.solution_link}
+      pdfPath={'/mathcenter/subproblems/' + sub.id + '/solution/pdf'}
+      texQuery={texQuery}
+    />
   )
 }
