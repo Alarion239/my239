@@ -186,7 +186,7 @@ function RazborPreview({
     <div className="animate-rise rounded-xl border border-accent/40 bg-surface p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h3 className="font-display text-lg font-medium text-ink">
-          Разбор · {sub.display}
+          {sub.display}
         </h3>
         <div className="flex items-center gap-2">
           <SolutionEditor
