@@ -167,7 +167,7 @@ export function TeacherProblemStats({ stats, series, centerId }: TeacherProblemS
 }
 
 // RazborPreview shows the official разбор of a solved problem on the left, with
-// a «Заменить» action (re-author it) and a close button.
+// a «Редактировать» action (edit it in place) and a close button.
 function RazborPreview({
   centerId,
   sub,
@@ -190,17 +190,18 @@ function RazborPreview({
         </h3>
         <div className="flex items-center gap-2">
           <SolutionEditor
-            title={'Заменить разбор · ' + sub.display}
+            title={'Редактировать разбор · ' + sub.display}
             hasTex={sub.has_solution_tex}
             hasPdf={sub.has_solution_pdf}
             link={sub.solution_link}
+            initialTex={texQuery.data?.tex}
             onPutTex={(tex) => putTex.mutateAsync({ subproblemIds: ids, tex })}
             onUploadPdf={(file) => uploadPdf.mutateAsync({ subproblemIds: ids, file })}
             onSetLink={(link) => setLink.mutateAsync({ subproblemIds: ids, link })}
             closeOnSave
             trigger={
               <Button type="button" size="sm" variant="secondary">
-                Заменить
+                Редактировать
               </Button>
             }
           />

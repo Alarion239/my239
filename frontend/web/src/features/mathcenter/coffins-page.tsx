@@ -260,21 +260,27 @@ function ManagerControls({
   const putTex = usePutSubproblemSolutionTex(coffin.subproblem_id, centerId)
   const uploadPdf = useUploadSubproblemSolutionPdf(coffin.subproblem_id, centerId)
   const setLink = useSetSubproblemSolutionLink(coffin.subproblem_id, centerId)
+  // Load the existing LaTeX so a разобранный coffin's editor opens on its code.
+  const texQuery = useSubproblemSolutionTex(
+    coffin.subproblem_id,
+    solved && coffin.has_solution_tex,
+  )
 
   if (solved) {
-    // Разобранный гроб: attach / replace its разбор.
+    // Разобранный гроб: edit / attach its разбор.
     return (
       <SolutionEditor
         title={'Разбор · ' + coffin.display}
         hasTex={coffin.has_solution_tex}
         hasPdf={coffin.has_solution_pdf}
         link={coffin.solution_link}
+        initialTex={texQuery.data?.tex}
         onPutTex={(tex) => putTex.mutateAsync(tex)}
         onUploadPdf={(file) => uploadPdf.mutateAsync(file)}
         onSetLink={(link) => setLink.mutateAsync(link)}
         trigger={
           <Button type="button" size="sm" variant="secondary">
-            {hasSolution ? 'Заменить разбор' : 'Загрузить разбор'}
+            {hasSolution ? 'Редактировать разбор' : 'Загрузить разбор'}
           </Button>
         }
       />
