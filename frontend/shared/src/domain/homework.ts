@@ -204,9 +204,16 @@ export function eventKindLabel(
 // of the first whitespace-separated token plus the first letter of the last
 // (Cyrillic-safe). Mirrors the server's user-id → initials rule so registered
 // and free-text offline graders render the same way in the «Кондуит».
+//
+// A single short token (≤2 letters, e.g. "АБ") is taken to already BE initials
+// — there are no two-letter names — so it's returned whole rather than
+// collapsed to one letter.
 export function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean)
   if (parts.length === 0) return ''
+  if (parts.length === 1 && [...parts[0]].length <= 2) {
+    return parts[0].toUpperCase()
+  }
   const first = [...parts[0]][0] ?? ''
   const last = parts.length > 1 ? ([...parts[parts.length - 1]][0] ?? '') : ''
   return (first + last).toUpperCase()

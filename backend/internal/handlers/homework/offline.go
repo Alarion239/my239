@@ -80,14 +80,24 @@ func OfflineAccept(database *db.DB, hub *live.Hub, blobs objectstore.Store) http
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
-		// Already accepted (online or offline) → nothing to do. Returning a
-		// 409 keeps the action explicit; the conduit only taps un-accepted
-		// cells to accept and uses /offline/undo to reverse.
+		// An already-accepted thread can still be *re-credited* when it was
+		// accepted OFFLINE — the grader corrected their initials mid-session.
+		// An ONLINE accept is left alone (409), so offline marking can't quietly
+		// override a real graded verdict.
 		if thread.CurrentStatus == homework.StatusAccepted {
-			httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "already accepted")
-			return
-		}
-		if err := homework.CanTransition(thread.CurrentStatus, homework.KindAcceptedOffline); err != nil {
+			offline, err := currentAcceptIsOffline(ctx, q, thread)
+			if err != nil {
+				logger.LogErrorContext(ctx, "homework: offline accept check current grade", err)
+				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+				return
+			}
+			if !offline {
+				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "already accepted")
+				return
+			}
+			// Fall through: writeOfflineAccept appends a fresh accepted_offline
+			// event with the new credit and repoints the cache.
+		} else if err := homework.CanTransition(thread.CurrentStatus, homework.KindAcceptedOffline); err != nil {
 			httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, err.Error())
 			return
 		}
@@ -227,6 +237,19 @@ func resolveCreditedGrader(ctx context.Context, q *store.Queries, sessionUserID,
 		return nil, "", "grader name is required"
 	}
 	return &sessionUserID, name, ""
+}
+
+// currentAcceptIsOffline reports whether the thread's current grade event is an
+// offline accept (vs. an online graded verdict). Used to gate re-crediting.
+func currentAcceptIsOffline(ctx context.Context, q *store.Queries, thread store.HomeworkThread) (bool, error) {
+	if thread.CurrentGradeEventID == nil {
+		return false, nil
+	}
+	ge, err := q.GetEvent(ctx, *thread.CurrentGradeEventID)
+	if err != nil {
+		return false, err
+	}
+	return ge.IsOffline, nil
 }
 
 // graderFullName looks up a user's "Имя Фамилия" for crediting.

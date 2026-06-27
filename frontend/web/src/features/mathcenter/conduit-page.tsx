@@ -122,7 +122,40 @@ function ConduitTable({
   const [grader, setGrader] = useState<CreditedGrader>(emptyGrader)
   const [dialog, setDialog] = useState<OfflineCellTarget | null>(null)
   const [pendingKey, setPendingKey] = useState<string | null>(null)
+  // Subproblems marked during the current active-student session → the grader
+  // key they were credited with at mark time. Lets cells show the *current*
+  // initials live (override below) and re-credit only the cells that drift when
+  // the grader corrects their initials before «Готово».
+  const [markedSubs, setMarkedSubs] = useState<Map<number, string>>(new Map())
   const accept = useOfflineAccept()
+
+  // graderKey identifies a credited grader so we can tell whether a marked cell
+  // still matches the current initials; graderFields builds the accept payload.
+  const graderKey = (g: CreditedGrader): string =>
+    g.userId != null ? 'u' + g.userId : 'n' + g.name.trim().toLowerCase()
+  const graderFields = (g: CreditedGrader) =>
+    g.userId != null ? { grader_user_id: g.userId } : { grader_name: g.name.trim() }
+
+  // commitMarks re-credits any cell marked under an earlier initials value once
+  // the grader settles on a final one — only the drifted cells, so the common
+  // "type once, mark many" path issues no extra writes.
+  function commitMarks(studentId: number | null) {
+    if (studentId == null || !grader.name.trim()) return
+    const finalKey = graderKey(grader)
+    markedSubs.forEach((markKey, sub) => {
+      if (markKey !== finalKey) {
+        accept.mutate({ student_user_id: studentId, subproblem_id: sub, ...graderFields(grader) })
+      }
+    })
+  }
+
+  // selectStudent switches the active row, committing the previous student's
+  // marks first; passing null is «Готово».
+  function selectStudent(id: number | null) {
+    if (activeStudentId != null && id !== activeStudentId) commitMarks(activeStudentId)
+    setActiveStudentId(id)
+    setMarkedSubs(new Map())
+  }
 
   const cols: FlatCol[] = useMemo(() => {
     const out: FlatCol[] = []
@@ -182,19 +215,19 @@ function ConduitTable({
     students.reduce((n, st) => n + (accepted(st.user_id, subId) ? 1 : 0), 0)
   const grandTotal = students.reduce((n, st) => n + rowTotal(st.user_id), 0)
 
-  // markCell fast-paths an offline accept using the initials bar's grader.
+  // markCell fast-paths an offline accept using the initials bar's grader and
+  // remembers which grader credited it (for later re-crediting on a correction).
   function markCell(studentId: number, col: CenterGridColumn) {
     const key = studentId + ':' + col.subproblem_id
+    const gk = graderKey(grader)
     setPendingKey(key)
     accept.mutate(
+      { student_user_id: studentId, subproblem_id: col.subproblem_id, ...graderFields(grader) },
       {
-        student_user_id: studentId,
-        subproblem_id: col.subproblem_id,
-        ...(grader.userId != null
-          ? { grader_user_id: grader.userId }
-          : { grader_name: grader.name.trim() }),
+        onSettled: () => setPendingKey(null),
+        onSuccess: () =>
+          setMarkedSubs((prev) => new Map(prev).set(col.subproblem_id, gk)),
       },
-      { onSettled: () => setPendingKey(null) },
     )
   }
 
@@ -250,12 +283,13 @@ function ConduitTable({
               centerId={centerId}
               value={grader}
               onChange={setGrader}
+              onEnter={() => selectStudent(null)}
               autoFocus
             />
           </div>
           <button
             type="button"
-            onClick={() => setActiveStudentId(null)}
+            onClick={() => selectStudent(null)}
             className="h-9 rounded-lg border border-line px-3 text-sm text-muted hover:bg-surface-muted hover:text-ink"
           >
             Готово
@@ -354,7 +388,7 @@ function ConduitTable({
                         <button
                           type="button"
                           onClick={() =>
-                            setActiveStudentId(isActiveRow ? null : st.user_id)
+                            selectStudent(isActiveRow ? null : st.user_id)
                           }
                           className={cn(
                             'inline-flex items-center gap-1.5 text-left underline-offset-2 hover:underline',
@@ -373,13 +407,22 @@ function ConduitTable({
                       </td>
                       {cols.map((fc) => {
                         const { col, firstInSeries } = fc
-                        const acc = accepted(st.user_id, col.subproblem_id)
+                        // A cell marked this session shows green + the CURRENT
+                        // initials immediately, so correcting the bar updates the
+                        // letters live (the persisted credit is reconciled on
+                        // «Готово»).
+                        const marked =
+                          isActiveRow && markedSubs.has(col.subproblem_id)
+                        const acc = accepted(st.user_id, col.subproblem_id) || marked
                         const open = col.is_coffin && coffinOpen(col.coffin_released_at)
                         const cell = data.cells[st.user_id + ':' + col.subproblem_id]
                         const threadId = cell?.thread_id ?? 0
                         const hasComment = !!cell?.has_internal_comment && threadId > 0
                         const key = st.user_id + ':' + col.subproblem_id
                         const pending = pendingKey === key
+                        const shownInitials = marked
+                          ? initialsOf(grader.name)
+                          : cellInitials(st.user_id, col.subproblem_id)
                         // Click behaviour: accepted → detail dialog; active row
                         // empty → fast-mark (or dialog if no initials yet);
                         // other empty → select that student for marking.
@@ -390,7 +433,7 @@ function ConduitTable({
                             if (grader.name.trim()) markCell(st.user_id, col)
                             else openCellDialog(st.user_id, st.name, fc)
                           } else {
-                            setActiveStudentId(st.user_id)
+                            selectStudent(st.user_id)
                           }
                         }
                         return (
@@ -420,7 +463,7 @@ function ConduitTable({
                               {pending
                                 ? '…'
                                 : acc
-                                  ? cellInitials(st.user_id, col.subproblem_id)
+                                  ? shownInitials
                                   : isActiveRow
                                     ? '＋'
                                     : ''}

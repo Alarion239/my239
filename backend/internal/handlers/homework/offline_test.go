@@ -168,12 +168,17 @@ func TestOfflineAccept_AlreadyAccepted(t *testing.T) {
 	expectSubproblemContext(mock, 900, 500, 100, 42, 1, "", now.Add(time.Hour), &now)
 	expectTeacherCheck(mock, 3, 42, true)
 	expectGetUserByID(mock, 3, "Мария", "Кузнецова", now)
-	// Find-or-create returns an already-accepted thread → 409, no event written.
+	// Find-or-create returns a thread accepted via an ONLINE grade → 409.
 	gradeID := int64(80)
 	mock.ExpectQuery(`INSERT INTO homework_thread \(`).
 		WithArgs(int64(7), int64(900), int64(100), int64(42)).
 		WillReturnRows(mock.NewRows(threadColumns).AddRow(
 			threadRow(1, 7, 900, 100, 42, threadRowOpts{Status: "accepted", GradeEventID: &gradeID}, now)...))
+	verdict := "accepted"
+	mock.ExpectQuery(`SELECT .* FROM homework_thread_event\s+WHERE id`).
+		WithArgs(gradeID).
+		WillReturnRows(mock.NewRows(eventColumns).AddRow(
+			gradeID, int64(1), "uuid", "graded", int64(3), "ok", &verdict, (*int64)(nil), now, false, (*int64)(nil), ""))
 
 	body, _ := json.Marshal(map[string]any{"student_user_id": 7, "subproblem_id": 900})
 	req := authedRequest(t, access, 3, false, http.MethodPost, "/offline/accept", bytes.NewReader(body))
@@ -182,6 +187,64 @@ func TestOfflineAccept_AlreadyAccepted(t *testing.T) {
 	r.ServeHTTP(rr, req)
 	if rr.Code != http.StatusConflict {
 		t.Fatalf("got %d, want 409; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestOfflineAccept_RecreditsOfflineAccept(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	expectSubproblemContext(mock, 900, 500, 100, 42, 1, "", now.Add(time.Hour), &now)
+	expectTeacherCheck(mock, 3, 42, true)
+	gradeID := int64(80)
+	// Find-or-create returns a thread already accepted OFFLINE (credited "АБ").
+	mock.ExpectQuery(`INSERT INTO homework_thread \(`).
+		WithArgs(int64(7), int64(900), int64(100), int64(42)).
+		WillReturnRows(mock.NewRows(threadColumns).AddRow(
+			threadRow(1, 7, 900, 100, 42, threadRowOpts{
+				Status: "accepted", GradeEventID: &gradeID, LastGraderName: "АБ",
+			}, now)...))
+	verdict := "accepted"
+	// GetEvent(grade) → is_offline = true, so re-crediting is allowed.
+	mock.ExpectQuery(`SELECT .* FROM homework_thread_event\s+WHERE id`).
+		WithArgs(gradeID).
+		WillReturnRows(mock.NewRows(eventColumns).AddRow(
+			gradeID, int64(1), "uuid", "accepted_offline", int64(3), "", &verdict, (*int64)(nil), now, true, (*int64)(nil), "АБ"))
+
+	// Re-credit tx: new accepted_offline event + cache repoint to "МК".
+	mock.ExpectBegin()
+	mock.ExpectQuery(`INSERT INTO homework_thread_event`).
+		WithArgs(int64(1), pgxmock.AnyArg(), "accepted_offline", int64(3), "", &verdict, (*int64)(nil), (*int64)(nil), "МК").
+		WillReturnRows(mock.NewRows(eventColumns).AddRow(
+			int64(81), int64(1), "uuid2", "accepted_offline", int64(3), "", &verdict, (*int64)(nil), now, true, (*int64)(nil), "МК"))
+	mock.ExpectExec(`UPDATE homework_thread\s+SET current_status\s+= 'accepted'`).
+		WithArgs(int64(81), (*int64)(nil), "МК", int64(1)).
+		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+	mock.ExpectCommit()
+
+	// Post-mutation view.
+	mock.ExpectQuery(`SELECT .* FROM homework_thread\s+WHERE id`).
+		WithArgs(int64(1)).
+		WillReturnRows(mock.NewRows(threadColumns).AddRow(
+			threadRow(1, 7, 900, 100, 42, threadRowOpts{
+				Status: "accepted", GradeEventID: &gradeID, LastGraderName: "МК",
+			}, now)...))
+	expectGetSeriesForView(mock, 100, 42, now)
+	mock.ExpectQuery(`SELECT .* FROM homework_thread_event\s+WHERE thread_id`).
+		WithArgs(int64(1)).
+		WillReturnRows(mock.NewRows(eventColumns))
+	expectGetUsersForView(mock)
+
+	body, _ := json.Marshal(map[string]any{"student_user_id": 7, "subproblem_id": 900, "grader_name": "МК"})
+	req := authedRequest(t, access, 3, false, http.MethodPost, "/offline/accept", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body=%s", rr.Code, rr.Body.String())
 	}
 }
 
