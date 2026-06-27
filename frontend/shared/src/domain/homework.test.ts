@@ -7,6 +7,7 @@ import {
   eventKindLabel,
   eventTone,
   homeworkStatusMeta,
+  initialsOf,
   isClosed,
   problemStateFromSubproblems,
   resolveThreadRole,
@@ -167,6 +168,23 @@ describe('eventKindLabel', () => {
     expect(eventKindLabel('submitted')).toBe('Решение')
     expect(eventKindLabel('appealed')).toBe('Апелляция')
     expect(eventKindLabel('retracted')).toBe('Оценка отозвана')
+  })
+
+  it('labels the in-person offline kinds', () => {
+    expect(eventKindLabel('accepted_offline')).toBe('Принято очно')
+    expect(eventKindLabel('offline_retracted')).toBe('Очный зачёт отменён')
+  })
+})
+
+describe('initialsOf', () => {
+  it('takes first letters of first and last name tokens', () => {
+    expect(initialsOf('Мария Кузнецова')).toBe('МК')
+    expect(initialsOf('Пётр Сергеевич Сидоров')).toBe('ПС')
+  })
+
+  it('handles a single token and blanks', () => {
+    expect(initialsOf('Иванов')).toBe('И')
+    expect(initialsOf('   ')).toBe('')
   })
 })
 

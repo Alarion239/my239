@@ -427,6 +427,9 @@ export type EventKind =
   | 'retracted'
   | 'claimed'
   | 'released'
+  // In-person «кондуит» grading: accepted offline / that accept undone.
+  | 'accepted_offline'
+  | 'offline_retracted'
 
 // PhotoView is one image attached to an event. `url` is a short-TTL presigned
 // GET; `object_key` is exposed too so the UI can match images back to events.
@@ -449,6 +452,10 @@ export interface EventView {
   refers_to_event_id?: number | null
   created_at: string
   photos: PhotoView[]
+  // Set on accepted_offline / offline_retracted events. credited_grader_name is
+  // the in-person grader credited (a registered teacher's name or free text).
+  is_offline?: boolean
+  credited_grader_name?: string
 }
 
 // ThreadView is the full timeline + cache state for one thread (GET
@@ -465,6 +472,8 @@ export interface ThreadView {
   math_center_id: number
   current_status: HomeworkStatus
   last_grader_user_id?: number | null
+  // Credited grader name for an offline accept (covers unregistered graders).
+  last_grader_name?: string
   claim_holder_user_id?: number | null
   claim_expires_at?: string | null
   created_at: string
@@ -618,6 +627,8 @@ export interface GridCell {
   thread_id: number
   current_status: HomeworkStatus
   last_grader_user_id?: number | null
+  // Credited grader name for an offline accept by an unregistered grader.
+  last_grader_name?: string
   claim_holder_user_id?: number | null
   claim_expires_at?: string | null
   // True when the cell's thread carries at least one internal teacher note.
@@ -677,6 +688,9 @@ export interface CenterGridCell {
   thread_id: number
   current_status: HomeworkStatus
   last_grader_user_id?: number | null
+  // Credited grader name for an offline accept by an unregistered grader; the
+  // conduit derives initials from it when there's no last_grader_user_id.
+  last_grader_name?: string
   claim_holder_user_id?: number | null
   claim_expires_at?: string | null
   // True when the cell's thread carries at least one internal teacher note.
@@ -691,6 +705,33 @@ export interface CenterGridResponse {
   series: CenterGridSeries[]
   cells: Record<string, CenterGridCell>
   graders: Record<string, string>
+}
+
+// --- Offline grading («кондуит» in-person accept) ----------------------------
+
+// CenterTeacher is one option for the offline-grading initials autocomplete
+// (GET /homework/centers/{id}/teachers): a registered teacher of the center.
+export interface CenterTeacher {
+  user_id: number
+  name: string
+  initials: string
+}
+
+// OfflineAcceptPayload marks a (student, subproblem) solved in person. Omit
+// both grader fields (phone flow) to credit the authenticated teacher; set
+// grader_user_id to credit a resolved teacher, or grader_name for a free-text
+// (unregistered) grader at the shared conduit.
+export interface OfflineAcceptPayload {
+  student_user_id: number
+  subproblem_id: number
+  grader_user_id?: number | null
+  grader_name?: string
+}
+
+// OfflineUndoPayload reverses a prior offline accept on a (student, subproblem).
+export interface OfflineUndoPayload {
+  student_user_id: number
+  subproblem_id: number
 }
 
 // --- Internal teacher-only comments ------------------------------------------

@@ -193,7 +193,23 @@ export function eventKindLabel(
       return 'Взято в проверку'
     case 'released':
       return 'Освобождено'
+    case 'accepted_offline':
+      return 'Принято очно'
+    case 'offline_retracted':
+      return 'Очный зачёт отменён'
   }
+}
+
+// initialsOf builds a person's initials from a display name: the first letter
+// of the first whitespace-separated token plus the first letter of the last
+// (Cyrillic-safe). Mirrors the server's user-id → initials rule so registered
+// and free-text offline graders render the same way in the «Кондуит».
+export function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return ''
+  const first = [...parts[0]][0] ?? ''
+  const last = parts.length > 1 ? ([...parts[parts.length - 1]][0] ?? '') : ''
+  return (first + last).toUpperCase()
 }
 
 // eventTone maps a timeline event to an abstract StatusTone so the web layer
@@ -207,6 +223,8 @@ export function eventTone(
   switch (kind) {
     case 'graded':
       return verdict === 'accepted' ? 'accepted' : 'rejected'
+    case 'accepted_offline':
+      return 'accepted'
     case 'appealed':
       return 'appeal'
     default:

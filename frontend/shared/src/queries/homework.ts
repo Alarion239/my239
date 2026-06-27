@@ -8,9 +8,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
 import type {
   CenterGridResponse,
+  CenterTeacher,
   GradePayload,
   GraderStats,
   GridResponse,
+  OfflineAcceptPayload,
+  OfflineUndoPayload,
   QueueItem,
   SubmitOrAppealPayload,
   SubproblemContext,
@@ -94,6 +97,22 @@ export function useGraderStats(centerId: number) {
       client.request<GraderStats>(
         '/homework/centers/' + centerId + '/grader-stats',
       ),
+    enabled: centerId > 0,
+  })
+}
+
+// useCenterTeachers lists the center's teachers for the offline-grading
+// initials autocomplete (resolve typed initials → a registered grader).
+export function useCenterTeachers(centerId: number) {
+  const client = useApiClient()
+  return useQuery<CenterTeacher[]>({
+    queryKey: queryKeys.centerTeachers(centerId),
+    queryFn: () =>
+      client
+        .request<{ teachers: CenterTeacher[] }>(
+          '/homework/centers/' + centerId + '/teachers',
+        )
+        .then((r) => r.teachers),
     enabled: centerId > 0,
   })
 }
@@ -189,6 +208,38 @@ export function useRetractGrade(threadId: number) {
         '/homework/threads/by-id/' + threadId + '/retract',
         { method: 'POST', body: { body } },
       ),
+    onSuccess: (thread) => applyThread(qc, thread),
+  })
+}
+
+// useOfflineAccept marks a (student, subproblem) solved in person. The thread
+// is found-or-created server-side; the returned ThreadView (status accepted)
+// flows through applyThread so the conduit + grids update. Omit grader fields
+// to credit the authenticated teacher (phone flow).
+export function useOfflineAccept() {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: OfflineAcceptPayload) =>
+      client.request<ThreadView>('/homework/offline/accept', {
+        method: 'POST',
+        body: payload,
+      }),
+    onSuccess: (thread) => applyThread(qc, thread),
+  })
+}
+
+// useOfflineUndo reverses a prior offline accept, returning the thread to its
+// prior (or ungraded) state.
+export function useOfflineUndo() {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: OfflineUndoPayload) =>
+      client.request<ThreadView>('/homework/offline/undo', {
+        method: 'POST',
+        body: payload,
+      }),
     onSuccess: (thread) => applyThread(qc, thread),
   })
 }
