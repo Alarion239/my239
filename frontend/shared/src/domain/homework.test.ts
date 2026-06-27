@@ -186,6 +186,12 @@ describe('initialsOf', () => {
     expect(initialsOf('Иванов')).toBe('И')
     expect(initialsOf('   ')).toBe('')
   })
+
+  it('treats a two-letter token as already-initials', () => {
+    expect(initialsOf('АБ')).toBe('АБ')
+    expect(initialsOf('мк')).toBe('МК')
+    expect(initialsOf('А')).toBe('А')
+  })
 })
 
 describe('eventTone', () => {

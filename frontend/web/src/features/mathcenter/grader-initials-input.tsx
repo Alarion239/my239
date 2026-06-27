@@ -19,12 +19,15 @@ export function GraderInitialsInput({
   centerId,
   value,
   onChange,
+  onEnter,
   autoFocus,
   placeholder = 'Инициалы проверяющего…',
 }: {
   centerId: number
   value: CreditedGrader
   onChange: (g: CreditedGrader) => void
+  // Fired when Enter is pressed in the field (e.g. to commit «Готово»).
+  onEnter?: () => void
   autoFocus?: boolean
   placeholder?: string
 }) {
@@ -68,6 +71,13 @@ export function GraderInitialsInput({
         onChange={(e) => handleType(e.target.value)}
         onFocus={() => setFocused(true)}
         onBlur={() => window.setTimeout(() => setFocused(false), 120)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && onEnter) {
+            e.preventDefault()
+            setFocused(false)
+            onEnter()
+          }
+        }}
         placeholder={placeholder}
         aria-label="Инициалы проверяющего"
         autoFocus={autoFocus}
