@@ -53,3 +53,6 @@ frontend/**/coverage/
 
 # Brainstorming/spec docs — local only, not committed
 docs/superpowers/
+
+# Brainstorming visual companion
+.superpowers/

@@ -56,6 +56,13 @@ func Router(database *db.DB, hub *live.Hub, tokens *internalAuth.TokenService, b
 		r.Delete("/notes/{noteID}", DeleteThreadNote(database))
 	})
 
+	// Offline grading — teacher marks a solution explained in person, keyed
+	// on (student, subproblem) since the thread may not exist yet. The
+	// credited grader is resolved from the body (conduit) or defaults to the
+	// authenticated teacher (phone flow).
+	r.Post("/offline/accept", OfflineAccept(database, hub, blobs))
+	r.Post("/offline/undo", OfflineUndo(database, hub, blobs))
+
 	// Subproblem metadata — used by the new-submission page (when no
 	// thread exists yet) to find the series due-date.
 	r.Get("/subproblems/{subproblemID}", SubproblemContext(database))
@@ -69,6 +76,7 @@ func Router(database *db.DB, hub *live.Hub, tokens *internalAuth.TokenService, b
 	// Center-scoped dashboards.
 	r.Get("/centers/{centerID}/grader-stats", GraderStats(database))
 	r.Get("/centers/{centerID}/grid", GetCenterGrid(database))
+	r.Get("/centers/{centerID}/teachers", CenterTeachers(database))
 
 	return r
 }

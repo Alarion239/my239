@@ -69,7 +69,7 @@ func TestAppeal_HappyPath(t *testing.T) {
 	mock.ExpectQuery(`INSERT INTO homework_thread_event`).
 		WithArgs(int64(1), "u", "appealed", int64(7), "please regrade", (*string)(nil), &gradeID).
 		WillReturnRows(mock.NewRows(eventColumns).
-			AddRow(int64(70), int64(1), "u", "appealed", int64(7), "please regrade", (*string)(nil), &gradeID, now))
+			AddRow(int64(70), int64(1), "u", "appealed", int64(7), "please regrade", (*string)(nil), &gradeID, now, false, (*int64)(nil), ""))
 	newAttempt := int64(70)
 	mock.ExpectExec(`UPDATE homework_thread\s+SET current_status\s+= 'appealed'`).
 		WithArgs(int64(1), &newAttempt).

@@ -26,7 +26,7 @@ func TestGetThread_StudentOwnerAllowed(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM homework_thread_event\s+WHERE thread_id`).
 		WithArgs(int64(1)).
 		WillReturnRows(mock.NewRows(eventColumns).
-			AddRow(int64(50), int64(1), "u", "submitted", int64(7), "hi", (*string)(nil), (*int64)(nil), now))
+			AddRow(int64(50), int64(1), "u", "submitted", int64(7), "hi", (*string)(nil), (*int64)(nil), now, false, (*int64)(nil), ""))
 	expectGetUsersForView(mock)
 	key := "homework/thread/1/u/0.jpg"
 	_ = blobs.Put(t.Context(), key, strings.NewReader("img"), 3, "image/jpeg")

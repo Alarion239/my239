@@ -33,7 +33,7 @@ func TestGrade_HappyPathAccept(t *testing.T) {
 	mock.ExpectQuery(`INSERT INTO homework_thread_event`).
 		WithArgs(int64(1), "g1", "graded", int64(3), "great work", &verdict, &attemptID).
 		WillReturnRows(mock.NewRows(eventColumns).
-			AddRow(int64(80), int64(1), "g1", "graded", int64(3), "great work", &verdict, &attemptID, now))
+			AddRow(int64(80), int64(1), "g1", "graded", int64(3), "great work", &verdict, &attemptID, now, false, (*int64)(nil), ""))
 	mock.ExpectExec(`UPDATE homework_thread\s+SET current_status\s+= CASE`).
 		WithArgs("accepted", int64(80), int64(3), int64(1)).
 		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
@@ -84,7 +84,7 @@ func TestGrade_RejectVerdictAlsoWorks(t *testing.T) {
 	mock.ExpectQuery(`INSERT INTO homework_thread_event`).
 		WithArgs(int64(1), "g2", "graded", int64(3), "see step 3", &verdict, &attemptID).
 		WillReturnRows(mock.NewRows(eventColumns).
-			AddRow(int64(81), int64(1), "g2", "graded", int64(3), "see step 3", &verdict, &attemptID, now))
+			AddRow(int64(81), int64(1), "g2", "graded", int64(3), "see step 3", &verdict, &attemptID, now, false, (*int64)(nil), ""))
 	mock.ExpectExec(`UPDATE homework_thread\s+SET current_status\s+= CASE`).
 		WithArgs("rejected", int64(81), int64(3), int64(1)).
 		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
@@ -134,7 +134,7 @@ func TestGrade_ClaimContention(t *testing.T) {
 	mock.ExpectQuery(`INSERT INTO homework_thread_event`).
 		WithArgs(int64(1), "g3", "graded", int64(3), "ok", &verdict, &attemptID).
 		WillReturnRows(mock.NewRows(eventColumns).
-			AddRow(int64(82), int64(1), "g3", "graded", int64(3), "ok", &verdict, &attemptID, now))
+			AddRow(int64(82), int64(1), "g3", "graded", int64(3), "ok", &verdict, &attemptID, now, false, (*int64)(nil), ""))
 	// UpdateThreadAfterGrade affects 0 rows — claim was stolen.
 	mock.ExpectExec(`UPDATE homework_thread\s+SET current_status\s+= CASE`).
 		WithArgs("accepted", int64(82), int64(3), int64(1)).
@@ -205,7 +205,7 @@ func TestGrade_AdminCanOverrideAppealStickiness(t *testing.T) {
 	mock.ExpectQuery(`INSERT INTO homework_thread_event`).
 		WithArgs(int64(1), "g5", "graded", int64(4), "admin override", &verdict, &attemptID).
 		WillReturnRows(mock.NewRows(eventColumns).
-			AddRow(int64(90), int64(1), "g5", "graded", int64(4), "admin override", &verdict, &attemptID, now))
+			AddRow(int64(90), int64(1), "g5", "graded", int64(4), "admin override", &verdict, &attemptID, now, false, (*int64)(nil), ""))
 	mock.ExpectExec(`UPDATE homework_thread\s+SET current_status\s+= CASE`).
 		WithArgs("accepted", int64(90), int64(4), int64(1)).
 		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
@@ -295,7 +295,7 @@ func TestGrade_HappyPathWithPhoto(t *testing.T) {
 	mock.ExpectQuery(`INSERT INTO homework_thread_event`).
 		WithArgs(int64(1), "g6", "graded", int64(3), "annotated", &verdict, &attemptID).
 		WillReturnRows(mock.NewRows(eventColumns).
-			AddRow(int64(83), int64(1), "g6", "graded", int64(3), "annotated", &verdict, &attemptID, now))
+			AddRow(int64(83), int64(1), "g6", "graded", int64(3), "annotated", &verdict, &attemptID, now, false, (*int64)(nil), ""))
 	mock.ExpectExec(`INSERT INTO homework_thread_event_photo`).
 		WithArgs(int64(83), int32(0), key, int64(5), "image/png").
 		WillReturnResult(pgxmock.NewResult("INSERT", 1))

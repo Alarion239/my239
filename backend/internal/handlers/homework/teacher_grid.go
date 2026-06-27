@@ -32,13 +32,15 @@ type gridStudent struct {
 // thread exists yet (no submission at all); the frontend renders that as a
 // neutral "пусто" tile.
 type gridCell struct {
-	SubproblemID      int64      `json:"subproblem_id"`
-	SubproblemLabel   string     `json:"subproblem_label"`
-	ProblemID         int64      `json:"problem_id"`
-	ProblemNumber     int        `json:"problem_number"`
-	ThreadID          int64      `json:"thread_id"`
-	CurrentStatus     string     `json:"current_status"`
-	LastGraderUserID  *int64     `json:"last_grader_user_id,omitempty"`
+	SubproblemID     int64  `json:"subproblem_id"`
+	SubproblemLabel  string `json:"subproblem_label"`
+	ProblemID        int64  `json:"problem_id"`
+	ProblemNumber    int    `json:"problem_number"`
+	ThreadID         int64  `json:"thread_id"`
+	CurrentStatus    string `json:"current_status"`
+	LastGraderUserID *int64 `json:"last_grader_user_id,omitempty"`
+	// LastGraderName credits an offline accept by an unregistered grader.
+	LastGraderName    string     `json:"last_grader_name,omitempty"`
 	ClaimHolderUserID *int64     `json:"claim_holder_user_id,omitempty"`
 	ClaimExpiresAt    *time.Time `json:"claim_expires_at,omitempty"`
 	// HasInternalComment marks the cell when its thread carries at least one
@@ -180,6 +182,7 @@ func buildGridStudents(rows []store.TeacherSeriesGridRow, columns []gridSubprobl
 			ThreadID:           threadID,
 			CurrentStatus:      row.CurrentStatus,
 			LastGraderUserID:   row.LastGraderUserID,
+			LastGraderName:     row.LastGraderName,
 			ClaimHolderUserID:  row.ClaimHolderUserID,
 			ClaimExpiresAt:     row.ClaimExpiresAt,
 			HasInternalComment: row.HasInternalComment,

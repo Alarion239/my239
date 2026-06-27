@@ -40,6 +40,11 @@ type eventView struct {
 	RefersToEventID *int64      `json:"refers_to_event_id,omitempty"`
 	CreatedAt       time.Time   `json:"created_at"`
 	Photos          []photoView `json:"photos"`
+	// IsOffline + CreditedGraderName describe an in-person accept/undo so the
+	// timeline can render "Принято очно — Мария Кузнецова" for a grader who
+	// may not be a registered user.
+	IsOffline          bool   `json:"is_offline,omitempty"`
+	CreditedGraderName string `json:"credited_grader_name,omitempty"`
 }
 
 // threadView is the full timeline + cache state for one thread. Used by
@@ -57,6 +62,7 @@ type threadView struct {
 	MathCenterID      int64             `json:"math_center_id"`
 	CurrentStatus     string            `json:"current_status"`
 	LastGraderUserID  *int64            `json:"last_grader_user_id,omitempty"`
+	LastGraderName    string            `json:"last_grader_name,omitempty"`
 	ClaimHolderUserID *int64            `json:"claim_holder_user_id,omitempty"`
 	ClaimExpiresAt    *time.Time        `json:"claim_expires_at,omitempty"`
 	CreatedAt         time.Time         `json:"created_at"`
@@ -178,15 +184,17 @@ func buildThreadView(ctx context.Context, q *store.Queries, blobs objectstore.St
 			photos = []photoView{}
 		}
 		evViews = append(evViews, eventView{
-			ID:              e.ID,
-			EventUUID:       e.EventUuid,
-			Kind:            e.Kind,
-			ActorUserID:     e.ActorUserID,
-			Body:            e.Body,
-			Verdict:         e.Verdict,
-			RefersToEventID: e.RefersToEventID,
-			CreatedAt:       e.CreatedAt,
-			Photos:          photos,
+			ID:                 e.ID,
+			EventUUID:          e.EventUuid,
+			Kind:               e.Kind,
+			ActorUserID:        e.ActorUserID,
+			Body:               e.Body,
+			Verdict:            e.Verdict,
+			RefersToEventID:    e.RefersToEventID,
+			CreatedAt:          e.CreatedAt,
+			Photos:             photos,
+			IsOffline:          e.IsOffline,
+			CreditedGraderName: e.CreditedGraderName,
 		})
 	}
 	return &threadView{
@@ -198,6 +206,7 @@ func buildThreadView(ctx context.Context, q *store.Queries, blobs objectstore.St
 		MathCenterID:      thread.MathCenterID,
 		CurrentStatus:     thread.CurrentStatus,
 		LastGraderUserID:  thread.LastGraderUserID,
+		LastGraderName:    thread.LastGraderName,
 		ClaimHolderUserID: thread.ClaimHolderUserID,
 		ClaimExpiresAt:    thread.ClaimExpiresAt,
 		CreatedAt:         thread.CreatedAt,

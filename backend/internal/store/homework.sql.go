@@ -14,7 +14,7 @@ const appendEvent = `-- name: AppendEvent :one
 INSERT INTO homework_thread_event
     (thread_id, event_uuid, kind, actor_user_id, body, verdict, refers_to_event_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, thread_id, event_uuid, kind, actor_user_id, body, verdict, refers_to_event_id, created_at
+RETURNING id, thread_id, event_uuid, kind, actor_user_id, body, verdict, refers_to_event_id, created_at, is_offline, credited_grader_user_id, credited_grader_name
 `
 
 type AppendEventParams struct {
@@ -48,6 +48,63 @@ func (q *Queries) AppendEvent(ctx context.Context, arg AppendEventParams) (Homew
 		&i.Verdict,
 		&i.RefersToEventID,
 		&i.CreatedAt,
+		&i.IsOffline,
+		&i.CreditedGraderUserID,
+		&i.CreditedGraderName,
+	)
+	return i, err
+}
+
+const appendOfflineEvent = `-- name: AppendOfflineEvent :one
+INSERT INTO homework_thread_event
+    (thread_id, event_uuid, kind, actor_user_id, body, verdict, refers_to_event_id,
+     is_offline, credited_grader_user_id, credited_grader_name)
+VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9::text)
+RETURNING id, thread_id, event_uuid, kind, actor_user_id, body, verdict, refers_to_event_id, created_at, is_offline, credited_grader_user_id, credited_grader_name
+`
+
+type AppendOfflineEventParams struct {
+	ThreadID             int64   `json:"thread_id"`
+	EventUuid            string  `json:"event_uuid"`
+	Kind                 string  `json:"kind"`
+	ActorUserID          int64   `json:"actor_user_id"`
+	Body                 string  `json:"body"`
+	Verdict              *string `json:"verdict"`
+	RefersToEventID      *int64  `json:"refers_to_event_id"`
+	CreditedGraderUserID *int64  `json:"credited_grader_user_id"`
+	CreditedGraderName   string  `json:"credited_grader_name"`
+}
+
+// Offline accept / undo events. is_offline is always true; the credited
+// grader is either a registered teacher (credited_grader_user_id) resolved
+// from typed initials, or a free-text name (credited_grader_name) when that
+// teacher isn't registered. actor_user_id stays the session account.
+func (q *Queries) AppendOfflineEvent(ctx context.Context, arg AppendOfflineEventParams) (HomeworkThreadEvent, error) {
+	row := q.db.QueryRow(ctx, appendOfflineEvent,
+		arg.ThreadID,
+		arg.EventUuid,
+		arg.Kind,
+		arg.ActorUserID,
+		arg.Body,
+		arg.Verdict,
+		arg.RefersToEventID,
+		arg.CreditedGraderUserID,
+		arg.CreditedGraderName,
+	)
+	var i HomeworkThreadEvent
+	err := row.Scan(
+		&i.ID,
+		&i.ThreadID,
+		&i.EventUuid,
+		&i.Kind,
+		&i.ActorUserID,
+		&i.Body,
+		&i.Verdict,
+		&i.RefersToEventID,
+		&i.CreatedAt,
+		&i.IsOffline,
+		&i.CreditedGraderUserID,
+		&i.CreditedGraderName,
 	)
 	return i, err
 }
@@ -57,7 +114,7 @@ INSERT INTO homework_thread (student_user_id, subproblem_id, series_id, math_cen
 VALUES ($1, $2, $3, $4)
 ON CONFLICT (student_user_id, subproblem_id) DO UPDATE
     SET updated_at = NOW()
-RETURNING id, student_user_id, subproblem_id, series_id, math_center_id, current_status, current_attempt_event_id, current_grade_event_id, last_grader_user_id, claim_holder_user_id, claim_expires_at, created_at, updated_at
+RETURNING id, student_user_id, subproblem_id, series_id, math_center_id, current_status, current_attempt_event_id, current_grade_event_id, last_grader_user_id, claim_holder_user_id, claim_expires_at, created_at, updated_at, last_grader_name
 `
 
 type FindOrCreateThreadParams struct {
@@ -92,6 +149,33 @@ func (q *Queries) FindOrCreateThread(ctx context.Context, arg FindOrCreateThread
 		&i.ClaimExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LastGraderName,
+	)
+	return i, err
+}
+
+const getEvent = `-- name: GetEvent :one
+SELECT id, thread_id, event_uuid, kind, actor_user_id, body, verdict, refers_to_event_id, created_at, is_offline, credited_grader_user_id, credited_grader_name
+FROM homework_thread_event
+WHERE id = $1
+`
+
+func (q *Queries) GetEvent(ctx context.Context, id int64) (HomeworkThreadEvent, error) {
+	row := q.db.QueryRow(ctx, getEvent, id)
+	var i HomeworkThreadEvent
+	err := row.Scan(
+		&i.ID,
+		&i.ThreadID,
+		&i.EventUuid,
+		&i.Kind,
+		&i.ActorUserID,
+		&i.Body,
+		&i.Verdict,
+		&i.RefersToEventID,
+		&i.CreatedAt,
+		&i.IsOffline,
+		&i.CreditedGraderUserID,
+		&i.CreditedGraderName,
 	)
 	return i, err
 }
@@ -110,7 +194,7 @@ func (q *Queries) GetEventKind(ctx context.Context, id int64) (string, error) {
 }
 
 const getMostRecentGradedEvent = `-- name: GetMostRecentGradedEvent :one
-SELECT id, thread_id, event_uuid, kind, actor_user_id, body, verdict, refers_to_event_id, created_at
+SELECT id, thread_id, event_uuid, kind, actor_user_id, body, verdict, refers_to_event_id, created_at, is_offline, credited_grader_user_id, credited_grader_name
 FROM homework_thread_event
 WHERE thread_id = $1
   AND kind      = 'graded'
@@ -131,6 +215,9 @@ func (q *Queries) GetMostRecentGradedEvent(ctx context.Context, threadID int64) 
 		&i.Verdict,
 		&i.RefersToEventID,
 		&i.CreatedAt,
+		&i.IsOffline,
+		&i.CreditedGraderUserID,
+		&i.CreditedGraderName,
 	)
 	return i, err
 }
@@ -190,7 +277,7 @@ func (q *Queries) GetSubproblemContext(ctx context.Context, id int64) (GetSubpro
 }
 
 const getThread = `-- name: GetThread :one
-SELECT id, student_user_id, subproblem_id, series_id, math_center_id, current_status, current_attempt_event_id, current_grade_event_id, last_grader_user_id, claim_holder_user_id, claim_expires_at, created_at, updated_at
+SELECT id, student_user_id, subproblem_id, series_id, math_center_id, current_status, current_attempt_event_id, current_grade_event_id, last_grader_user_id, claim_holder_user_id, claim_expires_at, created_at, updated_at, last_grader_name
 FROM homework_thread
 WHERE id = $1
 `
@@ -212,12 +299,13 @@ func (q *Queries) GetThread(ctx context.Context, id int64) (HomeworkThread, erro
 		&i.ClaimExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LastGraderName,
 	)
 	return i, err
 }
 
 const getThreadByStudentAndSubproblem = `-- name: GetThreadByStudentAndSubproblem :one
-SELECT id, student_user_id, subproblem_id, series_id, math_center_id, current_status, current_attempt_event_id, current_grade_event_id, last_grader_user_id, claim_holder_user_id, claim_expires_at, created_at, updated_at
+SELECT id, student_user_id, subproblem_id, series_id, math_center_id, current_status, current_attempt_event_id, current_grade_event_id, last_grader_user_id, claim_holder_user_id, claim_expires_at, created_at, updated_at, last_grader_name
 FROM homework_thread
 WHERE student_user_id = $1
   AND subproblem_id   = $2
@@ -245,6 +333,7 @@ func (q *Queries) GetThreadByStudentAndSubproblem(ctx context.Context, arg GetTh
 		&i.ClaimExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LastGraderName,
 	)
 	return i, err
 }
@@ -465,7 +554,7 @@ func (q *Queries) ListGraderQueueForSeries(ctx context.Context, arg ListGraderQu
 }
 
 const listThreadEvents = `-- name: ListThreadEvents :many
-SELECT id, thread_id, event_uuid, kind, actor_user_id, body, verdict, refers_to_event_id, created_at
+SELECT id, thread_id, event_uuid, kind, actor_user_id, body, verdict, refers_to_event_id, created_at, is_offline, credited_grader_user_id, credited_grader_name
 FROM homework_thread_event
 WHERE thread_id = $1
 ORDER BY id ASC
@@ -490,6 +579,9 @@ func (q *Queries) ListThreadEvents(ctx context.Context, threadID int64) ([]Homew
 			&i.Verdict,
 			&i.RefersToEventID,
 			&i.CreatedAt,
+			&i.IsOffline,
+			&i.CreditedGraderUserID,
+			&i.CreditedGraderName,
 		); err != nil {
 			return nil, err
 		}
@@ -713,6 +805,7 @@ SELECT
     COALESCE(t.id, 0)::bigint              AS thread_id,
     COALESCE(t.current_status, 'ungraded') AS current_status,
     t.last_grader_user_id                  AS last_grader_user_id,
+    COALESCE(t.last_grader_name, '')        AS last_grader_name,
     gu.first_name                          AS grader_first_name,
     gu.last_name                           AS grader_last_name,
     t.claim_holder_user_id                 AS claim_holder_user_id,
@@ -756,6 +849,7 @@ type TeacherCenterGridRow struct {
 	ThreadID           int64      `json:"thread_id"`
 	CurrentStatus      string     `json:"current_status"`
 	LastGraderUserID   *int64     `json:"last_grader_user_id"`
+	LastGraderName     string     `json:"last_grader_name"`
 	GraderFirstName    *string    `json:"grader_first_name"`
 	GraderLastName     *string    `json:"grader_last_name"`
 	ClaimHolderUserID  *int64     `json:"claim_holder_user_id"`
@@ -797,6 +891,7 @@ func (q *Queries) TeacherCenterGrid(ctx context.Context, mathCenterID int64) ([]
 			&i.ThreadID,
 			&i.CurrentStatus,
 			&i.LastGraderUserID,
+			&i.LastGraderName,
 			&i.GraderFirstName,
 			&i.GraderLastName,
 			&i.ClaimHolderUserID,
@@ -831,6 +926,7 @@ SELECT
     COALESCE(t.id, 0)::bigint              AS thread_id,
     COALESCE(t.current_status, 'ungraded') AS current_status,
     t.last_grader_user_id                  AS last_grader_user_id,
+    COALESCE(t.last_grader_name, '')        AS last_grader_name,
     t.claim_holder_user_id                 AS claim_holder_user_id,
     t.claim_expires_at                     AS claim_expires_at,
     t.updated_at                           AS thread_updated_at,
@@ -868,6 +964,7 @@ type TeacherSeriesGridRow struct {
 	ThreadID           int64      `json:"thread_id"`
 	CurrentStatus      string     `json:"current_status"`
 	LastGraderUserID   *int64     `json:"last_grader_user_id"`
+	LastGraderName     string     `json:"last_grader_name"`
 	ClaimHolderUserID  *int64     `json:"claim_holder_user_id"`
 	ClaimExpiresAt     *time.Time `json:"claim_expires_at"`
 	ThreadUpdatedAt    *time.Time `json:"thread_updated_at"`
@@ -905,6 +1002,7 @@ func (q *Queries) TeacherSeriesGrid(ctx context.Context, id int64) ([]TeacherSer
 			&i.ThreadID,
 			&i.CurrentStatus,
 			&i.LastGraderUserID,
+			&i.LastGraderName,
 			&i.ClaimHolderUserID,
 			&i.ClaimExpiresAt,
 			&i.ThreadUpdatedAt,
@@ -930,7 +1028,7 @@ WHERE id = $2::bigint
   AND (claim_holder_user_id IS NULL
        OR claim_expires_at < NOW()
        OR claim_holder_user_id = $1::bigint)
-RETURNING id, student_user_id, subproblem_id, series_id, math_center_id, current_status, current_attempt_event_id, current_grade_event_id, last_grader_user_id, claim_holder_user_id, claim_expires_at, created_at, updated_at
+RETURNING id, student_user_id, subproblem_id, series_id, math_center_id, current_status, current_attempt_event_id, current_grade_event_id, last_grader_user_id, claim_holder_user_id, claim_expires_at, created_at, updated_at, last_grader_name
 `
 
 type TryClaimParams struct {
@@ -957,6 +1055,7 @@ func (q *Queries) TryClaim(ctx context.Context, arg TryClaimParams) (HomeworkThr
 		&i.ClaimExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LastGraderName,
 	)
 	return i, err
 }
@@ -1018,6 +1117,62 @@ func (q *Queries) UpdateThreadAfterGrade(ctx context.Context, arg UpdateThreadAf
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const updateThreadAfterOfflineAccept = `-- name: UpdateThreadAfterOfflineAccept :exec
+UPDATE homework_thread
+SET current_status         = 'accepted',
+    current_grade_event_id = $1::bigint,
+    last_grader_user_id    = $2,
+    last_grader_name       = $3::text,
+    claim_holder_user_id   = NULL,
+    claim_expires_at       = NULL,
+    updated_at             = NOW()
+WHERE id = $4::bigint
+`
+
+type UpdateThreadAfterOfflineAcceptParams struct {
+	GradeEventID int64  `json:"grade_event_id"`
+	GraderUserID *int64 `json:"grader_user_id"`
+	GraderName   string `json:"grader_name"`
+	ID           int64  `json:"id"`
+}
+
+// Offline accept supersedes any state: status → accepted, grade cache points
+// at the offline event, and the credited grader is recorded both as a user id
+// (when registered, so the conduit's user-id → initials map covers them) and
+// as a denormalized name (so unregistered graders still render). Any stale
+// claim is cleared so the cell isn't stuck "in review". No claim re-check —
+// offline grading is a shared-tool action, not a claimed online grade.
+func (q *Queries) UpdateThreadAfterOfflineAccept(ctx context.Context, arg UpdateThreadAfterOfflineAcceptParams) error {
+	_, err := q.db.Exec(ctx, updateThreadAfterOfflineAccept,
+		arg.GradeEventID,
+		arg.GraderUserID,
+		arg.GraderName,
+		arg.ID,
+	)
+	return err
+}
+
+const updateThreadAfterOfflineUndo = `-- name: UpdateThreadAfterOfflineUndo :exec
+UPDATE homework_thread
+SET current_status         = $1::text,
+    current_grade_event_id = NULL,
+    last_grader_name       = '',
+    updated_at             = NOW()
+WHERE id = $2::bigint
+`
+
+type UpdateThreadAfterOfflineUndoParams struct {
+	RollbackStatus string `json:"rollback_status"`
+	ID             int64  `json:"id"`
+}
+
+// Reverts an offline accept to the rollback status (the most recent attempt,
+// or 'ungraded' when there was none) and clears the offline grade cache.
+func (q *Queries) UpdateThreadAfterOfflineUndo(ctx context.Context, arg UpdateThreadAfterOfflineUndoParams) error {
+	_, err := q.db.Exec(ctx, updateThreadAfterOfflineUndo, arg.RollbackStatus, arg.ID)
+	return err
 }
 
 const updateThreadAfterRetract = `-- name: UpdateThreadAfterRetract :exec
