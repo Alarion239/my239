@@ -23,18 +23,22 @@ type HomeworkThread struct {
 	ClaimExpiresAt        *time.Time `json:"claim_expires_at"`
 	CreatedAt             time.Time  `json:"created_at"`
 	UpdatedAt             time.Time  `json:"updated_at"`
+	LastGraderName        string     `json:"last_grader_name"`
 }
 
 type HomeworkThreadEvent struct {
-	ID              int64     `json:"id"`
-	ThreadID        int64     `json:"thread_id"`
-	EventUuid       string    `json:"event_uuid"`
-	Kind            string    `json:"kind"`
-	ActorUserID     int64     `json:"actor_user_id"`
-	Body            string    `json:"body"`
-	Verdict         *string   `json:"verdict"`
-	RefersToEventID *int64    `json:"refers_to_event_id"`
-	CreatedAt       time.Time `json:"created_at"`
+	ID                   int64     `json:"id"`
+	ThreadID             int64     `json:"thread_id"`
+	EventUuid            string    `json:"event_uuid"`
+	Kind                 string    `json:"kind"`
+	ActorUserID          int64     `json:"actor_user_id"`
+	Body                 string    `json:"body"`
+	Verdict              *string   `json:"verdict"`
+	RefersToEventID      *int64    `json:"refers_to_event_id"`
+	CreatedAt            time.Time `json:"created_at"`
+	IsOffline            bool      `json:"is_offline"`
+	CreditedGraderUserID *int64    `json:"credited_grader_user_id"`
+	CreditedGraderName   string    `json:"credited_grader_name"`
 }
 
 type HomeworkThreadEventPhoto struct {

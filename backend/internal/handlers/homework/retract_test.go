@@ -32,7 +32,7 @@ func TestRetract_OwnGraderRollsBackToSubmitted(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM homework_thread_event\s+WHERE thread_id = \$1\s+AND kind\s+= 'graded'`).
 		WithArgs(int64(1)).
 		WillReturnRows(mock.NewRows(eventColumns).
-			AddRow(int64(80), int64(1), "g1", "graded", int64(3), "see step 3", &verdict, &attemptID, now))
+			AddRow(int64(80), int64(1), "g1", "graded", int64(3), "see step 3", &verdict, &attemptID, now, false, (*int64)(nil), ""))
 	// rollbackStatus reads the kind of the current attempt event (50).
 	mock.ExpectQuery(`SELECT kind FROM homework_thread_event\s+WHERE id`).
 		WithArgs(int64(50)).
@@ -43,7 +43,7 @@ func TestRetract_OwnGraderRollsBackToSubmitted(t *testing.T) {
 	mock.ExpectQuery(`INSERT INTO homework_thread_event`).
 		WithArgs(int64(1), pgxmock.AnyArg(), "retracted", int64(3), "my mistake", (*string)(nil), &gradeID).
 		WillReturnRows(mock.NewRows(eventColumns).
-			AddRow(int64(85), int64(1), "rev1", "retracted", int64(3), "my mistake", (*string)(nil), &gradeID, now))
+			AddRow(int64(85), int64(1), "rev1", "retracted", int64(3), "my mistake", (*string)(nil), &gradeID, now, false, (*int64)(nil), ""))
 	mock.ExpectExec(`UPDATE homework_thread\s+SET current_status\s+= \$2`).
 		WithArgs(int64(1), "submitted").
 		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
@@ -91,7 +91,7 @@ func TestRetract_RollbackAfterAppealGoesToAppealed(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM homework_thread_event\s+WHERE thread_id = \$1\s+AND kind\s+= 'graded'`).
 		WithArgs(int64(1)).
 		WillReturnRows(mock.NewRows(eventColumns).
-			AddRow(int64(85), int64(1), "g2", "graded", int64(3), "ok actually no", &verdict, &appealEv, now))
+			AddRow(int64(85), int64(1), "g2", "graded", int64(3), "ok actually no", &verdict, &appealEv, now, false, (*int64)(nil), ""))
 	mock.ExpectQuery(`SELECT kind FROM homework_thread_event\s+WHERE id`).
 		WithArgs(int64(70)).
 		WillReturnRows(mock.NewRows([]string{"kind"}).AddRow("appealed"))
@@ -100,7 +100,7 @@ func TestRetract_RollbackAfterAppealGoesToAppealed(t *testing.T) {
 	mock.ExpectQuery(`INSERT INTO homework_thread_event`).
 		WithArgs(int64(1), pgxmock.AnyArg(), "retracted", int64(3), "", (*string)(nil), &gradeID).
 		WillReturnRows(mock.NewRows(eventColumns).
-			AddRow(int64(95), int64(1), "rev2", "retracted", int64(3), "", (*string)(nil), &gradeID, now))
+			AddRow(int64(95), int64(1), "rev2", "retracted", int64(3), "", (*string)(nil), &gradeID, now, false, (*int64)(nil), ""))
 	mock.ExpectExec(`UPDATE homework_thread\s+SET current_status\s+= \$2`).
 		WithArgs(int64(1), "appealed").
 		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
@@ -170,7 +170,7 @@ func TestRetract_AdminCanRetract(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM homework_thread_event\s+WHERE thread_id = \$1\s+AND kind\s+= 'graded'`).
 		WithArgs(int64(1)).
 		WillReturnRows(mock.NewRows(eventColumns).
-			AddRow(int64(80), int64(1), "g", "graded", int64(3), "x", &verdict, &attemptID, now))
+			AddRow(int64(80), int64(1), "g", "graded", int64(3), "x", &verdict, &attemptID, now, false, (*int64)(nil), ""))
 	mock.ExpectQuery(`SELECT kind FROM homework_thread_event\s+WHERE id`).
 		WithArgs(int64(50)).
 		WillReturnRows(mock.NewRows([]string{"kind"}).AddRow("submitted"))
@@ -179,7 +179,7 @@ func TestRetract_AdminCanRetract(t *testing.T) {
 	mock.ExpectQuery(`INSERT INTO homework_thread_event`).
 		WithArgs(int64(1), pgxmock.AnyArg(), "retracted", int64(4), "policy override", (*string)(nil), &gradeID).
 		WillReturnRows(mock.NewRows(eventColumns).
-			AddRow(int64(95), int64(1), "rev", "retracted", int64(4), "policy override", (*string)(nil), &gradeID, now))
+			AddRow(int64(95), int64(1), "rev", "retracted", int64(4), "policy override", (*string)(nil), &gradeID, now, false, (*int64)(nil), ""))
 	mock.ExpectExec(`UPDATE homework_thread\s+SET current_status\s+= \$2`).
 		WithArgs(int64(1), "submitted").
 		WillReturnResult(pgxmock.NewResult("UPDATE", 1))

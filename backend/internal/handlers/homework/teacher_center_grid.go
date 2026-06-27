@@ -70,9 +70,13 @@ type centerGridColumn struct {
 }
 
 type centerGridCell struct {
-	ThreadID          int64      `json:"thread_id"`
-	CurrentStatus     string     `json:"current_status"`
-	LastGraderUserID  *int64     `json:"last_grader_user_id,omitempty"`
+	ThreadID         int64  `json:"thread_id"`
+	CurrentStatus    string `json:"current_status"`
+	LastGraderUserID *int64 `json:"last_grader_user_id,omitempty"`
+	// LastGraderName is the credited grader of an offline accept. Set when an
+	// unregistered grader (no user id) accepted in person, so the conduit can
+	// still render their initials; empty for online grades.
+	LastGraderName    string     `json:"last_grader_name,omitempty"`
 	ClaimHolderUserID *int64     `json:"claim_holder_user_id,omitempty"`
 	ClaimExpiresAt    *time.Time `json:"claim_expires_at,omitempty"`
 	// HasInternalComment marks the cell when its thread carries at least one
@@ -153,6 +157,7 @@ func buildCenterGridResponse(rows []store.TeacherCenterGridRow) centerGridRespon
 			ThreadID:           row.ThreadID,
 			CurrentStatus:      row.CurrentStatus,
 			LastGraderUserID:   row.LastGraderUserID,
+			LastGraderName:     row.LastGraderName,
 			ClaimHolderUserID:  row.ClaimHolderUserID,
 			ClaimExpiresAt:     row.ClaimExpiresAt,
 			HasInternalComment: row.HasInternalComment,

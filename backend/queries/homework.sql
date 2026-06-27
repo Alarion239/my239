@@ -25,6 +25,22 @@ INSERT INTO homework_thread_event
 VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
+-- name: AppendOfflineEvent :one
+-- Offline accept / undo events. is_offline is always true; the credited
+-- grader is either a registered teacher (credited_grader_user_id) resolved
+-- from typed initials, or a free-text name (credited_grader_name) when that
+-- teacher isn't registered. actor_user_id stays the session account.
+INSERT INTO homework_thread_event
+    (thread_id, event_uuid, kind, actor_user_id, body, verdict, refers_to_event_id,
+     is_offline, credited_grader_user_id, credited_grader_name)
+VALUES ($1, $2, $3, $4, $5, $6, $7, true, sqlc.narg('credited_grader_user_id'), @credited_grader_name::text)
+RETURNING *;
+
+-- name: GetEvent :one
+SELECT *
+FROM homework_thread_event
+WHERE id = $1;
+
 -- name: InsertEventPhoto :exec
 INSERT INTO homework_thread_event_photo (event_id, idx, object_key, size_bytes, content_type)
 VALUES ($1, $2, $3, $4, $5);
@@ -72,6 +88,33 @@ SET current_status         = $2,
     current_grade_event_id = NULL,
     updated_at             = NOW()
 WHERE id = $1;
+
+-- name: UpdateThreadAfterOfflineAccept :exec
+-- Offline accept supersedes any state: status → accepted, grade cache points
+-- at the offline event, and the credited grader is recorded both as a user id
+-- (when registered, so the conduit's user-id → initials map covers them) and
+-- as a denormalized name (so unregistered graders still render). Any stale
+-- claim is cleared so the cell isn't stuck "in review". No claim re-check —
+-- offline grading is a shared-tool action, not a claimed online grade.
+UPDATE homework_thread
+SET current_status         = 'accepted',
+    current_grade_event_id = @grade_event_id::bigint,
+    last_grader_user_id    = sqlc.narg('grader_user_id'),
+    last_grader_name       = @grader_name::text,
+    claim_holder_user_id   = NULL,
+    claim_expires_at       = NULL,
+    updated_at             = NOW()
+WHERE id = @id::bigint;
+
+-- name: UpdateThreadAfterOfflineUndo :exec
+-- Reverts an offline accept to the rollback status (the most recent attempt,
+-- or 'ungraded' when there was none) and clears the offline grade cache.
+UPDATE homework_thread
+SET current_status         = @rollback_status::text,
+    current_grade_event_id = NULL,
+    last_grader_name       = '',
+    updated_at             = NOW()
+WHERE id = @id::bigint;
 
 -- name: TryClaim :one
 -- Returns the row when the claim is granted (no live holder, or the caller
@@ -246,6 +289,7 @@ SELECT
     COALESCE(t.id, 0)::bigint              AS thread_id,
     COALESCE(t.current_status, 'ungraded') AS current_status,
     t.last_grader_user_id                  AS last_grader_user_id,
+    COALESCE(t.last_grader_name, '')        AS last_grader_name,
     t.claim_holder_user_id                 AS claim_holder_user_id,
     t.claim_expires_at                     AS claim_expires_at,
     t.updated_at                           AS thread_updated_at,
@@ -291,6 +335,7 @@ SELECT
     COALESCE(t.id, 0)::bigint              AS thread_id,
     COALESCE(t.current_status, 'ungraded') AS current_status,
     t.last_grader_user_id                  AS last_grader_user_id,
+    COALESCE(t.last_grader_name, '')        AS last_grader_name,
     gu.first_name                          AS grader_first_name,
     gu.last_name                           AS grader_last_name,
     t.claim_holder_user_id                 AS claim_holder_user_id,

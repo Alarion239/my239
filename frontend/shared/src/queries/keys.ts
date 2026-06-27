@@ -48,6 +48,9 @@ export const queryKeys = {
     ['homework', 'centers', centerId, 'grid'] as const,
   graderStats: (centerId: number) =>
     ['homework', 'centers', centerId, 'grader-stats'] as const,
+  // Teachers of a center, for the offline-grading initials autocomplete.
+  centerTeachers: (centerId: number) =>
+    ['homework', 'centers', centerId, 'teachers'] as const,
   // Internal teacher-only notes on a solution thread.
   threadNotes: (threadId: number) =>
     ['homework', 'thread', threadId, 'notes'] as const,

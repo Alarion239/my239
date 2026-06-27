@@ -12,6 +12,11 @@ type Querier interface {
 	AddStudentToGroup(ctx context.Context, arg AddStudentToGroupParams) (MathCenterStudent, error)
 	AddTeacherToCenter(ctx context.Context, arg AddTeacherToCenterParams) (MathCenterTeacher, error)
 	AppendEvent(ctx context.Context, arg AppendEventParams) (HomeworkThreadEvent, error)
+	// Offline accept / undo events. is_offline is always true; the credited
+	// grader is either a registered teacher (credited_grader_user_id) resolved
+	// from typed initials, or a free-text name (credited_grader_name) when that
+	// teacher isn't registered. actor_user_id stays the session account.
+	AppendOfflineEvent(ctx context.Context, arg AppendOfflineEventParams) (HomeworkThreadEvent, error)
 	ClearSeriesTex(ctx context.Context, id int64) (MathCenterSeries, error)
 	CountHeadTeachersForCenter(ctx context.Context, mathCenterID int64) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
@@ -58,6 +63,7 @@ type Querier interface {
 	// whether we created it now or matched an existing one. The DO UPDATE bumps
 	// updated_at so we can see activity even on no-op upserts.
 	FindOrCreateThread(ctx context.Context, arg FindOrCreateThreadParams) (HomeworkThread, error)
+	GetEvent(ctx context.Context, id int64) (HomeworkThreadEvent, error)
 	GetEventKind(ctx context.Context, id int64) (string, error)
 	GetGroup(ctx context.Context, id int64) (MathCenterGroup, error)
 	GetInvitationTokenByID(ctx context.Context, id int64) (InvitationToken, error)
@@ -224,6 +230,16 @@ type Querier interface {
 	// ownership so a slow grader whose lease expired can't overwrite someone
 	// else's claim. Caller inspects affected-row count to detect contention.
 	UpdateThreadAfterGrade(ctx context.Context, arg UpdateThreadAfterGradeParams) (int64, error)
+	// Offline accept supersedes any state: status → accepted, grade cache points
+	// at the offline event, and the credited grader is recorded both as a user id
+	// (when registered, so the conduit's user-id → initials map covers them) and
+	// as a denormalized name (so unregistered graders still render). Any stale
+	// claim is cleared so the cell isn't stuck "in review". No claim re-check —
+	// offline grading is a shared-tool action, not a claimed online grade.
+	UpdateThreadAfterOfflineAccept(ctx context.Context, arg UpdateThreadAfterOfflineAcceptParams) error
+	// Reverts an offline accept to the rollback status (the most recent attempt,
+	// or 'ungraded' when there was none) and clears the offline grade cache.
+	UpdateThreadAfterOfflineUndo(ctx context.Context, arg UpdateThreadAfterOfflineUndoParams) error
 	// After a retraction the thread reverts to whatever its most recent attempt
 	// event was: 'submitted' for an original submission, 'appealed' for an
 	// appeal. The handler passes that rollback status in $2.

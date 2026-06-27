@@ -23,12 +23,13 @@ var threadColumns = []string{
 	"id", "student_user_id", "subproblem_id", "series_id", "math_center_id",
 	"current_status", "current_attempt_event_id", "current_grade_event_id",
 	"last_grader_user_id", "claim_holder_user_id", "claim_expires_at",
-	"created_at", "updated_at",
+	"created_at", "updated_at", "last_grader_name",
 }
 
 var eventColumns = []string{
 	"id", "thread_id", "event_uuid", "kind", "actor_user_id", "body", "verdict",
 	"refers_to_event_id", "created_at",
+	"is_offline", "credited_grader_user_id", "credited_grader_name",
 }
 
 var subproblemCtxColumns = []string{
@@ -177,6 +178,7 @@ func emptyThreadRow(threadID, studentID, subID, seriesID, centerID int64, now ti
 		(*int64)(nil),     // claim_holder_user_id
 		(*time.Time)(nil), // claim_expires_at
 		now, now,
+		"", // last_grader_name
 	}
 }
 
@@ -189,6 +191,7 @@ type threadRowOpts struct {
 	LastGraderID   *int64
 	ClaimHolderID  *int64
 	ClaimExpiresAt *time.Time
+	LastGraderName string
 }
 
 func threadRow(threadID, studentID, subID, seriesID, centerID int64, opts threadRowOpts, now time.Time) []any {
@@ -205,5 +208,6 @@ func threadRow(threadID, studentID, subID, seriesID, centerID int64, opts thread
 		opts.ClaimHolderID,
 		opts.ClaimExpiresAt,
 		now, now,
+		opts.LastGraderName,
 	}
 }

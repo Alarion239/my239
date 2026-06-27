@@ -15,7 +15,7 @@ var gridRowColumns = []string{
 	"group_id", "group_name",
 	"subproblem_id", "subproblem_label", "problem_id", "problem_number", "is_coffin",
 	"coffin_released_at",
-	"thread_id", "current_status", "last_grader_user_id",
+	"thread_id", "current_status", "last_grader_user_id", "last_grader_name",
 	"claim_holder_user_id", "claim_expires_at", "thread_updated_at",
 	"has_internal_comment", "has_student_comment",
 }
@@ -42,19 +42,19 @@ func TestTeacherGrid_HappyPath(t *testing.T) {
 			// student A also carries a student-level comment.
 			AddRow(int64(7), "Аня", (*string)(nil), "Иванова", int64(10), "А",
 				int64(900), "a", int64(500), int32(1), true, (*time.Time)(nil),
-				int64(1), "submitted", (*int64)(nil), (*int64)(nil), (*time.Time)(nil), &now, true, true).
+				int64(1), "submitted", (*int64)(nil), "", (*int64)(nil), (*time.Time)(nil), &now, true, true).
 			// Student A, subproblem b, ungraded
 			AddRow(int64(7), "Аня", (*string)(nil), "Иванова", int64(10), "А",
 				int64(901), "b", int64(500), int32(1), false, (*time.Time)(nil),
-				int64(0), "ungraded", (*int64)(nil), (*int64)(nil), (*time.Time)(nil), (*time.Time)(nil), false, true).
+				int64(0), "ungraded", (*int64)(nil), "", (*int64)(nil), (*time.Time)(nil), (*time.Time)(nil), false, true).
 			// Student B, subproblem a, ungraded
 			AddRow(int64(8), "Боря", (*string)(nil), "Петров", int64(10), "А",
 				int64(900), "a", int64(500), int32(1), true, (*time.Time)(nil),
-				int64(0), "ungraded", (*int64)(nil), (*int64)(nil), (*time.Time)(nil), (*time.Time)(nil), false, false).
+				int64(0), "ungraded", (*int64)(nil), "", (*int64)(nil), (*time.Time)(nil), (*time.Time)(nil), false, false).
 			// Student B, subproblem b, ungraded
 			AddRow(int64(8), "Боря", (*string)(nil), "Петров", int64(10), "А",
 				int64(901), "b", int64(500), int32(1), false, (*time.Time)(nil),
-				int64(0), "ungraded", (*int64)(nil), (*int64)(nil), (*time.Time)(nil), (*time.Time)(nil), false, false))
+				int64(0), "ungraded", (*int64)(nil), "", (*int64)(nil), (*time.Time)(nil), (*time.Time)(nil), false, false))
 
 	req := authedRequest(t, access, 3, false, http.MethodGet, "/series/100/grid", nil)
 	rr := httptest.NewRecorder()

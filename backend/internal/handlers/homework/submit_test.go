@@ -39,7 +39,7 @@ func TestSubmit_HappyPath(t *testing.T) {
 	mock.ExpectQuery(`INSERT INTO homework_thread_event`).
 		WithArgs(int64(1), eventUUID, "submitted", int64(7), "my solution", (*string)(nil), (*int64)(nil)).
 		WillReturnRows(mock.NewRows(eventColumns).
-			AddRow(int64(50), int64(1), eventUUID, "submitted", int64(7), "my solution", (*string)(nil), (*int64)(nil), now))
+			AddRow(int64(50), int64(1), eventUUID, "submitted", int64(7), "my solution", (*string)(nil), (*int64)(nil), now, false, (*int64)(nil), ""))
 	mock.ExpectExec(`INSERT INTO homework_thread_event_photo`).
 		WithArgs(int64(50), int32(0), key0, int64(8), "image/jpeg").
 		WillReturnResult(pgxmock.NewResult("INSERT", 1))
@@ -59,7 +59,7 @@ func TestSubmit_HappyPath(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM homework_thread_event\s+WHERE thread_id`).
 		WithArgs(int64(1)).
 		WillReturnRows(mock.NewRows(eventColumns).
-			AddRow(int64(50), int64(1), eventUUID, "submitted", int64(7), "my solution", (*string)(nil), (*int64)(nil), now))
+			AddRow(int64(50), int64(1), eventUUID, "submitted", int64(7), "my solution", (*string)(nil), (*int64)(nil), now, false, (*int64)(nil), ""))
 	expectGetUsersForView(mock)
 	mock.ExpectQuery(`SELECT .* FROM homework_thread_event_photo`).
 		WithArgs([]int64{50}).
@@ -156,7 +156,7 @@ func TestSubmit_OpenCoffinAllowsLateSubmit(t *testing.T) {
 	mock.ExpectQuery(`INSERT INTO homework_thread_event`).
 		WithArgs(int64(1), eventUUID, "submitted", int64(7), "late coffin try", (*string)(nil), (*int64)(nil)).
 		WillReturnRows(mock.NewRows(eventColumns).
-			AddRow(int64(50), int64(1), eventUUID, "submitted", int64(7), "late coffin try", (*string)(nil), (*int64)(nil), now))
+			AddRow(int64(50), int64(1), eventUUID, "submitted", int64(7), "late coffin try", (*string)(nil), (*int64)(nil), now, false, (*int64)(nil), ""))
 	evID := int64(50)
 	mock.ExpectExec(`UPDATE homework_thread\s+SET current_status\s+= 'submitted'`).
 		WithArgs(int64(1), &evID).
@@ -173,7 +173,7 @@ func TestSubmit_OpenCoffinAllowsLateSubmit(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM homework_thread_event\s+WHERE thread_id`).
 		WithArgs(int64(1)).
 		WillReturnRows(mock.NewRows(eventColumns).
-			AddRow(int64(50), int64(1), eventUUID, "submitted", int64(7), "late coffin try", (*string)(nil), (*int64)(nil), now))
+			AddRow(int64(50), int64(1), eventUUID, "submitted", int64(7), "late coffin try", (*string)(nil), (*int64)(nil), now, false, (*int64)(nil), ""))
 	expectGetUsersForView(mock)
 	mock.ExpectQuery(`SELECT .* FROM homework_thread_event_photo`).
 		WithArgs([]int64{50}).
@@ -344,7 +344,7 @@ func TestSubmit_AllowedAfterRejection(t *testing.T) {
 	mock.ExpectQuery(`INSERT INTO homework_thread_event`).
 		WithArgs(int64(1), "uuid2", "submitted", int64(7), "fixed it", (*string)(nil), (*int64)(nil)).
 		WillReturnRows(mock.NewRows(eventColumns).
-			AddRow(int64(60), int64(1), "uuid2", "submitted", int64(7), "fixed it", (*string)(nil), (*int64)(nil), now))
+			AddRow(int64(60), int64(1), "uuid2", "submitted", int64(7), "fixed it", (*string)(nil), (*int64)(nil), now, false, (*int64)(nil), ""))
 	newAttempt := int64(60)
 	mock.ExpectExec(`UPDATE homework_thread\s+SET current_status\s+= 'submitted'`).
 		WithArgs(int64(1), &newAttempt).

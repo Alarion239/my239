@@ -1,8 +1,10 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import {
   coffinOpen,
+  initialsOf,
   useCenterGrid,
+  useOfflineAccept,
   type CenterGridColumn,
   type CenterGridResponse,
   type CenterGridSeries,
@@ -10,6 +12,12 @@ import {
 import { Card, Input, Spinner } from '../../design/ui'
 import { cn } from '../../design/cn'
 import { ThreadCommentCell } from './cell-comment'
+import { OfflineCellDialog, type OfflineCellTarget } from './offline-cell-dialog'
+import {
+  GraderInitialsInput,
+  emptyGrader,
+  type CreditedGrader,
+} from './grader-initials-input'
 import { useSeriesContext } from './use-series-context'
 import { useCenterIdContext } from './center-id-context'
 import {
@@ -62,7 +70,7 @@ function Conduit({ centerId }: { centerId: number }) {
       </Card>
     )
   }
-  return <ConduitTable data={data} />
+  return <ConduitTable centerId={centerId} data={data} />
 }
 
 // flatCol is a column with the bookkeeping the table needs: which series it
@@ -96,9 +104,25 @@ function currentSeriesId(series: CenterGridSeries[]): number | null {
   return best ?? last
 }
 
-function ConduitTable({ data }: { data: CenterGridResponse }) {
+function ConduitTable({
+  centerId,
+  data,
+}: {
+  centerId: number
+  data: CenterGridResponse
+}) {
   const { year } = useParams<{ year: string }>()
   const [query, setQuery] = useState('')
+
+  // Offline-grading interaction state. A grader picks an active student (their
+  // row lights up) and enters their initials once; tapping un-accepted cells in
+  // that row marks them solved. Any cell can open the detail dialog (undo /
+  // comment / thread link).
+  const [activeStudentId, setActiveStudentId] = useState<number | null>(null)
+  const [grader, setGrader] = useState<CreditedGrader>(emptyGrader)
+  const [dialog, setDialog] = useState<OfflineCellTarget | null>(null)
+  const [pendingKey, setPendingKey] = useState<string | null>(null)
+  const accept = useOfflineAccept()
 
   const cols: FlatCol[] = useMemo(() => {
     const out: FlatCol[] = []
@@ -135,6 +159,11 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
     [filteredGroups],
   )
 
+  const activeStudent = useMemo(
+    () => students.find((s) => s.user_id === activeStudentId) ?? null,
+    [students, activeStudentId],
+  )
+
   const accepted = (studentId: number, subId: number): boolean =>
     data.cells[studentId + ':' + subId]?.current_status === 'accepted'
 
@@ -142,7 +171,9 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
     const cell = data.cells[studentId + ':' + subId]
     if (!cell || cell.current_status !== 'accepted') return ''
     const g = cell.last_grader_user_id
-    return (g != null && data.graders[String(g)]) || '✓'
+    if (g != null && data.graders[String(g)]) return data.graders[String(g)]
+    if (cell.last_grader_name) return initialsOf(cell.last_grader_name)
+    return '✓'
   }
 
   const rowTotal = (studentId: number): number =>
@@ -150,6 +181,45 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
   const colTotal = (subId: number): number =>
     students.reduce((n, st) => n + (accepted(st.user_id, subId) ? 1 : 0), 0)
   const grandTotal = students.reduce((n, st) => n + rowTotal(st.user_id), 0)
+
+  // markCell fast-paths an offline accept using the initials bar's grader.
+  function markCell(studentId: number, col: CenterGridColumn) {
+    const key = studentId + ':' + col.subproblem_id
+    setPendingKey(key)
+    accept.mutate(
+      {
+        student_user_id: studentId,
+        subproblem_id: col.subproblem_id,
+        ...(grader.userId != null
+          ? { grader_user_id: grader.userId }
+          : { grader_name: grader.name.trim() }),
+      },
+      { onSettled: () => setPendingKey(null) },
+    )
+  }
+
+  function openCellDialog(
+    studentId: number,
+    studentName: string,
+    fc: FlatCol,
+  ) {
+    const sub = fc.col.subproblem_id
+    const cell = data.cells[studentId + ':' + sub]
+    setDialog({
+      studentUserId: studentId,
+      studentName,
+      subproblemId: sub,
+      columnLabel: fc.col.column_label,
+      threadId: cell?.thread_id ?? 0,
+      status: cell?.current_status ?? 'ungraded',
+      lastGraderName: cell?.last_grader_name,
+      acceptedInitials: cellInitials(studentId, sub) || undefined,
+      threadHref:
+        cell && cell.thread_id > 0
+          ? '/mathcenter/' + (year ?? '') + '/series/' + fc.seriesId + '/thread/' + cell.thread_id
+          : undefined,
+    })
+  }
 
   // Centre the current series on open.
   const scrollerRef = useRef<HTMLDivElement>(null)
@@ -165,178 +235,241 @@ function ConduitTable({ data }: { data: CenterGridResponse }) {
     scroller.scrollLeft += elRect.left - scRect.left - 200
   }, [currentId])
 
-  // The grid IS the page: it fills the full-bleed region and is the single
-  // scroll surface (both axes), like a spreadsheet — no Card, no nested box.
-  // Borders / sticky rules / coffin tint are shared with «Таблица» via
-  // grid-style so the two grids can't drift apart.
+  // The grid IS the page: it fills the full-bleed region. When a student is
+  // active, an initials bar sits above the single scroll surface.
   return (
-    <div ref={scrollerRef} className={gridScrollerWithHeight('h-full')}>
-      <table className={gridTable}>
-        <thead>
-          {/* Series band — one header spanning each series' columns. */}
-          <tr>
-            {/* Corner cell — holds the student search filter. */}
-            <th rowSpan={2} className={cornerHeaderCell}>
-              <div className="flex flex-col gap-1">
-                <Input
-                  type="search"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Ученик…"
-                  className="h-8 w-full min-w-40"
-                  aria-label="Поиск ученика"
-                />
-                <span className="text-[0.65rem] font-normal text-faint">
-                  {shown} из {students.length}
-                </span>
-              </div>
-            </th>
-            {data.series.map((s) => (
-              <th
-                key={s.series_id}
-                ref={s.series_id === currentId ? currentThRef : undefined}
-                colSpan={s.columns.length}
-                className={cn(
-                  'sticky top-0 z-20 h-9 whitespace-nowrap border-b border-t border-line bg-surface-muted px-3 text-center font-medium text-ink',
-                  vert(true),
-                )}
-                title={s.display_name}
-              >
-                Серия {s.number}
+    <div className="flex h-full flex-col">
+      {activeStudent ? (
+        <div className="flex flex-wrap items-end gap-3 border-b border-amber-300/70 bg-amber-50/70 px-4 py-2.5 dark:bg-amber-500/10">
+          <div className="flex flex-col">
+            <span className="text-xs text-faint">Отмечаю решённые у</span>
+            <span className="font-medium text-ink">{activeStudent.name}</span>
+          </div>
+          <div className="min-w-48 flex-1">
+            <GraderInitialsInput
+              centerId={centerId}
+              value={grader}
+              onChange={setGrader}
+              autoFocus
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setActiveStudentId(null)}
+            className="h-9 rounded-lg border border-line px-3 text-sm text-muted hover:bg-surface-muted hover:text-ink"
+          >
+            Готово
+          </button>
+        </div>
+      ) : null}
+
+      <div ref={scrollerRef} className={gridScrollerWithHeight('min-h-0 flex-1')}>
+        <table className={gridTable}>
+          <thead>
+            {/* Series band — one header spanning each series' columns. */}
+            <tr>
+              {/* Corner cell — holds the student search filter. */}
+              <th rowSpan={2} className={cornerHeaderCell}>
+                <div className="flex flex-col gap-1">
+                  <Input
+                    type="search"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Ученик…"
+                    className="h-8 w-full min-w-40"
+                    aria-label="Поиск ученика"
+                  />
+                  <span className="text-[0.65rem] font-normal text-faint">
+                    {shown} из {students.length}
+                  </span>
+                </div>
               </th>
-            ))}
-            <th
-              rowSpan={2}
-              className="sticky right-0 top-0 z-40 border-b border-l border-r border-t border-line bg-surface-muted px-3 py-2 text-center font-medium text-ink"
-            >
-              Решено
-            </th>
-          </tr>
-          {/* Per-subproblem column labels. Coffins are tinted — amber while
-              open for submission, gray once разобрана (solved). */}
-          <tr>
-            {cols.map(({ col, firstInSeries }) => {
-              const open = col.is_coffin && coffinOpen(col.coffin_released_at)
-              return (
+              {data.series.map((s) => (
                 <th
-                  key={col.subproblem_id}
-                  title={
-                    col.is_coffin
-                      ? open
-                        ? 'Гроб — открыт'
-                        : 'Гроб — разобран'
-                      : undefined
-                  }
+                  key={s.series_id}
+                  ref={s.series_id === currentId ? currentThRef : undefined}
+                  colSpan={s.columns.length}
                   className={cn(
-                    'sticky top-9 z-20 min-w-9 border-b border-line px-1.5 py-1 text-center text-xs font-medium',
-                    vert(firstInSeries),
-                    coffinColumnClasses(col.is_coffin, open),
+                    'sticky top-0 z-20 h-9 whitespace-nowrap border-b border-t border-line bg-surface-muted px-3 text-center font-medium text-ink',
+                    vert(true),
                   )}
+                  title={s.display_name}
                 >
-                  {col.column_label}
+                  Серия {s.number}
                 </th>
-              )
-            })}
-          </tr>
-        </thead>
-        <tbody>
-          {filteredGroups.map((g) => (
-            <Fragment key={g.group_id}>
-              <tr className="bg-surface-muted/60">
-                <td colSpan={cols.length + 2} className="border-b border-line p-0">
-                  <div className={groupLabel}>{g.name}</div>
-                </td>
-              </tr>
-              {g.students.map((st) => (
-                <tr key={st.user_id} className="hover:bg-surface-muted/40">
-                  <td className={nameCell}>
-                    <Link
-                      to={'../students/' + st.user_id}
-                      className="inline-flex items-center gap-1.5 underline-offset-2 hover:underline"
-                    >
-                      <span>{st.name}</span>
-                      {st.has_student_comment ? (
-                        <span
-                          tabIndex={0}
-                          title="Есть заметки об ученике"
-                          aria-label="Есть заметки об ученике"
-                          className="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-500"
-                        />
-                      ) : null}
-                    </Link>
-                  </td>
-                  {cols.map(({ col, firstInSeries, seriesId }) => {
-                    const acc = accepted(st.user_id, col.subproblem_id)
-                    const open = col.is_coffin && coffinOpen(col.coffin_released_at)
-                    const cell = data.cells[st.user_id + ':' + col.subproblem_id]
-                    const threadId = cell?.thread_id ?? 0
-                    const hasComment = !!cell?.has_internal_comment && threadId > 0
-                    // A solved (green) cell links to its submission thread.
-                    const href =
-                      acc && threadId > 0
-                        ? '/mathcenter/' + (year ?? '') + '/series/' + seriesId + '/thread/' + threadId
-                        : null
-                    return (
-                      <ThreadCommentCell
-                        key={col.subproblem_id}
-                        threadId={threadId}
-                        hasComment={hasComment}
-                        className={cn(
-                          'border-b border-line px-1.5 py-1.5 text-center',
-                          vert(firstInSeries),
-                          acc
-                            ? 'bg-status-accepted-soft font-medium text-status-accepted'
-                            : cn(coffinCellClasses(col.is_coffin, open), 'text-faint'),
-                        )}
-                      >
-                        {acc ? (
-                          href ? (
-                            <Link
-                              to={href}
-                              aria-label="Открыть проверку"
-                              className="block rounded hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-                            >
-                              {cellInitials(st.user_id, col.subproblem_id)}
-                            </Link>
-                          ) : (
-                            cellInitials(st.user_id, col.subproblem_id)
-                          )
-                        ) : (
-                          ''
-                        )}
-                      </ThreadCommentCell>
-                    )
-                  })}
-                  <td className="sticky right-0 z-10 border-b border-l border-r border-line bg-surface px-3 py-1.5 text-center font-medium text-ink">
-                    {rowTotal(st.user_id)}
+              ))}
+              <th
+                rowSpan={2}
+                className="sticky right-0 top-0 z-40 border-b border-l border-r border-t border-line bg-surface-muted px-3 py-2 text-center font-medium text-ink"
+              >
+                Решено
+              </th>
+            </tr>
+            {/* Per-subproblem column labels. Coffins are tinted — amber while
+                open for submission, gray once разобрана (solved). */}
+            <tr>
+              {cols.map(({ col, firstInSeries }) => {
+                const open = col.is_coffin && coffinOpen(col.coffin_released_at)
+                return (
+                  <th
+                    key={col.subproblem_id}
+                    title={
+                      col.is_coffin
+                        ? open
+                          ? 'Гроб — открыт'
+                          : 'Гроб — разобран'
+                        : undefined
+                    }
+                    className={cn(
+                      'sticky top-9 z-20 min-w-9 border-b border-line px-1.5 py-1 text-center text-xs font-medium',
+                      vert(firstInSeries),
+                      coffinColumnClasses(col.is_coffin, open),
+                    )}
+                  >
+                    {col.column_label}
+                  </th>
+                )
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {filteredGroups.map((g) => (
+              <Fragment key={g.group_id}>
+                <tr className="bg-surface-muted/60">
+                  <td colSpan={cols.length + 2} className="border-b border-line p-0">
+                    <div className={groupLabel}>{g.name}</div>
                   </td>
                 </tr>
-              ))}
-            </Fragment>
-          ))}
-          {/* Column totals: people who solved each problem — pinned to the
-              bottom so it's always on screen. Always over ALL students. */}
-          <tr>
-            <td className="sticky bottom-0 left-0 z-30 border-b border-l border-r border-t border-line bg-surface-muted px-3 py-1.5 font-medium text-ink">
-              Решили
-            </td>
-            {cols.map(({ col, firstInSeries }) => (
-              <td
-                key={col.subproblem_id}
-                className={cn(
-                  'sticky bottom-0 z-20 border-b border-t border-line bg-surface-muted px-1.5 py-1.5 text-center font-medium text-ink',
-                  vert(firstInSeries),
-                )}
-              >
-                {colTotal(col.subproblem_id)}
-              </td>
+                {g.students.map((st) => {
+                  const isActiveRow = activeStudentId === st.user_id
+                  return (
+                    <tr
+                      key={st.user_id}
+                      className={cn(
+                        'hover:bg-surface-muted/40',
+                        isActiveRow && 'bg-amber-50/60 dark:bg-amber-500/10',
+                      )}
+                    >
+                      <td className={nameCell}>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setActiveStudentId(isActiveRow ? null : st.user_id)
+                          }
+                          className={cn(
+                            'inline-flex items-center gap-1.5 text-left underline-offset-2 hover:underline',
+                            isActiveRow && 'font-semibold text-ink',
+                          )}
+                        >
+                          <span>{st.name}</span>
+                          {st.has_student_comment ? (
+                            <span
+                              title="Есть заметки об ученике"
+                              aria-label="Есть заметки об ученике"
+                              className="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-500"
+                            />
+                          ) : null}
+                        </button>
+                      </td>
+                      {cols.map((fc) => {
+                        const { col, firstInSeries } = fc
+                        const acc = accepted(st.user_id, col.subproblem_id)
+                        const open = col.is_coffin && coffinOpen(col.coffin_released_at)
+                        const cell = data.cells[st.user_id + ':' + col.subproblem_id]
+                        const threadId = cell?.thread_id ?? 0
+                        const hasComment = !!cell?.has_internal_comment && threadId > 0
+                        const key = st.user_id + ':' + col.subproblem_id
+                        const pending = pendingKey === key
+                        // Click behaviour: accepted → detail dialog; active row
+                        // empty → fast-mark (or dialog if no initials yet);
+                        // other empty → select that student for marking.
+                        const onClick = () => {
+                          if (acc) {
+                            openCellDialog(st.user_id, st.name, fc)
+                          } else if (isActiveRow) {
+                            if (grader.name.trim()) markCell(st.user_id, col)
+                            else openCellDialog(st.user_id, st.name, fc)
+                          } else {
+                            setActiveStudentId(st.user_id)
+                          }
+                        }
+                        return (
+                          <ThreadCommentCell
+                            key={col.subproblem_id}
+                            threadId={threadId}
+                            hasComment={hasComment}
+                            className={cn(
+                              'border-b border-line p-0 text-center',
+                              vert(firstInSeries),
+                              acc
+                                ? 'bg-status-accepted-soft font-medium text-status-accepted'
+                                : cn(coffinCellClasses(col.is_coffin, open), 'text-faint'),
+                            )}
+                          >
+                            <button
+                              type="button"
+                              onClick={onClick}
+                              disabled={pending}
+                              aria-label={acc ? 'Открыть проверку' : 'Отметить решённым'}
+                              className={cn(
+                                'flex h-full w-full items-center justify-center px-1.5 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                                !acc && isActiveRow && 'text-status-accepted hover:bg-status-accepted-soft',
+                                !acc && !isActiveRow && 'hover:bg-surface-muted',
+                              )}
+                            >
+                              {pending
+                                ? '…'
+                                : acc
+                                  ? cellInitials(st.user_id, col.subproblem_id)
+                                  : isActiveRow
+                                    ? '＋'
+                                    : ''}
+                            </button>
+                          </ThreadCommentCell>
+                        )
+                      })}
+                      <td className="sticky right-0 z-10 border-b border-l border-r border-line bg-surface px-3 py-1.5 text-center font-medium text-ink">
+                        {rowTotal(st.user_id)}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </Fragment>
             ))}
-            <td className="sticky bottom-0 right-0 z-30 border-b border-l border-r border-t border-line bg-surface-muted px-3 py-1.5 text-center font-medium text-ink">
-              {grandTotal}
-            </td>
-          </tr>
-        </tbody>
-      </table>
+            {/* Column totals: people who solved each problem — pinned to the
+                bottom so it's always on screen. Always over ALL students. */}
+            <tr>
+              <td className="sticky bottom-0 left-0 z-30 border-b border-l border-r border-t border-line bg-surface-muted px-3 py-1.5 font-medium text-ink">
+                Решили
+              </td>
+              {cols.map(({ col, firstInSeries }) => (
+                <td
+                  key={col.subproblem_id}
+                  className={cn(
+                    'sticky bottom-0 z-20 border-b border-t border-line bg-surface-muted px-1.5 py-1.5 text-center font-medium text-ink',
+                    vert(firstInSeries),
+                  )}
+                >
+                  {colTotal(col.subproblem_id)}
+                </td>
+              ))}
+              <td className="sticky bottom-0 right-0 z-30 border-b border-l border-r border-t border-line bg-surface-muted px-3 py-1.5 text-center font-medium text-ink">
+                {grandTotal}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {dialog ? (
+        <OfflineCellDialog
+          open={dialog != null}
+          onOpenChange={(o) => !o && setDialog(null)}
+          centerId={centerId}
+          mode="conduit"
+          target={dialog}
+        />
+      ) : null}
     </div>
   )
 }

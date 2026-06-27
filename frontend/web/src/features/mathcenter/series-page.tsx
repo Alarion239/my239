@@ -33,6 +33,7 @@ import { StudentRazbor } from './student-razbor'
 import { TeacherProblemStats } from './teacher-problem-stats'
 import { GraderQueue } from './grader-queue'
 import { TeacherGrid } from './teacher-grid'
+import { OfflineGradingTab } from './offline-grading-tab'
 import { UploadSeriesDialog } from './upload-series-dialog'
 import { useSeriesContext } from './use-series-context'
 import { useCenterIdContext } from './center-id-context'
@@ -40,7 +41,7 @@ import { useCenterIdContext } from './center-id-context'
 // Allowed tab ids per view, with the default first. The route carries the tab
 // (e.g. /mathcenter/2027/series/42/razbor) so it survives reload + back/forward.
 const STUDENT_TAB_IDS = ['progress', 'statement', 'razbor'] as const
-const TEACHER_TAB_IDS = ['razbor', 'statement', 'queue', 'grid'] as const
+const TEACHER_TAB_IDS = ['razbor', 'statement', 'queue', 'grid', 'offline'] as const
 
 export function SeriesPage() {
   const centerId = useCenterIdContext()
@@ -431,6 +432,8 @@ function TeacherSeriesView({
         <StatsTab series={series} centerId={centerId} />
       ) : tab === 'queue' ? (
         <GraderQueue seriesId={series.id} />
+      ) : tab === 'offline' ? (
+        <OfflineGradingTab centerId={centerId} seriesId={series.id} />
       ) : (
         <TeacherGrid seriesId={series.id} />
       )}
@@ -443,6 +446,7 @@ const TEACHER_TABS: { id: TeacherTab; label: string }[] = [
   { id: 'razbor', label: 'Разбор' },
   { id: 'queue', label: 'Очередь' },
   { id: 'grid', label: 'Таблица' },
+  { id: 'offline', label: 'Очно' },
 ]
 
 // EditSeriesButton is the icon-only «Редактировать серию» control that lives at

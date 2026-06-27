@@ -16,7 +16,7 @@ var centerGridColumns = []string{
 	"group_id", "group_name",
 	"subproblem_id", "subproblem_label", "problem_id", "problem_number", "is_coffin",
 	"coffin_released_at",
-	"thread_id", "current_status", "last_grader_user_id",
+	"thread_id", "current_status", "last_grader_user_id", "last_grader_name",
 	"grader_first_name", "grader_last_name",
 	"claim_holder_user_id", "claim_expires_at",
 	"has_internal_comment", "has_student_comment",
@@ -42,19 +42,19 @@ func TestGetCenterGrid_HappyPath(t *testing.T) {
 				int64(7), "Аня", (*string)(nil), "Иванова",
 				int64(10), "А",
 				int64(900), "", int64(500), int32(0), true, (*time.Time)(nil),
-				int64(1), "accepted", &graderID, &grFirst, &grLast, (*int64)(nil), (*time.Time)(nil), true, true).
+				int64(1), "accepted", &graderID, "", &grFirst, &grLast, (*int64)(nil), (*time.Time)(nil), true, true).
 			// Series 1, problem 1, subpart a, student A
 			AddRow(int64(100), int32(0), "Алгебра", due,
 				int64(7), "Аня", (*string)(nil), "Иванова",
 				int64(10), "А",
 				int64(901), "a", int64(501), int32(1), false, (*time.Time)(nil),
-				int64(0), "ungraded", (*int64)(nil), (*string)(nil), (*string)(nil), (*int64)(nil), (*time.Time)(nil), false, true).
+				int64(0), "ungraded", (*int64)(nil), "", (*string)(nil), (*string)(nil), (*int64)(nil), (*time.Time)(nil), false, true).
 			// Series 2, problem 1, no subparts, student A
 			AddRow(int64(200), int32(2), "Геометрия", due,
 				int64(7), "Аня", (*string)(nil), "Иванова",
 				int64(10), "А",
 				int64(910), "", int64(600), int32(1), false, (*time.Time)(nil),
-				int64(0), "ungraded", (*int64)(nil), (*string)(nil), (*string)(nil), (*int64)(nil), (*time.Time)(nil), false, true))
+				int64(0), "ungraded", (*int64)(nil), "", (*string)(nil), (*string)(nil), (*int64)(nil), (*time.Time)(nil), false, true))
 
 	req := authedRequest(t, access, 3, false, http.MethodGet, "/centers/42/grid", nil)
 	rr := httptest.NewRecorder()
