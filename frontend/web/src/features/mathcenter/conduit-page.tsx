@@ -1,10 +1,11 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import {
   coffinOpen,
   initialsOf,
   useCenterGrid,
   useOfflineAccept,
+  useOfflineUndo,
   type CenterGridColumn,
   type CenterGridResponse,
   type CenterGridSeries,
@@ -128,6 +129,7 @@ function ConduitTable({
   // the grader corrects their initials before «Готово».
   const [markedSubs, setMarkedSubs] = useState<Map<number, string>>(new Map())
   const accept = useOfflineAccept()
+  const undo = useOfflineUndo()
 
   // graderKey identifies a credited grader so we can tell whether a marked cell
   // still matches the current initials; graderFields builds the accept payload.
@@ -156,6 +158,44 @@ function ConduitTable({
     setActiveStudentId(id)
     setMarkedSubs(new Map())
   }
+
+  // unmarkCell reverses a mark made this session (e.g. the grader hit the wrong
+  // square) — undoes the offline accept and drops it from the session set.
+  function unmarkCell(studentId: number, col: CenterGridColumn) {
+    const sub = col.subproblem_id
+    setPendingKey(studentId + ':' + sub)
+    undo.mutate(
+      { student_user_id: studentId, subproblem_id: sub },
+      {
+        onSettled: () => setPendingKey(null),
+        onSuccess: () =>
+          setMarkedSubs((prev) => {
+            const next = new Map(prev)
+            next.delete(sub)
+            return next
+          }),
+      },
+    )
+  }
+
+  // Enter commits «Готово» from anywhere in the active session (the initials
+  // field, a just-marked cell, …), not just while the initials input is focused.
+  // Refs keep the listener stable while always seeing the latest handlers.
+  const selectStudentRef = useRef(selectStudent)
+  selectStudentRef.current = selectStudent
+  const dialogOpenRef = useRef(dialog)
+  dialogOpenRef.current = dialog
+  useEffect(() => {
+    if (activeStudentId == null) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && !dialogOpenRef.current) {
+        e.preventDefault()
+        selectStudentRef.current(null)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [activeStudentId])
 
   const cols: FlatCol[] = useMemo(() => {
     const out: FlatCol[] = []
@@ -283,7 +323,6 @@ function ConduitTable({
               centerId={centerId}
               value={grader}
               onChange={setGrader}
-              onEnter={() => selectStudent(null)}
               autoFocus
             />
           </div>
@@ -385,13 +424,13 @@ function ConduitTable({
                       )}
                     >
                       <td className={nameCell}>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            selectStudent(isActiveRow ? null : st.user_id)
-                          }
+                        {/* The name opens the student's profile (identity +
+                            teacher notes about them). Marking mode is entered by
+                            touching one of the student's cells, not the name. */}
+                        <Link
+                          to={'../students/' + st.user_id}
                           className={cn(
-                            'inline-flex items-center gap-1.5 text-left underline-offset-2 hover:underline',
+                            'inline-flex items-center gap-1.5 underline-offset-2 hover:underline',
                             isActiveRow && 'font-semibold text-ink',
                           )}
                         >
@@ -403,7 +442,7 @@ function ConduitTable({
                               className="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-500"
                             />
                           ) : null}
-                        </button>
+                        </Link>
                       </td>
                       {cols.map((fc) => {
                         const { col, firstInSeries } = fc
@@ -423,19 +462,29 @@ function ConduitTable({
                         const shownInitials = marked
                           ? initialsOf(grader.name)
                           : cellInitials(st.user_id, col.subproblem_id)
-                        // Click behaviour: accepted → detail dialog; active row
-                        // empty → fast-mark (or dialog if no initials yet);
-                        // other empty → select that student for marking.
+                        // Touching any cell of another student enters marking
+                        // mode for them. Within the active row: a square YOU
+                        // marked this session toggles off (undo a misclick); a
+                        // pre-existing accept opens the detail dialog; an empty
+                        // cell fast-marks (or opens the dialog if no initials yet).
                         const onClick = () => {
-                          if (acc) {
-                            openCellDialog(st.user_id, st.name, fc)
-                          } else if (isActiveRow) {
-                            if (grader.name.trim()) markCell(st.user_id, col)
-                            else openCellDialog(st.user_id, st.name, fc)
-                          } else {
+                          if (!isActiveRow) {
                             selectStudent(st.user_id)
+                          } else if (marked) {
+                            unmarkCell(st.user_id, col)
+                          } else if (accepted(st.user_id, col.subproblem_id)) {
+                            openCellDialog(st.user_id, st.name, fc)
+                          } else if (grader.name.trim()) {
+                            markCell(st.user_id, col)
+                          } else {
+                            openCellDialog(st.user_id, st.name, fc)
                           }
                         }
+                        const cellAria = marked
+                          ? 'Снять отметку'
+                          : acc
+                            ? 'Открыть проверку'
+                            : 'Отметить решённым'
                         return (
                           <ThreadCommentCell
                             key={col.subproblem_id}
@@ -453,7 +502,7 @@ function ConduitTable({
                               type="button"
                               onClick={onClick}
                               disabled={pending}
-                              aria-label={acc ? 'Открыть проверку' : 'Отметить решённым'}
+                              aria-label={cellAria}
                               className={cn(
                                 'flex h-full w-full items-center justify-center px-1.5 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
                                 !acc && isActiveRow && 'text-status-accepted hover:bg-status-accepted-soft',
