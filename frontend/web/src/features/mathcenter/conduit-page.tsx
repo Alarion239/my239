@@ -462,22 +462,25 @@ function ConduitTable({
                         const shownInitials = marked
                           ? initialsOf(grader.name)
                           : cellInitials(st.user_id, col.subproblem_id)
-                        // Touching any cell of another student enters marking
-                        // mode for them. Within the active row: a square YOU
-                        // marked this session toggles off (undo a misclick); a
-                        // pre-existing accept opens the detail dialog; an empty
-                        // cell fast-marks (or opens the dialog if no initials yet).
+                        // Tapping a cell acts on THAT cell. If the student
+                        // wasn't active yet, the same tap also enters marking
+                        // mode for them (committing the previous student) — the
+                        // tap isn't spent just selecting the row. Within a row:
+                        // a square you marked this session toggles off (undo a
+                        // misclick); a pre-existing accept opens the detail
+                        // dialog; an empty cell fast-marks with the current
+                        // initials (or opens the dialog to set them).
                         const onClick = () => {
-                          if (!isActiveRow) {
-                            selectStudent(st.user_id)
-                          } else if (marked) {
-                            unmarkCell(st.user_id, col)
-                          } else if (accepted(st.user_id, col.subproblem_id)) {
-                            openCellDialog(st.user_id, st.name, fc)
+                          const sid = st.user_id
+                          if (!isActiveRow) selectStudent(sid)
+                          if (isActiveRow && marked) {
+                            unmarkCell(sid, col)
+                          } else if (accepted(sid, col.subproblem_id)) {
+                            openCellDialog(sid, st.name, fc)
                           } else if (grader.name.trim()) {
-                            markCell(st.user_id, col)
+                            markCell(sid, col)
                           } else {
-                            openCellDialog(st.user_id, st.name, fc)
+                            openCellDialog(sid, st.name, fc)
                           }
                         }
                         const cellAria = marked
