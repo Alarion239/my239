@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/Alarion239/my239/backend/internal/ctxcache"
+	"github.com/Alarion239/my239/backend/internal/googlesheets"
 	"github.com/Alarion239/my239/backend/internal/httpx"
 	"github.com/Alarion239/my239/backend/internal/live"
 	"github.com/Alarion239/my239/backend/internal/logger"
@@ -27,8 +28,12 @@ import (
 // /centers/{centerID}/manage. Every handler re-checks head-teacher access (or
 // admin) and that the target row belongs to {centerID}, so a head teacher of
 // one center can never touch another center's rows via a guessed id.
-func ManageRouter(database *db.DB, hub *live.Hub) chi.Router {
+func ManageRouter(database *db.DB, hub *live.Hub, sheetServices ...*googlesheets.Service) chi.Router {
 	r := chi.NewRouter()
+	sheets := googlesheets.NewDisabledService(database.Pool())
+	if len(sheetServices) > 0 && sheetServices[0] != nil {
+		sheets = sheetServices[0]
+	}
 
 	r.Get("/groups", manageListGroups(database))
 	r.Post("/groups", manageCreateGroup(database, hub))
@@ -49,6 +54,14 @@ func ManageRouter(database *db.DB, hub *live.Hub) chi.Router {
 	r.Get("/invites", manageListInvites(database))
 	r.Post("/invites", manageCreateInvite(database))
 	r.Delete("/invites/{tokenID}", manageRevokeInvite(database))
+
+	// Google Sheets link configuration remains a head-teacher operation.
+	r.Get("/google-sheets/links", manageGoogleSheetLinks(database, sheets))
+	r.Post("/google-sheets/discover", manageGoogleSheetDiscover(database, sheets))
+	r.Post("/google-sheets/links", manageGoogleSheetCreate(database, sheets))
+	r.Patch("/google-sheets/links/{linkID}", manageGoogleSheetEnabled(database, sheets))
+	r.Delete("/google-sheets/links/{linkID}", manageGoogleSheetDelete(database, sheets))
+	r.Get("/google-sheets/runs", manageGoogleSheetRuns(database, sheets))
 
 	return r
 }

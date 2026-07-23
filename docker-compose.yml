@@ -62,6 +62,10 @@ services:
       # in-memory to Redis-backed. Leave empty for the memory fallback.
       REDIS_URL: redis://redis:6379/0
 
+      # Optional Google Sheets service account JSON. Share linked spreadsheets
+      # with the service account email as an editor before enabling sync.
+      # GOOGLE_SERVICE_ACCOUNT_JSON: '{"type":"service_account",...}'
+
       # Object storage. With S3_BUCKET unset the backend uses its in-process
       # in-memory store, so local Compose needs zero object-storage setup
       # (browser PDF download/upload is unavailable in that mode, which is

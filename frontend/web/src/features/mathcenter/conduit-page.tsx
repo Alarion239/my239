@@ -7,6 +7,7 @@ import {
   useCenterGrid,
   useOfflineAccept,
   useOfflineUndo,
+  useSyncGoogleSheets,
   type CenterGridColumn,
   type CenterGridResponse,
   type CenterGridSeries,
@@ -80,7 +81,7 @@ function Conduit({ centerId, termId }: { centerId: number; termId: number }) {
       </Card>
     )
   }
-  return <ConduitTable centerId={centerId} data={data} />
+  return <ConduitTable centerId={centerId} termId={termId} data={data} />
 }
 
 // flatCol is a column with the bookkeeping the table needs: which series it
@@ -116,9 +117,11 @@ function currentSeriesId(series: CenterGridSeries[]): number | null {
 
 function ConduitTable({
   centerId,
+  termId,
   data,
 }: {
   centerId: number
+  termId: number
   data: CenterGridResponse
 }) {
   const { year } = useParams<{ year: string }>()
@@ -146,6 +149,7 @@ function ConduitTable({
   const [markedSubs, setMarkedSubs] = useState<Map<number, string>>(new Map())
   const accept = useOfflineAccept()
   const undo = useOfflineUndo()
+  const syncGoogleSheets = useSyncGoogleSheets(centerId)
 
   useEffect(() => {
     setToolbarSlot(document.getElementById('conduit-toolbar-slot'))
@@ -364,6 +368,15 @@ function ConduitTable({
 
   const toolbar = (
     <div className="flex min-w-0 items-center justify-end gap-2">
+      <button
+        type="button"
+        title="Синхронизировать связанные Google Sheets"
+        disabled={termId <= 0 || syncGoogleSheets.isPending}
+        onClick={() => syncGoogleSheets.mutate(termId)}
+        className="h-8 shrink-0 rounded-lg border border-line px-2.5 text-xs text-muted hover:bg-surface-muted hover:text-ink disabled:opacity-50"
+      >
+        {syncGoogleSheets.isPending ? 'Синхронизация…' : 'Sheets'}
+      </button>
       <span className="hidden whitespace-nowrap text-xs text-faint xl:inline">Ваши инициалы</span>
       <div className="min-w-0 w-56 sm:w-64">
         <GraderInitialsInput

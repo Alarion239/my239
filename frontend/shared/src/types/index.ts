@@ -217,6 +217,39 @@ export interface MathCenterTerm {
   is_active: boolean
 }
 
+export interface GoogleSheetTab {
+  id: number
+  title: string
+}
+
+// GoogleSheetLink is a term-wide connection to one immutable Google Sheet tab.
+// The server keeps the spreadsheet id internal to the integration; it is safe
+// to show to head teachers because they supplied the source URL.
+export interface GoogleSheetLink {
+  id: number
+  term_id: number
+  spreadsheet_id: string
+  sheet_id: number
+  sheet_title: string
+  enabled: boolean
+  last_google_version: string
+  last_google_modified_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface GoogleSheetSyncRun {
+  id: number
+  link_id: number
+  status: 'running' | 'succeeded' | 'failed'
+  google_version: string
+  google_modified_at?: string | null
+  summary: Record<string, unknown>
+  error_message: string
+  started_at: string
+  finished_at?: string | null
+}
+
 // --- Head-teacher management panel ("Управление") ----------------------------
 // Wire types for /mathcenter/centers/{id}/manage/*. Keep in sync with
 // backend/internal/handlers/mathcenter/manage.go.

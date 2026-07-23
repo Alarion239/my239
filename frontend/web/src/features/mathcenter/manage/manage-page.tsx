@@ -7,13 +7,15 @@ import { useCenterIdContext, useCenterTermContext } from '../center-id-context'
 import { GroupsTab } from './groups-tab'
 import { TeachersTab } from './teachers-tab'
 import { StudentsTab } from './students-tab'
+import { GoogleSheetsTab } from './google-sheets-tab'
 
-type Tab = 'groups' | 'teachers' | 'students'
+type Tab = 'groups' | 'teachers' | 'students' | 'google-sheets'
 
 const TABS: PillTabOption<Tab>[] = [
   { id: 'groups', label: 'Группы' },
   { id: 'teachers', label: 'Преподаватели' },
   { id: 'students', label: 'Ученики' },
+  { id: 'google-sheets', label: 'Google Sheets' },
 ]
 
 const TAB_IDS = TABS.map((t) => t.id)
@@ -72,6 +74,8 @@ export function ManagePage() {
         <GroupsTab centerId={centerId} />
       ) : tab === 'teachers' ? (
         <TeachersTab centerId={centerId} />
+      ) : tab === 'google-sheets' ? (
+        <GoogleSheetsTab centerId={centerId} activeTermId={term?.id ?? 0} />
       ) : term === null || term.is_active ? (
         <StudentsTab centerId={centerId} />
       ) : null}

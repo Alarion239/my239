@@ -5,6 +5,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type {
   CenterInvite,
+  GoogleSheetLink,
+  GoogleSheetSyncRun,
+  GoogleSheetTab,
   InviteContext,
   MathCenterGroup,
   MathCenterStudent,
@@ -221,6 +224,83 @@ export function useManageRevokeInvite(centerId: number) {
       client.request(base(centerId) + '/invites/' + tokenId, { method: 'DELETE' }),
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: queryKeys.manageInvites(centerId) }),
+  })
+}
+
+// --- Google Sheets conduit links -------------------------------------------
+
+export function useManageGoogleSheetLinks(centerId: number) {
+  const client = useApiClient()
+  return useQuery<GoogleSheetLink[]>({
+    queryKey: queryKeys.manageGoogleSheetLinks(centerId),
+    queryFn: () => client.request(base(centerId) + '/google-sheets/links'),
+    enabled: centerId > 0,
+  })
+}
+
+export function useManageGoogleSheetRuns(centerId: number) {
+  const client = useApiClient()
+  return useQuery<GoogleSheetSyncRun[]>({
+    queryKey: queryKeys.manageGoogleSheetRuns(centerId),
+    queryFn: () => client.request(base(centerId) + '/google-sheets/runs'),
+    enabled: centerId > 0,
+  })
+}
+
+export function useDiscoverGoogleSheet(centerId: number) {
+  const client = useApiClient()
+  return useMutation({
+    mutationFn: (spreadsheet_url: string) =>
+      client.request<{ spreadsheet_id: string; tabs: GoogleSheetTab[] }>(
+        base(centerId) + '/google-sheets/discover',
+        { method: 'POST', body: { spreadsheet_url } },
+      ),
+  })
+}
+
+export function useCreateGoogleSheetLink(centerId: number) {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { term_id: number; spreadsheet_url: string; sheet_id: number }) =>
+      client.request<GoogleSheetLink>(base(centerId) + '/google-sheets/links', {
+        method: 'POST', body,
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.manageGoogleSheetLinks(centerId) }),
+  })
+}
+
+export function useSetGoogleSheetLinkEnabled(centerId: number) {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ linkId, enabled }: { linkId: number; enabled: boolean }) =>
+      client.request(base(centerId) + '/google-sheets/links/' + linkId, {
+        method: 'PATCH', body: { enabled },
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.manageGoogleSheetLinks(centerId) }),
+  })
+}
+
+export function useDeleteGoogleSheetLink(centerId: number) {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (linkId: number) => client.request(base(centerId) + '/google-sheets/links/' + linkId, { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.manageGoogleSheetLinks(centerId) }),
+  })
+}
+
+// Any center teacher can manually pull links for the selected term.
+export function useSyncGoogleSheets(centerId: number) {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (term_id: number) => client.request<{ runs: GoogleSheetSyncRun[] }>(
+      '/mathcenter/centers/' + centerId + '/google-sheets/sync',
+      { method: 'POST', body: { term_id } },
+    ),
+    onSettled: () => qc.invalidateQueries({ queryKey: queryKeys.manageGoogleSheetRuns(centerId) }),
   })
 }
 

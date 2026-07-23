@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	internalAuth "github.com/Alarion239/my239/backend/internal/auth"
+	"github.com/Alarion239/my239/backend/internal/googlesheets"
 	"github.com/Alarion239/my239/backend/internal/live"
 	"github.com/Alarion239/my239/backend/internal/middleware"
 	"github.com/Alarion239/my239/backend/pkg/db"
@@ -18,8 +19,12 @@ import (
 // blobs is used by the series PDF endpoints; uploadTTL signs PUT URLs the
 // client uses to upload directly to Yandex; downloadTTL signs GET URLs for
 // the redirect download.
-func Router(database *db.DB, hub *live.Hub, tokens *internalAuth.TokenService, blobs objectstore.Store, uploadTTL, downloadTTL time.Duration) chi.Router {
+func Router(database *db.DB, hub *live.Hub, tokens *internalAuth.TokenService, blobs objectstore.Store, uploadTTL, downloadTTL time.Duration, sheetServices ...*googlesheets.Service) chi.Router {
 	r := chi.NewRouter()
+	sheets := googlesheets.NewDisabledService(database.Pool())
+	if len(sheetServices) > 0 && sheetServices[0] != nil {
+		sheets = sheetServices[0]
+	}
 	r.Use(middleware.AuthMiddleware(tokens.Access()))
 	// Act-as impersonation runs right after auth: an admin may carry the
 	// X-Act-As-User-Id header to view/operate as any user (including /me here).
@@ -40,7 +45,9 @@ func Router(database *db.DB, hub *live.Hub, tokens *internalAuth.TokenService, b
 	r.Get("/centers/{centerID}/coffins", ListCenterCoffins(database))
 	r.Get("/centers/{centerID}/coffin-queue", ListCoffinQueue(database))
 	// Head-teacher self-service management panel ("Управление").
-	r.Mount("/centers/{centerID}/manage", ManageRouter(database, hub))
+	r.Mount("/centers/{centerID}/manage", ManageRouter(database, hub, sheets))
+	// Any teacher may manually pull the linked tabs; only heads configure them.
+	r.Post("/centers/{centerID}/google-sheets/sync", SyncGoogleSheets(database, sheets))
 	// Teacher-facing student profile + internal teacher-only notes on a student
 	// (any teacher of the center reads/writes; author-or-admin edits/deletes).
 	r.Route("/centers/{centerID}/students/{studentUserID}", func(r chi.Router) {

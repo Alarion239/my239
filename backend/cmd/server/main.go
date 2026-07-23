@@ -19,6 +19,7 @@ import (
 	"github.com/Alarion239/my239/backend/internal/auth"
 	"github.com/Alarion239/my239/backend/internal/bootstrap"
 	"github.com/Alarion239/my239/backend/internal/config"
+	"github.com/Alarion239/my239/backend/internal/googlesheets"
 	adminHandlers "github.com/Alarion239/my239/backend/internal/handlers/admin"
 	authHandlers "github.com/Alarion239/my239/backend/internal/handlers/auth"
 	"github.com/Alarion239/my239/backend/internal/handlers/health"
@@ -99,6 +100,16 @@ func run() error {
 		return err
 	}
 
+	sheets, err := googlesheets.NewService(database.Pool(), cfg.GoogleSheets.ServiceAccountJSON)
+	if err != nil {
+		return err
+	}
+	if sheets.Configured() {
+		logger.LogInfo("google sheets integration: configured")
+	} else {
+		logger.LogInfo("google sheets integration: disabled (GOOGLE_SERVICE_ACCOUNT_JSON not set)")
+	}
+
 	// Live push: one in-process hub fed by a single LISTEN goroutine on a
 	// dedicated pool connection. The goroutine stops when rootCtx is cancelled.
 	liveHub := live.NewHub()
@@ -120,7 +131,7 @@ func run() error {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Mount("/auth", authHandlers.Router(database, tokens, limiter))
 		r.Mount("/admin", adminHandlers.Router(database, tokens))
-		r.Mount("/mathcenter", mcHandlers.Router(database, liveHub, tokens, blobs, cfg.S3.UploadTTL, cfg.S3.DownloadTTL))
+		r.Mount("/mathcenter", mcHandlers.Router(database, liveHub, tokens, blobs, cfg.S3.UploadTTL, cfg.S3.DownloadTTL, sheets))
 		r.Mount("/homework", hwHandlers.Router(database, liveHub, tokens, blobs, cfg.S3.UploadTTL, cfg.S3.DownloadTTL))
 	})
 

@@ -17,8 +17,16 @@ type Config struct {
 	Port        string
 	FrontendURL string
 
-	JWT JWTConfig
-	S3  S3Config
+	JWT          JWTConfig
+	S3           S3Config
+	GoogleSheets GoogleSheetsConfig
+}
+
+// GoogleSheetsConfig is optional so local development and deployments that do
+// not use the integration continue to start. The JSON stays only in process
+// configuration; it is never persisted or returned by an API.
+type GoogleSheetsConfig struct {
+	ServiceAccountJSON string
 }
 
 // JWTConfig groups all JWT-related settings so handler code can pass it
@@ -104,6 +112,7 @@ func Load() (*Config, error) {
 	s3KeyID := os.Getenv("S3_ACCESS_KEY_ID")
 	s3Secret := os.Getenv("S3_SECRET_ACCESS_KEY")
 	s3PathStyle := os.Getenv("S3_USE_PATH_STYLE") != "false" // default true; safest for arbitrary bucket names
+	googleServiceAccountJSON := os.Getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
 	s3TTLMin, err := envInt("S3_DOWNLOAD_TTL_MINUTES", 15)
 	if err != nil {
 		return nil, err
@@ -146,6 +155,7 @@ func Load() (*Config, error) {
 			DownloadTTL:     time.Duration(s3TTLMin) * time.Minute,
 			UploadTTL:       time.Duration(s3UploadTTLMin) * time.Minute,
 		},
+		GoogleSheets: GoogleSheetsConfig{ServiceAccountJSON: googleServiceAccountJSON},
 	}, nil
 }
 

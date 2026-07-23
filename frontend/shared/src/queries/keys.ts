@@ -22,6 +22,10 @@ export const queryKeys = {
     ['mathcenter', 'manage', centerId, 'students'] as const,
   manageInvites: (centerId: number) =>
     ['mathcenter', 'manage', centerId, 'invites'] as const,
+  manageGoogleSheetLinks: (centerId: number) =>
+    ['mathcenter', 'manage', centerId, 'google-sheets', 'links'] as const,
+  manageGoogleSheetRuns: (centerId: number) =>
+    ['mathcenter', 'manage', centerId, 'google-sheets', 'runs'] as const,
   userSearch: (centerId: number, q: string) =>
     ['mathcenter', 'manage', centerId, 'user-search', q] as const,
   inviteContext: (token: string) => ['auth', 'invite', token] as const,
