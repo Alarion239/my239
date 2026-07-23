@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           # Pin to the toolchain golangci-lint v2.6.0 was built against. With
           # "stable" (now go1.26) its type-checker panics on 1.26 stdlib files
