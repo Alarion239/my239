@@ -222,7 +222,7 @@ function ConduitTable({
   useEffect(() => {
     if (activeStudentId == null) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Enter' && !dialogOpenRef.current) {
+      if ((e.key === 'Enter' || e.key === 'Escape') && !dialogOpenRef.current) {
         e.preventDefault()
         selectStudentRef.current(null)
       }
@@ -537,10 +537,12 @@ function ConduitTable({
 
                           if (marked) {
                             unmarkCell(sid, col)
+                            focusGraderInput()
                           } else if (accepted(sid, col.subproblem_id)) {
                             openCellDialog(sid, st.name, fc)
                           } else if (grader.name.trim()) {
                             markCell(sid, col)
+                            focusGraderInput()
                           } else {
                             focusGraderInput()
                           }

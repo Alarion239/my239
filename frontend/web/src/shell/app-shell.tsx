@@ -1,4 +1,5 @@
 import { Outlet, useLocation } from 'react-router-dom'
+import { useState } from 'react'
 import { useAuth } from '../auth/auth-context'
 import { useImpersonation } from '../auth/impersonation-context'
 import { Button } from '../design/ui'
@@ -18,6 +19,7 @@ export function AppShell() {
   const { user } = useAuth()
   const { actingAs, stop } = useImpersonation()
   const location = useLocation()
+  const [navOpen, setNavOpen] = useState(true)
   // RequireAuth guarantees a user before this renders, but guard defensively.
   if (!user) return null
 
@@ -30,12 +32,16 @@ export function AppShell() {
         fullBleed ? 'h-screen overflow-hidden' : 'min-h-screen',
       )}
     >
-      <NavRail />
+      <NavRail open={navOpen} />
       <div className="flex min-w-0 flex-1 flex-col">
         {/* The top bar (and impersonation banner) stays pinned while the main
             panel scrolls underneath. */}
         <div className="sticky top-0 z-30">
-          <TopBar user={user} />
+          <TopBar
+            user={user}
+            navOpen={navOpen}
+            onBrandClick={() => setNavOpen((open) => !open)}
+          />
           {actingAs ? (
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-accent-soft px-4 py-2.5 text-accent-ink sm:px-6 lg:px-10">
               <span className="text-sm font-medium">Просмотр от имени {actingAs.label}</span>

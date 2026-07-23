@@ -95,7 +95,11 @@ export function GraderInitialsInput({
         value={text}
         onChange={(e) => handleType(e.target.value)}
         onFocus={() => setFocused(true)}
-        onBlur={() => window.setTimeout(() => setFocused(false), 120)}
+        onBlur={() =>
+          window.setTimeout(() => {
+            if (document.activeElement !== ownInputRef.current) setFocused(false)
+          }, 120)
+        }
         onKeyDown={(e) => {
           if (e.key === 'Tab' && matches.length > 0) {
             // The first match is always the active suggestion. Let the

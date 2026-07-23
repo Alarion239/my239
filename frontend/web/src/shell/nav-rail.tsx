@@ -38,12 +38,18 @@ function NavItem({
 // modules; each module's own pages live as tabs in the top bar. On small screens
 // it is hidden and TopBar provides a dropdown nav instead. The brand lives in the
 // top bar (on all widths), so the rail does not repeat it.
-export function NavRail() {
+export function NavRail({ open = true }: { open?: boolean }) {
   const { user } = useAuth()
   const isAdmin = !!user?.is_admin
   const modules = useNavModules()
   return (
-    <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col self-start overflow-y-auto border-r border-line bg-surface px-3 py-5 md:flex">
+    <aside
+      id="desktop-nav-rail"
+      className={cn(
+        'sticky top-0 hidden h-screen w-60 shrink-0 flex-col self-start overflow-y-auto border-r border-line bg-surface px-3 py-5',
+        open && 'md:flex',
+      )}
+    >
       <p className="mb-1 px-2.5 text-xs text-faint">Модули</p>
       <nav className="flex flex-col gap-0.5">
         {modules

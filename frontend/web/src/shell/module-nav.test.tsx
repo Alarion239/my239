@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
@@ -13,6 +14,7 @@ import {
 import { AuthProvider } from '../auth/auth-context'
 import { ImpersonationProvider } from '../auth/impersonation-context'
 import { ThemeProvider } from '../design/theme-provider'
+import { AppShell } from './app-shell'
 import { TopBar } from './top-bar'
 import { NavRail } from './nav-rail'
 
@@ -161,5 +163,23 @@ describe('module navigation', () => {
 
     // The active module's "Серии" tab for center 8 (year 2025) shows in the bar.
     expect(await screen.findByRole('link', { name: 'Серии' })).toBeInTheDocument()
+  })
+
+  it('toggles the desktop nav rail from the my239 logo', async () => {
+    const member = makeUser({ is_admin: false })
+    mockFetch(member)
+    renderShell(<AppShell />, '/')
+
+    const logo = await screen.findByRole('link', { name: 'my239' })
+    const rail = screen.getByRole('complementary', { hidden: true })
+    expect(rail).toHaveClass('md:flex')
+
+    await userEvent.click(logo)
+    expect(rail).not.toHaveClass('md:flex')
+    expect(logo).toHaveAttribute('aria-expanded', 'false')
+
+    await userEvent.click(logo)
+    expect(rail).toHaveClass('md:flex')
+    expect(logo).toHaveAttribute('aria-expanded', 'true')
   })
 })

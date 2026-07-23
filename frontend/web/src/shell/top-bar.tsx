@@ -80,11 +80,32 @@ function ModuleTabs({ user }: { user: User }) {
   )
 }
 
-export function TopBar({ user }: { user: User }) {
+export function TopBar({
+  user,
+  navOpen,
+  onBrandClick,
+}: {
+  user: User
+  navOpen?: boolean
+  onBrandClick?: () => void
+}) {
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-paper/80 px-4 backdrop-blur">
       <MobileNav user={user} />
-      <Link to="/" className="shrink-0 font-display text-xl font-medium text-ink">
+      <Link
+        to="/"
+        onClick={
+          onBrandClick
+            ? (e) => {
+                e.preventDefault()
+                onBrandClick()
+              }
+            : undefined
+        }
+        aria-expanded={navOpen}
+        aria-controls={navOpen == null ? undefined : 'desktop-nav-rail'}
+        className="shrink-0 rounded-md font-display text-xl font-medium text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      >
         my239
       </Link>
       <ModuleTabs user={user} />
