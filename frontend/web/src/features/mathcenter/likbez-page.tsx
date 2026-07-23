@@ -96,17 +96,27 @@ function LikbezCard({ likbez, centerId, isTeacher, terms }: { likbez: Likbez; ce
   const remove = useDeleteLikbez(centerId)
   const navigate = useNavigate()
   const hasMaterials = likbez.has_pdf || likbez.has_tex || !!likbez.video_url
+  const detailPath = '/mathcenter/' + year + '/likbez/' + likbez.id
 
   return (
-    <Card className="group flex flex-col gap-4 p-4 sm:flex-row sm:items-start">
+    <Card
+      className="group flex cursor-pointer flex-col gap-4 p-4 transition-colors hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 sm:flex-row sm:items-start"
+      role="link"
+      tabIndex={0}
+      onClick={() => navigate(detailPath)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          navigate(detailPath)
+        }
+      }}
+    >
       <div className="flex h-11 min-w-11 items-center justify-center rounded-lg bg-accent-soft px-2 font-display text-lg font-medium text-accent-ink" aria-label={'Ликбез №' + likbez.number}>
         {likbez.number}
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <Link to={'/mathcenter/' + year + '/likbez/' + likbez.id} className="font-display text-lg font-medium text-ink hover:text-accent">
-            {likbez.title}
-          </Link>
+          <h2 className="font-display text-lg font-medium text-ink group-hover:text-accent">{likbez.title}</h2>
           {!likbez.published ? <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-muted">Черновик</span> : null}
         </div>
         <p className="mt-1 text-sm text-muted">Ликбез №{likbez.number} · {likbezDateFromISO(likbez.held_on)} · {likbez.term_display_name}</p>
@@ -118,8 +128,8 @@ function LikbezCard({ likbez, centerId, isTeacher, terms }: { likbez: Likbez; ce
         </div>
       </div>
       {isTeacher ? (
-        <div className="flex flex-wrap gap-2 sm:w-44 sm:justify-end">
-          <LikbezFormDialog centerId={centerId} terms={terms} likbez={likbez} trigger={<Button size="sm" variant="ghost"><Pencil className="h-4 w-4" />Изменить</Button>} />
+        <div className="flex flex-wrap gap-2 sm:w-44 sm:justify-end" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+          <LikbezFormDialog centerId={centerId} terms={terms} likbez={likbez} trigger={<Button size="sm" variant="ghost"><Pencil className="h-4 w-4" />Редактировать название</Button>} />
           <Button size="sm" variant="secondary" disabled={(likbez.published ? unpublish : publish).isPending || (!likbez.published && !hasMaterials)} onClick={() => (likbez.published ? unpublish : publish).mutate()}>
             {likbez.published ? 'Снять' : 'Опубликовать'}
           </Button>
