@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strings"
+	"net/url"
 	"time"
 
 	"github.com/Alarion239/my239/backend/internal/httpx"
@@ -32,8 +32,9 @@ func validateSolutionLink(link string) string {
 	if len(link) > MaxSolutionLinkLen {
 		return "link too long"
 	}
-	if !strings.HasPrefix(link, "http://") && !strings.HasPrefix(link, "https://") {
-		return "link must start with http:// or https://"
+	parsed, err := url.ParseRequestURI(link)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return "link must be a valid http(s) URL"
 	}
 	return ""
 }

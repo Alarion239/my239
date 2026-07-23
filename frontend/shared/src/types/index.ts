@@ -217,6 +217,24 @@ export interface MathCenterTerm {
   is_active: boolean
 }
 
+// Likbez is a center-wide lecture. Its number is continuous across all terms;
+// term_display_name is historical context, not a catalog filter.
+export interface Likbez {
+  id: number
+  math_center_id: number
+  term_id: number
+  term_display_name: string
+  number: number
+  title: string
+  held_on: string
+  description: string
+  published: boolean
+  published_at?: string | null
+  has_pdf: boolean
+  has_tex: boolean
+  video_url?: string | null
+}
+
 export interface GoogleSheetTab {
   id: number
   title: string

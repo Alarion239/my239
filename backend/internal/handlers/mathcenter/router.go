@@ -41,6 +41,12 @@ func Router(database *db.DB, hub *live.Hub, tokens *internalAuth.TokenService, b
 		r.Get("/", ListSeriesForCenter(database))
 		r.Post("/", CreateSeries(database))
 	})
+	// Center-wide lecture catalog. Unlike series, the collection spans every
+	// term; each likbez carries its period only as a historical label.
+	r.Route("/centers/{centerID}/likbez", func(r chi.Router) {
+		r.Get("/", ListLikbezForCenter(database))
+		r.Post("/", CreateLikbez(database))
+	})
 	// Center-wide coffins ("Гробы") tab.
 	r.Get("/centers/{centerID}/coffins", ListCenterCoffins(database))
 	r.Get("/centers/{centerID}/coffin-queue", ListCoffinQueue(database))
@@ -70,6 +76,19 @@ func Router(database *db.DB, hub *live.Hub, tokens *internalAuth.TokenService, b
 		r.Get("/tex", GetSeriesTex(database))
 		r.Put("/tex", PutSeriesTex(database))
 		r.Delete("/tex", DeleteSeriesTex(database))
+	})
+	r.Route("/likbez/{likbezID}", func(r chi.Router) {
+		r.Get("/", GetLikbez(database))
+		r.Put("/", UpdateLikbez(database))
+		r.Delete("/", DeleteLikbez(database, blobs))
+		r.Post("/publish", PublishLikbez(database))
+		r.Post("/unpublish", UnpublishLikbez(database))
+		r.Post("/pdf/upload-url", IssueLikbezPDFUploadURL(database, blobs, uploadTTL))
+		r.Post("/pdf/publish", FinalizeLikbezPDF(database, blobs))
+		r.Get("/pdf", DownloadLikbezPDF(database, blobs, downloadTTL))
+		r.Get("/tex", GetLikbezTex(database))
+		r.Put("/tex", PutLikbezTex(database))
+		r.Put("/video", SetLikbezVideoURL(database))
 	})
 
 	// Per-subproblem coffins ("гробы") + официальный «Разбор». The subproblem is

@@ -53,6 +53,7 @@ export function useNavModules(): ModuleDef[] {
         // it stays highlighted on deeper series paths via NavLink prefix match.
         { label: 'Серии', path: base + '/series', notification: 'series-queue' },
         { label: 'Гробы', path: base + '/coffins', notification: 'coffin-queue' },
+        { label: 'Ликбезы', path: base + '/likbez' },
         // «Управление» (the management panel) is a head-teacher self-service tool.
         ...(headTeacherCenters.has(c.id)
           ? [{ label: 'Управление', path: base + '/manage' }]

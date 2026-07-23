@@ -31,6 +31,10 @@ export const queryKeys = {
   inviteContext: (token: string) => ['auth', 'invite', token] as const,
   seriesList: (centerId: number, termId = 0) =>
     ['mathcenter', 'centers', centerId, 'terms', termId, 'series'] as const,
+  likbezList: (centerId: number) =>
+    ['mathcenter', 'centers', centerId, 'likbez'] as const,
+  likbez: (id: number) => ['mathcenter', 'likbez', id] as const,
+  likbezTex: (id: number) => ['mathcenter', 'likbez', id, 'tex'] as const,
   series: (id: number) => ['mathcenter', 'series', id] as const,
   seriesTex: (id: number) => ['mathcenter', 'series', id, 'tex'] as const,
   centerCoffins: (centerId: number, termId = 0) =>

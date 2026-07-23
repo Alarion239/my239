@@ -7,6 +7,7 @@ import { HomePage } from '../features/home/home-page'
 import { ProfilePage } from '../features/profile/profile-page'
 import { MathCenterIndex, SeriesPage } from '../features/mathcenter/series-page'
 import { CoffinsPage } from '../features/mathcenter/coffins-page'
+import { LikbezPage } from '../features/mathcenter/likbez-page'
 import { ConduitPage } from '../features/mathcenter/conduit-page'
 import { ManagePage } from '../features/mathcenter/manage/manage-page'
 import { ThreadPage } from '../features/mathcenter/thread-page'
@@ -55,6 +56,8 @@ export const router = createBrowserRouter([
               },
               { path: 'coffins', element: <Navigate to="queue" replace /> },
               { path: 'coffins/:tab', element: <CoffinsPage /> },
+              { path: 'likbez', element: <LikbezPage /> },
+              { path: 'likbez/:likbezId', element: <LikbezPage /> },
               { path: 'conduit', element: <ConduitPage /> },
               { path: 'students/:studentUserId', element: <StudentProfilePage /> },
               { path: 'manage', element: <Navigate to="groups" replace /> },

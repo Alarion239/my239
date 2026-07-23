@@ -27,6 +27,7 @@ type Querier interface {
 	// concrete token here.
 	CountUsesOfInvitationToken(ctx context.Context, tokenID int64) (int64, error)
 	CreateInvitationToken(ctx context.Context, arg CreateInvitationTokenParams) (InvitationToken, error)
+	CreateLikbez(ctx context.Context, arg CreateLikbezParams) (MathCenterLikbez, error)
 	CreateMathCenter(ctx context.Context, graduationYear int32) (MathCenter, error)
 	// Creates a shared, admin-provisioned MathCenter login. These accounts carry no
 	// invitation lineage (invitation_token_id stays NULL) and are flagged so the UI
@@ -50,6 +51,7 @@ type Querier interface {
 	// author's display name without an extra lookup.
 	CreateThreadNote(ctx context.Context, arg CreateThreadNoteParams) (HomeworkThreadNote, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeleteLikbez(ctx context.Context, id int64) (int64, error)
 	DeleteMathCenter(ctx context.Context, id int64) (int64, error)
 	DeleteMathCenterGroup(ctx context.Context, id int64) (int64, error)
 	// Delete one problem (cascades to its subproblems → threads/solutions). Used by
@@ -77,6 +79,7 @@ type Querier interface {
 	GetInvitationTokenByValue(ctx context.Context, token string) (InvitationToken, error)
 	GetInvitationTokenByValueForUpdate(ctx context.Context, token string) (InvitationToken, error)
 	GetLegacyTermForCenter(ctx context.Context, mathCenterID int64) (MathCenterTerm, error)
+	GetLikbez(ctx context.Context, id int64) (GetLikbezRow, error)
 	GetMathCenter(ctx context.Context, id int64) (MathCenter, error)
 	GetMostRecentGradedEvent(ctx context.Context, threadID int64) (HomeworkThreadEvent, error)
 	// Resolve a problem to its series + center, for authorizing coffin actions.
@@ -150,9 +153,11 @@ type Querier interface {
 	ListHeadTeachersForCenter(ctx context.Context, mathCenterID int64) ([]ListHeadTeachersForCenterRow, error)
 	ListInvitationTokens(ctx context.Context) ([]InvitationToken, error)
 	ListInvitationTokensForCenter(ctx context.Context, mathCenterID *int64) ([]InvitationToken, error)
+	ListLikbezForCenter(ctx context.Context, mathCenterID int64) ([]ListLikbezForCenterRow, error)
 	ListMathCenters(ctx context.Context) ([]MathCenter, error)
 	ListProblemsForSeries(ctx context.Context, seriesID int64) ([]MathCenterProblem, error)
 	ListProblemsForSeriesIDs(ctx context.Context, seriesIds []int64) ([]MathCenterProblem, error)
+	ListPublishedLikbezForCenter(ctx context.Context, mathCenterID int64) ([]ListPublishedLikbezForCenterRow, error)
 	ListPublishedSeriesForCenter(ctx context.Context, mathCenterID int64) ([]ListPublishedSeriesForCenterRow, error)
 	ListPublishedSeriesForTerm(ctx context.Context, arg ListPublishedSeriesForTermParams) ([]MathCenterSeries, error)
 	ListSeriesForCenter(ctx context.Context, mathCenterID int64) ([]ListSeriesForCenterRow, error)
@@ -179,6 +184,10 @@ type Querier interface {
 	ListThreadEvents(ctx context.Context, threadID int64) ([]HomeworkThreadEvent, error)
 	ListThreadNotesAuthored(ctx context.Context, threadID int64) ([]ListThreadNotesAuthoredRow, error)
 	ListUsers(ctx context.Context) ([]User, error)
+	// Serializes automatic per-center numbering without an application-level lock.
+	LockMathCenterForLikbezNumbering(ctx context.Context, id int64) (int64, error)
+	NextLikbezNumber(ctx context.Context, mathCenterID int64) (int32, error)
+	PublishLikbez(ctx context.Context, id int64) (MathCenterLikbez, error)
 	// Sets the PDF object key and stamps published_at to NOW(). Used both for
 	// first-time publishing and re-uploads (we just overwrite; the caller is
 	// responsible for deleting the prior key first if needed).
@@ -204,6 +213,9 @@ type Querier interface {
 	// line (1а, 1б are distinct); placeholder rows register the subproblem with
 	// zero counts. Roster scoping mirrors TeacherSeriesGrid.
 	SeriesProblemStats(ctx context.Context, id int64) ([]SeriesProblemStatsRow, error)
+	SetLikbezPDF(ctx context.Context, arg SetLikbezPDFParams) (MathCenterLikbez, error)
+	SetLikbezTex(ctx context.Context, arg SetLikbezTexParams) (MathCenterLikbez, error)
+	SetLikbezVideoURL(ctx context.Context, arg SetLikbezVideoURLParams) (MathCenterLikbez, error)
 	// Renumber a problem in place (used by the diff-based series update so existing
 	// problems keep their id — and thus their subproblems/threads/разборы/coffins).
 	SetProblemNumber(ctx context.Context, arg SetProblemNumberParams) error
@@ -243,6 +255,8 @@ type Querier interface {
 	// Returns the row when the claim is granted (no live holder, or the caller
 	// already holds it). Returns no rows when someone else holds a live claim.
 	TryClaim(ctx context.Context, arg TryClaimParams) (HomeworkThread, error)
+	UnpublishLikbez(ctx context.Context, id int64) (MathCenterLikbez, error)
+	UpdateLikbez(ctx context.Context, arg UpdateLikbezParams) (MathCenterLikbez, error)
 	UpdateSeries(ctx context.Context, arg UpdateSeriesParams) (UpdateSeriesRow, error)
 	UpdateStudentNote(ctx context.Context, arg UpdateStudentNoteParams) (int64, error)
 	UpdateThreadAfterAppeal(ctx context.Context, arg UpdateThreadAfterAppealParams) error

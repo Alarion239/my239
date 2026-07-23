@@ -7,6 +7,8 @@ package store
 import (
 	"encoding/json"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type HomeworkThread struct {
@@ -82,6 +84,22 @@ type MathCenterGroup struct {
 	Name         string    `json:"name"`
 	CreatedAt    time.Time `json:"created_at"`
 	TermID       int64     `json:"term_id"`
+}
+
+type MathCenterLikbez struct {
+	ID           int64       `json:"id"`
+	MathCenterID int64       `json:"math_center_id"`
+	TermID       int64       `json:"term_id"`
+	Number       int32       `json:"number"`
+	Title        string      `json:"title"`
+	HeldOn       pgtype.Date `json:"held_on"`
+	Description  string      `json:"description"`
+	PdfObjectKey *string     `json:"pdf_object_key"`
+	TexSource    *string     `json:"tex_source"`
+	VideoUrl     *string     `json:"video_url"`
+	PublishedAt  *time.Time  `json:"published_at"`
+	CreatedAt    time.Time   `json:"created_at"`
+	UpdatedAt    time.Time   `json:"updated_at"`
 }
 
 type MathCenterProblem struct {
