@@ -1,6 +1,9 @@
 package googlesheets
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestSpreadsheetIDFromURL(t *testing.T) {
 	t.Parallel()
@@ -31,7 +34,7 @@ func TestSpreadsheetIDFromURLRejectsUntrustedURL(t *testing.T) {
 
 func TestNewHTTPClientRejectsMissingConfiguration(t *testing.T) {
 	t.Parallel()
-	if _, err := NewHTTPClient(""); err != ErrNotConfigured {
+	if _, err := NewHTTPClient(""); !errors.Is(err, ErrNotConfigured) {
 		t.Fatalf("NewHTTPClient(empty) error = %v, want ErrNotConfigured", err)
 	}
 }

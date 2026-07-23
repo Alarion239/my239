@@ -22,6 +22,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Alarion239/my239/backend/internal/logger"
 )
 
 const (
@@ -172,7 +174,11 @@ func (c *HTTPClient) getJSON(ctx context.Context, endpoint string, dst any) erro
 	if err != nil {
 		return fmt.Errorf("calling google api: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			logger.LogErrorContext(ctx, "google api: close response body", closeErr)
+		}
+	}()
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
 		return fmt.Errorf("google api returned %s: %s", resp.Status, strings.TrimSpace(string(body)))
@@ -203,7 +209,11 @@ func (c *HTTPClient) accessToken(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("requesting google access token: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			logger.LogErrorContext(ctx, "google token: close response body", closeErr)
+		}
+	}()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
 		return "", fmt.Errorf("google token endpoint returned %s: %s", resp.Status, strings.TrimSpace(string(body)))
@@ -248,7 +258,11 @@ func validSpreadsheetID(id string) error {
 		return errors.New("invalid google spreadsheet id")
 	}
 	for _, r := range id {
-		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
+		isLower := r >= 'a' && r <= 'z'
+		isUpper := r >= 'A' && r <= 'Z'
+		isDigit := r >= '0' && r <= '9'
+		isSafe := isLower || isUpper || isDigit || r == '-' || r == '_'
+		if !isSafe {
 			return errors.New("invalid google spreadsheet id")
 		}
 	}
