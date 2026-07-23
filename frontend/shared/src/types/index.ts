@@ -222,12 +222,15 @@ export interface GoogleSheetTab {
   title: string
 }
 
-// GoogleSheetLink is a term-wide connection to one immutable Google Sheet tab.
-// The server keeps the spreadsheet id internal to the integration; it is safe
-// to show to head teachers because they supplied the source URL.
+// A conduit tab belongs to one group. The term-scoped initials legend is an
+// outbound-only exception: my239 publishes it but never imports it.
 export interface GoogleSheetLink {
   id: number
   term_id: number
+  group_id?: number | null
+  group_name?: string | null
+  link_kind: 'conduit' | 'initials_legend'
+  sync_direction: 'two_way' | 'outbound_only'
   spreadsheet_id: string
   sheet_id: number
   sheet_title: string

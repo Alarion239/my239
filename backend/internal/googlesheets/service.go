@@ -19,17 +19,35 @@ import (
 // usable, but no unreviewed row/column heuristic can alter student history.
 var ErrParserNotConfigured = errors.New("google sheets conduit parser is not configured")
 
+type LinkKind string
+
+const (
+	LinkKindConduit        LinkKind = "conduit"
+	LinkKindInitialsLegend LinkKind = "initials_legend"
+)
+
+type SyncDirection string
+
+const (
+	SyncDirectionTwoWay       SyncDirection = "two_way"
+	SyncDirectionOutboundOnly SyncDirection = "outbound_only"
+)
+
 type Link struct {
-	ID                   int64      `json:"id"`
-	TermID               int64      `json:"term_id"`
-	SpreadsheetID        string     `json:"spreadsheet_id"`
-	SheetID              int64      `json:"sheet_id"`
-	SheetTitle           string     `json:"sheet_title"`
-	Enabled              bool       `json:"enabled"`
-	LastGoogleVersion    string     `json:"last_google_version"`
-	LastGoogleModifiedAt *time.Time `json:"last_google_modified_at"`
-	CreatedAt            time.Time  `json:"created_at"`
-	UpdatedAt            time.Time  `json:"updated_at"`
+	ID                   int64         `json:"id"`
+	TermID               int64         `json:"term_id"`
+	GroupID              *int64        `json:"group_id"`
+	GroupName            *string       `json:"group_name"`
+	LinkKind             LinkKind      `json:"link_kind"`
+	SyncDirection        SyncDirection `json:"sync_direction"`
+	SpreadsheetID        string        `json:"spreadsheet_id"`
+	SheetID              int64         `json:"sheet_id"`
+	SheetTitle           string        `json:"sheet_title"`
+	Enabled              bool          `json:"enabled"`
+	LastGoogleVersion    string        `json:"last_google_version"`
+	LastGoogleModifiedAt *time.Time    `json:"last_google_modified_at"`
+	CreatedAt            time.Time     `json:"created_at"`
+	UpdatedAt            time.Time     `json:"updated_at"`
 }
 
 type SyncRun struct {
@@ -82,7 +100,7 @@ func (s *Service) DiscoverTabs(ctx context.Context, spreadsheetURL string) (stri
 	return spreadsheetID, tabs, nil
 }
 
-func (s *Service) CreateLink(ctx context.Context, centerID, termID, sheetID, actorID int64, spreadsheetURL string) (Link, error) {
+func (s *Service) CreateLink(ctx context.Context, centerID, termID, groupID, sheetID, actorID int64, kind LinkKind, spreadsheetURL string) (Link, error) {
 	if !s.Configured() {
 		return Link{}, ErrNotConfigured
 	}
@@ -100,6 +118,9 @@ func (s *Service) CreateLink(ctx context.Context, centerID, termID, sheetID, act
 	if title == "" {
 		return Link{}, errors.New("selected tab was not found in the spreadsheet")
 	}
+	if err := validateLinkTarget(kind, groupID, title); err != nil {
+		return Link{}, err
+	}
 	var belongs bool
 	if err := s.pool.QueryRow(ctx, `SELECT EXISTS (
         SELECT 1 FROM math_center_terms WHERE id = $1 AND math_center_id = $2
@@ -109,12 +130,25 @@ func (s *Service) CreateLink(ctx context.Context, centerID, termID, sheetID, act
 	if !belongs {
 		return Link{}, errors.New("term does not belong to this math center")
 	}
+	if kind == LinkKindConduit {
+		if err := s.pool.QueryRow(ctx, `SELECT EXISTS (
+            SELECT 1 FROM math_center_groups
+            WHERE id = $1 AND term_id = $2 AND math_center_id = $3
+        )`, groupID, termID, centerID).Scan(&belongs); err != nil {
+			return Link{}, fmt.Errorf("checking google sheet group: %w", err)
+		}
+		if !belongs {
+			return Link{}, errors.New("group does not belong to this term and math center")
+		}
+	}
+	direction := directionForKind(kind)
 	const query = `INSERT INTO math_center_google_sheet_links
-        (term_id, spreadsheet_id, sheet_id, sheet_title, created_by_user_id)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING id, term_id, spreadsheet_id, sheet_id, sheet_title, enabled,
-          last_google_version, last_google_modified_at, created_at, updated_at`
-	link, err := scanLink(s.pool.QueryRow(ctx, query, termID, spreadsheetID, sheetID, title, actorID))
+        (term_id, group_id, link_kind, sync_direction, spreadsheet_id, sheet_id, sheet_title, created_by_user_id)
+        VALUES ($1, NULLIF($2, 0), $3, $4, $5, $6, $7, $8)
+        RETURNING id, term_id, group_id, NULL::TEXT, link_kind, sync_direction,
+          spreadsheet_id, sheet_id, sheet_title, enabled, last_google_version,
+          last_google_modified_at, created_at, updated_at`
+	link, err := scanLink(s.pool.QueryRow(ctx, query, termID, groupID, kind, direction, spreadsheetID, sheetID, title, actorID))
 	if err != nil {
 		return Link{}, fmt.Errorf("creating google sheet link: %w", err)
 	}
@@ -122,10 +156,12 @@ func (s *Service) CreateLink(ctx context.Context, centerID, termID, sheetID, act
 }
 
 func (s *Service) ListLinks(ctx context.Context, centerID int64) ([]Link, error) {
-	const query = `SELECT l.id, l.term_id, l.spreadsheet_id, l.sheet_id, l.sheet_title, l.enabled,
-        l.last_google_version, l.last_google_modified_at, l.created_at, l.updated_at
+	const query = `SELECT l.id, l.term_id, l.group_id, g.name, l.link_kind, l.sync_direction,
+        l.spreadsheet_id, l.sheet_id, l.sheet_title, l.enabled, l.last_google_version,
+        l.last_google_modified_at, l.created_at, l.updated_at
         FROM math_center_google_sheet_links l
         JOIN math_center_terms t ON t.id = l.term_id
+		LEFT JOIN math_center_groups g ON g.id = l.group_id
         WHERE t.math_center_id = $1
         ORDER BY t.is_active DESC, t.grade DESC NULLS LAST, l.created_at`
 	rows, err := s.pool.Query(ctx, query, centerID)
@@ -223,10 +259,12 @@ func (s *Service) SyncTerm(ctx context.Context, centerID, termID, actorID int64)
 }
 
 func (s *Service) linksForTerm(ctx context.Context, centerID, termID int64) ([]Link, error) {
-	const query = `SELECT l.id, l.term_id, l.spreadsheet_id, l.sheet_id, l.sheet_title, l.enabled,
-        l.last_google_version, l.last_google_modified_at, l.created_at, l.updated_at
+	const query = `SELECT l.id, l.term_id, l.group_id, g.name, l.link_kind, l.sync_direction,
+        l.spreadsheet_id, l.sheet_id, l.sheet_title, l.enabled, l.last_google_version,
+        l.last_google_modified_at, l.created_at, l.updated_at
         FROM math_center_google_sheet_links l
         JOIN math_center_terms t ON t.id = l.term_id
+		LEFT JOIN math_center_groups g ON g.id = l.group_id
         WHERE l.term_id = $1 AND t.math_center_id = $2 AND l.enabled = TRUE
         ORDER BY l.id`
 	rows, err := s.pool.Query(ctx, query, termID, centerID)
@@ -285,9 +323,40 @@ type rowScanner interface{ Scan(...any) error }
 
 func scanLink(row rowScanner) (Link, error) {
 	var link Link
-	err := row.Scan(&link.ID, &link.TermID, &link.SpreadsheetID, &link.SheetID, &link.SheetTitle,
-		&link.Enabled, &link.LastGoogleVersion, &link.LastGoogleModifiedAt, &link.CreatedAt, &link.UpdatedAt)
+	err := row.Scan(&link.ID, &link.TermID, &link.GroupID, &link.GroupName, &link.LinkKind,
+		&link.SyncDirection, &link.SpreadsheetID, &link.SheetID, &link.SheetTitle, &link.Enabled,
+		&link.LastGoogleVersion, &link.LastGoogleModifiedAt, &link.CreatedAt, &link.UpdatedAt)
 	return link, err
+}
+
+func validateLinkTarget(kind LinkKind, groupID int64, title string) error {
+	title = strings.ToLower(strings.TrimSpace(title))
+	if title == "зп" {
+		return errors.New("the ЗП tab cannot be linked")
+	}
+	switch kind {
+	case LinkKindConduit:
+		if groupID <= 0 {
+			return errors.New("a group is required for a conduit tab")
+		}
+	case LinkKindInitialsLegend:
+		if groupID != 0 {
+			return errors.New("the initials legend cannot be linked to a group")
+		}
+		if title != "расшифровка" {
+			return errors.New("only the Расшифровка tab can be an initials legend")
+		}
+	default:
+		return errors.New("invalid Google Sheets link kind")
+	}
+	return nil
+}
+
+func directionForKind(kind LinkKind) SyncDirection {
+	if kind == LinkKindInitialsLegend {
+		return SyncDirectionOutboundOnly
+	}
+	return SyncDirectionTwoWay
 }
 
 func nullableTime(value time.Time) *time.Time {

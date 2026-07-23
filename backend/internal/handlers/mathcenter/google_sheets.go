@@ -22,6 +22,8 @@ type googleSheetDiscoverRequest struct {
 }
 type googleSheetLinkRequest struct {
 	TermID         int64  `json:"term_id"`
+	GroupID        int64  `json:"group_id"`
+	LinkKind       string `json:"link_kind"`
 	SpreadsheetURL string `json:"spreadsheet_url"`
 	SheetID        int64  `json:"sheet_id"`
 }
@@ -100,7 +102,7 @@ func manageGoogleSheetCreate(database *db.DB, sheets *googlesheets.Service) http
 			httpx.WriteAPIError(w, r, 400, httpx.CodeBadRequest, "term_id, spreadsheet_url, and sheet_id are required")
 			return
 		}
-		link, err := sheets.CreateLink(r.Context(), centerID, request.TermID, request.SheetID, userID, request.SpreadsheetURL)
+		link, err := sheets.CreateLink(r.Context(), centerID, request.TermID, request.GroupID, request.SheetID, userID, googlesheets.LinkKind(request.LinkKind), request.SpreadsheetURL)
 		if writeGoogleSheetsError(w, r, err) {
 			return
 		}

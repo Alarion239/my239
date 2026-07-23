@@ -262,7 +262,13 @@ export function useCreateGoogleSheetLink(centerId: number) {
   const client = useApiClient()
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { term_id: number; spreadsheet_url: string; sheet_id: number }) =>
+    mutationFn: (body: {
+      term_id: number
+      group_id: number
+      link_kind: 'conduit' | 'initials_legend'
+      spreadsheet_url: string
+      sheet_id: number
+    }) =>
       client.request<GoogleSheetLink>(base(centerId) + '/google-sheets/links', {
         method: 'POST', body,
       }),
@@ -291,7 +297,7 @@ export function useDeleteGoogleSheetLink(centerId: number) {
   })
 }
 
-// Any center teacher can manually pull links for the selected term.
+// Any center teacher can manually synchronize links for the selected term.
 export function useSyncGoogleSheets(centerId: number) {
   const client = useApiClient()
   const qc = useQueryClient()
