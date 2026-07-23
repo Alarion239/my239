@@ -13,6 +13,7 @@ import {
 } from '@my239/shared'
 import { Card, Input, Spinner } from '../../design/ui'
 import { cn } from '../../design/cn'
+import { usePhoneViewport } from '../../use-phone-viewport'
 import { ThreadCommentCell } from './cell-comment'
 import { OfflineCellDialog, type OfflineCellTarget } from './offline-cell-dialog'
 import {
@@ -38,9 +39,13 @@ const RECENT_GRADER_WINDOW_MS = 15_000
 export function ConduitPage() {
   const centerId = useCenterIdContext()
   const ctx = useSeriesContext(centerId)
+  const isPhone = usePhoneViewport()
 
   if (!Number.isFinite(centerId) || centerId <= 0) {
     return <NoAccess />
+  }
+  if (isPhone) {
+    return <NoAccess message="Кондуит доступен только на компьютере." />
   }
   if (ctx.isLoading) {
     return <CenteredSpinner />
@@ -359,7 +364,7 @@ function ConduitTable({
   const toolbar = (
     <div className="flex min-w-0 items-center justify-end gap-2">
       <span className="hidden whitespace-nowrap text-xs text-faint xl:inline">Ваши инициалы</span>
-      <div className="min-w-0 w-36 sm:w-44">
+      <div className="min-w-0 w-56 sm:w-64">
         <GraderInitialsInput
           centerId={centerId}
           value={grader}
@@ -578,7 +583,7 @@ function ConduitTable({
                             threadId={threadId}
                             hasComment={hasComment}
                             className={cn(
-                              'border-b border-line p-0 text-center',
+                              'min-w-9 border-b border-line p-0 text-center align-middle',
                               vert(firstInSeries),
                               acc
                                 ? 'bg-status-accepted-soft font-medium text-status-accepted'
@@ -591,7 +596,7 @@ function ConduitTable({
                               disabled={pending}
                               aria-label={cellAria}
                               className={cn(
-                                'flex h-full w-full items-center justify-center px-1.5 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                                'flex h-9 w-full min-w-full items-center justify-center px-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
                                 !acc && isActiveRow && 'text-status-accepted hover:bg-status-accepted-soft',
                                 !acc && !isActiveRow && 'hover:bg-surface-muted',
                               )}
@@ -661,10 +666,10 @@ function CenteredSpinner() {
   )
 }
 
-function NoAccess() {
+function NoAccess({ message = 'Нет доступа к кондуиту этого матцентра.' }: { message?: string }) {
   return (
     <Card className="px-6 py-16 text-center">
-      <p className="text-muted">Нет доступа к кондуиту этого матцентра.</p>
+      <p className="text-muted">{message}</p>
     </Card>
   )
 }

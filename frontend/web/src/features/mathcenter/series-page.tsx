@@ -41,7 +41,7 @@ import { useCenterIdContext } from './center-id-context'
 // Allowed tab ids per view, with the default first. The route carries the tab
 // (e.g. /mathcenter/2027/series/42/razbor) so it survives reload + back/forward.
 const STUDENT_TAB_IDS = ['progress', 'statement', 'razbor'] as const
-const TEACHER_TAB_IDS = ['razbor', 'statement', 'queue', 'grid', 'offline'] as const
+const TEACHER_TAB_IDS = ['queue', 'statement', 'razbor', 'grid', 'offline'] as const
 
 export function SeriesPage() {
   const centerId = useCenterIdContext()
@@ -442,9 +442,9 @@ function TeacherSeriesView({
 }
 
 const TEACHER_TABS: { id: TeacherTab; label: string }[] = [
+  { id: 'queue', label: 'Очередь' },
   { id: 'statement', label: 'Условие' },
   { id: 'razbor', label: 'Разбор' },
-  { id: 'queue', label: 'Очередь' },
   { id: 'grid', label: 'Таблица' },
   { id: 'offline', label: 'Очно' },
 ]

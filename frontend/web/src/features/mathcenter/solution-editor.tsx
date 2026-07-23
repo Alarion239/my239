@@ -108,8 +108,8 @@ export function SolutionEditor({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-w-lg">
-        <DialogTitle>{title}</DialogTitle>
+      <DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] overflow-y-auto p-4 sm:max-h-[85vh] sm:w-[calc(100vw-2rem)] sm:max-w-lg sm:p-5">
+        <DialogTitle className="break-words pr-8">{title}</DialogTitle>
         <DialogDescription className="mt-1">
           Прикрепите разбор: LaTeX, PDF и/или ссылку на видео (YouTube/VK).
         </DialogDescription>

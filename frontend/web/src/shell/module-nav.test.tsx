@@ -40,11 +40,11 @@ function makeUser(overrides: Partial<User>): User {
 }
 
 // jsdom lacks matchMedia; ThemeProvider reads it for the initial theme.
-function mockMatchMedia() {
+function mockMatchMedia(matches = false) {
   vi.stubGlobal(
     'matchMedia',
     vi.fn((query: string) => ({
-      matches: false,
+      matches,
       media: query,
       onchange: null,
       addEventListener: () => {},
@@ -89,8 +89,8 @@ function mockFetch(user: User, me: MeResponse = mcMe) {
   )
 }
 
-function renderShell(node: ReactNode, initialPath: string) {
-  mockMatchMedia()
+function renderShell(node: ReactNode, initialPath: string, phone = false) {
+  mockMatchMedia(phone)
   const client = new ApiClient({ baseURL: '/api/v1', tokenStore: noopStore })
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
@@ -163,6 +163,27 @@ describe('module navigation', () => {
 
     // The active module's "Серии" tab for center 8 (year 2025) shows in the bar.
     expect(await screen.findByRole('link', { name: 'Серии' })).toBeInTheDocument()
+  })
+
+  it('orders the teacher math-center tabs with conduit first', async () => {
+    const member = makeUser({ is_admin: false })
+    mockFetch(member)
+    renderShell(<TopBar user={member} />, '/mathcenter/2025/series')
+
+    const tabNav = await screen.findByRole('navigation', { name: 'Разделы модуля' })
+    const labels = Array.from(tabNav.querySelectorAll('a')).map((link) => link.textContent)
+    expect(labels).toEqual(['Кондуит', 'Серии', 'Гробы', 'Управление'])
+  })
+
+  it('hides the conduit tab on phone-sized viewports', async () => {
+    const member = makeUser({ is_admin: false })
+    mockFetch(member)
+    renderShell(<TopBar user={member} />, '/mathcenter/2025/series', true)
+
+    const tabNav = await screen.findByRole('navigation', { name: 'Разделы модуля' })
+    expect(tabNav).not.toHaveTextContent('Кондуит')
+    expect(tabNav).toHaveTextContent('Серии')
+    expect(tabNav).toHaveTextContent('Гробы')
   })
 
   it('toggles the desktop nav rail from the my239 logo', async () => {

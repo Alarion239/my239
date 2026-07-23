@@ -445,8 +445,12 @@ function CoffinBadge({
           <Skull className="h-5 w-5" aria-hidden />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-56">
-        <DropdownMenuLabel>{problemDisplay}</DropdownMenuLabel>
+      <DropdownMenuContent
+        align="end"
+        collisionPadding={8}
+        className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] min-w-0 max-w-56 overflow-y-auto"
+      >
+        <DropdownMenuLabel className="break-words">{problemDisplay}</DropdownMenuLabel>
         {isCoffin ? (
           <>
             <p className="px-2.5 pb-1 text-xs text-muted">

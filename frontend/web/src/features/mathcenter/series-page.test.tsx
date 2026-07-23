@@ -243,8 +243,17 @@ describe('SeriesPage — teacher view', () => {
     // The "+" create-series card sits at the end of the strip.
     expect(await screen.findByRole('button', { name: 'Создать серию' })).toBeInTheDocument()
 
-    // The Разбор tab (default) renders the per-subproblem stats breakdown
-    // full-width — no separate "Статистика" panel heading/container.
+    const tabList = screen.getByRole('tablist', { name: 'Раздел проверки' })
+    const tabs = Array.from(tabList.querySelectorAll('[role="tab"]')).map(
+      (tab) => tab.textContent,
+    )
+    expect(tabs.slice(0, 5)).toEqual(['Очередь', 'Условие', 'Разбор', 'Таблица', 'Очно'])
+
+    // The queue is now the default teacher tab; the Разбор tab still renders
+    // the per-subproblem stats breakdown when selected.
+    expect(await screen.findByText('Очередь пуста.')).toBeInTheDocument()
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('tab', { name: 'Разбор' }))
     expect(await screen.findByText('Принято:', { exact: false })).toBeInTheDocument()
     expect(screen.getByText('5')).toBeInTheDocument()
   })

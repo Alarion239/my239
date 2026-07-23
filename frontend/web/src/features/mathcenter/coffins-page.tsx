@@ -53,9 +53,9 @@ function CoffinsView({ centerId, isManager }: { centerId: number; isManager: boo
   const { data, isPending, isError } = useCenterCoffins(centerId)
 
   const tabs: { id: Tab; label: string }[] = [
+    ...(isManager ? [{ id: 'queue' as Tab, label: 'Очередь' }] : []),
     { id: 'current', label: 'Текущие' },
     { id: 'solved', label: 'Разобранные' },
-    ...(isManager ? [{ id: 'queue' as Tab, label: 'Очередь' }] : []),
   ]
   // Validate the URL tab against what this role may see. «Очередь» is
   // manager-only, so a student landing on coffins/queue bounces to current.

@@ -1,5 +1,6 @@
 import { FunctionSquare } from 'lucide-react'
 import { useMathCenterMe } from '@my239/shared'
+import { usePhoneViewport } from '../use-phone-viewport'
 import { modules, type ModuleDef } from './modules'
 
 // useNavModules builds the full module list for the current user: one "Матцентр
@@ -9,6 +10,7 @@ import { modules, type ModuleDef } from './modules'
 // this so adding a center is automatic.
 export function useNavModules(): ModuleDef[] {
   const me = useMathCenterMe()
+  const isPhone = usePhoneViewport()
 
   const seen = new Set<number>()
   const teacherCenters = new Set<number>()
@@ -42,14 +44,13 @@ export function useNavModules(): ModuleDef[] {
       icon: FunctionSquare,
       status: 'active',
       pages: [
+        ...(teacherCenters.has(c.id) && !isPhone
+          ? [{ label: 'Кондуит', path: base + '/conduit' }]
+          : []),
         // «Серии» now nests series/:id/:tab routes, so it must NOT use `end`:
         // it stays highlighted on deeper series paths via NavLink prefix match.
         { label: 'Серии', path: base + '/series' },
         { label: 'Гробы', path: base + '/coffins' },
-        // «Кондуит» (the center-wide accept matrix) is a teacher-only tool.
-        ...(teacherCenters.has(c.id)
-          ? [{ label: 'Кондуит', path: base + '/conduit' }]
-          : []),
         // «Управление» (the management panel) is a head-teacher self-service tool.
         ...(headTeacherCenters.has(c.id)
           ? [{ label: 'Управление', path: base + '/manage' }]
