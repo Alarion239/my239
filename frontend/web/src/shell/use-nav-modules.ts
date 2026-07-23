@@ -43,14 +43,16 @@ export function useNavModules(): ModuleDef[] {
       path: base,
       icon: FunctionSquare,
       status: 'active',
+      centerId: c.id,
+      canGrade: teacherCenters.has(c.id),
       pages: [
         ...(teacherCenters.has(c.id) && !isPhone
           ? [{ label: 'Кондуит', path: base + '/conduit' }]
           : []),
         // «Серии» now nests series/:id/:tab routes, so it must NOT use `end`:
         // it stays highlighted on deeper series paths via NavLink prefix match.
-        { label: 'Серии', path: base + '/series' },
-        { label: 'Гробы', path: base + '/coffins' },
+        { label: 'Серии', path: base + '/series', notification: 'series-queue' },
+        { label: 'Гробы', path: base + '/coffins', notification: 'coffin-queue' },
         // «Управление» (the management panel) is a head-teacher self-service tool.
         ...(headTeacherCenters.has(c.id)
           ? [{ label: 'Управление', path: base + '/manage' }]

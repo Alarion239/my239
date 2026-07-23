@@ -98,22 +98,21 @@ export function RegisterPage() {
           )}
         </Field>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Имя" error={errors.first_name?.message}>
-            {({ id, invalid }) => (
-              <Input id={id} invalid={invalid} autoComplete="given-name" {...register('first_name')} />
-            )}
-          </Field>
-          <Field label="Фамилия" error={errors.last_name?.message}>
-            {({ id, invalid }) => (
-              <Input id={id} invalid={invalid} autoComplete="family-name" {...register('last_name')} />
-            )}
-          </Field>
-        </div>
+        <Field label="Имя" error={errors.first_name?.message}>
+          {({ id, invalid }) => (
+            <Input id={id} invalid={invalid} autoComplete="given-name" {...register('first_name')} />
+          )}
+        </Field>
 
         <Field label="Отчество (необязательно)" error={errors.middle_name?.message}>
           {({ id, invalid }) => (
             <Input id={id} invalid={invalid} autoComplete="additional-name" {...register('middle_name')} />
+          )}
+        </Field>
+
+        <Field label="Фамилия" error={errors.last_name?.message}>
+          {({ id, invalid }) => (
+            <Input id={id} invalid={invalid} autoComplete="family-name" {...register('last_name')} />
           )}
         </Field>
 

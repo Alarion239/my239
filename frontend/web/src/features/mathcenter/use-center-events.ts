@@ -71,6 +71,7 @@ function handle(
     }
     qc.invalidateQueries({ queryKey: queryKeys.centerGrid(centerId) })
     qc.invalidateQueries({ queryKey: queryKeys.graderStats(centerId) })
+    qc.invalidateQueries({ queryKey: queryKeys.coffinQueue(centerId) })
   } else if (kind === 'coffins') {
     qc.invalidateQueries({ queryKey: queryKeys.centerCoffins(centerId) })
     qc.invalidateQueries({ queryKey: queryKeys.coffinQueue(centerId) })

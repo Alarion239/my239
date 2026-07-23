@@ -9,6 +9,7 @@ export interface ModulePage {
   label: string
   path: string
   end?: boolean
+  notification?: 'series-queue' | 'coffin-queue'
 }
 
 // The platform's modules. The nav rail and home page both render from this one
@@ -23,6 +24,8 @@ export interface ModuleDef {
   icon: LucideIcon
   status: 'active' | 'soon'
   adminOnly?: boolean
+  centerId?: number
+  canGrade?: boolean
   pages?: ModulePage[]
 }
 

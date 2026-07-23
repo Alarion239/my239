@@ -140,19 +140,19 @@ describe('currentSeries', () => {
     expect(currentSeries(list, NOW)?.id).toBe(2)
   })
 
-  it('falls back to the highest number when everything is overdue', () => {
+  it('returns undefined when everything is overdue', () => {
     const list = [
       makeSeries({ id: 1, number: 1, due_at: '2026-05-01T00:00:00Z' }),
       makeSeries({ id: 2, number: 3, due_at: '2026-04-01T00:00:00Z' }),
       makeSeries({ id: 3, number: 2, due_at: '2026-05-15T00:00:00Z' }),
     ]
-    expect(currentSeries(list, NOW)?.id).toBe(2)
+    expect(currentSeries(list, NOW)).toBeUndefined()
   })
 
-  it('ignores draft series in the fallback', () => {
+  it('ignores draft series when finding an upcoming series', () => {
     const list = [
       makeSeries({ id: 1, number: 9, published: false, due_at: '2026-05-01T00:00:00Z' }),
-      makeSeries({ id: 2, number: 2, due_at: '2026-05-01T00:00:00Z' }),
+      makeSeries({ id: 2, number: 2, due_at: '2026-07-01T00:00:00Z' }),
     ]
     expect(currentSeries(list, NOW)?.id).toBe(2)
   })

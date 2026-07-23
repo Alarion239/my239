@@ -72,7 +72,7 @@ const mcMe: MeResponse = {
   },
 }
 
-function mockFetch(user: User, me: MeResponse = mcMe) {
+function mockFetch(user: User, me: MeResponse = mcMe, notifications = false) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
@@ -84,6 +84,12 @@ function mockFetch(user: User, me: MeResponse = mcMe) {
         })
       if (url.includes('/auth/me')) return json(user)
       if (url.includes('/mathcenter/me')) return json(me)
+      if (notifications && url.includes('/homework/centers/8/grader-stats')) {
+        return json({ pending_count: 3, my_claimed_count: 0, my_appeals_count: 0 })
+      }
+      if (notifications && url.includes('/mathcenter/centers/8/coffin-queue')) {
+        return json([{ thread_id: 1 }, { thread_id: 2 }])
+      }
       return json([])
     }),
   )
@@ -184,6 +190,18 @@ describe('module navigation', () => {
     expect(tabNav).not.toHaveTextContent('Кондуит')
     expect(tabNav).toHaveTextContent('Серии')
     expect(tabNav).toHaveTextContent('Гробы')
+  })
+
+  it('shows inactive queue notifications on the module tabs', async () => {
+    const member = makeUser({ is_admin: false })
+    mockFetch(member, mcMe, true)
+    renderShell(<TopBar user={member} />, '/mathcenter/2025/coffins/queue')
+
+    const tabNav = await screen.findByRole('navigation', { name: 'Разделы модуля' })
+    const seriesTab = tabNav.querySelector('a[href="/mathcenter/2025/series"]')
+    const coffinsTab = tabNav.querySelector('a[href="/mathcenter/2025/coffins"]')
+    expect(seriesTab).toHaveTextContent('Серии3')
+    expect(coffinsTab).not.toHaveTextContent('2')
   })
 
   it('toggles the desktop nav rail from the my239 logo', async () => {

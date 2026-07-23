@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, type ReactNode } from 'react'
-import { formatDateTime, type Series } from '@my239/shared'
-import { Badge } from '../../design/ui'
+import { formatDateTime, useGraderQueue, type Series } from '@my239/shared'
+import { Badge, NotificationBadge } from '../../design/ui'
 import { cn } from '../../design/cn'
 
 export interface SeriesStripProps {
@@ -14,6 +14,10 @@ export interface SeriesStripProps {
   // Optional card rendered at the END of the strip (the teacher "+ create"
   // card). Stretches to the row height like the series cards.
   trailing?: ReactNode
+  // Teacher-only queue counts for series cards that are not currently open.
+  showQueueNotifications?: boolean
+  selectedActionsOpen?: boolean
+  selectedActions?: ReactNode
 }
 
 // SeriesStrip is the horizontal, scrollable row of series cards above the detail
@@ -28,6 +32,9 @@ export function SeriesStrip({
   onSelect,
   progress,
   trailing,
+  showQueueNotifications = false,
+  selectedActionsOpen = false,
+  selectedActions,
 }: SeriesStripProps) {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const centerRef = useRef<HTMLButtonElement | null>(null)
@@ -76,39 +83,55 @@ export function SeriesStrip({
         const isCurrent = s.id === currentId
         const isSelected = s.id === selectedId
         return (
-          <button
-            key={s.id}
-            ref={s.id === centerId ? centerRef : undefined}
-            type="button"
-            role="tab"
-            aria-selected={isSelected}
-            onClick={() => onSelect(s.id)}
-            className={cn(
-              'flex w-56 shrink-0 flex-col gap-1 rounded-2xl border bg-surface p-4 text-left transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-              isCurrent ? 'border-accent' : 'border-line hover:bg-surface-muted',
-              isSelected && 'ring-2 ring-accent/60',
-            )}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-display text-lg font-medium text-ink">
-                Серия {s.number}
+          <div key={s.id} className="relative w-56 shrink-0">
+            <button
+              ref={s.id === centerId ? centerRef : undefined}
+              type="button"
+              role="tab"
+              aria-selected={isSelected}
+              onClick={() => onSelect(s.id)}
+              className={cn(
+                'flex w-full flex-col gap-1 rounded-2xl border bg-surface p-4 text-left transition-colors',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                isCurrent ? 'border-accent' : 'border-line hover:bg-surface-muted',
+                isSelected && 'ring-2 ring-accent/60',
+              )}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-display text-lg font-medium text-ink">
+                  Серия {s.number}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  {showQueueNotifications && !isSelected ? (
+                    <SeriesQueueBadge seriesId={s.id} />
+                  ) : null}
+                  {isCurrent ? <Badge variant="accent">Текущая</Badge> : null}
+                </div>
+              </div>
+              <span className="line-clamp-2 text-sm text-muted">{s.name}</span>
+              <span className="mt-1 text-xs text-faint">
+                Срок: {formatDateTime(s.due_at)}
               </span>
-              {isCurrent ? <Badge variant="accent">Текущая</Badge> : null}
-            </div>
-            <span className="line-clamp-2 text-sm text-muted">{s.name}</span>
-            <span className="mt-1 text-xs text-faint">
-              Срок: {formatDateTime(s.due_at)}
-            </span>
-            {progress?.[s.id] ? (
-              <span className="text-xs font-medium text-accent-ink">
-                {progress[s.id]}
-              </span>
+              {progress?.[s.id] ? (
+                <span className="text-xs font-medium text-accent-ink">
+                  {progress[s.id]}
+                </span>
+              ) : null}
+            </button>
+            {isSelected && selectedActionsOpen && selectedActions ? (
+              <div className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded-lg border border-line bg-surface/95 p-1 shadow-lg backdrop-blur-sm">
+                {selectedActions}
+              </div>
             ) : null}
-          </button>
+          </div>
         )
       })}
       {trailing}
     </div>
   )
+}
+
+function SeriesQueueBadge({ seriesId }: { seriesId: number }) {
+  const queue = useGraderQueue(seriesId, false)
+  return <NotificationBadge count={queue.data?.length ?? 0} label="Очередь серии" />
 }

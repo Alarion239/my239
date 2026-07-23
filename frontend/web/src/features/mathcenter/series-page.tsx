@@ -89,9 +89,11 @@ function NotFoundState() {
 function CreateSeriesCard({
   centerId,
   defaultNumber,
+  highlight = false,
 }: {
   centerId: number
   defaultNumber: number
+  highlight?: boolean
 }) {
   return (
     <UploadSeriesDialog
@@ -103,6 +105,7 @@ function CreateSeriesCard({
           aria-label="Создать серию"
           className={cn(
             'flex w-56 shrink-0 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-line-strong bg-surface p-4 text-muted transition-colors',
+            highlight && 'border-accent bg-accent-soft text-accent-ink ring-2 ring-accent/30',
             'hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
           )}
         >
@@ -176,6 +179,7 @@ function CenterSeries({
     tab?: string
   }>()
   const navigate = useNavigate()
+  const [actionsSeriesId, setActionsSeriesId] = useState<number | null>(null)
   const { data: list, isPending, isError } = useSeriesList(centerId)
   const current = useMemo(() => (list ? currentSeries(list) : undefined), [list])
 
@@ -196,7 +200,11 @@ function CenterSeries({
   const nextNumber =
     list.length > 0 ? Math.max(...list.map((s) => s.number)) + 1 : 1
   const createCard = !isStudentView ? (
-    <CreateSeriesCard centerId={centerId} defaultNumber={nextNumber} />
+    <CreateSeriesCard
+      centerId={centerId}
+      defaultNumber={nextNumber}
+      highlight={!current}
+    />
   ) : undefined
 
   if (list.length === 0) {
@@ -235,9 +243,21 @@ function CenterSeries({
   }
 
   const selectSeries = (id: number) => {
+    if (id === selected.id) {
+      setActionsSeriesId((openId) => (openId === id ? null : id))
+      return
+    }
+    setActionsSeriesId(null)
     // Preserve the active tab when switching series.
     navigate('/mathcenter/' + year + '/series/' + id + '/' + activeTab)
   }
+
+  const selectedActions = !isStudentView ? (
+    <>
+      <EditSeriesButton centerId={centerId} series={selected} />
+      <DeleteSeriesButton centerId={centerId} series={selected} year={year ?? ''} />
+    </>
+  ) : undefined
 
   return (
     <>
@@ -246,6 +266,9 @@ function CenterSeries({
         selectedId={selected.id}
         currentId={current?.id ?? null}
         onSelect={selectSeries}
+        showQueueNotifications={!isStudentView}
+        selectedActionsOpen={actionsSeriesId === selected.id}
+        selectedActions={selectedActions}
         trailing={createCard}
       />
 
@@ -256,8 +279,8 @@ function CenterSeries({
           tab={activeTab as StudentTab}
         />
       ) : (
-        // Teachers get Условие / Разбор / Очередь / Таблица as full-width
-        // tabs; разбор carries the statistics + coffin handling.
+        // Teachers get Очередь / Условие / Разбор / Таблица as full-width tabs;
+        // разбор carries the statistics + coffin handling.
         <TeacherSeriesView
           centerId={centerId}
           series={selected}
@@ -391,10 +414,9 @@ function StudentProblemListWithCounts({
 
 type TeacherTab = (typeof TEACHER_TAB_IDS)[number]
 
-// TeacherSeriesView gives teachers full-width tabs: «Условие» (the statement),
-// «Разбор» (official solutions + statistics + coffin handling), and the grading
-// surfaces «Очередь»/«Таблица» — a 60+ student grid or a long queue needs the
-// room. Each tab takes the full width.
+// TeacherSeriesView gives teachers full-width tabs in workflow order:
+// «Очередь», «Условие», «Разбор», «Таблица», then «Очно». A 60+ student grid
+// or a long queue needs the room, so each tab takes the full width.
 function TeacherSeriesView({
   centerId,
   series,
@@ -409,23 +431,15 @@ function TeacherSeriesView({
   const navigate = useNavigate()
   return (
     <div className="flex flex-col gap-4">
-      {/* Tab switch on the left; the edit-series icon pinned to the right of the
-          same row (it never blends with the switch). */}
-      <div className="flex items-center justify-between gap-2">
-        <PillTabs
-          value={tab}
-          onChange={(t) =>
-            navigate('/mathcenter/' + year + '/series/' + series.id + '/' + t)
-          }
-          options={TEACHER_TABS}
-          ariaLabel="Раздел проверки"
-          className="min-w-0"
-        />
-        <div className="flex shrink-0 items-center gap-2">
-          <EditSeriesButton centerId={centerId} series={series} />
-          <DeleteSeriesButton centerId={centerId} series={series} year={year} />
-        </div>
-      </div>
+      <PillTabs
+        value={tab}
+        onChange={(t) =>
+          navigate('/mathcenter/' + year + '/series/' + series.id + '/' + t)
+        }
+        options={TEACHER_TABS}
+        ariaLabel="Раздел проверки"
+        className="min-w-0 self-start"
+      />
       {tab === 'statement' ? (
         <StatementPanel series={series} bare />
       ) : tab === 'razbor' ? (
@@ -449,9 +463,8 @@ const TEACHER_TABS: { id: TeacherTab; label: string }[] = [
   { id: 'offline', label: 'Очно' },
 ]
 
-// EditSeriesButton is the icon-only «Редактировать серию» control that lives at
-// the right edge of the teacher tab row (resource-economy: no dedicated row,
-// no label).
+// EditSeriesButton is the icon-only «Редактировать серию» control shown after
+// the selected series card is clicked again.
 function EditSeriesButton({ centerId, series }: { centerId: number; series: Series }) {
   return (
     <UploadSeriesDialog

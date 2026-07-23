@@ -53,7 +53,7 @@ export const router = createBrowserRouter([
                 path: 'series/:seriesId/thread/:threadId',
                 element: <ThreadPage />,
               },
-              { path: 'coffins', element: <Navigate to="current" replace /> },
+              { path: 'coffins', element: <Navigate to="queue" replace /> },
               { path: 'coffins/:tab', element: <CoffinsPage /> },
               { path: 'conduit', element: <ConduitPage /> },
               { path: 'students/:studentUserId', element: <StudentProfilePage /> },

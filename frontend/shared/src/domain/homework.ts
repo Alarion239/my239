@@ -90,10 +90,9 @@ export function problemStateFromSubproblems(
 
 // currentSeries picks the "current" series from a list: the published series
 // with the soonest due_at that is still at or after `nowMs`. When nothing is
-// upcoming (all overdue, or none published with a future due date), it falls
-// back to the published series with the highest number. Returns undefined when
-// there are no published series. `nowMs` is injectable for testability; on a
-// device Date.now() is fine since this runs on-device.
+// upcoming, there is no current series. Returns undefined when there are no
+// published series or all published series are overdue. `nowMs` is injectable
+// for testability; on a device Date.now() is fine since this runs on-device.
 export function currentSeries(
   series: Series[],
   nowMs: number = Date.now(),
@@ -111,10 +110,7 @@ export function currentSeries(
       upcomingMs = due
     }
   }
-  if (upcoming) return upcoming
-
-  // Fallback: the highest-numbered published series.
-  return published.reduce((best, s) => (s.number > best.number ? s : best))
+  return upcoming
 }
 
 // --- Thread role resolution --------------------------------------------------

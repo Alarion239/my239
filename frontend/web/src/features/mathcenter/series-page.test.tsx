@@ -256,6 +256,10 @@ describe('SeriesPage — teacher view', () => {
     await user.click(screen.getByRole('tab', { name: 'Разбор' }))
     expect(await screen.findByText('Принято:', { exact: false })).toBeInTheDocument()
     expect(screen.getByText('5')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: /Серия 2/ }))
+    expect(screen.getByRole('button', { name: 'Редактировать серию' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Удалить серию' })).toBeInTheDocument()
   })
 
   it('drives tab switching through the URL (push navigation)', async () => {

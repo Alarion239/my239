@@ -1,6 +1,6 @@
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { Menu, User as UserIcon } from 'lucide-react'
-import type { User } from '@my239/shared'
+import { useCoffinQueue, useGraderStats, type User } from '@my239/shared'
 import { cn } from '../design/cn'
 import {
   Button,
@@ -9,6 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  NotificationBadge,
   ThemeToggle,
 } from '../design/ui'
 import { activeNavModule } from './modules'
@@ -55,7 +56,12 @@ function ModuleTabs({ user }: { user: User }) {
   const { pathname } = useLocation()
   const mod = activeNavModule(useNavModules(), pathname, user.is_admin)
   const pages = mod?.pages
+  const centerId = mod?.canGrade ? (mod.centerId ?? 0) : 0
+  const graderStats = useGraderStats(centerId)
+  const coffinQueue = useCoffinQueue(centerId)
   if (!pages || pages.length === 0) return null
+
+  const pageIsActive = (path: string) => pathname === path || pathname.startsWith(path + '/')
 
   return (
     <nav className="flex min-w-0 items-center gap-1 overflow-x-auto" aria-label="Разделы модуля">
@@ -74,6 +80,12 @@ function ModuleTabs({ user }: { user: User }) {
           }
         >
           {p.label}
+          {!pageIsActive(p.path) && p.notification === 'series-queue' ? (
+            <NotificationBadge count={graderStats.data?.pending_count ?? 0} label="Очередь серий" />
+          ) : null}
+          {!pageIsActive(p.path) && p.notification === 'coffin-queue' ? (
+            <NotificationBadge count={coffinQueue.data?.length ?? 0} label="Очередь гробов" />
+          ) : null}
         </NavLink>
       ))}
     </nav>
