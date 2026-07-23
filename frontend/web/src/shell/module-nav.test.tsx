@@ -192,7 +192,7 @@ describe('module navigation', () => {
     expect(tabNav).toHaveTextContent('Гробы')
   })
 
-  it('shows inactive queue notifications on the module tabs', async () => {
+  it('shows queue notifications on the module tabs', async () => {
     const member = makeUser({ is_admin: false })
     mockFetch(member, mcMe, true)
     renderShell(<TopBar user={member} />, '/mathcenter/2025/coffins/queue')
@@ -201,7 +201,7 @@ describe('module navigation', () => {
     const seriesTab = tabNav.querySelector('a[href="/mathcenter/2025/series"]')
     const coffinsTab = tabNav.querySelector('a[href="/mathcenter/2025/coffins"]')
     expect(seriesTab).toHaveTextContent('Серии3')
-    expect(coffinsTab).not.toHaveTextContent('2')
+    expect(coffinsTab).toHaveTextContent('2')
   })
 
   it('toggles the desktop nav rail from the my239 logo', async () => {

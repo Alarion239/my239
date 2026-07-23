@@ -14,7 +14,7 @@ export interface SeriesStripProps {
   // Optional card rendered at the END of the strip (the teacher "+ create"
   // card). Stretches to the row height like the series cards.
   trailing?: ReactNode
-  // Teacher-only queue counts for series cards that are not currently open.
+  // Teacher-only queue counts for every series card, including the selected one.
   showQueueNotifications?: boolean
   selectedActionsOpen?: boolean
   selectedActions?: ReactNode
@@ -102,7 +102,7 @@ export function SeriesStrip({
                   Серия {s.number}
                 </span>
                 <div className="flex items-center gap-1.5">
-                  {showQueueNotifications && !isSelected ? (
+                  {showQueueNotifications ? (
                     <SeriesQueueBadge seriesId={s.id} />
                   ) : null}
                   {isCurrent ? <Badge variant="accent">Текущая</Badge> : null}

@@ -61,8 +61,6 @@ function ModuleTabs({ user }: { user: User }) {
   const coffinQueue = useCoffinQueue(centerId)
   if (!pages || pages.length === 0) return null
 
-  const pageIsActive = (path: string) => pathname === path || pathname.startsWith(path + '/')
-
   return (
     <nav className="flex min-w-0 items-center gap-1 overflow-x-auto" aria-label="Разделы модуля">
       {pages.map((p) => (
@@ -80,10 +78,10 @@ function ModuleTabs({ user }: { user: User }) {
           }
         >
           {p.label}
-          {!pageIsActive(p.path) && p.notification === 'series-queue' ? (
+          {p.notification === 'series-queue' ? (
             <NotificationBadge count={graderStats.data?.pending_count ?? 0} label="Очередь серий" />
           ) : null}
-          {!pageIsActive(p.path) && p.notification === 'coffin-queue' ? (
+          {p.notification === 'coffin-queue' ? (
             <NotificationBadge count={coffinQueue.data?.length ?? 0} label="Очередь гробов" />
           ) : null}
         </NavLink>
