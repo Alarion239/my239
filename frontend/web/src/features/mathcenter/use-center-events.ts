@@ -76,6 +76,9 @@ function handle(
     qc.invalidateQueries({ queryKey: queryKeys.centerCoffins(centerId) })
     qc.invalidateQueries({ queryKey: queryKeys.coffinQueue(centerId) })
     qc.invalidateQueries({ queryKey: queryKeys.seriesList(centerId) })
+  } else if (kind === 'likbez') {
+    qc.invalidateQueries({ queryKey: queryKeys.likbezList(centerId) })
+    qc.invalidateQueries({ queryKey: ['mathcenter', 'likbez'] })
   } else if (kind === 'comments') {
     // An internal note was added/edited/removed: refresh the grid marks.
     if (seriesId > 0) {

@@ -205,7 +205,7 @@ describe('module navigation', () => {
 
     const tabNav = await screen.findByRole('navigation', { name: 'Разделы модуля' })
     const labels = Array.from(tabNav.querySelectorAll('a')).map((link) => link.textContent)
-    expect(labels).toEqual(['Кондуит', 'Серии', 'Гробы', 'Управление'])
+    expect(labels).toEqual(['Кондуит', 'Серии', 'Гробы', 'Ликбезы', 'Управление'])
   })
 
   it('hides the conduit tab on phone-sized viewports', async () => {

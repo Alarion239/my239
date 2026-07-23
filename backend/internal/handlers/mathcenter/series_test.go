@@ -123,6 +123,19 @@ func TestRouter_RequiresAuth(t *testing.T) {
 		{http.MethodPost, "/series/1/pdf/upload-url"},
 		{http.MethodPost, "/series/1/pdf/publish"},
 		{http.MethodGet, "/series/1/pdf"},
+		{http.MethodGet, "/centers/1/likbez"},
+		{http.MethodPost, "/centers/1/likbez"},
+		{http.MethodGet, "/likbez/1"},
+		{http.MethodPut, "/likbez/1"},
+		{http.MethodDelete, "/likbez/1"},
+		{http.MethodPost, "/likbez/1/publish"},
+		{http.MethodPost, "/likbez/1/unpublish"},
+		{http.MethodPost, "/likbez/1/pdf/upload-url"},
+		{http.MethodPost, "/likbez/1/pdf/publish"},
+		{http.MethodGet, "/likbez/1/pdf"},
+		{http.MethodGet, "/likbez/1/tex"},
+		{http.MethodPut, "/likbez/1/tex"},
+		{http.MethodPut, "/likbez/1/video"},
 	}
 	for _, c := range cases {
 		t.Run(c.method+" "+c.path, func(t *testing.T) {

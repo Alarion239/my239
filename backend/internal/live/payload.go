@@ -15,6 +15,7 @@ type Kind string
 const (
 	KindGrading    Kind = "grading"    // submit/claim/grade/retract/release/appeal
 	KindCoffins    Kind = "coffins"    // mark/unmark/release/solution
+	KindLikbez     Kind = "likbez"     // lecture catalog/content/publication
 	KindMembership Kind = "membership" // groups/teachers/students changes
 	KindComments   Kind = "comments"   // internal teacher notes on threads/students
 )
