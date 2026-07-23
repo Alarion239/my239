@@ -32,6 +32,8 @@ import {
   vert,
 } from './grid-style'
 
+const RECENT_GRADER_WINDOW_MS = 15_000
+
 export function ConduitPage() {
   const centerId = useCenterIdContext()
   const ctx = useSeriesContext(centerId)
@@ -123,6 +125,12 @@ function ConduitTable({
   const [grader, setGrader] = useState<CreditedGrader>(emptyGrader)
   const [dialog, setDialog] = useState<OfflineCellTarget | null>(null)
   const [pendingKey, setPendingKey] = useState<string | null>(null)
+  const [graderFocusToken, setGraderFocusToken] = useState(0)
+  const graderInputRef = useRef<HTMLInputElement>(null)
+  const lastGraderRef = useRef<{
+    grader: CreditedGrader
+    enteredAt: number
+  } | null>(null)
   // Subproblems marked during the current active-student session → the grader
   // key they were credited with at mark time. Lets cells show the *current*
   // initials live (override below) and re-credit only the cells that drift when
@@ -130,6 +138,31 @@ function ConduitTable({
   const [markedSubs, setMarkedSubs] = useState<Map<number, string>>(new Map())
   const accept = useOfflineAccept()
   const undo = useOfflineUndo()
+
+  const recentGrader = (): CreditedGrader => {
+    const saved = lastGraderRef.current
+    if (!saved) return emptyGrader
+    if (Date.now() - saved.enteredAt > RECENT_GRADER_WINDOW_MS) {
+      lastGraderRef.current = null
+      return emptyGrader
+    }
+    return { ...saved.grader }
+  }
+
+  function handleGraderChange(next: CreditedGrader) {
+    setGrader(next)
+    if (next.name.trim()) {
+      lastGraderRef.current = {
+        grader: { ...next },
+        enteredAt: Date.now(),
+      }
+    }
+  }
+
+  function focusGraderInput() {
+    setGraderFocusToken((token) => token + 1)
+    graderInputRef.current?.focus()
+  }
 
   // graderKey identifies a credited grader so we can tell whether a marked cell
   // still matches the current initials; graderFields builds the accept payload.
@@ -157,6 +190,7 @@ function ConduitTable({
     if (activeStudentId != null && id !== activeStudentId) commitMarks(activeStudentId)
     setActiveStudentId(id)
     setMarkedSubs(new Map())
+    setGrader(id == null ? emptyGrader : recentGrader())
   }
 
   // unmarkCell reverses a mark made this session (e.g. the grader hit the wrong
@@ -257,12 +291,20 @@ function ConduitTable({
 
   // markCell fast-paths an offline accept using the initials bar's grader and
   // remembers which grader credited it (for later re-crediting on a correction).
-  function markCell(studentId: number, col: CenterGridColumn) {
+  function markCell(
+    studentId: number,
+    col: CenterGridColumn,
+    creditedGrader: CreditedGrader = grader,
+  ) {
     const key = studentId + ':' + col.subproblem_id
-    const gk = graderKey(grader)
+    const gk = graderKey(creditedGrader)
     setPendingKey(key)
     accept.mutate(
-      { student_user_id: studentId, subproblem_id: col.subproblem_id, ...graderFields(grader) },
+      {
+        student_user_id: studentId,
+        subproblem_id: col.subproblem_id,
+        ...graderFields(creditedGrader),
+      },
       {
         onSettled: () => setPendingKey(null),
         onSuccess: () =>
@@ -322,7 +364,9 @@ function ConduitTable({
             <GraderInitialsInput
               centerId={centerId}
               value={grader}
-              onChange={setGrader}
+              onChange={handleGraderChange}
+              inputRef={graderInputRef}
+              focusToken={graderFocusToken}
               autoFocus
             />
           </div>
@@ -469,18 +513,36 @@ function ConduitTable({
                         // a square you marked this session toggles off (undo a
                         // misclick); a pre-existing accept opens the detail
                         // dialog; an empty cell fast-marks with the current
-                        // initials (or opens the dialog to set them).
+                        // initials. If none is available yet, the same tap
+                        // activates the row and focuses the initials field.
                         const onClick = () => {
                           const sid = st.user_id
-                          if (!isActiveRow) selectStudent(sid)
-                          if (isActiveRow && marked) {
+                          if (!isActiveRow) {
+                            if (accepted(sid, col.subproblem_id)) {
+                              selectStudent(sid)
+                              openCellDialog(sid, st.name, fc)
+                              return
+                            }
+
+                            // An empty cell starts the active marking mode. If
+                            // a grader was entered recently, reuse it for the
+                            // first mark; either way, put the cursor in the
+                            // top field so a new grader can start typing.
+                            const remembered = recentGrader()
+                            selectStudent(sid)
+                            focusGraderInput()
+                            if (remembered.name.trim()) markCell(sid, col, remembered)
+                            return
+                          }
+
+                          if (marked) {
                             unmarkCell(sid, col)
                           } else if (accepted(sid, col.subproblem_id)) {
                             openCellDialog(sid, st.name, fc)
                           } else if (grader.name.trim()) {
                             markCell(sid, col)
                           } else {
-                            openCellDialog(sid, st.name, fc)
+                            focusGraderInput()
                           }
                         }
                         const cellAria = marked
