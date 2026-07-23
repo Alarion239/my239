@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useParams } from 'react-router-dom'
 import {
   coffinOpen,
@@ -125,6 +126,7 @@ function ConduitTable({
   const [grader, setGrader] = useState<CreditedGrader>(emptyGrader)
   const [dialog, setDialog] = useState<OfflineCellTarget | null>(null)
   const [pendingKey, setPendingKey] = useState<string | null>(null)
+  const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null)
   const [graderFocusToken, setGraderFocusToken] = useState(0)
   const graderInputRef = useRef<HTMLInputElement>(null)
   const lastGraderRef = useRef<{
@@ -138,6 +140,10 @@ function ConduitTable({
   const [markedSubs, setMarkedSubs] = useState<Map<number, string>>(new Map())
   const accept = useOfflineAccept()
   const undo = useOfflineUndo()
+
+  useEffect(() => {
+    setToolbarSlot(document.getElementById('conduit-toolbar-slot'))
+  }, [])
 
   const recentGrader = (): CreditedGrader => {
     const saved = lastGraderRef.current
@@ -350,35 +356,50 @@ function ConduitTable({
     scroller.scrollLeft += elRect.left - scRect.left - 200
   }, [currentId])
 
-  // The grid IS the page: it fills the full-bleed region. When a student is
-  // active, an initials bar sits above the single scroll surface.
+  const toolbar = (
+    <div className="flex min-w-0 items-center justify-end gap-2">
+      <span className="hidden whitespace-nowrap text-xs text-faint xl:inline">Ваши инициалы</span>
+      <div className="min-w-0 w-36 sm:w-44">
+        <GraderInitialsInput
+          centerId={centerId}
+          value={grader}
+          onChange={handleGraderChange}
+          inputRef={graderInputRef}
+          focusToken={graderFocusToken}
+          onEscape={() => selectStudent(null)}
+          showCreditHint={false}
+        />
+      </div>
+      <div
+        className={cn(
+          'min-w-0 overflow-hidden whitespace-nowrap transition-[max-width,opacity,transform] duration-300 ease-out motion-reduce:transition-none',
+          activeStudent
+            ? 'max-w-48 translate-x-0 opacity-100'
+            : 'pointer-events-none max-w-0 translate-x-2 opacity-0',
+        )}
+        aria-hidden={!activeStudent}
+      >
+        <span className="block max-w-48 truncate text-xs text-muted">{activeStudent?.name}</span>
+      </div>
+      <button
+        type="button"
+        onClick={() => selectStudent(null)}
+        disabled={!activeStudent}
+        className={cn(
+          'h-8 shrink-0 overflow-hidden rounded-lg border border-line px-2.5 text-xs text-muted transition-[max-width,opacity,transform] duration-300 ease-out motion-reduce:transition-none hover:bg-surface-muted hover:text-ink disabled:pointer-events-none',
+          activeStudent
+            ? 'max-w-24 translate-x-0 opacity-100'
+            : 'pointer-events-none max-w-0 border-0 px-0 opacity-0',
+        )}
+      >
+        Готово
+      </button>
+    </div>
+  )
+
   return (
     <div className="flex h-full flex-col">
-      {activeStudent ? (
-        <div className="flex flex-wrap items-end gap-3 border-b border-amber-300/70 bg-amber-50/70 px-4 py-2.5 dark:bg-amber-500/10">
-          <div className="flex flex-col">
-            <span className="text-xs text-faint">Отмечаю решённые у</span>
-            <span className="font-medium text-ink">{activeStudent.name}</span>
-          </div>
-          <div className="min-w-48 flex-1">
-            <GraderInitialsInput
-              centerId={centerId}
-              value={grader}
-              onChange={handleGraderChange}
-              inputRef={graderInputRef}
-              focusToken={graderFocusToken}
-              autoFocus
-            />
-          </div>
-          <button
-            type="button"
-            onClick={() => selectStudent(null)}
-            className="h-9 rounded-lg border border-line px-3 text-sm text-muted hover:bg-surface-muted hover:text-ink"
-          >
-            Готово
-          </button>
-        </div>
-      ) : null}
+      {toolbarSlot ? createPortal(toolbar, toolbarSlot) : null}
 
       <div ref={scrollerRef} className={gridScrollerWithHeight('min-h-0 flex-1')}>
         <table className={gridTable}>
@@ -519,7 +540,6 @@ function ConduitTable({
                           const sid = st.user_id
                           if (!isActiveRow) {
                             if (accepted(sid, col.subproblem_id)) {
-                              selectStudent(sid)
                               openCellDialog(sid, st.name, fc)
                               return
                             }

@@ -89,6 +89,9 @@ export function TopBar({
   navOpen?: boolean
   onBrandClick?: () => void
 }) {
+  const { pathname } = useLocation()
+  const isConduit = pathname.endsWith('/conduit')
+
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-paper/80 px-4 backdrop-blur">
       <MobileNav user={user} />
@@ -109,7 +112,14 @@ export function TopBar({
         my239
       </Link>
       <ModuleTabs user={user} />
-      <div className="flex-1" />
+      {isConduit ? (
+        <div
+          id="conduit-toolbar-slot"
+          className="flex min-w-0 flex-1 items-center justify-end overflow-visible"
+        />
+      ) : (
+        <div className="flex-1" />
+      )}
       <ThemeToggle />
       <UserMenu user={user} />
     </header>

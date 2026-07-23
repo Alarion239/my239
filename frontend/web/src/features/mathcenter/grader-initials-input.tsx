@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type Ref } from 'react'
 import { useCenterTeachers, type CenterTeacher } from '@my239/shared'
+import { cn } from '../../design/cn'
 import { Input } from '../../design/ui'
 
 // CreditedGrader is who an offline accept is attributed to: a resolved teacher
@@ -23,6 +24,8 @@ export function GraderInitialsInput({
   autoFocus,
   inputRef,
   focusToken,
+  onEscape,
+  showCreditHint = true,
   placeholder = 'Инициалы проверяющего…',
 }: {
   centerId: number
@@ -34,6 +37,8 @@ export function GraderInitialsInput({
   inputRef?: Ref<HTMLInputElement>
   // Increment this to focus an already-mounted input after a cell click.
   focusToken?: number
+  onEscape?: () => void
+  showCreditHint?: boolean
   placeholder?: string
 }) {
   const { data } = useCenterTeachers(centerId)
@@ -101,6 +106,14 @@ export function GraderInitialsInput({
           }, 120)
         }
         onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault()
+            e.stopPropagation()
+            setFocused(false)
+            ownInputRef.current?.blur()
+            onEscape?.()
+            return
+          }
           if (e.key === 'Tab' && matches.length > 0) {
             // The first match is always the active suggestion. Let the
             // browser's normal Tab behavior move on after accepting it.
@@ -123,17 +136,23 @@ export function GraderInitialsInput({
           else if (inputRef) inputRef.current = node
         }}
       />
-      {value.userId != null ? (
+      {showCreditHint && value.userId != null ? (
         <span className="mt-1 block text-xs text-status-accepted">↳ {value.name}</span>
-      ) : value.name.trim() ? (
+      ) : showCreditHint && value.name.trim() ? (
         <span className="mt-1 block text-xs text-muted">
           ↳ {value.name} · не зарегистрирован
         </span>
       ) : null}
-      {focused && matches.length > 0 ? (
+      {matches.length > 0 ? (
         <ul
           role="listbox"
-          className="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-line bg-surface shadow-lg"
+          aria-hidden={!focused}
+          className={cn(
+            'absolute z-50 mt-1 max-h-48 w-full origin-top overflow-auto rounded-lg border border-line bg-surface shadow-lg transition-[opacity,transform,visibility] duration-200 ease-out motion-reduce:transition-none',
+            focused
+              ? 'visible translate-y-0 scale-100 opacity-100'
+              : 'pointer-events-none invisible -translate-y-1 scale-[0.98] opacity-0',
+          )}
         >
           {matches.map((t, index) => (
             <li key={t.user_id} role="option" aria-selected={index === 0}>
