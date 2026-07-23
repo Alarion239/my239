@@ -45,3 +45,40 @@ func TestDisplayNames(t *testing.T) {
 		t.Errorf("student no last name: got %q", got)
 	}
 }
+
+func TestTermStage(t *testing.T) {
+	cases := []struct {
+		name  string
+		kind  string
+		grade int32
+		want  int
+		valid bool
+	}{
+		{name: "academic fifth", kind: TermKindAcademic, grade: 5, want: 1, valid: true},
+		{name: "camp fifth", kind: TermKindCamp, grade: 5, want: 2, valid: true},
+		{name: "academic sixth", kind: TermKindAcademic, grade: 6, want: 3, valid: true},
+		{name: "camp eleventh is invalid", kind: TermKindCamp, grade: 11, valid: false},
+		{name: "legacy is invalid", kind: TermKindLegacy, grade: 5, valid: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, valid := TermStage(tc.kind, tc.grade)
+			if valid != tc.valid || got != tc.want {
+				t.Fatalf("TermStage(%q, %d) = (%d, %t), want (%d, %t)", tc.kind, tc.grade, got, valid, tc.want, tc.valid)
+			}
+		})
+	}
+}
+
+func TestTermLabels(t *testing.T) {
+	grade := int32(7)
+	if got := TermDisplayName(TermKindCamp, &grade); got != "7 класс · Лагерь" {
+		t.Fatalf("camp label = %q", got)
+	}
+	if got := TermReferencePrefix(TermKindCamp, &grade); got != "7Л" {
+		t.Fatalf("camp prefix = %q", got)
+	}
+	if got := TermReferencePrefix(TermKindLegacy, nil); got != "Архив" {
+		t.Fatalf("legacy prefix = %q", got)
+	}
+}

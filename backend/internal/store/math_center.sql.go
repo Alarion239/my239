@@ -7,11 +7,14 @@ package store
 
 import (
 	"context"
+	"time"
 )
 
 const addStudentToGroup = `-- name: AddStudentToGroup :one
-INSERT INTO math_center_students (user_id, group_id)
-VALUES ($1, $2)
+INSERT INTO math_center_students (user_id, group_id, term_id)
+SELECT $1, g.id, g.term_id
+FROM math_center_groups g
+WHERE g.id = $2::bigint
 RETURNING id, user_id, group_id, created_at
 `
 
@@ -20,9 +23,16 @@ type AddStudentToGroupParams struct {
 	GroupID int64 `json:"group_id"`
 }
 
-func (q *Queries) AddStudentToGroup(ctx context.Context, arg AddStudentToGroupParams) (MathCenterStudent, error) {
+type AddStudentToGroupRow struct {
+	ID        int64     `json:"id"`
+	UserID    int64     `json:"user_id"`
+	GroupID   int64     `json:"group_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (q *Queries) AddStudentToGroup(ctx context.Context, arg AddStudentToGroupParams) (AddStudentToGroupRow, error) {
 	row := q.db.QueryRow(ctx, addStudentToGroup, arg.UserID, arg.GroupID)
-	var i MathCenterStudent
+	var i AddStudentToGroupRow
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
@@ -85,8 +95,11 @@ func (q *Queries) CreateMathCenter(ctx context.Context, graduationYear int32) (M
 }
 
 const createMathCenterGroup = `-- name: CreateMathCenterGroup :one
-INSERT INTO math_center_groups (math_center_id, name)
-VALUES ($1, $2)
+INSERT INTO math_center_groups (math_center_id, term_id, name)
+SELECT $1, t.id, $2
+FROM math_center_terms t
+WHERE t.math_center_id = $1
+  AND t.is_active = TRUE
 RETURNING id, math_center_id, name, created_at
 `
 
@@ -95,9 +108,16 @@ type CreateMathCenterGroupParams struct {
 	Name         string `json:"name"`
 }
 
-func (q *Queries) CreateMathCenterGroup(ctx context.Context, arg CreateMathCenterGroupParams) (MathCenterGroup, error) {
+type CreateMathCenterGroupRow struct {
+	ID           int64     `json:"id"`
+	MathCenterID int64     `json:"math_center_id"`
+	Name         string    `json:"name"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+func (q *Queries) CreateMathCenterGroup(ctx context.Context, arg CreateMathCenterGroupParams) (CreateMathCenterGroupRow, error) {
 	row := q.db.QueryRow(ctx, createMathCenterGroup, arg.MathCenterID, arg.Name)
-	var i MathCenterGroup
+	var i CreateMathCenterGroupRow
 	err := row.Scan(
 		&i.ID,
 		&i.MathCenterID,
@@ -141,15 +161,41 @@ FROM math_center_groups
 WHERE id = $1
 `
 
-func (q *Queries) GetGroup(ctx context.Context, id int64) (MathCenterGroup, error) {
+type GetGroupRow struct {
+	ID           int64     `json:"id"`
+	MathCenterID int64     `json:"math_center_id"`
+	Name         string    `json:"name"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+func (q *Queries) GetGroup(ctx context.Context, id int64) (GetGroupRow, error) {
 	row := q.db.QueryRow(ctx, getGroup, id)
-	var i MathCenterGroup
+	var i GetGroupRow
 	err := row.Scan(
 		&i.ID,
 		&i.MathCenterID,
 		&i.Name,
 		&i.CreatedAt,
 	)
+	return i, err
+}
+
+const getGroupCenter = `-- name: GetGroupCenter :one
+SELECT id, math_center_id, term_id
+FROM math_center_groups
+WHERE id = $1
+`
+
+type GetGroupCenterRow struct {
+	ID           int64 `json:"id"`
+	MathCenterID int64 `json:"math_center_id"`
+	TermID       int64 `json:"term_id"`
+}
+
+func (q *Queries) GetGroupCenter(ctx context.Context, id int64) (GetGroupCenterRow, error) {
+	row := q.db.QueryRow(ctx, getGroupCenter, id)
+	var i GetGroupCenterRow
+	err := row.Scan(&i.ID, &i.MathCenterID, &i.TermID)
 	return i, err
 }
 
@@ -172,9 +218,16 @@ FROM math_center_students
 WHERE id = $1
 `
 
-func (q *Queries) GetStudent(ctx context.Context, id int64) (MathCenterStudent, error) {
+type GetStudentRow struct {
+	ID        int64     `json:"id"`
+	UserID    int64     `json:"user_id"`
+	GroupID   int64     `json:"group_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (q *Queries) GetStudent(ctx context.Context, id int64) (GetStudentRow, error) {
 	row := q.db.QueryRow(ctx, getStudent, id)
-	var i MathCenterStudent
+	var i GetStudentRow
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
@@ -194,7 +247,15 @@ SELECT s.id          AS id,
 FROM math_center_students s
          JOIN math_center_groups g ON g.id = s.group_id
          JOIN math_centers mc ON mc.id = g.math_center_id
+         JOIN math_center_terms t ON t.id = s.term_id
 WHERE s.user_id = $1
+  AND (t.is_active = TRUE OR NOT EXISTS (
+      SELECT 1 FROM math_center_terms active
+      WHERE active.math_center_id = g.math_center_id
+        AND active.is_active = TRUE
+  ))
+ORDER BY t.is_active DESC, s.id DESC
+LIMIT 1
 `
 
 type GetStudentByUserIDRow struct {
@@ -298,21 +359,35 @@ func (q *Queries) ListCentersForTeacher(ctx context.Context, userID int64) ([]Li
 }
 
 const listGroupsForCenter = `-- name: ListGroupsForCenter :many
-SELECT id, math_center_id, name, created_at
-FROM math_center_groups
-WHERE math_center_id = $1
+WITH selected_term AS (
+    SELECT COALESCE(
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.is_active = TRUE),
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.kind = 'legacy')
+    ) AS id
+)
+SELECT g.id, g.math_center_id, g.name, g.created_at
+FROM math_center_groups g
+WHERE g.math_center_id = $1
+  AND g.term_id = (SELECT id FROM selected_term)
 ORDER BY name ASC
 `
 
-func (q *Queries) ListGroupsForCenter(ctx context.Context, mathCenterID int64) ([]MathCenterGroup, error) {
+type ListGroupsForCenterRow struct {
+	ID           int64     `json:"id"`
+	MathCenterID int64     `json:"math_center_id"`
+	Name         string    `json:"name"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+func (q *Queries) ListGroupsForCenter(ctx context.Context, mathCenterID int64) ([]ListGroupsForCenterRow, error) {
 	rows, err := q.db.Query(ctx, listGroupsForCenter, mathCenterID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []MathCenterGroup{}
+	items := []ListGroupsForCenterRow{}
 	for rows.Next() {
-		var i MathCenterGroup
+		var i ListGroupsForCenterRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.MathCenterID,
@@ -330,9 +405,19 @@ func (q *Queries) ListGroupsForCenter(ctx context.Context, mathCenterID int64) (
 }
 
 const listGroupsForCenters = `-- name: ListGroupsForCenters :many
-SELECT id, math_center_id, name, created_at
+SELECT id, math_center_id, name, created_at, term_id
 FROM math_center_groups
-WHERE math_center_id = ANY($1::bigint[])
+WHERE term_id = COALESCE(
+    (SELECT id
+     FROM math_center_terms t
+     WHERE t.math_center_id = math_center_groups.math_center_id
+       AND t.is_active = TRUE),
+    (SELECT id
+     FROM math_center_terms t
+     WHERE t.math_center_id = math_center_groups.math_center_id
+       AND t.kind = 'legacy')
+)
+  AND math_center_id = ANY($1::bigint[])
 ORDER BY math_center_id ASC, name ASC
 `
 
@@ -350,6 +435,7 @@ func (q *Queries) ListGroupsForCenters(ctx context.Context, centerIds []int64) (
 			&i.MathCenterID,
 			&i.Name,
 			&i.CreatedAt,
+			&i.TermID,
 		); err != nil {
 			return nil, err
 		}
@@ -445,7 +531,10 @@ SELECT s.id        AS id,
 FROM math_center_students s
          JOIN math_center_groups g ON g.id = s.group_id
          JOIN users u ON u.id = s.user_id
-WHERE g.math_center_id = $1
+WHERE g.term_id = COALESCE(
+    (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.is_active = TRUE),
+    (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.kind = 'legacy')
+)
 ORDER BY g.name ASC, u.last_name ASC, u.first_name ASC
 `
 
@@ -499,7 +588,17 @@ SELECT s.id            AS id,
 FROM math_center_students s
          JOIN math_center_groups g ON g.id = s.group_id
          JOIN users u ON u.id = s.user_id
-WHERE g.math_center_id = ANY($1::bigint[])
+WHERE s.term_id = COALESCE(
+    (SELECT id
+     FROM math_center_terms t
+     WHERE t.math_center_id = g.math_center_id
+       AND t.is_active = TRUE),
+    (SELECT id
+     FROM math_center_terms t
+     WHERE t.math_center_id = g.math_center_id
+       AND t.kind = 'legacy')
+)
+  AND g.math_center_id = ANY($1::bigint[])
 ORDER BY g.math_center_id ASC, g.name ASC, u.last_name ASC, u.first_name ASC
 `
 

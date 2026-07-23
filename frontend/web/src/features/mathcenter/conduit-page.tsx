@@ -22,7 +22,7 @@ import {
   type CreditedGrader,
 } from './grader-initials-input'
 import { useSeriesContext } from './use-series-context'
-import { useCenterIdContext } from './center-id-context'
+import { useCenterIdContext, useCenterTermContext } from './center-id-context'
 import {
   coffinCellClasses,
   coffinColumnClasses,
@@ -38,6 +38,7 @@ const RECENT_GRADER_WINDOW_MS = 15_000
 
 export function ConduitPage() {
   const centerId = useCenterIdContext()
+  const { termId } = useCenterTermContext()
   const ctx = useSeriesContext(centerId)
   const isPhone = usePhoneViewport()
 
@@ -59,13 +60,13 @@ export function ConduitPage() {
   // surface (see AppShell's full-bleed branch).
   return (
     <div className="h-full">
-      <Conduit centerId={centerId} />
+      <Conduit centerId={centerId} termId={termId} />
     </div>
   )
 }
 
-function Conduit({ centerId }: { centerId: number }) {
-  const { data, isPending, isError } = useCenterGrid(centerId)
+function Conduit({ centerId, termId }: { centerId: number; termId: number }) {
+  const { data, isPending, isError } = useCenterGrid(centerId, termId)
   if (isPending) return <CenteredSpinner />
   if (isError || !data) {
     return <p className="py-10 text-sm text-danger">Не удалось загрузить кондуит.</p>

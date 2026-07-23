@@ -30,15 +30,15 @@ type mockStore struct {
 	addTeacherCall []store.AddTeacherToCenterParams
 }
 
-func (m *mockStore) GetGroup(_ context.Context, id int64) (store.MathCenterGroup, error) {
+func (m *mockStore) GetGroup(_ context.Context, id int64) (store.GetGroupRow, error) {
 	if m.groupErr != nil {
-		return store.MathCenterGroup{}, m.groupErr
+		return store.GetGroupRow{}, m.groupErr
 	}
 	g, ok := m.groups[id]
 	if !ok {
-		return store.MathCenterGroup{}, pgx.ErrNoRows
+		return store.GetGroupRow{}, pgx.ErrNoRows
 	}
-	return g, nil
+	return store.GetGroupRow{ID: g.ID, MathCenterID: g.MathCenterID, Name: g.Name, CreatedAt: g.CreatedAt}, nil
 }
 
 func (m *mockStore) GetMathCenter(_ context.Context, id int64) (store.MathCenter, error) {
@@ -65,9 +65,9 @@ func (m *mockStore) SetUserAdmin(_ context.Context, arg store.SetUserAdminParams
 	return nil
 }
 
-func (m *mockStore) AddStudentToGroup(_ context.Context, arg store.AddStudentToGroupParams) (store.MathCenterStudent, error) {
+func (m *mockStore) AddStudentToGroup(_ context.Context, arg store.AddStudentToGroupParams) (store.AddStudentToGroupRow, error) {
 	m.addStudentCall = append(m.addStudentCall, arg)
-	return store.MathCenterStudent{ID: 1, UserID: arg.UserID, GroupID: arg.GroupID}, nil
+	return store.AddStudentToGroupRow{ID: 1, UserID: arg.UserID, GroupID: arg.GroupID}, nil
 }
 
 func (m *mockStore) AddTeacherToCenter(_ context.Context, arg store.AddTeacherToCenterParams) (store.MathCenterTeacher, error) {

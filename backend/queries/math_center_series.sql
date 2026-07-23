@@ -1,23 +1,63 @@
 -- name: CreateSeries :one
-INSERT INTO math_center_series (math_center_id, number, name, due_at)
-VALUES ($1, $2, $3, $4)
-RETURNING *;
+INSERT INTO math_center_series (math_center_id, term_id, number, name, due_at)
+SELECT $1, id, $2, $3, $4
+FROM math_center_terms
+WHERE math_center_id = $1
+  AND is_active = TRUE
+RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source;
+
+-- name: CreateSeriesInTerm :one
+INSERT INTO math_center_series (math_center_id, term_id, number, name, due_at)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, math_center_id, term_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source;
 
 -- name: GetSeries :one
-SELECT *
+-- Keep the long-standing row shape for the high-traffic series detail path.
+-- Term-aware list/create endpoints carry term_id; callers that only resolve a
+-- series id do not need it and existing homework mocks retain their contract.
+SELECT id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source
 FROM math_center_series
 WHERE id = $1;
 
 -- name: ListSeriesForCenter :many
+WITH selected_term AS (
+    SELECT COALESCE(
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.is_active = TRUE),
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.kind = 'legacy')
+    ) AS id
+)
+SELECT s.id, s.math_center_id, s.number, s.name, s.due_at, s.pdf_object_key, s.published_at, s.created_at, s.tex_source
+FROM math_center_series s
+WHERE s.math_center_id = $1
+  AND s.term_id = (SELECT id FROM selected_term)
+ORDER BY number ASC;
+
+-- name: ListSeriesForTerm :many
 SELECT *
 FROM math_center_series
 WHERE math_center_id = $1
+  AND term_id = $2
 ORDER BY number ASC;
 
 -- name: ListPublishedSeriesForCenter :many
+WITH selected_term AS (
+    SELECT COALESCE(
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.is_active = TRUE),
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.kind = 'legacy')
+    ) AS id
+)
+SELECT s.id, s.math_center_id, s.number, s.name, s.due_at, s.pdf_object_key, s.published_at, s.created_at, s.tex_source
+FROM math_center_series s
+WHERE s.math_center_id = $1
+  AND s.term_id = (SELECT id FROM selected_term)
+  AND s.published_at IS NOT NULL
+ORDER BY number ASC;
+
+-- name: ListPublishedSeriesForTerm :many
 SELECT *
 FROM math_center_series
 WHERE math_center_id = $1
+  AND term_id = $2
   AND published_at IS NOT NULL
 ORDER BY number ASC;
 
@@ -27,7 +67,7 @@ SET number = $2,
     name   = $3,
     due_at = $4
 WHERE id = $1
-RETURNING *;
+RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source;
 
 -- name: PublishSeries :one
 -- Sets the PDF object key and stamps published_at to NOW(). Used both for
@@ -37,7 +77,7 @@ UPDATE math_center_series
 SET pdf_object_key = $2,
     published_at   = NOW()
 WHERE id = $1
-RETURNING *;
+RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source;
 
 -- name: DeleteSeries :execrows
 DELETE
@@ -52,13 +92,13 @@ UPDATE math_center_series
 SET tex_source  = $2,
     published_at = COALESCE(published_at, NOW())
 WHERE id = $1
-RETURNING *;
+RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source;
 
 -- name: ClearSeriesTex :one
 UPDATE math_center_series
 SET tex_source = NULL
 WHERE id = $1
-RETURNING *;
+RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source;
 
 -- name: GetSeriesTex :one
 SELECT tex_source
@@ -136,10 +176,20 @@ SELECT EXISTS (
 -- name: IsStudentInCenter :one
 SELECT EXISTS (
     SELECT 1
-    FROM math_center_students s
-             JOIN math_center_groups g ON g.id = s.group_id
+FROM math_center_students s
+         JOIN math_center_groups g ON g.id = s.group_id
+         JOIN math_center_terms t ON t.id = s.term_id
     WHERE s.user_id = $1
       AND g.math_center_id = $2
+      AND (
+          t.is_active = TRUE
+          OR NOT EXISTS (
+              SELECT 1
+              FROM math_center_terms active
+              WHERE active.math_center_id = $2
+                AND active.is_active = TRUE
+          )
+      )
 ) AS is_student;
 
 -- name: ListProblemsForSeriesIDs :many

@@ -36,7 +36,7 @@ import { TeacherGrid } from './teacher-grid'
 import { OfflineGradingTab } from './offline-grading-tab'
 import { UploadSeriesDialog } from './upload-series-dialog'
 import { useSeriesContext } from './use-series-context'
-import { useCenterIdContext } from './center-id-context'
+import { useCenterIdContext, useCenterTermContext } from './center-id-context'
 
 // Allowed tab ids per view, with the default first. The route carries the tab
 // (e.g. /mathcenter/2027/series/42/razbor) so it survives reload + back/forward.
@@ -45,6 +45,7 @@ const TEACHER_TAB_IDS = ['queue', 'statement', 'razbor', 'grid', 'offline'] as c
 
 export function SeriesPage() {
   const centerId = useCenterIdContext()
+  const { termId, term } = useCenterTermContext()
   const ctx = useSeriesContext(centerId)
 
   if (!Number.isFinite(centerId) || centerId <= 0) {
@@ -67,8 +68,10 @@ export function SeriesPage() {
   return (
     <div className="animate-rise flex flex-col gap-6">
       <CenterSeries
-        key={centerId}
+        key={centerId + ':' + termId}
         centerId={centerId}
+        termId={termId}
+        isArchived={term !== null && !term.is_active}
         isStudentView={ctx.isStudentView}
       />
     </div>
@@ -88,16 +91,19 @@ function NotFoundState() {
 // the series cards' width and stretches to their height.
 function CreateSeriesCard({
   centerId,
+  termId,
   defaultNumber,
   highlight = false,
 }: {
   centerId: number
+  termId: number
   defaultNumber: number
   highlight?: boolean
 }) {
   return (
     <UploadSeriesDialog
       centerId={centerId}
+      termId={termId}
       defaultNumber={defaultNumber}
       trigger={
         <button
@@ -168,9 +174,13 @@ export function MathCenterIndex() {
 // default tab.
 function CenterSeries({
   centerId,
+  termId,
+  isArchived,
   isStudentView,
 }: {
   centerId: number
+  termId: number
+  isArchived: boolean
   isStudentView: boolean
 }) {
   const { year, seriesId: seriesIdParam, tab } = useParams<{
@@ -180,8 +190,9 @@ function CenterSeries({
   }>()
   const navigate = useNavigate()
   const [actionsSeriesId, setActionsSeriesId] = useState<number | null>(null)
-  const { data: list, isPending, isError } = useSeriesList(centerId)
+  const { data: list, isPending, isError } = useSeriesList(centerId, termId)
   const current = useMemo(() => (list ? currentSeries(list) : undefined), [list])
+  const termSearch = '?term_id=' + termId
 
   if (isPending) {
     return (
@@ -199,16 +210,17 @@ function CenterSeries({
   // Pre-fill the next series number: one past the highest existing number.
   const nextNumber =
     list.length > 0 ? Math.max(...list.map((s) => s.number)) + 1 : 1
-  const createCard = !isStudentView ? (
+  const createCard = !isStudentView && !isArchived ? (
     <CreateSeriesCard
       centerId={centerId}
+      termId={termId}
       defaultNumber={nextNumber}
       highlight={!current}
     />
   ) : undefined
 
   if (list.length === 0) {
-    return !isStudentView ? (
+    return !isStudentView && !isArchived ? (
       <div className="flex">{createCard}</div>
     ) : (
       <Card className="px-6 py-16 text-center">
@@ -224,7 +236,7 @@ function CenterSeries({
   if (!seriesIdParam || !list.some((s) => s.id === seriesIdNum)) {
     return (
       <Navigate
-        to={'/mathcenter/' + year + '/series/' + selected.id + '/' + defaultTab}
+        to={'/mathcenter/' + year + '/series/' + selected.id + '/' + defaultTab + termSearch}
         replace
       />
     )
@@ -236,7 +248,7 @@ function CenterSeries({
   if (!activeTab) {
     return (
       <Navigate
-        to={'/mathcenter/' + year + '/series/' + selected.id + '/' + defaultTab}
+        to={'/mathcenter/' + year + '/series/' + selected.id + '/' + defaultTab + termSearch}
         replace
       />
     )
@@ -249,10 +261,10 @@ function CenterSeries({
     }
     setActionsSeriesId(null)
     // Preserve the active tab when switching series.
-    navigate('/mathcenter/' + year + '/series/' + id + '/' + activeTab)
+    navigate('/mathcenter/' + year + '/series/' + id + '/' + activeTab + termSearch)
   }
 
-  const selectedActions = !isStudentView ? (
+  const selectedActions = !isStudentView && !isArchived ? (
     <>
       <EditSeriesButton centerId={centerId} series={selected} />
       <DeleteSeriesButton centerId={centerId} series={selected} year={year ?? ''} />

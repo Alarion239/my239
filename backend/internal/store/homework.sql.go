@@ -626,7 +626,7 @@ SELECT
 FROM math_center_subproblems sp
          JOIN math_center_problems p ON p.id = sp.problem_id
          LEFT JOIN math_center_groups g
-                   ON g.math_center_id = (SELECT s.math_center_id FROM math_center_series s WHERE s.id = $1)
+                   ON g.term_id = (SELECT s.term_id FROM math_center_series s WHERE s.id = $1)
          LEFT JOIN math_center_students mcs ON mcs.group_id = g.id
          LEFT JOIN homework_thread t
                    ON t.student_user_id = mcs.user_id
@@ -817,7 +817,7 @@ SELECT
 FROM math_center_students mcs
          JOIN users u                       ON u.id = mcs.user_id
          JOIN math_center_groups g          ON g.id = mcs.group_id
-         JOIN math_center_series s          ON s.math_center_id = g.math_center_id
+         JOIN math_center_series s          ON s.term_id = g.term_id
          JOIN math_center_problems p        ON p.series_id = s.id
          JOIN math_center_subproblems sp    ON sp.problem_id = p.id
          LEFT JOIN math_center_subproblem_solutions ss ON ss.subproblem_id = sp.id
@@ -825,7 +825,10 @@ FROM math_center_students mcs
                    ON t.student_user_id = mcs.user_id
                   AND t.subproblem_id   = sp.id
          LEFT JOIN users gu                 ON gu.id = t.last_grader_user_id
-WHERE g.math_center_id = $1
+WHERE g.term_id = COALESCE(
+    (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.is_active = TRUE),
+    (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.kind = 'legacy')
+)
 ORDER BY g.name ASC, u.last_name ASC, u.first_name ASC, s.number ASC, p.number ASC, sp.label ASC
 `
 
@@ -909,6 +912,116 @@ func (q *Queries) TeacherCenterGrid(ctx context.Context, mathCenterID int64) ([]
 	return items, nil
 }
 
+const teacherCenterGridForTerm = `-- name: TeacherCenterGridForTerm :many
+SELECT
+    s.id AS series_id, s.number AS series_number, s.name AS series_name, s.due_at AS series_due_at,
+    mcs.user_id AS student_user_id, u.first_name AS student_first_name,
+    u.middle_name AS student_middle_name, u.last_name AS student_last_name,
+    g.id AS group_id, g.name AS group_name, sp.id AS subproblem_id,
+    sp.label AS subproblem_label, p.id AS problem_id, p.number AS problem_number,
+    COALESCE(ss.is_coffin, false)::boolean AS is_coffin, ss.released_at AS coffin_released_at,
+    COALESCE(t.id, 0)::bigint AS thread_id, COALESCE(t.current_status, 'ungraded') AS current_status,
+    t.last_grader_user_id AS last_grader_user_id, COALESCE(t.last_grader_name, '') AS last_grader_name,
+    gu.first_name AS grader_first_name, gu.last_name AS grader_last_name,
+    t.claim_holder_user_id AS claim_holder_user_id, t.claim_expires_at AS claim_expires_at,
+    EXISTS (SELECT 1 FROM homework_thread_note n WHERE n.thread_id = t.id) AS has_internal_comment,
+    EXISTS (SELECT 1 FROM math_center_student_note csn
+            WHERE csn.student_user_id = mcs.user_id AND csn.math_center_id = g.math_center_id) AS has_student_comment
+FROM math_center_students mcs
+         JOIN users u ON u.id = mcs.user_id
+         JOIN math_center_groups g ON g.id = mcs.group_id
+         JOIN math_center_series s ON s.term_id = g.term_id
+         JOIN math_center_problems p ON p.series_id = s.id
+         JOIN math_center_subproblems sp ON sp.problem_id = p.id
+         LEFT JOIN math_center_subproblem_solutions ss ON ss.subproblem_id = sp.id
+         LEFT JOIN homework_thread t ON t.student_user_id = mcs.user_id AND t.subproblem_id = sp.id
+         LEFT JOIN users gu ON gu.id = t.last_grader_user_id
+WHERE g.term_id = $2
+  AND g.math_center_id = $1
+ORDER BY g.name ASC, u.last_name ASC, u.first_name ASC, s.number ASC, p.number ASC, sp.label ASC
+`
+
+type TeacherCenterGridForTermParams struct {
+	MathCenterID int64 `json:"math_center_id"`
+	TermID       int64 `json:"term_id"`
+}
+
+type TeacherCenterGridForTermRow struct {
+	SeriesID           int64      `json:"series_id"`
+	SeriesNumber       int32      `json:"series_number"`
+	SeriesName         string     `json:"series_name"`
+	SeriesDueAt        time.Time  `json:"series_due_at"`
+	StudentUserID      int64      `json:"student_user_id"`
+	StudentFirstName   string     `json:"student_first_name"`
+	StudentMiddleName  *string    `json:"student_middle_name"`
+	StudentLastName    string     `json:"student_last_name"`
+	GroupID            int64      `json:"group_id"`
+	GroupName          string     `json:"group_name"`
+	SubproblemID       int64      `json:"subproblem_id"`
+	SubproblemLabel    string     `json:"subproblem_label"`
+	ProblemID          int64      `json:"problem_id"`
+	ProblemNumber      int32      `json:"problem_number"`
+	IsCoffin           bool       `json:"is_coffin"`
+	CoffinReleasedAt   *time.Time `json:"coffin_released_at"`
+	ThreadID           int64      `json:"thread_id"`
+	CurrentStatus      string     `json:"current_status"`
+	LastGraderUserID   *int64     `json:"last_grader_user_id"`
+	LastGraderName     string     `json:"last_grader_name"`
+	GraderFirstName    *string    `json:"grader_first_name"`
+	GraderLastName     *string    `json:"grader_last_name"`
+	ClaimHolderUserID  *int64     `json:"claim_holder_user_id"`
+	ClaimExpiresAt     *time.Time `json:"claim_expires_at"`
+	HasInternalComment bool       `json:"has_internal_comment"`
+	HasStudentComment  bool       `json:"has_student_comment"`
+}
+
+func (q *Queries) TeacherCenterGridForTerm(ctx context.Context, arg TeacherCenterGridForTermParams) ([]TeacherCenterGridForTermRow, error) {
+	rows, err := q.db.Query(ctx, teacherCenterGridForTerm, arg.MathCenterID, arg.TermID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TeacherCenterGridForTermRow{}
+	for rows.Next() {
+		var i TeacherCenterGridForTermRow
+		if err := rows.Scan(
+			&i.SeriesID,
+			&i.SeriesNumber,
+			&i.SeriesName,
+			&i.SeriesDueAt,
+			&i.StudentUserID,
+			&i.StudentFirstName,
+			&i.StudentMiddleName,
+			&i.StudentLastName,
+			&i.GroupID,
+			&i.GroupName,
+			&i.SubproblemID,
+			&i.SubproblemLabel,
+			&i.ProblemID,
+			&i.ProblemNumber,
+			&i.IsCoffin,
+			&i.CoffinReleasedAt,
+			&i.ThreadID,
+			&i.CurrentStatus,
+			&i.LastGraderUserID,
+			&i.LastGraderName,
+			&i.GraderFirstName,
+			&i.GraderLastName,
+			&i.ClaimHolderUserID,
+			&i.ClaimExpiresAt,
+			&i.HasInternalComment,
+			&i.HasStudentComment,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const teacherSeriesGrid = `-- name: TeacherSeriesGrid :many
 SELECT
     mcs.user_id                            AS student_user_id,
@@ -943,7 +1056,7 @@ FROM math_center_students mcs
          LEFT JOIN homework_thread t
                    ON t.student_user_id = mcs.user_id
                   AND t.subproblem_id   = sp.id
-WHERE g.math_center_id = (SELECT s.math_center_id FROM math_center_series s WHERE s.id = $1)
+WHERE g.term_id = (SELECT s.term_id FROM math_center_series s WHERE s.id = $1)
   AND p.series_id = $1
 ORDER BY g.name ASC, u.last_name ASC, u.first_name ASC, p.number ASC, sp.label ASC
 `

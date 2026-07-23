@@ -42,6 +42,9 @@ type coffinView struct {
 	SeriesNumber    int        `json:"series_number"`
 	SeriesName      string     `json:"series_name"`
 	MathCenterID    int64      `json:"math_center_id"`
+	TermID          int64      `json:"term_id"`
+	TermKind        string     `json:"term_kind,omitempty"`
+	TermGrade       *int32     `json:"term_grade,omitempty"`
 	IsCoffin        bool       `json:"is_coffin"`
 	ReleasedAt      *time.Time `json:"released_at,omitempty"`
 	HasSolutionTex  bool       `json:"has_solution_tex"`
@@ -54,6 +57,25 @@ type coffinView struct {
 	ThreadID      int64  `json:"thread_id,omitempty"`
 	CurrentStatus string `json:"current_status,omitempty"`
 	BeingGraded   bool   `json:"being_graded,omitempty"`
+}
+
+type coffinRecord struct {
+	SubproblemID         int64
+	IsCoffin             bool
+	ReleasedAt           *time.Time
+	SolutionTexSource    *string
+	SolutionPdfObjectKey *string
+	SolutionLink         *string
+	SubproblemLabel      string
+	ProblemID            int64
+	ProblemNumber        int32
+	SeriesID             int64
+	SeriesNumber         int32
+	SeriesName           string
+	MathCenterID         int64
+	TermID               int64
+	TermKind             string
+	TermGrade            *int32
 }
 
 // coffinActionView is the lean response for mark/release/solution actions; the
@@ -113,11 +135,50 @@ func ListCenterCoffins(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusForbidden, httpx.CodeForbidden, "no access to this center")
 			return
 		}
-		rows, err := q.ListCenterCoffins(ctx, centerID)
-		if err != nil {
-			logger.LogErrorContext(ctx, "coffins: list", err)
-			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to list coffins")
-			return
+		records := []coffinRecord{}
+		selected, hasSelectedTerm := store.MathCenterTerm{}, r.URL.Query().Get("term_id") != ""
+		if hasSelectedTerm {
+			selected, err = selectedTerm(ctx, r, q, centerID)
+			if err != nil {
+				httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid term")
+				return
+			}
+			rows, err := q.ListCenterCoffinsForTerm(ctx, store.ListCenterCoffinsForTermParams{
+				MathCenterID:   centerID,
+				TermID:         selected.ID,
+				IncludeCarried: selected.IsActive,
+			})
+			if err != nil {
+				logger.LogErrorContext(ctx, "coffins: list term", err)
+				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to list coffins")
+				return
+			}
+			for _, row := range rows {
+				records = append(records, coffinRecord{
+					SubproblemID: row.SubproblemID, IsCoffin: row.IsCoffin, ReleasedAt: row.ReleasedAt,
+					SolutionTexSource: row.SolutionTexSource, SolutionPdfObjectKey: row.SolutionPdfObjectKey,
+					SolutionLink: row.SolutionLink, SubproblemLabel: row.SubproblemLabel, ProblemID: row.ProblemID,
+					ProblemNumber: row.ProblemNumber, SeriesID: row.SeriesID, SeriesNumber: row.SeriesNumber,
+					SeriesName: row.SeriesName, MathCenterID: row.MathCenterID, TermID: row.TermID,
+					TermKind: row.TermKind, TermGrade: row.TermGrade,
+				})
+			}
+		} else {
+			rows, err := q.ListCenterCoffins(ctx, centerID)
+			if err != nil {
+				logger.LogErrorContext(ctx, "coffins: list", err)
+				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to list coffins")
+				return
+			}
+			for _, row := range rows {
+				records = append(records, coffinRecord{
+					SubproblemID: row.SubproblemID, IsCoffin: row.IsCoffin, ReleasedAt: row.ReleasedAt,
+					SolutionTexSource: row.SolutionTexSource, SolutionPdfObjectKey: row.SolutionPdfObjectKey,
+					SolutionLink: row.SolutionLink, SubproblemLabel: row.SubproblemLabel, ProblemID: row.ProblemID,
+					ProblemNumber: row.ProblemNumber, SeriesID: row.SeriesID, SeriesNumber: row.SeriesNumber,
+					SeriesName: row.SeriesName, MathCenterID: row.MathCenterID,
+				})
+			}
 		}
 
 		// Students get their own thread status per coffin subproblem so they can
@@ -151,18 +212,25 @@ func ListCenterCoffins(database *db.DB) http.HandlerFunc {
 			}
 		}
 
-		out := make([]coffinView, 0, len(rows))
-		for _, c := range rows {
+		out := make([]coffinView, 0, len(records))
+		for _, c := range records {
+			display := mc.SubproblemDisplayName(int(c.ProblemNumber), c.SubproblemLabel)
+			if hasSelectedTerm && (!selected.IsActive || c.TermID != selected.ID) {
+				display = fmt.Sprintf("%s.%d.%d%s", mc.TermReferencePrefix(c.TermKind, c.TermGrade), c.SeriesNumber, c.ProblemNumber, c.SubproblemLabel)
+			}
 			v := coffinView{
 				SubproblemID:    c.SubproblemID,
 				SubproblemLabel: c.SubproblemLabel,
 				ProblemID:       c.ProblemID,
 				ProblemNumber:   int(c.ProblemNumber),
-				Display:         mc.SubproblemDisplayName(int(c.ProblemNumber), c.SubproblemLabel),
+				Display:         display,
 				SeriesID:        c.SeriesID,
 				SeriesNumber:    int(c.SeriesNumber),
 				SeriesName:      c.SeriesName,
 				MathCenterID:    c.MathCenterID,
+				TermID:          c.TermID,
+				TermKind:        c.TermKind,
+				TermGrade:       c.TermGrade,
 				IsCoffin:        c.IsCoffin,
 				ReleasedAt:      c.ReleasedAt,
 				HasSolutionTex:  c.SolutionTexSource != nil,

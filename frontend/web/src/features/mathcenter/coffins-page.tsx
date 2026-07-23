@@ -18,13 +18,14 @@ import {
 import { Button, Card, Spinner, StatusTile } from '../../design/ui'
 import { cn } from '../../design/cn'
 import { useSeriesContext } from './use-series-context'
-import { useCenterIdContext } from './center-id-context'
+import { useCenterIdContext, useCenterTermContext } from './center-id-context'
 import { SolutionContent } from './solution-content'
 import { SolutionEditor } from './solution-editor'
 import { displayPill } from './status-style'
 
 export function CoffinsPage() {
   const centerId = useCenterIdContext()
+  const { termId } = useCenterTermContext()
   const ctx = useSeriesContext(centerId)
 
   if (!Number.isFinite(centerId) || centerId <= 0 || (!ctx.isLoading && !ctx.hasAccess)) {
@@ -40,17 +41,17 @@ export function CoffinsPage() {
 
   return (
     <div className="animate-rise flex flex-col gap-4">
-      <CoffinsView centerId={centerId} isManager={!ctx.isStudentView} />
+      <CoffinsView centerId={centerId} termId={termId} isManager={!ctx.isStudentView} />
     </div>
   )
 }
 
 type Tab = 'current' | 'solved' | 'queue'
 
-function CoffinsView({ centerId, isManager }: { centerId: number; isManager: boolean }) {
+function CoffinsView({ centerId, termId, isManager }: { centerId: number; termId: number; isManager: boolean }) {
   const { year, tab: tabParam } = useParams<{ year: string; tab?: string }>()
   const navigate = useNavigate()
-  const { data, isPending, isError } = useCenterCoffins(centerId)
+  const { data, isPending, isError } = useCenterCoffins(centerId, termId)
 
   const tabs: { id: Tab; label: string }[] = [
     ...(isManager ? [{ id: 'queue' as Tab, label: 'Очередь' }] : []),

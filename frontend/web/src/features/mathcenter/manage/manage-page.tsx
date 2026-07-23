@@ -1,8 +1,9 @@
+import { useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
-import { useMathCenterMe } from '@my239/shared'
-import { Card, PillTabs, Spinner, type PillTabOption } from '../../../design/ui'
+import { useCreateMathCenterTerm, useMathCenterMe } from '@my239/shared'
+import { Button, Card, PillTabs, Spinner, type PillTabOption } from '../../../design/ui'
 import { useAuth } from '../../../auth/auth-context'
-import { useCenterIdContext } from '../center-id-context'
+import { useCenterIdContext, useCenterTermContext } from '../center-id-context'
 import { GroupsTab } from './groups-tab'
 import { TeachersTab } from './teachers-tab'
 import { StudentsTab } from './students-tab'
@@ -23,6 +24,7 @@ const TAB_IDS = TABS.map((t) => t.id)
 // students.
 export function ManagePage() {
   const centerId = useCenterIdContext()
+  const { term } = useCenterTermContext()
   const { year, tab: tabParam } = useParams<{ year: string; tab?: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -52,6 +54,12 @@ export function ManagePage() {
 
   return (
     <div className="animate-rise flex flex-col gap-5">
+      <TermRolloverCard centerId={centerId} />
+      {term !== null && !term.is_active ? (
+        <Card className="px-5 py-4 text-sm text-muted">
+          Архивный период доступен только для чтения. Выберите текущий период, чтобы менять группы и состав учеников.
+        </Card>
+      ) : null}
       <PillTabs
         value={tab}
         onChange={(t) => navigate('/mathcenter/' + year + '/manage/' + t)}
@@ -60,14 +68,56 @@ export function ManagePage() {
         className="self-start"
       />
 
-      {tab === 'groups' ? (
+      {tab === 'groups' && (term === null || term.is_active) ? (
         <GroupsTab centerId={centerId} />
       ) : tab === 'teachers' ? (
         <TeachersTab centerId={centerId} />
-      ) : (
+      ) : term === null || term.is_active ? (
         <StudentsTab centerId={centerId} />
-      )}
+      ) : null}
     </div>
+  )
+}
+
+function TermRolloverCard({ centerId }: { centerId: number }) {
+  const { term } = useCenterTermContext()
+  const create = useCreateMathCenterTerm(centerId)
+  const [kind, setKind] = useState<'academic' | 'camp'>('academic')
+  const [grade, setGrade] = useState(5)
+  const isCamp = kind === 'camp'
+
+  return (
+    <Card className="flex flex-wrap items-end gap-3 p-4">
+      <div className="mr-auto">
+        <div className="font-medium text-ink">Новый период</div>
+        <p className="text-sm text-muted">
+          Завершает «{term?.display_name ?? 'текущий период'}», копируя только названия групп.
+        </p>
+      </div>
+      <label className="flex flex-col gap-1 text-xs text-muted">
+        Вид
+        <select value={kind} onChange={(event) => setKind(event.target.value as 'academic' | 'camp')} className="rounded-lg border border-line bg-surface px-2 py-1 text-sm text-ink">
+          <option value="academic">Учебный год</option>
+          <option value="camp">Лагерь</option>
+        </select>
+      </label>
+      <label className="flex flex-col gap-1 text-xs text-muted">
+        Класс
+        <select value={grade} onChange={(event) => setGrade(Number(event.target.value))} className="rounded-lg border border-line bg-surface px-2 py-1 text-sm text-ink">
+          {Array.from({ length: isCamp ? 6 : 7 }, (_, index) => index + 5).map((value) => (
+            <option key={value} value={value}>{value}</option>
+          ))}
+        </select>
+      </label>
+      <Button
+        type="button"
+        size="sm"
+        disabled={create.isPending}
+        onClick={() => create.mutate({ kind, grade })}
+      >
+        Открыть период
+      </Button>
+    </Card>
   )
 }
 

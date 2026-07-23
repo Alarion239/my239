@@ -17,13 +17,13 @@ import { queryKeys } from './keys'
 // --- Queries -----------------------------------------------------------------
 
 // useSeriesList fetches every series in a center (teacher-facing list).
-export function useSeriesList(centerId: number) {
+export function useSeriesList(centerId: number, termId = 0) {
   const client = useApiClient()
   return useQuery<Series[]>({
-    queryKey: queryKeys.seriesList(centerId),
+    queryKey: queryKeys.seriesList(centerId, termId),
     queryFn: () =>
       client.request<Series[]>(
-        '/mathcenter/centers/' + centerId + '/series',
+        '/mathcenter/centers/' + centerId + '/series' + (termId > 0 ? '?term_id=' + termId : ''),
       ),
     enabled: centerId > 0,
   })
@@ -81,17 +81,17 @@ export function useSeriesProblemStats(seriesId: number) {
 // --- Mutations ---------------------------------------------------------------
 
 // useCreateSeries creates a series in a center and invalidates the center list.
-export function useCreateSeries(centerId: number) {
+export function useCreateSeries(centerId: number, termId = 0) {
   const client = useApiClient()
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (body: CreateSeriesBody) =>
-      client.request<Series>('/mathcenter/centers/' + centerId + '/series', {
+      client.request<Series>('/mathcenter/centers/' + centerId + '/series' + (termId > 0 ? '?term_id=' + termId : ''), {
         method: 'POST',
         body,
       }),
     onSuccess: () =>
-      qc.invalidateQueries({ queryKey: queryKeys.seriesList(centerId) }),
+      qc.invalidateQueries({ queryKey: queryKeys.seriesList(centerId, termId) }),
   })
 }
 
@@ -109,7 +109,7 @@ export function useUpdateSeries(seriesId: number) {
     onSuccess: (updated) => {
       qc.invalidateQueries({ queryKey: queryKeys.series(seriesId) })
       qc.invalidateQueries({
-        queryKey: queryKeys.seriesList(updated.math_center_id),
+        queryKey: ['mathcenter', 'centers', updated.math_center_id],
       })
     },
   })
@@ -127,7 +127,7 @@ export function useDeleteSeries(centerId: number) {
         method: 'DELETE',
       }),
     onSuccess: (_data, seriesId) => {
-      qc.invalidateQueries({ queryKey: queryKeys.seriesList(centerId) })
+      qc.invalidateQueries({ queryKey: ['mathcenter', 'centers', centerId] })
       qc.removeQueries({ queryKey: queryKeys.series(seriesId) })
     },
   })
@@ -147,7 +147,7 @@ export function usePutSeriesTex(seriesId: number) {
       qc.invalidateQueries({ queryKey: queryKeys.series(seriesId) })
       qc.invalidateQueries({ queryKey: queryKeys.seriesTex(seriesId) })
       qc.invalidateQueries({
-        queryKey: queryKeys.seriesList(updated.math_center_id),
+        queryKey: ['mathcenter', 'centers', updated.math_center_id],
       })
     },
   })
@@ -166,7 +166,7 @@ export function useDeleteSeriesTex(seriesId: number) {
       qc.invalidateQueries({ queryKey: queryKeys.series(seriesId) })
       qc.invalidateQueries({ queryKey: queryKeys.seriesTex(seriesId) })
       qc.invalidateQueries({
-        queryKey: queryKeys.seriesList(updated.math_center_id),
+        queryKey: ['mathcenter', 'centers', updated.math_center_id],
       })
     },
   })
@@ -201,7 +201,7 @@ export function useUploadSeriesPdf(seriesId: number) {
     onSuccess: (updated) => {
       qc.invalidateQueries({ queryKey: queryKeys.series(seriesId) })
       qc.invalidateQueries({
-        queryKey: queryKeys.seriesList(updated.math_center_id),
+        queryKey: ['mathcenter', 'centers', updated.math_center_id],
       })
     },
   })

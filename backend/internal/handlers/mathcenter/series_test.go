@@ -689,7 +689,7 @@ func TestListSeries_StudentSeesOnlyPublished(t *testing.T) {
 	// Published-only list.
 	pubAt := now
 	key := "mathcenter/series/100.pdf"
-	mock.ExpectQuery(`FROM math_center_series\s+WHERE math_center_id = \$1\s+AND published_at IS NOT NULL`).
+	mock.ExpectQuery(`FROM math_center_series s\s+WHERE s.math_center_id = \$1.*s.published_at IS NOT NULL`).
 		WithArgs(int64(42)).
 		WillReturnRows(mock.NewRows(seriesColumns).
 			AddRow(int64(100), int64(42), int32(1), "Опубликованная", now.Add(time.Hour), &key, &pubAt, now, (*string)(nil)))

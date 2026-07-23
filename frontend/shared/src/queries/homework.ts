@@ -78,12 +78,12 @@ export function useTeacherGrid(seriesId: number) {
 
 // useCenterGrid fetches the center-wide students × all-subproblems matrix used
 // by the «Кондуит» page.
-export function useCenterGrid(centerId: number) {
+export function useCenterGrid(centerId: number, termId = 0) {
   const client = useApiClient()
   return useQuery<CenterGridResponse>({
-    queryKey: queryKeys.centerGrid(centerId),
+    queryKey: queryKeys.centerGrid(centerId, termId),
     queryFn: () =>
-      client.request<CenterGridResponse>('/homework/centers/' + centerId + '/grid'),
+      client.request<CenterGridResponse>('/homework/centers/' + centerId + '/grid' + (termId > 0 ? '?term_id=' + termId : '')),
     enabled: centerId > 0,
   })
 }

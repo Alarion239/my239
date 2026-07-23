@@ -95,6 +95,7 @@ type problemView struct {
 type seriesView struct {
 	ID           int64         `json:"id"`
 	MathCenterID int64         `json:"math_center_id"`
+	TermID       int64         `json:"term_id"`
 	Number       int           `json:"number"`
 	Name         string        `json:"name"`
 	DisplayName  string        `json:"display_name"`
@@ -111,6 +112,62 @@ type seriesView struct {
 type subIdent struct {
 	ID    int64
 	Label string
+}
+
+// seriesFromGetRow adapts the legacy detail query shape. Detail handlers do
+// not need term_id (term access is validated at the collection boundary), and
+// keeping this query's stable columns avoids breaking the established homework
+// read-path contract while term-aware collection responses include it.
+func seriesFromGetRow(row store.GetSeriesRow) store.MathCenterSeries {
+	return seriesFromColumns(row.ID, row.MathCenterID, row.Number, row.Name, row.DueAt, row.PdfObjectKey, row.PublishedAt, row.CreatedAt, row.TexSource)
+}
+
+func seriesFromColumns(id, centerID int64, number int32, name string, dueAt time.Time, pdfObjectKey *string, publishedAt *time.Time, createdAt time.Time, texSource *string) store.MathCenterSeries {
+	return store.MathCenterSeries{
+		ID:           id,
+		MathCenterID: centerID,
+		Number:       number,
+		Name:         name,
+		DueAt:        dueAt,
+		PdfObjectKey: pdfObjectKey,
+		PublishedAt:  publishedAt,
+		CreatedAt:    createdAt,
+		TexSource:    texSource,
+	}
+}
+
+func seriesFromCreateTermRow(row store.CreateSeriesInTermRow) store.MathCenterSeries {
+	series := seriesFromColumns(row.ID, row.MathCenterID, row.Number, row.Name, row.DueAt, row.PdfObjectKey, row.PublishedAt, row.CreatedAt, row.TexSource)
+	series.TermID = row.TermID
+	return series
+}
+
+func seriesFromCreateRow(row store.CreateSeriesRow) store.MathCenterSeries {
+	return seriesFromColumns(row.ID, row.MathCenterID, row.Number, row.Name, row.DueAt, row.PdfObjectKey, row.PublishedAt, row.CreatedAt, row.TexSource)
+}
+
+func seriesFromLegacyListRow(row store.ListSeriesForCenterRow) store.MathCenterSeries {
+	return seriesFromColumns(row.ID, row.MathCenterID, row.Number, row.Name, row.DueAt, row.PdfObjectKey, row.PublishedAt, row.CreatedAt, row.TexSource)
+}
+
+func seriesFromLegacyPublishedListRow(row store.ListPublishedSeriesForCenterRow) store.MathCenterSeries {
+	return seriesFromColumns(row.ID, row.MathCenterID, row.Number, row.Name, row.DueAt, row.PdfObjectKey, row.PublishedAt, row.CreatedAt, row.TexSource)
+}
+
+func seriesFromUpdateRow(row store.UpdateSeriesRow) store.MathCenterSeries {
+	return seriesFromColumns(row.ID, row.MathCenterID, row.Number, row.Name, row.DueAt, row.PdfObjectKey, row.PublishedAt, row.CreatedAt, row.TexSource)
+}
+
+func seriesFromPublishRow(row store.PublishSeriesRow) store.MathCenterSeries {
+	return seriesFromColumns(row.ID, row.MathCenterID, row.Number, row.Name, row.DueAt, row.PdfObjectKey, row.PublishedAt, row.CreatedAt, row.TexSource)
+}
+
+func seriesFromSetTexRow(row store.SetSeriesTexRow) store.MathCenterSeries {
+	return seriesFromColumns(row.ID, row.MathCenterID, row.Number, row.Name, row.DueAt, row.PdfObjectKey, row.PublishedAt, row.CreatedAt, row.TexSource)
+}
+
+func seriesFromClearTexRow(row store.ClearSeriesTexRow) store.MathCenterSeries {
+	return seriesFromColumns(row.ID, row.MathCenterID, row.Number, row.Name, row.DueAt, row.PdfObjectKey, row.PublishedAt, row.CreatedAt, row.TexSource)
 }
 
 // Handlers -------------------------------------------------------------------
@@ -144,7 +201,6 @@ func CreateSeries(database *db.DB) http.HandlerFunc {
 		if !requireTeacher(ctx, w, r, q, userID, centerID) {
 			return
 		}
-
 		// Create the series and its problems atomically: a partial write
 		// would leave a series with an incomplete problem set.
 		tx, err := database.Pool().Begin(ctx)
@@ -156,12 +212,29 @@ func CreateSeries(database *db.DB) http.HandlerFunc {
 		defer func() { _ = tx.Rollback(ctx) }()
 		qx := store.New(tx)
 
-		series, err := qx.CreateSeries(ctx, store.CreateSeriesParams{
-			MathCenterID: centerID,
-			Number:       int32(req.Number),
-			Name:         req.Name,
-			DueAt:        req.DueAt,
-		})
+		var series store.MathCenterSeries
+		if r.URL.Query().Get("term_id") == "" {
+			created, createErr := qx.CreateSeries(ctx, store.CreateSeriesParams{
+				MathCenterID: centerID, Number: int32(req.Number), Name: req.Name, DueAt: req.DueAt,
+			})
+			err = createErr
+			series = seriesFromCreateRow(created)
+		} else {
+			term, termErr := selectedTerm(ctx, r, q, centerID)
+			if termErr != nil {
+				httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid term")
+				return
+			}
+			if !term.IsActive {
+				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "archived terms are read-only")
+				return
+			}
+			created, createErr := qx.CreateSeriesInTerm(ctx, store.CreateSeriesInTermParams{
+				MathCenterID: centerID, TermID: term.ID, Number: int32(req.Number), Name: req.Name, DueAt: req.DueAt,
+			})
+			err = createErr
+			series = seriesFromCreateTermRow(created)
+		}
 		if err != nil {
 			if isUniqueViolation(err) {
 				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "series number already exists in this center")
@@ -223,10 +296,33 @@ func ListSeriesForCenter(database *db.DB) http.HandlerFunc {
 		}
 
 		var rows []store.MathCenterSeries
-		if isTeacher {
-			rows, err = q.ListSeriesForCenter(ctx, centerID)
+		if r.URL.Query().Get("term_id") == "" {
+			if isTeacher {
+				legacyRows, listErr := q.ListSeriesForCenter(ctx, centerID)
+				err = listErr
+				rows = make([]store.MathCenterSeries, 0, len(legacyRows))
+				for _, row := range legacyRows {
+					rows = append(rows, seriesFromLegacyListRow(row))
+				}
+			} else {
+				legacyRows, listErr := q.ListPublishedSeriesForCenter(ctx, centerID)
+				err = listErr
+				rows = make([]store.MathCenterSeries, 0, len(legacyRows))
+				for _, row := range legacyRows {
+					rows = append(rows, seriesFromLegacyPublishedListRow(row))
+				}
+			}
 		} else {
-			rows, err = q.ListPublishedSeriesForCenter(ctx, centerID)
+			term, termErr := selectedTerm(ctx, r, q, centerID)
+			if termErr != nil {
+				httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid term")
+				return
+			}
+			if isTeacher {
+				rows, err = q.ListSeriesForTerm(ctx, store.ListSeriesForTermParams{MathCenterID: centerID, TermID: term.ID})
+			} else {
+				rows, err = q.ListPublishedSeriesForTerm(ctx, store.ListPublishedSeriesForTermParams{MathCenterID: centerID, TermID: term.ID})
+			}
 		}
 		if err != nil {
 			logger.LogErrorContext(ctx, "series: list", err)
@@ -287,7 +383,7 @@ func GetSeries(database *db.DB) http.HandlerFunc {
 			return
 		}
 
-		view, err := buildSeriesView(ctx, q, series)
+		view, err := buildSeriesView(ctx, q, seriesFromGetRow(series))
 		if err != nil {
 			logger.LogErrorContext(ctx, "series: build view", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
@@ -383,7 +479,7 @@ func UpdateSeries(database *db.DB) http.HandlerFunc {
 			return
 		}
 
-		view, err := buildSeriesView(ctx, q, updated)
+		view, err := buildSeriesView(ctx, q, seriesFromUpdateRow(updated))
 		if err != nil {
 			logger.LogErrorContext(ctx, "series: build view", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
@@ -570,7 +666,7 @@ func FinalizePDFPublish(database *db.DB, blobs objectstore.Store) http.HandlerFu
 			return
 		}
 
-		view, err := buildSeriesView(ctx, q, updated)
+		view, err := buildSeriesView(ctx, q, seriesFromPublishRow(updated))
 		if err != nil {
 			logger.LogErrorContext(ctx, "series: build view", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
@@ -699,7 +795,7 @@ func PutSeriesTex(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to save tex")
 			return
 		}
-		view, err := buildSeriesView(ctx, q, updated)
+		view, err := buildSeriesView(ctx, q, seriesFromSetTexRow(updated))
 		if err != nil {
 			logger.LogErrorContext(ctx, "series: build view after tex", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
@@ -747,7 +843,7 @@ func DeleteSeriesTex(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to clear tex")
 			return
 		}
-		view, err := buildSeriesView(ctx, q, updated)
+		view, err := buildSeriesView(ctx, q, seriesFromClearTexRow(updated))
 		if err != nil {
 			logger.LogErrorContext(ctx, "series: build view after tex clear", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
@@ -1239,6 +1335,7 @@ func assembleSeriesView(s store.MathCenterSeries, problems []store.MathCenterPro
 	return &seriesView{
 		ID:           s.ID,
 		MathCenterID: s.MathCenterID,
+		TermID:       s.TermID,
 		Number:       int(s.Number),
 		Name:         s.Name,
 		DisplayName:  mc.SeriesDisplayName(int(s.Number), s.Name),

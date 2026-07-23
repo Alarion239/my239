@@ -37,6 +37,9 @@ const MAX_PDF_BYTES = 1024 * 1024
 
 export interface UploadSeriesDialogProps {
   centerId: number
+  // Fresh series belong to the selected active term. Existing series retain
+  // their owning term when edited.
+  termId?: number
   // When present the dialog edits an existing series; otherwise it creates one.
   series?: Series
   // Pre-filled series number for a fresh series (max existing + 1). Defaults 1.
@@ -95,6 +98,7 @@ function draftsToBody(drafts: ProblemDraft[]): CreateSeriesBody['problems'] {
 // can attach to it; problems are saved in step 3.
 export function UploadSeriesDialog({
   centerId,
+  termId = 0,
   series,
   defaultNumber,
   trigger,
@@ -129,6 +133,7 @@ export function UploadSeriesDialog({
         {step === 'meta' ? (
           <MetaStep
             centerId={centerId}
+            termId={termId}
             series={attachTo ?? undefined}
             defaultNumber={defaultNumber ?? 1}
             onSaved={(saved) => {
@@ -158,17 +163,19 @@ export function UploadSeriesDialog({
 
 function MetaStep({
   centerId,
+  termId,
   series,
   defaultNumber,
   onSaved,
 }: {
   centerId: number
+  termId: number
   series: Series | undefined
   defaultNumber: number
   onSaved: (saved: Series) => void
 }) {
   const isEdit = !!series
-  const create = useCreateSeries(centerId)
+  const create = useCreateSeries(centerId, termId)
   const update = useUpdateSeries(series?.id ?? 0)
   const [formError, setFormError] = useState<string | null>(null)
 

@@ -32,12 +32,12 @@ export interface CoffinAction {
 }
 
 // useCenterCoffins lists every coffin subproblem in a center for the Гробы tab.
-export function useCenterCoffins(centerId: number) {
+export function useCenterCoffins(centerId: number, termId = 0) {
   const client = useApiClient()
   return useQuery<Coffin[]>({
-    queryKey: queryKeys.centerCoffins(centerId),
+    queryKey: queryKeys.centerCoffins(centerId, termId),
     queryFn: () =>
-      client.request<Coffin[]>('/mathcenter/centers/' + centerId + '/coffins'),
+      client.request<Coffin[]>('/mathcenter/centers/' + centerId + '/coffins' + (termId > 0 ? '?term_id=' + termId : '')),
     enabled: centerId > 0,
   })
 }
@@ -171,10 +171,10 @@ export function useSetSubproblemSolutionLink(subproblemId: number, centerId: num
 }
 
 function invalidate(qc: ReturnType<typeof useQueryClient>, centerId: number) {
-  qc.invalidateQueries({ queryKey: queryKeys.centerCoffins(centerId) })
+  qc.invalidateQueries({ queryKey: ['mathcenter', 'centers', centerId] })
   // The series view carries per-subproblem coffin/разбор metadata; refresh it
   // so the Разбор tab badges + student gating update.
-  qc.invalidateQueries({ queryKey: queryKeys.seriesList(centerId) })
+  qc.invalidateQueries({ queryKey: ['mathcenter', 'centers', centerId] })
 }
 
 // --- batch «Разбор» (attach one source to several subproblems) ---------------

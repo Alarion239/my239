@@ -53,7 +53,7 @@ func TestManage_ListGroupsAdmin(t *testing.T) {
 
 	now := time.Now()
 	// Admin token → callerIsAdmin bypass, no head-teacher query.
-	mock.ExpectQuery(`FROM math_center_groups\s+WHERE math_center_id = \$1`).
+	mock.ExpectQuery(`FROM math_center_groups g\s+WHERE g.math_center_id = \$1`).
 		WithArgs(int64(42)).
 		WillReturnRows(mock.NewRows(manageGroupColumns).
 			AddRow(int64(1), int64(42), "А", now))

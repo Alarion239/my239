@@ -9,7 +9,7 @@ import (
 )
 
 type Querier interface {
-	AddStudentToGroup(ctx context.Context, arg AddStudentToGroupParams) (MathCenterStudent, error)
+	AddStudentToGroup(ctx context.Context, arg AddStudentToGroupParams) (AddStudentToGroupRow, error)
 	AddTeacherToCenter(ctx context.Context, arg AddTeacherToCenterParams) (MathCenterTeacher, error)
 	AppendEvent(ctx context.Context, arg AppendEventParams) (HomeworkThreadEvent, error)
 	// Offline accept / undo events. is_offline is always true; the credited
@@ -17,7 +17,9 @@ type Querier interface {
 	// from typed initials, or a free-text name (credited_grader_name) when that
 	// teacher isn't registered. actor_user_id stays the session account.
 	AppendOfflineEvent(ctx context.Context, arg AppendOfflineEventParams) (HomeworkThreadEvent, error)
-	ClearSeriesTex(ctx context.Context, id int64) (MathCenterSeries, error)
+	ArchiveActiveTermsForCenter(ctx context.Context, mathCenterID int64) error
+	ClearSeriesTex(ctx context.Context, id int64) (ClearSeriesTexRow, error)
+	CopyGroupsToTerm(ctx context.Context, arg CopyGroupsToTermParams) error
 	CountHeadTeachersForCenter(ctx context.Context, mathCenterID int64) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
 	// The cast keeps the parameter a plain int64: invitation_token_id is nullable
@@ -31,10 +33,13 @@ type Querier interface {
 	// can distinguish them. The caller enrolls the returned user as a head teacher
 	// of the target center in the same transaction.
 	CreateMathCenterAccount(ctx context.Context, arg CreateMathCenterAccountParams) (User, error)
-	CreateMathCenterGroup(ctx context.Context, arg CreateMathCenterGroupParams) (MathCenterGroup, error)
+	CreateMathCenterGroup(ctx context.Context, arg CreateMathCenterGroupParams) (CreateMathCenterGroupRow, error)
+	CreateMathCenterGroupForTerm(ctx context.Context, arg CreateMathCenterGroupForTermParams) (MathCenterGroup, error)
+	CreateMathCenterTerm(ctx context.Context, arg CreateMathCenterTermParams) (MathCenterTerm, error)
 	CreateProblem(ctx context.Context, arg CreateProblemParams) (MathCenterProblem, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
-	CreateSeries(ctx context.Context, arg CreateSeriesParams) (MathCenterSeries, error)
+	CreateSeries(ctx context.Context, arg CreateSeriesParams) (CreateSeriesRow, error)
+	CreateSeriesInTerm(ctx context.Context, arg CreateSeriesInTermParams) (CreateSeriesInTermRow, error)
 	// Mint a fresh shared-разбор group id.
 	CreateSolutionGroup(ctx context.Context) (int64, error)
 	CreateStudentNote(ctx context.Context, arg CreateStudentNoteParams) (MathCenterStudentNote, error)
@@ -63,20 +68,26 @@ type Querier interface {
 	// whether we created it now or matched an existing one. The DO UPDATE bumps
 	// updated_at so we can see activity even on no-op upserts.
 	FindOrCreateThread(ctx context.Context, arg FindOrCreateThreadParams) (HomeworkThread, error)
+	GetActiveTermForCenter(ctx context.Context, mathCenterID int64) (MathCenterTerm, error)
 	GetEvent(ctx context.Context, id int64) (HomeworkThreadEvent, error)
 	GetEventKind(ctx context.Context, id int64) (string, error)
-	GetGroup(ctx context.Context, id int64) (MathCenterGroup, error)
+	GetGroup(ctx context.Context, id int64) (GetGroupRow, error)
+	GetGroupCenter(ctx context.Context, id int64) (GetGroupCenterRow, error)
 	GetInvitationTokenByID(ctx context.Context, id int64) (InvitationToken, error)
 	GetInvitationTokenByValue(ctx context.Context, token string) (InvitationToken, error)
 	GetInvitationTokenByValueForUpdate(ctx context.Context, token string) (InvitationToken, error)
+	GetLegacyTermForCenter(ctx context.Context, mathCenterID int64) (MathCenterTerm, error)
 	GetMathCenter(ctx context.Context, id int64) (MathCenter, error)
 	GetMostRecentGradedEvent(ctx context.Context, threadID int64) (HomeworkThreadEvent, error)
 	// Resolve a problem to its series + center, for authorizing coffin actions.
 	GetProblemCenter(ctx context.Context, id int64) (GetProblemCenterRow, error)
 	GetRefreshTokenByHash(ctx context.Context, tokenHash []byte) (RefreshToken, error)
-	GetSeries(ctx context.Context, id int64) (MathCenterSeries, error)
+	// Keep the long-standing row shape for the high-traffic series detail path.
+	// Term-aware list/create endpoints carry term_id; callers that only resolve a
+	// series id do not need it and existing homework mocks retain their contract.
+	GetSeries(ctx context.Context, id int64) (GetSeriesRow, error)
 	GetSeriesTex(ctx context.Context, id int64) (*string, error)
-	GetStudent(ctx context.Context, id int64) (MathCenterStudent, error)
+	GetStudent(ctx context.Context, id int64) (GetStudentRow, error)
 	GetStudentByUserID(ctx context.Context, userID int64) (GetStudentByUserIDRow, error)
 	GetStudentNote(ctx context.Context, id int64) (MathCenterStudentNote, error)
 	GetStudentNoteAuthored(ctx context.Context, id int64) (GetStudentNoteAuthoredRow, error)
@@ -90,6 +101,7 @@ type Querier interface {
 	// the row even when no solution row exists yet.
 	GetSubproblemSolutionCenter(ctx context.Context, id int64) (GetSubproblemSolutionCenterRow, error)
 	GetTeacher(ctx context.Context, id int64) (MathCenterTeacher, error)
+	GetTerm(ctx context.Context, id int64) (MathCenterTerm, error)
 	GetThread(ctx context.Context, id int64) (HomeworkThread, error)
 	GetThreadByStudentAndSubproblem(ctx context.Context, arg GetThreadByStudentAndSubproblemParams) (HomeworkThread, error)
 	GetThreadNote(ctx context.Context, id int64) (HomeworkThreadNote, error)
@@ -108,9 +120,13 @@ type Querier interface {
 	IsHeadTeacherInCenter(ctx context.Context, arg IsHeadTeacherInCenterParams) (bool, error)
 	IsStudentInCenter(ctx context.Context, arg IsStudentInCenterParams) (bool, error)
 	IsTeacherInCenter(ctx context.Context, arg IsTeacherInCenterParams) (bool, error)
+	IsTermActive(ctx context.Context, id int64) (bool, error)
 	// Every coffin subproblem in a center with the labels the Гробы tab needs,
 	// newest series first. Used by the center-wide "Гробы" tab.
 	ListCenterCoffins(ctx context.Context, mathCenterID int64) ([]ListCenterCoffinsRow, error)
+	// The active term includes its own released and open coffins plus open coffins
+	// carried from every archived term. An archive selection shows only that term.
+	ListCenterCoffinsForTerm(ctx context.Context, arg ListCenterCoffinsForTermParams) ([]ListCenterCoffinsForTermRow, error)
 	ListCentersForTeacher(ctx context.Context, userID int64) ([]ListCentersForTeacherRow, error)
 	// Center-wide grading queue for coffins: submissions/appeals on coffin
 	// subproblems that aren't locked by another grader. Mirrors the per-series
@@ -128,19 +144,23 @@ type Querier interface {
 	// threads I currently hold a live claim on, OR where I was the most recent
 	// grader (appeal stickiness) — so a grader can find what they've taken on.
 	ListGraderQueueForSeries(ctx context.Context, arg ListGraderQueueForSeriesParams) ([]ListGraderQueueForSeriesRow, error)
-	ListGroupsForCenter(ctx context.Context, mathCenterID int64) ([]MathCenterGroup, error)
+	ListGroupsForCenter(ctx context.Context, mathCenterID int64) ([]ListGroupsForCenterRow, error)
 	ListGroupsForCenters(ctx context.Context, centerIds []int64) ([]MathCenterGroup, error)
+	ListGroupsForTerm(ctx context.Context, termID int64) ([]MathCenterGroup, error)
 	ListHeadTeachersForCenter(ctx context.Context, mathCenterID int64) ([]ListHeadTeachersForCenterRow, error)
 	ListInvitationTokens(ctx context.Context) ([]InvitationToken, error)
 	ListInvitationTokensForCenter(ctx context.Context, mathCenterID *int64) ([]InvitationToken, error)
 	ListMathCenters(ctx context.Context) ([]MathCenter, error)
 	ListProblemsForSeries(ctx context.Context, seriesID int64) ([]MathCenterProblem, error)
 	ListProblemsForSeriesIDs(ctx context.Context, seriesIds []int64) ([]MathCenterProblem, error)
-	ListPublishedSeriesForCenter(ctx context.Context, mathCenterID int64) ([]MathCenterSeries, error)
-	ListSeriesForCenter(ctx context.Context, mathCenterID int64) ([]MathCenterSeries, error)
+	ListPublishedSeriesForCenter(ctx context.Context, mathCenterID int64) ([]ListPublishedSeriesForCenterRow, error)
+	ListPublishedSeriesForTerm(ctx context.Context, arg ListPublishedSeriesForTermParams) ([]MathCenterSeries, error)
+	ListSeriesForCenter(ctx context.Context, mathCenterID int64) ([]ListSeriesForCenterRow, error)
+	ListSeriesForTerm(ctx context.Context, arg ListSeriesForTermParams) ([]MathCenterSeries, error)
 	ListStudentNotesAuthored(ctx context.Context, arg ListStudentNotesAuthoredParams) ([]ListStudentNotesAuthoredRow, error)
 	ListStudentsForCenter(ctx context.Context, mathCenterID int64) ([]ListStudentsForCenterRow, error)
 	ListStudentsForCenters(ctx context.Context, centerIds []int64) ([]ListStudentsForCentersRow, error)
+	ListStudentsForTerm(ctx context.Context, termID int64) ([]ListStudentsForTermRow, error)
 	// Per-subproblem разбор/coffin metadata for one series, so the teacher Разбор
 	// tab and student views can show "has разбор / released / is coffin" per
 	// subproblem without N+1 fetches. Only subproblems with a row appear.
@@ -155,13 +175,14 @@ type Querier interface {
 	ListTeacherEnrollmentsForUser(ctx context.Context, userID int64) ([]ListTeacherEnrollmentsForUserRow, error)
 	ListTeachersForCenter(ctx context.Context, mathCenterID int64) ([]ListTeachersForCenterRow, error)
 	ListTeachersForCenters(ctx context.Context, centerIds []int64) ([]ListTeachersForCentersRow, error)
+	ListTermsForCenter(ctx context.Context, mathCenterID int64) ([]MathCenterTerm, error)
 	ListThreadEvents(ctx context.Context, threadID int64) ([]HomeworkThreadEvent, error)
 	ListThreadNotesAuthored(ctx context.Context, threadID int64) ([]ListThreadNotesAuthoredRow, error)
 	ListUsers(ctx context.Context) ([]User, error)
 	// Sets the PDF object key and stamps published_at to NOW(). Used both for
 	// first-time publishing and re-uploads (we just overwrite; the caller is
 	// responsible for deleting the prior key first if needed).
-	PublishSeries(ctx context.Context, arg PublishSeriesParams) (MathCenterSeries, error)
+	PublishSeries(ctx context.Context, arg PublishSeriesParams) (PublishSeriesRow, error)
 	ReleaseClaim(ctx context.Context, arg ReleaseClaimParams) (int64, error)
 	// Stamp released_at (first release wins) — closes a coffin's submission window
 	// and makes its разбор available.
@@ -189,7 +210,7 @@ type Querier interface {
 	// Stores or replaces the raw LaTeX source. Also stamps published_at if
 	// the series wasn't already published, mirroring the PDF publish flow:
 	// a series with any rendered content is considered visible to students.
-	SetSeriesTex(ctx context.Context, arg SetSeriesTexParams) (MathCenterSeries, error)
+	SetSeriesTex(ctx context.Context, arg SetSeriesTexParams) (SetSeriesTexRow, error)
 	SetStudentGroup(ctx context.Context, arg SetStudentGroupParams) (int64, error)
 	// Assign a (just-minted) group to every subproblem in the set. The solution
 	// rows must already exist (content was set first); only existing rows update.
@@ -212,6 +233,7 @@ type Querier interface {
 	// math_center_series in the center, so the frontend can render one
 	// side-scrolling table across all psets and keep grouping/sort stable.
 	TeacherCenterGrid(ctx context.Context, mathCenterID int64) ([]TeacherCenterGridRow, error)
+	TeacherCenterGridForTerm(ctx context.Context, arg TeacherCenterGridForTermParams) ([]TeacherCenterGridForTermRow, error)
 	// The full (student × subproblem) matrix for one series. Used by the
 	// teacher spreadsheet view: every student of the series's math center is
 	// crossed with every subproblem of the series, with the LEFT JOIN filling
@@ -221,7 +243,7 @@ type Querier interface {
 	// Returns the row when the claim is granted (no live holder, or the caller
 	// already holds it). Returns no rows when someone else holds a live claim.
 	TryClaim(ctx context.Context, arg TryClaimParams) (HomeworkThread, error)
-	UpdateSeries(ctx context.Context, arg UpdateSeriesParams) (MathCenterSeries, error)
+	UpdateSeries(ctx context.Context, arg UpdateSeriesParams) (UpdateSeriesRow, error)
 	UpdateStudentNote(ctx context.Context, arg UpdateStudentNoteParams) (int64, error)
 	UpdateThreadAfterAppeal(ctx context.Context, arg UpdateThreadAfterAppealParams) error
 	// One statement does all four things atomically: set new status from

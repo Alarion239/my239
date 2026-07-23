@@ -181,6 +181,7 @@ export interface MathCenter {
 export interface MathCenterGroup {
   id: number
   math_center_id: number
+  term_id?: number
   name: string
   created_at: string
 }
@@ -201,7 +202,19 @@ export interface MathCenterStudent {
   id: number
   user_id: number
   group_id: number
+  term_id?: number
   created_at: string
+}
+
+// MathCenterTerm partitions one graduation-year cohort into an academic year,
+// its separate summer camp, or the imported read-only legacy archive.
+export interface MathCenterTerm {
+  id: number
+  math_center_id: number
+  kind: 'academic' | 'camp' | 'legacy'
+  grade?: number | null
+  display_name: string
+  is_active: boolean
 }
 
 // --- Head-teacher management panel ("Управление") ----------------------------
@@ -341,6 +354,7 @@ export interface SeriesProblem {
 export interface Series {
   id: number
   math_center_id: number
+  term_id?: number
   number: number
   name: string
   display_name: string
@@ -547,6 +561,9 @@ export interface Coffin {
   series_number: number
   series_name: string
   math_center_id: number
+  term_id?: number
+  term_kind?: 'academic' | 'camp' | 'legacy'
+  term_grade?: number | null
   is_coffin: boolean
   released_at?: string | null
   has_solution_tex: boolean

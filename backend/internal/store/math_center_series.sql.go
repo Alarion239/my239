@@ -17,9 +17,21 @@ WHERE id = $1
 RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source
 `
 
-func (q *Queries) ClearSeriesTex(ctx context.Context, id int64) (MathCenterSeries, error) {
+type ClearSeriesTexRow struct {
+	ID           int64      `json:"id"`
+	MathCenterID int64      `json:"math_center_id"`
+	Number       int32      `json:"number"`
+	Name         string     `json:"name"`
+	DueAt        time.Time  `json:"due_at"`
+	PdfObjectKey *string    `json:"pdf_object_key"`
+	PublishedAt  *time.Time `json:"published_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+	TexSource    *string    `json:"tex_source"`
+}
+
+func (q *Queries) ClearSeriesTex(ctx context.Context, id int64) (ClearSeriesTexRow, error) {
 	row := q.db.QueryRow(ctx, clearSeriesTex, id)
-	var i MathCenterSeries
+	var i ClearSeriesTexRow
 	err := row.Scan(
 		&i.ID,
 		&i.MathCenterID,
@@ -58,8 +70,11 @@ func (q *Queries) CreateProblem(ctx context.Context, arg CreateProblemParams) (M
 }
 
 const createSeries = `-- name: CreateSeries :one
-INSERT INTO math_center_series (math_center_id, number, name, due_at)
-VALUES ($1, $2, $3, $4)
+INSERT INTO math_center_series (math_center_id, term_id, number, name, due_at)
+SELECT $1, id, $2, $3, $4
+FROM math_center_terms
+WHERE math_center_id = $1
+  AND is_active = TRUE
 RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source
 `
 
@@ -70,17 +85,80 @@ type CreateSeriesParams struct {
 	DueAt        time.Time `json:"due_at"`
 }
 
-func (q *Queries) CreateSeries(ctx context.Context, arg CreateSeriesParams) (MathCenterSeries, error) {
+type CreateSeriesRow struct {
+	ID           int64      `json:"id"`
+	MathCenterID int64      `json:"math_center_id"`
+	Number       int32      `json:"number"`
+	Name         string     `json:"name"`
+	DueAt        time.Time  `json:"due_at"`
+	PdfObjectKey *string    `json:"pdf_object_key"`
+	PublishedAt  *time.Time `json:"published_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+	TexSource    *string    `json:"tex_source"`
+}
+
+func (q *Queries) CreateSeries(ctx context.Context, arg CreateSeriesParams) (CreateSeriesRow, error) {
 	row := q.db.QueryRow(ctx, createSeries,
 		arg.MathCenterID,
 		arg.Number,
 		arg.Name,
 		arg.DueAt,
 	)
-	var i MathCenterSeries
+	var i CreateSeriesRow
 	err := row.Scan(
 		&i.ID,
 		&i.MathCenterID,
+		&i.Number,
+		&i.Name,
+		&i.DueAt,
+		&i.PdfObjectKey,
+		&i.PublishedAt,
+		&i.CreatedAt,
+		&i.TexSource,
+	)
+	return i, err
+}
+
+const createSeriesInTerm = `-- name: CreateSeriesInTerm :one
+INSERT INTO math_center_series (math_center_id, term_id, number, name, due_at)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, math_center_id, term_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source
+`
+
+type CreateSeriesInTermParams struct {
+	MathCenterID int64     `json:"math_center_id"`
+	TermID       int64     `json:"term_id"`
+	Number       int32     `json:"number"`
+	Name         string    `json:"name"`
+	DueAt        time.Time `json:"due_at"`
+}
+
+type CreateSeriesInTermRow struct {
+	ID           int64      `json:"id"`
+	MathCenterID int64      `json:"math_center_id"`
+	TermID       int64      `json:"term_id"`
+	Number       int32      `json:"number"`
+	Name         string     `json:"name"`
+	DueAt        time.Time  `json:"due_at"`
+	PdfObjectKey *string    `json:"pdf_object_key"`
+	PublishedAt  *time.Time `json:"published_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+	TexSource    *string    `json:"tex_source"`
+}
+
+func (q *Queries) CreateSeriesInTerm(ctx context.Context, arg CreateSeriesInTermParams) (CreateSeriesInTermRow, error) {
+	row := q.db.QueryRow(ctx, createSeriesInTerm,
+		arg.MathCenterID,
+		arg.TermID,
+		arg.Number,
+		arg.Name,
+		arg.DueAt,
+	)
+	var i CreateSeriesInTermRow
+	err := row.Scan(
+		&i.ID,
+		&i.MathCenterID,
+		&i.TermID,
 		&i.Number,
 		&i.Name,
 		&i.DueAt,
@@ -195,9 +273,24 @@ FROM math_center_series
 WHERE id = $1
 `
 
-func (q *Queries) GetSeries(ctx context.Context, id int64) (MathCenterSeries, error) {
+type GetSeriesRow struct {
+	ID           int64      `json:"id"`
+	MathCenterID int64      `json:"math_center_id"`
+	Number       int32      `json:"number"`
+	Name         string     `json:"name"`
+	DueAt        time.Time  `json:"due_at"`
+	PdfObjectKey *string    `json:"pdf_object_key"`
+	PublishedAt  *time.Time `json:"published_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+	TexSource    *string    `json:"tex_source"`
+}
+
+// Keep the long-standing row shape for the high-traffic series detail path.
+// Term-aware list/create endpoints carry term_id; callers that only resolve a
+// series id do not need it and existing homework mocks retain their contract.
+func (q *Queries) GetSeries(ctx context.Context, id int64) (GetSeriesRow, error) {
 	row := q.db.QueryRow(ctx, getSeries, id)
-	var i MathCenterSeries
+	var i GetSeriesRow
 	err := row.Scan(
 		&i.ID,
 		&i.MathCenterID,
@@ -228,10 +321,20 @@ func (q *Queries) GetSeriesTex(ctx context.Context, id int64) (*string, error) {
 const isStudentInCenter = `-- name: IsStudentInCenter :one
 SELECT EXISTS (
     SELECT 1
-    FROM math_center_students s
-             JOIN math_center_groups g ON g.id = s.group_id
+FROM math_center_students s
+         JOIN math_center_groups g ON g.id = s.group_id
+         JOIN math_center_terms t ON t.id = s.term_id
     WHERE s.user_id = $1
       AND g.math_center_id = $2
+      AND (
+          t.is_active = TRUE
+          OR NOT EXISTS (
+              SELECT 1
+              FROM math_center_terms active
+              WHERE active.math_center_id = $2
+                AND active.is_active = TRUE
+          )
+      )
 ) AS is_student
 `
 
@@ -333,22 +436,41 @@ func (q *Queries) ListProblemsForSeriesIDs(ctx context.Context, seriesIds []int6
 }
 
 const listPublishedSeriesForCenter = `-- name: ListPublishedSeriesForCenter :many
-SELECT id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source
-FROM math_center_series
-WHERE math_center_id = $1
-  AND published_at IS NOT NULL
+WITH selected_term AS (
+    SELECT COALESCE(
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.is_active = TRUE),
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.kind = 'legacy')
+    ) AS id
+)
+SELECT s.id, s.math_center_id, s.number, s.name, s.due_at, s.pdf_object_key, s.published_at, s.created_at, s.tex_source
+FROM math_center_series s
+WHERE s.math_center_id = $1
+  AND s.term_id = (SELECT id FROM selected_term)
+  AND s.published_at IS NOT NULL
 ORDER BY number ASC
 `
 
-func (q *Queries) ListPublishedSeriesForCenter(ctx context.Context, mathCenterID int64) ([]MathCenterSeries, error) {
+type ListPublishedSeriesForCenterRow struct {
+	ID           int64      `json:"id"`
+	MathCenterID int64      `json:"math_center_id"`
+	Number       int32      `json:"number"`
+	Name         string     `json:"name"`
+	DueAt        time.Time  `json:"due_at"`
+	PdfObjectKey *string    `json:"pdf_object_key"`
+	PublishedAt  *time.Time `json:"published_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+	TexSource    *string    `json:"tex_source"`
+}
+
+func (q *Queries) ListPublishedSeriesForCenter(ctx context.Context, mathCenterID int64) ([]ListPublishedSeriesForCenterRow, error) {
 	rows, err := q.db.Query(ctx, listPublishedSeriesForCenter, mathCenterID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []MathCenterSeries{}
+	items := []ListPublishedSeriesForCenterRow{}
 	for rows.Next() {
-		var i MathCenterSeries
+		var i ListPublishedSeriesForCenterRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.MathCenterID,
@@ -370,15 +492,22 @@ func (q *Queries) ListPublishedSeriesForCenter(ctx context.Context, mathCenterID
 	return items, nil
 }
 
-const listSeriesForCenter = `-- name: ListSeriesForCenter :many
-SELECT id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source
+const listPublishedSeriesForTerm = `-- name: ListPublishedSeriesForTerm :many
+SELECT id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source, term_id
 FROM math_center_series
 WHERE math_center_id = $1
+  AND term_id = $2
+  AND published_at IS NOT NULL
 ORDER BY number ASC
 `
 
-func (q *Queries) ListSeriesForCenter(ctx context.Context, mathCenterID int64) ([]MathCenterSeries, error) {
-	rows, err := q.db.Query(ctx, listSeriesForCenter, mathCenterID)
+type ListPublishedSeriesForTermParams struct {
+	MathCenterID int64 `json:"math_center_id"`
+	TermID       int64 `json:"term_id"`
+}
+
+func (q *Queries) ListPublishedSeriesForTerm(ctx context.Context, arg ListPublishedSeriesForTermParams) ([]MathCenterSeries, error) {
+	rows, err := q.db.Query(ctx, listPublishedSeriesForTerm, arg.MathCenterID, arg.TermID)
 	if err != nil {
 		return nil, err
 	}
@@ -396,6 +525,107 @@ func (q *Queries) ListSeriesForCenter(ctx context.Context, mathCenterID int64) (
 			&i.PublishedAt,
 			&i.CreatedAt,
 			&i.TexSource,
+			&i.TermID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSeriesForCenter = `-- name: ListSeriesForCenter :many
+WITH selected_term AS (
+    SELECT COALESCE(
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.is_active = TRUE),
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.kind = 'legacy')
+    ) AS id
+)
+SELECT s.id, s.math_center_id, s.number, s.name, s.due_at, s.pdf_object_key, s.published_at, s.created_at, s.tex_source
+FROM math_center_series s
+WHERE s.math_center_id = $1
+  AND s.term_id = (SELECT id FROM selected_term)
+ORDER BY number ASC
+`
+
+type ListSeriesForCenterRow struct {
+	ID           int64      `json:"id"`
+	MathCenterID int64      `json:"math_center_id"`
+	Number       int32      `json:"number"`
+	Name         string     `json:"name"`
+	DueAt        time.Time  `json:"due_at"`
+	PdfObjectKey *string    `json:"pdf_object_key"`
+	PublishedAt  *time.Time `json:"published_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+	TexSource    *string    `json:"tex_source"`
+}
+
+func (q *Queries) ListSeriesForCenter(ctx context.Context, mathCenterID int64) ([]ListSeriesForCenterRow, error) {
+	rows, err := q.db.Query(ctx, listSeriesForCenter, mathCenterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSeriesForCenterRow{}
+	for rows.Next() {
+		var i ListSeriesForCenterRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.MathCenterID,
+			&i.Number,
+			&i.Name,
+			&i.DueAt,
+			&i.PdfObjectKey,
+			&i.PublishedAt,
+			&i.CreatedAt,
+			&i.TexSource,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSeriesForTerm = `-- name: ListSeriesForTerm :many
+SELECT id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source, term_id
+FROM math_center_series
+WHERE math_center_id = $1
+  AND term_id = $2
+ORDER BY number ASC
+`
+
+type ListSeriesForTermParams struct {
+	MathCenterID int64 `json:"math_center_id"`
+	TermID       int64 `json:"term_id"`
+}
+
+func (q *Queries) ListSeriesForTerm(ctx context.Context, arg ListSeriesForTermParams) ([]MathCenterSeries, error) {
+	rows, err := q.db.Query(ctx, listSeriesForTerm, arg.MathCenterID, arg.TermID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MathCenterSeries{}
+	for rows.Next() {
+		var i MathCenterSeries
+		if err := rows.Scan(
+			&i.ID,
+			&i.MathCenterID,
+			&i.Number,
+			&i.Name,
+			&i.DueAt,
+			&i.PdfObjectKey,
+			&i.PublishedAt,
+			&i.CreatedAt,
+			&i.TexSource,
+			&i.TermID,
 		); err != nil {
 			return nil, err
 		}
@@ -492,12 +722,24 @@ type PublishSeriesParams struct {
 	PdfObjectKey *string `json:"pdf_object_key"`
 }
 
+type PublishSeriesRow struct {
+	ID           int64      `json:"id"`
+	MathCenterID int64      `json:"math_center_id"`
+	Number       int32      `json:"number"`
+	Name         string     `json:"name"`
+	DueAt        time.Time  `json:"due_at"`
+	PdfObjectKey *string    `json:"pdf_object_key"`
+	PublishedAt  *time.Time `json:"published_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+	TexSource    *string    `json:"tex_source"`
+}
+
 // Sets the PDF object key and stamps published_at to NOW(). Used both for
 // first-time publishing and re-uploads (we just overwrite; the caller is
 // responsible for deleting the prior key first if needed).
-func (q *Queries) PublishSeries(ctx context.Context, arg PublishSeriesParams) (MathCenterSeries, error) {
+func (q *Queries) PublishSeries(ctx context.Context, arg PublishSeriesParams) (PublishSeriesRow, error) {
 	row := q.db.QueryRow(ctx, publishSeries, arg.ID, arg.PdfObjectKey)
-	var i MathCenterSeries
+	var i PublishSeriesRow
 	err := row.Scan(
 		&i.ID,
 		&i.MathCenterID,
@@ -543,12 +785,24 @@ type SetSeriesTexParams struct {
 	TexSource *string `json:"tex_source"`
 }
 
+type SetSeriesTexRow struct {
+	ID           int64      `json:"id"`
+	MathCenterID int64      `json:"math_center_id"`
+	Number       int32      `json:"number"`
+	Name         string     `json:"name"`
+	DueAt        time.Time  `json:"due_at"`
+	PdfObjectKey *string    `json:"pdf_object_key"`
+	PublishedAt  *time.Time `json:"published_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+	TexSource    *string    `json:"tex_source"`
+}
+
 // Stores or replaces the raw LaTeX source. Also stamps published_at if
 // the series wasn't already published, mirroring the PDF publish flow:
 // a series with any rendered content is considered visible to students.
-func (q *Queries) SetSeriesTex(ctx context.Context, arg SetSeriesTexParams) (MathCenterSeries, error) {
+func (q *Queries) SetSeriesTex(ctx context.Context, arg SetSeriesTexParams) (SetSeriesTexRow, error) {
 	row := q.db.QueryRow(ctx, setSeriesTex, arg.ID, arg.TexSource)
-	var i MathCenterSeries
+	var i SetSeriesTexRow
 	err := row.Scan(
 		&i.ID,
 		&i.MathCenterID,
@@ -579,14 +833,26 @@ type UpdateSeriesParams struct {
 	DueAt  time.Time `json:"due_at"`
 }
 
-func (q *Queries) UpdateSeries(ctx context.Context, arg UpdateSeriesParams) (MathCenterSeries, error) {
+type UpdateSeriesRow struct {
+	ID           int64      `json:"id"`
+	MathCenterID int64      `json:"math_center_id"`
+	Number       int32      `json:"number"`
+	Name         string     `json:"name"`
+	DueAt        time.Time  `json:"due_at"`
+	PdfObjectKey *string    `json:"pdf_object_key"`
+	PublishedAt  *time.Time `json:"published_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+	TexSource    *string    `json:"tex_source"`
+}
+
+func (q *Queries) UpdateSeries(ctx context.Context, arg UpdateSeriesParams) (UpdateSeriesRow, error) {
 	row := q.db.QueryRow(ctx, updateSeries,
 		arg.ID,
 		arg.Number,
 		arg.Name,
 		arg.DueAt,
 	)
-	var i MathCenterSeries
+	var i UpdateSeriesRow
 	err := row.Scan(
 		&i.ID,
 		&i.MathCenterID,

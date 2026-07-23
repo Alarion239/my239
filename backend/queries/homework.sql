@@ -306,7 +306,7 @@ FROM math_center_students mcs
          LEFT JOIN homework_thread t
                    ON t.student_user_id = mcs.user_id
                   AND t.subproblem_id   = sp.id
-WHERE g.math_center_id = (SELECT s.math_center_id FROM math_center_series s WHERE s.id = $1)
+WHERE g.term_id = (SELECT s.term_id FROM math_center_series s WHERE s.id = $1)
   AND p.series_id = $1
 ORDER BY g.name ASC, u.last_name ASC, u.first_name ASC, p.number ASC, sp.label ASC;
 
@@ -347,7 +347,7 @@ SELECT
 FROM math_center_students mcs
          JOIN users u                       ON u.id = mcs.user_id
          JOIN math_center_groups g          ON g.id = mcs.group_id
-         JOIN math_center_series s          ON s.math_center_id = g.math_center_id
+         JOIN math_center_series s          ON s.term_id = g.term_id
          JOIN math_center_problems p        ON p.series_id = s.id
          JOIN math_center_subproblems sp    ON sp.problem_id = p.id
          LEFT JOIN math_center_subproblem_solutions ss ON ss.subproblem_id = sp.id
@@ -355,7 +355,38 @@ FROM math_center_students mcs
                    ON t.student_user_id = mcs.user_id
                   AND t.subproblem_id   = sp.id
          LEFT JOIN users gu                 ON gu.id = t.last_grader_user_id
-WHERE g.math_center_id = $1
+WHERE g.term_id = COALESCE(
+    (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.is_active = TRUE),
+    (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.kind = 'legacy')
+)
+ORDER BY g.name ASC, u.last_name ASC, u.first_name ASC, s.number ASC, p.number ASC, sp.label ASC;
+
+-- name: TeacherCenterGridForTerm :many
+SELECT
+    s.id AS series_id, s.number AS series_number, s.name AS series_name, s.due_at AS series_due_at,
+    mcs.user_id AS student_user_id, u.first_name AS student_first_name,
+    u.middle_name AS student_middle_name, u.last_name AS student_last_name,
+    g.id AS group_id, g.name AS group_name, sp.id AS subproblem_id,
+    sp.label AS subproblem_label, p.id AS problem_id, p.number AS problem_number,
+    COALESCE(ss.is_coffin, false)::boolean AS is_coffin, ss.released_at AS coffin_released_at,
+    COALESCE(t.id, 0)::bigint AS thread_id, COALESCE(t.current_status, 'ungraded') AS current_status,
+    t.last_grader_user_id AS last_grader_user_id, COALESCE(t.last_grader_name, '') AS last_grader_name,
+    gu.first_name AS grader_first_name, gu.last_name AS grader_last_name,
+    t.claim_holder_user_id AS claim_holder_user_id, t.claim_expires_at AS claim_expires_at,
+    EXISTS (SELECT 1 FROM homework_thread_note n WHERE n.thread_id = t.id) AS has_internal_comment,
+    EXISTS (SELECT 1 FROM math_center_student_note csn
+            WHERE csn.student_user_id = mcs.user_id AND csn.math_center_id = g.math_center_id) AS has_student_comment
+FROM math_center_students mcs
+         JOIN users u ON u.id = mcs.user_id
+         JOIN math_center_groups g ON g.id = mcs.group_id
+         JOIN math_center_series s ON s.term_id = g.term_id
+         JOIN math_center_problems p ON p.series_id = s.id
+         JOIN math_center_subproblems sp ON sp.problem_id = p.id
+         LEFT JOIN math_center_subproblem_solutions ss ON ss.subproblem_id = sp.id
+         LEFT JOIN homework_thread t ON t.student_user_id = mcs.user_id AND t.subproblem_id = sp.id
+         LEFT JOIN users gu ON gu.id = t.last_grader_user_id
+WHERE g.term_id = $2
+  AND g.math_center_id = $1
 ORDER BY g.name ASC, u.last_name ASC, u.first_name ASC, s.number ASC, p.number ASC, sp.label ASC;
 
 -- name: SeriesProblemStats :many
@@ -377,7 +408,7 @@ SELECT
 FROM math_center_subproblems sp
          JOIN math_center_problems p ON p.id = sp.problem_id
          LEFT JOIN math_center_groups g
-                   ON g.math_center_id = (SELECT s.math_center_id FROM math_center_series s WHERE s.id = $1)
+                   ON g.term_id = (SELECT s.term_id FROM math_center_series s WHERE s.id = $1)
          LEFT JOIN math_center_students mcs ON mcs.group_id = g.id
          LEFT JOIN homework_thread t
                    ON t.student_user_id = mcs.user_id

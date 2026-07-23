@@ -81,6 +81,7 @@ type MathCenterGroup struct {
 	MathCenterID int64     `json:"math_center_id"`
 	Name         string    `json:"name"`
 	CreatedAt    time.Time `json:"created_at"`
+	TermID       int64     `json:"term_id"`
 }
 
 type MathCenterProblem struct {
@@ -100,6 +101,7 @@ type MathCenterSeries struct {
 	PublishedAt  *time.Time `json:"published_at"`
 	CreatedAt    time.Time  `json:"created_at"`
 	TexSource    *string    `json:"tex_source"`
+	TermID       int64      `json:"term_id"`
 }
 
 type MathCenterSolutionGroup struct {
@@ -112,6 +114,7 @@ type MathCenterStudent struct {
 	UserID    int64     `json:"user_id"`
 	GroupID   int64     `json:"group_id"`
 	CreatedAt time.Time `json:"created_at"`
+	TermID    int64     `json:"term_id"`
 }
 
 type MathCenterStudentNote struct {
@@ -150,6 +153,16 @@ type MathCenterTeacher struct {
 	MathCenterID  int64     `json:"math_center_id"`
 	IsHeadTeacher bool      `json:"is_head_teacher"`
 	CreatedAt     time.Time `json:"created_at"`
+}
+
+type MathCenterTerm struct {
+	ID           int64      `json:"id"`
+	MathCenterID int64      `json:"math_center_id"`
+	Kind         string     `json:"kind"`
+	Grade        *int32     `json:"grade"`
+	IsActive     bool       `json:"is_active"`
+	CreatedAt    time.Time  `json:"created_at"`
+	ArchivedAt   *time.Time `json:"archived_at"`
 }
 
 type RefreshToken struct {

@@ -93,7 +93,48 @@ FROM math_center_subproblem_solutions ss
          JOIN math_center_series s ON s.id = p.series_id
 WHERE s.math_center_id = $1
   AND ss.is_coffin = true
+  AND (
+      s.term_id = COALESCE(
+          (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.is_active = TRUE),
+          (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.kind = 'legacy')
+      )
+      OR ss.released_at IS NULL
+  )
 ORDER BY s.number DESC, p.number ASC, sp.label ASC;
+
+-- name: ListCenterCoffinsForTerm :many
+-- The active term includes its own released and open coffins plus open coffins
+-- carried from every archived term. An archive selection shows only that term.
+SELECT ss.subproblem_id           AS subproblem_id,
+       ss.is_coffin               AS is_coffin,
+       ss.released_at             AS released_at,
+       ss.solution_tex_source     AS solution_tex_source,
+       ss.solution_pdf_object_key AS solution_pdf_object_key,
+       ss.solution_link           AS solution_link,
+       ss.created_at              AS created_at,
+       sp.label                   AS subproblem_label,
+       p.id                       AS problem_id,
+       p.number                   AS problem_number,
+       s.id                       AS series_id,
+       s.number                   AS series_number,
+       s.name                     AS series_name,
+       s.due_at                   AS series_due_at,
+       s.math_center_id           AS math_center_id,
+       t.id                       AS term_id,
+       t.kind                     AS term_kind,
+       t.grade                    AS term_grade
+FROM math_center_subproblem_solutions ss
+         JOIN math_center_subproblems sp ON sp.id = ss.subproblem_id
+         JOIN math_center_problems p ON p.id = sp.problem_id
+         JOIN math_center_series s ON s.id = p.series_id
+         JOIN math_center_terms t ON t.id = s.term_id
+WHERE s.math_center_id = $1
+  AND ss.is_coffin = true
+  AND (
+      s.term_id = $2
+      OR (@include_carried::boolean AND ss.released_at IS NULL)
+  )
+ORDER BY (s.term_id = $2) DESC, s.number DESC, p.number ASC, sp.label ASC;
 
 -- name: ListCoffinSubproblemsForStudent :many
 -- Each coffin subproblem in a center with the calling student's thread status,
@@ -162,7 +203,7 @@ FROM math_center_subproblem_solutions ss
          JOIN math_center_subproblems sp ON sp.id = ss.subproblem_id
          JOIN math_center_problems p ON p.id = sp.problem_id
          JOIN math_center_series s ON s.id = p.series_id
-         JOIN math_center_groups g ON g.math_center_id = s.math_center_id
+         JOIN math_center_groups g ON g.term_id = s.term_id
          JOIN math_center_students mcs ON mcs.group_id = g.id
          LEFT JOIN homework_thread t
                    ON t.subproblem_id = ss.subproblem_id

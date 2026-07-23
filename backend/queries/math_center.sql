@@ -19,18 +19,33 @@ FROM math_centers
 WHERE id = $1;
 
 -- name: CreateMathCenterGroup :one
-INSERT INTO math_center_groups (math_center_id, name)
-VALUES ($1, $2)
-RETURNING *;
+INSERT INTO math_center_groups (math_center_id, term_id, name)
+SELECT $1, t.id, $2
+FROM math_center_terms t
+WHERE t.math_center_id = $1
+  AND t.is_active = TRUE
+RETURNING id, math_center_id, name, created_at;
 
 -- name: ListGroupsForCenter :many
-SELECT *
-FROM math_center_groups
-WHERE math_center_id = $1
+WITH selected_term AS (
+    SELECT COALESCE(
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.is_active = TRUE),
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.kind = 'legacy')
+    ) AS id
+)
+SELECT g.id, g.math_center_id, g.name, g.created_at
+FROM math_center_groups g
+WHERE g.math_center_id = $1
+  AND g.term_id = (SELECT id FROM selected_term)
 ORDER BY name ASC;
 
 -- name: GetGroup :one
-SELECT *
+SELECT id, math_center_id, name, created_at
+FROM math_center_groups
+WHERE id = $1;
+
+-- name: GetGroupCenter :one
+SELECT id, math_center_id, term_id
 FROM math_center_groups
 WHERE id = $1;
 
@@ -40,9 +55,11 @@ FROM math_center_groups
 WHERE id = $1;
 
 -- name: AddStudentToGroup :one
-INSERT INTO math_center_students (user_id, group_id)
-VALUES ($1, $2)
-RETURNING *;
+INSERT INTO math_center_students (user_id, group_id, term_id)
+SELECT $1, g.id, g.term_id
+FROM math_center_groups g
+WHERE g.id = @group_id::bigint
+RETURNING id, user_id, group_id, created_at;
 
 -- name: GetStudentByUserID :one
 SELECT s.id          AS id,
@@ -54,7 +71,15 @@ SELECT s.id          AS id,
 FROM math_center_students s
          JOIN math_center_groups g ON g.id = s.group_id
          JOIN math_centers mc ON mc.id = g.math_center_id
-WHERE s.user_id = $1;
+         JOIN math_center_terms t ON t.id = s.term_id
+WHERE s.user_id = $1
+  AND (t.is_active = TRUE OR NOT EXISTS (
+      SELECT 1 FROM math_center_terms active
+      WHERE active.math_center_id = g.math_center_id
+        AND active.is_active = TRUE
+  ))
+ORDER BY t.is_active DESC, s.id DESC
+LIMIT 1;
 
 -- name: ListStudentsForCenter :many
 SELECT s.id        AS id,
@@ -67,7 +92,10 @@ SELECT s.id        AS id,
 FROM math_center_students s
          JOIN math_center_groups g ON g.id = s.group_id
          JOIN users u ON u.id = s.user_id
-WHERE g.math_center_id = $1
+WHERE g.term_id = COALESCE(
+    (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.is_active = TRUE),
+    (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.kind = 'legacy')
+)
 ORDER BY g.name ASC, u.last_name ASC, u.first_name ASC;
 
 -- name: RemoveStudent :execrows
@@ -152,7 +180,17 @@ ORDER BY t.math_center_id ASC, t.is_head_teacher DESC, u.last_name ASC, u.first_
 -- name: ListGroupsForCenters :many
 SELECT *
 FROM math_center_groups
-WHERE math_center_id = ANY(@center_ids::bigint[])
+WHERE term_id = COALESCE(
+    (SELECT id
+     FROM math_center_terms t
+     WHERE t.math_center_id = math_center_groups.math_center_id
+       AND t.is_active = TRUE),
+    (SELECT id
+     FROM math_center_terms t
+     WHERE t.math_center_id = math_center_groups.math_center_id
+       AND t.kind = 'legacy')
+)
+  AND math_center_id = ANY(@center_ids::bigint[])
 ORDER BY math_center_id ASC, name ASC;
 
 -- name: ListStudentsForCenters :many
@@ -167,7 +205,17 @@ SELECT s.id            AS id,
 FROM math_center_students s
          JOIN math_center_groups g ON g.id = s.group_id
          JOIN users u ON u.id = s.user_id
-WHERE g.math_center_id = ANY(@center_ids::bigint[])
+WHERE s.term_id = COALESCE(
+    (SELECT id
+     FROM math_center_terms t
+     WHERE t.math_center_id = g.math_center_id
+       AND t.is_active = TRUE),
+    (SELECT id
+     FROM math_center_terms t
+     WHERE t.math_center_id = g.math_center_id
+       AND t.kind = 'legacy')
+)
+  AND g.math_center_id = ANY(@center_ids::bigint[])
 ORDER BY g.math_center_id ASC, g.name ASC, u.last_name ASC, u.first_name ASC;
 
 -- name: IsHeadTeacherInCenter :one
@@ -191,7 +239,7 @@ FROM math_center_teachers
 WHERE id = $1;
 
 -- name: GetStudent :one
-SELECT *
+SELECT id, user_id, group_id, created_at
 FROM math_center_students
 WHERE id = $1;
 

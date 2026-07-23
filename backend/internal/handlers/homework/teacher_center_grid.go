@@ -106,7 +106,23 @@ func GetCenterGrid(database *db.DB) http.HandlerFunc {
 			return
 		}
 
-		rows, err := q.TeacherCenterGrid(ctx, centerID)
+		var rows []store.TeacherCenterGridRow
+		termParam := r.URL.Query().Get("term_id")
+		if termParam == "" {
+			rows, err = q.TeacherCenterGrid(ctx, centerID)
+		} else {
+			termID, parseErr := strconv.ParseInt(termParam, 10, 64)
+			if parseErr != nil || termID <= 0 {
+				httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid term id")
+				return
+			}
+			termRows, queryErr := q.TeacherCenterGridForTerm(ctx, store.TeacherCenterGridForTermParams{
+				MathCenterID: centerID,
+				TermID:       termID,
+			})
+			err = queryErr
+			rows = teacherCenterRowsFromTerm(termRows)
+		}
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				// Empty center is a valid state — no students or no
@@ -125,6 +141,24 @@ func GetCenterGrid(database *db.DB) http.HandlerFunc {
 
 		httpx.WriteJSON(w, http.StatusOK, buildCenterGridResponse(rows))
 	}
+}
+
+func teacherCenterRowsFromTerm(rows []store.TeacherCenterGridForTermRow) []store.TeacherCenterGridRow {
+	out := make([]store.TeacherCenterGridRow, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, store.TeacherCenterGridRow{
+			SeriesID: row.SeriesID, SeriesNumber: row.SeriesNumber, SeriesName: row.SeriesName, SeriesDueAt: row.SeriesDueAt,
+			StudentUserID: row.StudentUserID, StudentFirstName: row.StudentFirstName, StudentMiddleName: row.StudentMiddleName,
+			StudentLastName: row.StudentLastName, GroupID: row.GroupID, GroupName: row.GroupName,
+			SubproblemID: row.SubproblemID, SubproblemLabel: row.SubproblemLabel, ProblemID: row.ProblemID,
+			ProblemNumber: row.ProblemNumber, IsCoffin: row.IsCoffin, CoffinReleasedAt: row.CoffinReleasedAt,
+			ThreadID: row.ThreadID, CurrentStatus: row.CurrentStatus, LastGraderUserID: row.LastGraderUserID,
+			LastGraderName: row.LastGraderName, GraderFirstName: row.GraderFirstName, GraderLastName: row.GraderLastName,
+			ClaimHolderUserID: row.ClaimHolderUserID, ClaimExpiresAt: row.ClaimExpiresAt,
+			HasInternalComment: row.HasInternalComment, HasStudentComment: row.HasStudentComment,
+		})
+	}
+	return out
 }
 
 // buildCenterGridResponse pivots the flat SQL rows into the three-axis

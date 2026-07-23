@@ -84,12 +84,12 @@ var (
 // pass a concrete *store.Queries; the interface exists so tests can drive
 // Validate/Apply with a pgxmock-backed *store.Queries or a hand-written mock.
 type Store interface {
-	GetGroup(ctx context.Context, id int64) (store.MathCenterGroup, error)
+	GetGroup(ctx context.Context, id int64) (store.GetGroupRow, error)
 	GetMathCenter(ctx context.Context, id int64) (store.MathCenter, error)
 	IsTeacherInCenter(ctx context.Context, arg store.IsTeacherInCenterParams) (bool, error)
 	IsStudentInCenter(ctx context.Context, arg store.IsStudentInCenterParams) (bool, error)
 	SetUserAdmin(ctx context.Context, arg store.SetUserAdminParams) error
-	AddStudentToGroup(ctx context.Context, arg store.AddStudentToGroupParams) (store.MathCenterStudent, error)
+	AddStudentToGroup(ctx context.Context, arg store.AddStudentToGroupParams) (store.AddStudentToGroupRow, error)
 	AddTeacherToCenter(ctx context.Context, arg store.AddTeacherToCenterParams) (store.MathCenterTeacher, error)
 }
 

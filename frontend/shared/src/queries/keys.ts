@@ -3,6 +3,8 @@
 export const queryKeys = {
   me: ['auth', 'me'] as const,
   mathCenterMe: ['mathcenter', 'me'] as const,
+  mathCenterTerms: (centerId: number) =>
+    ['mathcenter', 'centers', centerId, 'terms'] as const,
   adminUsers: ['admin', 'users'] as const,
   adminUser: (id: number) => ['admin', 'users', id] as const,
   userEnrollments: (id: number) =>
@@ -23,12 +25,12 @@ export const queryKeys = {
   userSearch: (centerId: number, q: string) =>
     ['mathcenter', 'manage', centerId, 'user-search', q] as const,
   inviteContext: (token: string) => ['auth', 'invite', token] as const,
-  seriesList: (centerId: number) =>
-    ['mathcenter', 'centers', centerId, 'series'] as const,
+  seriesList: (centerId: number, termId = 0) =>
+    ['mathcenter', 'centers', centerId, 'terms', termId, 'series'] as const,
   series: (id: number) => ['mathcenter', 'series', id] as const,
   seriesTex: (id: number) => ['mathcenter', 'series', id, 'tex'] as const,
-  centerCoffins: (centerId: number) =>
-    ['mathcenter', 'centers', centerId, 'coffins'] as const,
+  centerCoffins: (centerId: number, termId = 0) =>
+    ['mathcenter', 'centers', centerId, 'terms', termId, 'coffins'] as const,
   coffinQueue: (centerId: number) =>
     ['mathcenter', 'centers', centerId, 'coffin-queue'] as const,
   // Per-subproblem «Разбор» LaTeX (keyed by subproblem id).
@@ -44,8 +46,8 @@ export const queryKeys = {
     ['homework', 'series', seriesId, 'queue', mine] as const,
   teacherGrid: (seriesId: number) =>
     ['homework', 'series', seriesId, 'grid'] as const,
-  centerGrid: (centerId: number) =>
-    ['homework', 'centers', centerId, 'grid'] as const,
+  centerGrid: (centerId: number, termId = 0) =>
+    ['homework', 'centers', centerId, 'terms', termId, 'grid'] as const,
   graderStats: (centerId: number) =>
     ['homework', 'centers', centerId, 'grader-stats'] as const,
   // Teachers of a center, for the offline-grading initials autocomplete.
