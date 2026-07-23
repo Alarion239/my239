@@ -46,7 +46,7 @@ export function CenterLayout() {
 
 function CenterTermScope({ centerId }: { centerId: number }) {
   const { data: terms, isPending, isError } = useMathCenterTerms(centerId)
-  const [params, setParams] = useSearchParams()
+  const [params] = useSearchParams()
   if (isPending) {
     return (
       <div className="flex justify-center py-16">
@@ -69,28 +69,7 @@ function CenterTermScope({ centerId }: { centerId: number }) {
 
   return (
     <CenterTermContext.Provider value={{ termId: term.id, term }}>
-      <div className="flex flex-col gap-4">
-        <label className="flex w-fit items-center gap-2 self-end text-sm text-muted">
-          <span>{term.is_active ? 'Текущий период' : 'Архив'}</span>
-          <select
-            value={term.id}
-            onChange={(event) => {
-              const next = new URLSearchParams(params)
-              next.set('term_id', event.target.value)
-              setParams(next)
-            }}
-            className="rounded-lg border border-line bg-surface px-2 py-1 text-ink"
-            aria-label="Период матцентра"
-          >
-            {terms.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.display_name}{item.is_active ? ' · текущий' : ''}
-              </option>
-            ))}
-          </select>
-        </label>
-        <Outlet />
-      </div>
+      <Outlet />
     </CenterTermContext.Provider>
   )
 }

@@ -18,13 +18,13 @@ export function useMathCenterMe() {
   })
 }
 
-export function useMathCenterTerms(centerId: number) {
+export function useMathCenterTerms(centerId: number, enabled = true) {
   const client = useApiClient()
   return useQuery<MathCenterTerm[]>({
     queryKey: queryKeys.mathCenterTerms(centerId),
     queryFn: () =>
       client.request<MathCenterTerm[]>('/mathcenter/centers/' + centerId + '/terms'),
-    enabled: centerId > 0,
+    enabled: enabled && centerId > 0,
   })
 }
 

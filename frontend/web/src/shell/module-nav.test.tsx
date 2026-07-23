@@ -84,6 +84,13 @@ function mockFetch(user: User, me: MeResponse = mcMe, notifications = false) {
         })
       if (url.includes('/auth/me')) return json(user)
       if (url.includes('/mathcenter/me')) return json(me)
+      if (url.includes('/mathcenter/centers/7/terms')) {
+        return json([
+          { id: 71, math_center_id: 7, kind: 'academic', grade: 9, display_name: '9 класс', is_active: true },
+          { id: 70, math_center_id: 7, kind: 'camp', grade: 8, display_name: '8 класс · Лагерь', is_active: false },
+          { id: 69, math_center_id: 7, kind: 'academic', grade: 8, display_name: '8 класс', is_active: false },
+        ])
+      }
       if (notifications && url.includes('/homework/centers/8/grader-stats')) {
         return json({ pending_count: 3, my_claimed_count: 0, my_appeals_count: 0 })
       }
@@ -159,6 +166,26 @@ describe('module navigation', () => {
     const links = await screen.findAllByRole('link', { name: /Матцентр \d{4}/ })
     const labels = links.map((l) => l.textContent)
     expect(labels).toEqual(['Матцентр 2026', 'Матцентр 2025', 'Матцентр 2024'])
+  })
+
+  it('opens a cohort archive only when its already-active rail item is clicked', async () => {
+    const user = userEvent.setup()
+    const member = makeUser({ is_admin: false })
+    mockFetch(member)
+    renderShell(<NavRail />, '/mathcenter/2026/series')
+
+    const center = await screen.findByRole('link', { name: 'Матцентр 2026' })
+    expect(screen.queryByRole('link', { name: '8 класс · Лагерь' })).not.toBeInTheDocument()
+
+    await user.click(center)
+
+    expect(await screen.findByText('Архив')).toBeInTheDocument()
+    const camp = await screen.findByRole('link', { name: '8 класс · Лагерь' })
+    expect(camp).toHaveAttribute('href', '/mathcenter/2026/series?term_id=70')
+    expect(screen.getByRole('link', { name: '9 класс сейчас' })).toHaveAttribute(
+      'href',
+      '/mathcenter/2026/series?term_id=71',
+    )
   })
 
   it('exposes the per-center module tabs in the top bar', async () => {

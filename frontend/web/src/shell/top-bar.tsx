@@ -53,7 +53,7 @@ function MobileNav({ user }: { user: User }) {
 // ModuleTabs renders the active module's pages as horizontal NavLink tabs to the
 // right of the brand. macOS-like: the module's screens live in the top bar.
 function ModuleTabs({ user }: { user: User }) {
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
   const mod = activeNavModule(useNavModules(), pathname, user.is_admin)
   const pages = mod?.pages
   const centerId = mod?.canGrade ? (mod.centerId ?? 0) : 0
@@ -66,7 +66,7 @@ function ModuleTabs({ user }: { user: User }) {
       {pages.map((p) => (
         <NavLink
           key={p.path}
-          to={p.path}
+          to={p.path + (mod?.centerId ? search : '')}
           end={p.end}
           className={({ isActive }) =>
             cn(
