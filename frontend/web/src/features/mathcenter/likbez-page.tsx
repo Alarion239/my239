@@ -6,6 +6,9 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   APIErrorImpl,
   likbezSchema,
+  likbezDateFromISO,
+  russianLikbezDateToISO,
+  todayLikbezDate,
   useCreateLikbez,
   useDeleteLikbez,
   useLikbez,
@@ -40,12 +43,6 @@ import { PdfViewer } from './pdf-viewer'
 import { TexViewer } from './tex-viewer'
 import { useCenterIdContext } from './center-id-context'
 import { useSeriesContext } from './use-series-context'
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).format(
-    new Date(value + 'T00:00:00'),
-  )
-}
 
 export function LikbezPage() {
   const centerId = useCenterIdContext()
@@ -112,7 +109,7 @@ function LikbezCard({ likbez, centerId, isTeacher, terms }: { likbez: Likbez; ce
           </Link>
           {!likbez.published ? <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-muted">Черновик</span> : null}
         </div>
-        <p className="mt-1 text-sm text-muted">Ликбез №{likbez.number} · {formatDate(likbez.held_on)} · {likbez.term_display_name}</p>
+        <p className="mt-1 text-sm text-muted">Ликбез №{likbez.number} · {likbezDateFromISO(likbez.held_on)} · {likbez.term_display_name}</p>
         <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-ink">{likbez.description}</p>
         <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted">
           {likbez.has_tex ? <span className="inline-flex items-center gap-1"><FileText className="h-3.5 w-3.5" />TeX</span> : null}
@@ -148,7 +145,7 @@ function LikbezDetail({ likbezId, isTeacher }: { likbezId: number; isTeacher: bo
       <header className="border-b border-line pb-5">
         <p className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Ликбез №{data.number} · {data.term_display_name}</p>
         <h1 className="mt-2 font-display text-3xl font-medium text-ink">{data.title}</h1>
-        <p className="mt-2 text-sm text-muted">{formatDate(data.held_on)}</p>
+        <p className="mt-2 text-sm text-muted">{likbezDateFromISO(data.held_on)}</p>
         <p className="mt-4 max-w-3xl whitespace-pre-wrap leading-7 text-ink">{data.description}</p>
       </header>
       {isTeacher ? <LikbezMaterialsDialog likbez={data} /> : null}
@@ -176,10 +173,17 @@ function LikbezFormDialog({ centerId, terms, likbez, trigger }: { centerId: numb
   const { register, handleSubmit, reset, setError, formState: { errors, isSubmitting } } = useForm<LikbezValues>({ resolver: zodResolver(likbezSchema) })
 
   useEffect(() => {
-    if (open) reset({ term_id: likbez?.term_id ?? terms.find((term) => term.is_active)?.id ?? 0, number: likbez?.number ?? 1, title: likbez?.title ?? '', held_on: likbez?.held_on ?? '', description: likbez?.description ?? '' })
+    if (open) reset({ term_id: likbez?.term_id ?? terms.find((term) => term.is_active)?.id ?? 0, number: likbez?.number ?? 1, title: likbez?.title ?? '', held_on: likbez ? likbezDateFromISO(likbez.held_on) : todayLikbezDate(), description: likbez?.description ?? '' })
   }, [likbez, open, reset, terms])
 
   const submit = handleSubmit((values) => new Promise<void>((resolve) => {
+    const heldOn = russianLikbezDateToISO(values.held_on)
+    if (!heldOn) {
+      setError('held_on', { message: 'Укажите дату в формате ДД-ММ-ГГГГ' })
+      resolve()
+      return
+    }
+    const body = { ...values, held_on: heldOn }
     const callbacks = {
       onSuccess: () => { setOpen(false); resolve() },
       onError: (error: unknown) => {
@@ -189,10 +193,10 @@ function LikbezFormDialog({ centerId, terms, likbez, trigger }: { centerId: numb
       },
     }
     if (likbez) {
-      update.mutate(values, callbacks)
+      update.mutate(body, callbacks)
       return
     }
-    create.mutate({ term_id: values.term_id, title: values.title, held_on: values.held_on, description: values.description }, callbacks)
+    create.mutate({ term_id: body.term_id, title: body.title, held_on: body.held_on, description: body.description }, callbacks)
   }))
 
   return (
@@ -205,7 +209,7 @@ function LikbezFormDialog({ centerId, terms, likbez, trigger }: { centerId: numb
           <Field label="Период" error={errors.term_id?.message}>{({ id, invalid }) => <Select id={id} invalid={invalid} {...register('term_id', { valueAsNumber: true })}><option value={0}>Выберите период</option>{terms.map((term) => <option key={term.id} value={term.id}>{term.display_name}</option>)}</Select>}</Field>
           {likbez ? <Field label="Номер ликбеза" error={errors.number?.message}>{({ id, invalid }) => <Input id={id} type="number" min={1} invalid={invalid} {...register('number', { valueAsNumber: true })} />}</Field> : null}
           <Field label="Название" error={errors.title?.message}>{({ id, invalid }) => <Input id={id} invalid={invalid} {...register('title')} />}</Field>
-          <Field label="Дата" error={errors.held_on?.message}>{({ id, invalid }) => <Input id={id} type="date" invalid={invalid} {...register('held_on')} />}</Field>
+          <Field label="Дата" error={errors.held_on?.message}>{({ id, invalid }) => <Input id={id} inputMode="numeric" placeholder="ДД-ММ-ГГГГ" invalid={invalid} {...register('held_on')} />}</Field>
           <Field label="Краткое описание" error={errors.description?.message}>{({ id, invalid }) => <Textarea id={id} invalid={invalid} {...register('description')} />}</Field>
           <Button type="submit" disabled={isSubmitting || create.isPending || update.isPending}>{isSubmitting || create.isPending || update.isPending ? 'Сохраняем…' : 'Сохранить'}</Button>
         </form>
