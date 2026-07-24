@@ -121,7 +121,7 @@ SELECT l.id, l.math_center_id, l.term_id, l.number, l.title, l.held_on, l.descri
 FROM math_center_likbez l
          JOIN math_center_terms t ON t.id = l.term_id
 WHERE l.math_center_id = $1
-ORDER BY l.number DESC
+ORDER BY l.held_on DESC, l.number DESC
 `
 
 type ListLikbezForCenterRow struct {
@@ -184,7 +184,7 @@ FROM math_center_likbez l
          JOIN math_center_terms t ON t.id = l.term_id
 WHERE l.math_center_id = $1
   AND l.published_at IS NOT NULL
-ORDER BY l.number DESC
+ORDER BY l.held_on DESC, l.number DESC
 `
 
 type ListPublishedLikbezForCenterRow struct {
