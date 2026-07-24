@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useDeferredValue, useEffect, useRef, useState, type ReactNode } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ExternalLink, FileText, Pencil, Plus, Trash2, Video } from 'lucide-react'
 import { useForm } from 'react-hook-form'
@@ -129,7 +129,7 @@ function LikbezCard({ likbez, centerId, isTeacher, terms }: { likbez: Likbez; ce
       </div>
       {isTeacher ? (
         <div className="flex flex-wrap gap-2 sm:w-44 sm:justify-end" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
-          <LikbezFormDialog centerId={centerId} terms={terms} likbez={likbez} trigger={<Button size="sm" variant="ghost"><Pencil className="h-4 w-4" />Редактировать название</Button>} />
+          {likbez.published ? <LikbezFormDialog centerId={centerId} terms={terms} likbez={likbez} trigger={<Button size="sm" variant="ghost"><Pencil className="h-4 w-4" />Редактировать название</Button>} /> : null}
           <Button size="sm" variant="secondary" disabled={(likbez.published ? unpublish : publish).isPending || (!likbez.published && !hasMaterials)} onClick={() => (likbez.published ? unpublish : publish).mutate()}>
             {likbez.published ? 'Снять' : 'Опубликовать'}
           </Button>
@@ -145,10 +145,15 @@ function LikbezCard({ likbez, centerId, isTeacher, terms }: { likbez: Likbez; ce
 function LikbezDetail({ likbezId, isTeacher }: { likbezId: number; isTeacher: boolean }) {
   const { year } = useParams<{ year: string }>()
   const { data, isPending, isError } = useLikbez(likbezId)
-  const tex = useLikbezTex(likbezId, !!data?.has_tex)
+  const terms = useMathCenterTerms(data?.math_center_id ?? 0, isTeacher && !data?.published)
+  const tex = useLikbezTex(likbezId, !!data?.has_tex && !(isTeacher && !data?.published))
 
   if (isPending) return <CenteredSpinner />
   if (isError || !data) return <NoAccess />
+  if (isTeacher && !data.published) {
+    if (terms.isPending) return <CenteredSpinner />
+    return <LikbezDraftEditor likbez={data} terms={terms.data ?? []} />
+  }
   return (
     <div className="animate-rise flex flex-col gap-5">
       <Link to={'/mathcenter/' + year + '/likbez'} className="self-start text-sm font-medium text-accent hover:underline">← Все ликбезы</Link>
@@ -160,6 +165,96 @@ function LikbezDetail({ likbezId, isTeacher }: { likbezId: number; isTeacher: bo
       </header>
       {isTeacher ? <LikbezMaterialsDialog likbez={data} /> : null}
       <LikbezMaterials likbez={data} tex={tex} />
+    </div>
+  )
+}
+
+function LikbezDraftEditor({ likbez, terms }: { likbez: Likbez; terms: MathCenterTerm[] }) {
+  const { year } = useParams<{ year: string }>()
+  const update = useUpdateLikbez(likbez.id)
+  const texQuery = useLikbezTex(likbez.id, true)
+  const putTex = usePutLikbezTex(likbez.id)
+  const uploadPdf = useUploadLikbezPdf(likbez.id)
+  const setVideo = useSetLikbezVideo(likbez.id)
+  const [tex, setTex] = useState('')
+  const [link, setLink] = useState(likbez.video_url ?? '')
+  const [materialError, setMaterialError] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const previewTex = useDeferredValue(tex)
+  const { register, handleSubmit, reset, setError, formState: { errors, isSubmitting } } = useForm<LikbezValues>({ resolver: zodResolver(likbezSchema) })
+
+  useEffect(() => {
+    reset({ term_id: likbez.term_id, number: likbez.number, title: likbez.title, held_on: likbezDateFromISO(likbez.held_on), description: likbez.description })
+  }, [likbez, reset])
+
+  useEffect(() => {
+    setTex(texQuery.data?.tex ?? '')
+  }, [texQuery.data?.tex])
+
+  useEffect(() => {
+    setLink(likbez.video_url ?? '')
+  }, [likbez.video_url])
+
+  const saveDetails = handleSubmit((values) => new Promise<void>((resolve) => {
+    const heldOn = russianLikbezDateToISO(values.held_on)
+    if (!heldOn) {
+      setError('held_on', { message: 'Укажите дату в формате ДД-ММ-ГГГГ' })
+      resolve()
+      return
+    }
+    update.mutate({ ...values, held_on: heldOn }, {
+      onSuccess: () => resolve(),
+      onError: (error: unknown) => {
+        setError('title', { message: error instanceof APIErrorImpl ? error.message : 'Не удалось сохранить ликбез.' })
+        resolve()
+      },
+    })
+  }))
+
+  const runMaterialAction = (work: () => Promise<unknown>) => void work().catch((error: unknown) => setMaterialError(error instanceof APIErrorImpl ? error.message : 'Не удалось сохранить материал.'))
+  const busy = putTex.isPending || uploadPdf.isPending || setVideo.isPending
+
+  return (
+    <div className="animate-rise flex flex-col gap-6">
+      <Link to={'/mathcenter/' + year + '/likbez'} className="self-start text-sm font-medium text-accent hover:underline">← Все ликбезы</Link>
+      <form className="grid gap-4 border-b border-line pb-6 lg:grid-cols-[minmax(0,1fr)_12rem]" noValidate onSubmit={saveDetails}>
+        <div className="flex flex-col gap-4">
+          <p className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Черновик · ликбез №{likbez.number}</p>
+          <Field label="Название" error={errors.title?.message}>{({ id, invalid }) => <Input id={id} invalid={invalid} {...register('title')} />}</Field>
+          <Field label="Краткое описание" error={errors.description?.message}>{({ id, invalid }) => <Textarea id={id} invalid={invalid} {...register('description')} />}</Field>
+        </div>
+        <div className="flex flex-col gap-4">
+          <Field label="Период" error={errors.term_id?.message}>{({ id, invalid }) => <Select id={id} invalid={invalid} {...register('term_id', { valueAsNumber: true })}>{terms.map((term) => <option key={term.id} value={term.id}>{term.display_name}</option>)}</Select>}</Field>
+          <Field label="Номер" error={errors.number?.message}>{({ id, invalid }) => <Input id={id} type="number" min={1} invalid={invalid} {...register('number', { valueAsNumber: true })} />}</Field>
+          <Field label="Дата" error={errors.held_on?.message}>{({ id, invalid }) => <Input id={id} inputMode="numeric" placeholder="ДД-ММ-ГГГГ" invalid={invalid} {...register('held_on')} />}</Field>
+          <Button type="submit" disabled={isSubmitting || update.isPending}>{isSubmitting || update.isPending ? 'Сохраняем…' : 'Сохранить сведения'}</Button>
+        </div>
+      </form>
+
+      <section className="flex flex-col gap-3" aria-labelledby="likbez-latex-heading">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <div><p className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Материал 01</p><h1 id="likbez-latex-heading" className="mt-1 font-display text-2xl font-medium text-ink">LaTeX-конспект</h1></div>
+          <Button size="sm" variant="secondary" disabled={busy || tex.trim() === ''} onClick={() => runMaterialAction(async () => { await putTex.mutateAsync(tex) })}>{putTex.isPending ? 'Сохраняем…' : 'Сохранить LaTeX'}</Button>
+        </div>
+        {materialError ? <p className="text-sm text-danger" role="alert">{materialError}</p> : null}
+        <div className="grid gap-4 lg:grid-cols-2">
+          <section className="flex min-w-0 flex-col gap-2"><label htmlFor="likbez-tex-source" className="text-sm font-medium text-ink">Исходник</label><Textarea id="likbez-tex-source" value={tex} onChange={(event) => setTex(event.target.value)} className="min-h-[32rem] flex-1 font-mono text-xs leading-6" placeholder={'\\documentclass{article}\n\\begin{document}…'} /></section>
+          <section className="flex min-w-0 flex-col gap-2"><p className="text-sm font-medium text-ink">Предпросмотр</p><div className="min-h-[32rem] overflow-auto rounded-lg border border-line bg-surface p-5">{previewTex.trim() === '' ? <p className="text-sm text-muted">Предпросмотр появится здесь.</p> : <TexViewer tex={previewTex} />}</div></section>
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-3 border-t border-line pt-6" aria-labelledby="likbez-pdf-heading">
+        <div><p className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Материал 02</p><h2 id="likbez-pdf-heading" className="mt-1 font-display text-2xl font-medium text-ink">PDF</h2></div>
+        <p className="text-sm text-muted">{likbez.has_pdf ? 'PDF уже загружен. Новая загрузка заменит его.' : 'Добавьте PDF-версию лекции.'}</p>
+        <input ref={fileRef} type="file" accept="application/pdf" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) runMaterialAction(async () => { await uploadPdf.mutateAsync(file) }) }} />
+        <Button size="sm" variant="secondary" className="self-start" disabled={busy} onClick={() => fileRef.current?.click()}>{uploadPdf.isPending ? 'Загружаем…' : likbez.has_pdf ? 'Заменить PDF' : 'Загрузить PDF'}</Button>
+      </section>
+
+      <section className="flex flex-col gap-3 border-t border-line pt-6" aria-labelledby="likbez-video-heading">
+        <div><p className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Материал 03</p><h2 id="likbez-video-heading" className="mt-1 font-display text-2xl font-medium text-ink">Видео</h2></div>
+        <Input value={link} onChange={(event) => setLink(event.target.value)} placeholder="https://youtube.com/watch?v=…" />
+        <div className="flex gap-2"><Button size="sm" variant="secondary" disabled={busy || link.trim() === ''} onClick={() => runMaterialAction(async () => { await setVideo.mutateAsync(link.trim()) })}>{setVideo.isPending ? 'Сохраняем…' : 'Сохранить ссылку'}</Button>{likbez.video_url ? <Button size="sm" variant="ghost" disabled={busy} onClick={() => runMaterialAction(async () => { await setVideo.mutateAsync(''); setLink('') })}>Убрать</Button> : null}</div>
+      </section>
     </div>
   )
 }

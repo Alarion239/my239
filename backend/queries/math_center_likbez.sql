@@ -26,7 +26,7 @@ SELECT l.*, t.kind AS term_kind, t.grade AS term_grade
 FROM math_center_likbez l
          JOIN math_center_terms t ON t.id = l.term_id
 WHERE l.math_center_id = $1
-ORDER BY l.number DESC;
+ORDER BY l.held_on DESC, l.number DESC;
 
 -- name: ListPublishedLikbezForCenter :many
 SELECT l.*, t.kind AS term_kind, t.grade AS term_grade
@@ -34,7 +34,7 @@ FROM math_center_likbez l
          JOIN math_center_terms t ON t.id = l.term_id
 WHERE l.math_center_id = $1
   AND l.published_at IS NOT NULL
-ORDER BY l.number DESC;
+ORDER BY l.held_on DESC, l.number DESC;
 
 -- name: UpdateLikbez :one
 UPDATE math_center_likbez
