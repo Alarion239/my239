@@ -2,6 +2,7 @@ package mathcenter
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -72,7 +73,7 @@ func centerLatexPreamble(ctx context.Context, database *db.DB, centerID int64) (
 		centerID,
 	).Scan(&preamble)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return DefaultLatexPreamble, nil
 		}
 		return ``, err
@@ -142,7 +143,7 @@ func UpdateLatexPreamble(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, `failed to save latex preamble`)
 			return
 		}
-		httpx.WriteJSON(w, http.StatusOK, latexPreambleView{Preamble: req.Preamble})
+		httpx.WriteJSON(w, http.StatusOK, latexPreambleView(req))
 	}
 }
 
