@@ -44,25 +44,30 @@ import {
 } from '../../design/ui'
 import { PdfViewer } from './pdf-viewer'
 import { TexViewer } from './tex-viewer'
-import { useCenterIdContext } from './center-id-context'
+import { useCenterIdContext, useCenterTermContext } from './center-id-context'
 import { useSeriesContext } from './use-series-context'
 
 export function LikbezPage() {
   const centerId = useCenterIdContext()
+  const { termId } = useCenterTermContext()
   const ctx = useSeriesContext(centerId)
   const { likbezId } = useParams<{ likbezId?: string }>()
+  const { search } = useLocation()
+  const requestedTermID = Number(new URLSearchParams(search).get('term_id'))
+  const selectedTermID = requestedTermID > 0 && requestedTermID === termId ? requestedTermID : null
 
   if (!Number.isFinite(centerId) || centerId <= 0 || (!ctx.isLoading && !ctx.hasAccess)) {
     return <NoAccess />
   }
   if (ctx.isLoading) return <CenteredSpinner />
   if (likbezId) return <LikbezDetail likbezId={Number(likbezId)} isTeacher={!ctx.isStudentView} />
-  return <LikbezCatalog centerId={centerId} isTeacher={!ctx.isStudentView} />
+  return <LikbezCatalog centerId={centerId} isTeacher={!ctx.isStudentView} selectedTermID={selectedTermID} />
 }
 
-function LikbezCatalog({ centerId, isTeacher }: { centerId: number; isTeacher: boolean }) {
+function LikbezCatalog({ centerId, isTeacher, selectedTermID }: { centerId: number; isTeacher: boolean; selectedTermID: number | null }) {
   const { data, isPending, isError } = useLikbezList(centerId)
   const { data: terms = [] } = useMathCenterTerms(centerId, isTeacher)
+  const visible = selectedTermID === null ? data : data?.filter((item) => item.term_id === selectedTermID)
 
   if (isPending) return <CenteredSpinner />
   if (isError || !data) return <p className="py-10 text-sm text-danger">Не удалось загрузить ликбезы.</p>
@@ -78,14 +83,14 @@ function LikbezCatalog({ centerId, isTeacher }: { centerId: number; isTeacher: b
         {isTeacher ? <LikbezFormDialog centerId={centerId} terms={terms} /> : null}
       </header>
 
-      {data.length === 0 ? (
+      {visible?.length === 0 ? (
         <Card className="px-6 py-16 text-center">
-          <p className="text-muted">Ликбезов пока нет.</p>
+          <p className="text-muted">{selectedTermID === null ? 'Ликбезов пока нет.' : 'В этом периоде ликбезов пока нет.'}</p>
           {isTeacher ? <p className="mt-2 text-sm text-muted">Создайте первую лекцию, чтобы собрать материалы в одном месте.</p> : null}
         </Card>
       ) : (
         <div className="grid gap-3">
-          {data.map((item) => <LikbezCard key={item.id} likbez={item} centerId={centerId} isTeacher={isTeacher} terms={terms} />)}
+          {visible?.map((item) => <LikbezCard key={item.id} likbez={item} centerId={centerId} isTeacher={isTeacher} terms={terms} />)}
         </div>
       )}
     </div>

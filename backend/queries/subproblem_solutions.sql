@@ -103,8 +103,8 @@ WHERE s.math_center_id = $1
 ORDER BY s.number DESC, p.number ASC, sp.label ASC;
 
 -- name: ListCenterCoffinsForTerm :many
--- The active term includes its own released and open coffins plus open coffins
--- carried from every archived term. An archive selection shows only that term.
+-- A term-scoped request can opt into carried coffins, but the MathCenter UI
+-- passes false so archive and current views both show only the selected term.
 SELECT ss.subproblem_id           AS subproblem_id,
        ss.is_coffin               AS is_coffin,
        ss.released_at             AS released_at,
