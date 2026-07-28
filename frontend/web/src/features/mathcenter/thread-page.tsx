@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, ChevronDown } from 'lucide-react'
 import {
   claimIsLive,
@@ -36,17 +36,18 @@ import { useThreadRole } from './use-thread-role'
 import { useSeriesContext } from './use-series-context'
 import { useCenterIdContext } from './center-id-context'
 
-function seriesPath(year: string): string {
-  return '/mathcenter/' + year + '/series'
+function seriesPath(year: string, search = ''): string {
+  return '/mathcenter/' + year + '/series' + search
 }
 
 function threadPath(
   year: string,
   seriesId: number,
   threadId: number,
+  search = '',
 ): string {
   return (
-    '/mathcenter/' + year + '/series/' + seriesId + '/thread/' + threadId
+    '/mathcenter/' + year + '/series/' + seriesId + '/thread/' + threadId + search
   )
 }
 
@@ -83,6 +84,7 @@ function ThreadPageInner() {
     subproblemId?: string
   }>()
   const year = params.year ?? ''
+  const { search } = useLocation()
   const centerId = useCenterIdContext()
   const seriesId = Number(params.seriesId)
   const threadId = params.threadId ? Number(params.threadId) : 0
@@ -92,19 +94,19 @@ function ThreadPageInner() {
   const ctx = useSeriesContext(centerId)
 
   if (!Number.isFinite(centerId) || centerId <= 0) {
-    return <NotFound year={year} centerId={centerId} />
+    return <NotFound year={year} centerId={centerId} termSearch={search} />
   }
   if (ctx.isLoading) {
     return <CenteredSpinner />
   }
   if (!ctx.hasAccess) {
-    return <NotFound year={year} centerId={centerId} />
+    return <NotFound year={year} centerId={centerId} termSearch={search} />
   }
 
   return (
     <div className="animate-rise mx-auto flex w-full max-w-3xl flex-col gap-4">
       <Link
-        to={seriesPath(year)}
+        to={seriesPath(year, search)}
         className="inline-flex items-center gap-1.5 self-start text-sm font-medium text-accent underline-offset-4 hover:underline"
       >
         <ArrowLeft className="h-4 w-4" aria-hidden />
@@ -123,6 +125,7 @@ function ThreadPageInner() {
           seriesId={seriesId}
           subproblemId={subproblemId}
           year={year}
+          termSearch={search}
         />
       )}
     </div>
@@ -221,11 +224,13 @@ function SubmitMode({
   seriesId,
   subproblemId,
   year,
+  termSearch,
 }: {
   centerId: number
   seriesId: number
   subproblemId: number
   year: string
+  termSearch: string
 }) {
   const navigate = useNavigate()
   const { data: ctx, isPending, isError } = useSubproblemContext(subproblemId)
@@ -283,7 +288,7 @@ function SubmitMode({
                 body: args.body,
                 object_keys: args.object_keys,
               })
-              navigate(threadPath(year, seriesId, t.id), { replace: true })
+              navigate(threadPath(year, seriesId, t.id, termSearch), { replace: true })
             }}
           />
         </Card>
@@ -448,13 +453,21 @@ function CenteredSpinner() {
   )
 }
 
-function NotFound({ year, centerId }: { year: string; centerId: number }) {
+function NotFound({
+  year,
+  centerId,
+  termSearch,
+}: {
+  year: string
+  centerId: number
+  termSearch?: string
+}) {
   return (
     <Card className="animate-rise px-6 py-16 text-center">
       <p className="text-muted">Нет доступа к этой задаче.</p>
       {year && Number.isFinite(centerId) && centerId > 0 ? (
         <Link
-          to={seriesPath(year)}
+          to={seriesPath(year, termSearch)}
           className="mt-2 inline-block text-sm font-medium text-accent underline-offset-4 hover:underline"
         >
           Назад к серии

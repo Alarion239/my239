@@ -306,6 +306,7 @@ function CenterSeries({
           series={selected}
           year={year ?? ''}
           tab={activeTab as StudentTab}
+          termSearch={termSearch}
         />
       ) : (
         // Teachers get Очередь / Условие / Разбор / Таблица as full-width tabs;
@@ -315,6 +316,7 @@ function CenterSeries({
           series={selected}
           year={year ?? ''}
           tab={activeTab as TeacherTab}
+          termSearch={termSearch}
         />
       )}
     </>
@@ -336,10 +338,12 @@ function StudentSeriesView({
   series,
   year,
   tab,
+  termSearch,
 }: {
   series: Series
   year: string
   tab: StudentTab
+  termSearch: string
 }) {
   const navigate = useNavigate()
   return (
@@ -347,7 +351,7 @@ function StudentSeriesView({
       <PillTabs
         value={tab}
         onChange={(t) =>
-          navigate('/mathcenter/' + year + '/series/' + series.id + '/' + t)
+          navigate('/mathcenter/' + year + '/series/' + series.id + '/' + t + termSearch)
         }
         options={STUDENT_TABS}
         ariaLabel="Раздел серии"
@@ -451,11 +455,13 @@ function TeacherSeriesView({
   series,
   year,
   tab,
+  termSearch,
 }: {
   centerId: number
   series: Series
   year: string
   tab: TeacherTab
+  termSearch: string
 }) {
   const navigate = useNavigate()
   return (
@@ -463,7 +469,7 @@ function TeacherSeriesView({
       <PillTabs
         value={tab}
         onChange={(t) =>
-          navigate('/mathcenter/' + year + '/series/' + series.id + '/' + t)
+          navigate('/mathcenter/' + year + '/series/' + series.id + '/' + t + termSearch)
         }
         options={TEACHER_TABS}
         ariaLabel="Раздел проверки"

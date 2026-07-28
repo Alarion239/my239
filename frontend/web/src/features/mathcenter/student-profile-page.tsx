@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import {
   useCreateStudentNote,
@@ -17,6 +17,7 @@ import { useCenterIdContext } from './center-id-context'
 // name links here). Students who guess the URL are blocked by the backend.
 export function StudentProfilePage() {
   const params = useParams<{ year: string; studentUserId: string }>()
+  const { search } = useLocation()
   const year = params.year ?? ''
   const centerId = useCenterIdContext()
   const studentUserId = Number(params.studentUserId)
@@ -29,7 +30,7 @@ export function StudentProfilePage() {
   const update = useUpdateStudentNote(centerId, studentUserId)
   const remove = useDeleteStudentNote(centerId, studentUserId)
 
-  const conduitPath = '/mathcenter/' + year + '/conduit'
+  const conduitPath = '/mathcenter/' + year + '/conduit' + search
 
   return (
     <div className="animate-rise mx-auto flex w-full max-w-3xl flex-col gap-4">

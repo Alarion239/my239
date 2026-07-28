@@ -2,7 +2,7 @@ import { useDeferredValue, useEffect, useRef, useState, type ReactNode } from 'r
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ExternalLink, FileText, Pencil, Plus, Trash2, Video } from 'lucide-react'
 import { useForm } from 'react-hook-form'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   APIErrorImpl,
   DEFAULT_LATEX_PREAMBLE,
@@ -94,12 +94,13 @@ function LikbezCatalog({ centerId, isTeacher }: { centerId: number; isTeacher: b
 
 function LikbezCard({ likbez, centerId, isTeacher, terms }: { likbez: Likbez; centerId: number; isTeacher: boolean; terms: MathCenterTerm[] }) {
   const { year } = useParams<{ year: string }>()
+  const { search } = useLocation()
   const publish = usePublishLikbez(likbez.id)
   const unpublish = useUnpublishLikbez(likbez.id)
   const remove = useDeleteLikbez(centerId)
   const navigate = useNavigate()
   const hasMaterials = likbez.has_pdf || likbez.has_tex || !!likbez.video_url
-  const detailPath = '/mathcenter/' + year + '/likbez/' + likbez.id
+  const detailPath = '/mathcenter/' + year + '/likbez/' + likbez.id + search
 
   return (
     <Card
@@ -137,7 +138,7 @@ function LikbezCard({ likbez, centerId, isTeacher, terms }: { likbez: Likbez; ce
             {likbez.published ? 'Снять' : 'Опубликовать'}
           </Button>
           <Button size="sm" variant="ghost" aria-label={'Удалить ' + likbez.title} disabled={remove.isPending} onClick={() => {
-            if (window.confirm('Удалить ликбез «' + likbez.title + '»?')) remove.mutate(likbez.id, { onSuccess: () => navigate('/mathcenter/' + year + '/likbez') })
+            if (window.confirm('Удалить ликбез «' + likbez.title + '»?')) remove.mutate(likbez.id, { onSuccess: () => navigate('/mathcenter/' + year + '/likbez' + search) })
           }}><Trash2 className="h-4 w-4" /></Button>
         </div>
       ) : null}
@@ -147,6 +148,7 @@ function LikbezCard({ likbez, centerId, isTeacher, terms }: { likbez: Likbez; ce
 
 function LikbezDetail({ likbezId, isTeacher }: { likbezId: number; isTeacher: boolean }) {
   const { year } = useParams<{ year: string }>()
+  const { search } = useLocation()
   const { data, isPending, isError } = useLikbez(likbezId)
   const terms = useMathCenterTerms(data?.math_center_id ?? 0, isTeacher && !data?.published)
   const tex = useLikbezTex(likbezId, !!data?.has_tex && !(isTeacher && !data?.published))
@@ -159,7 +161,7 @@ function LikbezDetail({ likbezId, isTeacher }: { likbezId: number; isTeacher: bo
   }
   return (
     <div className="animate-rise flex flex-col gap-5">
-      <Link to={'/mathcenter/' + year + '/likbez'} className="self-start text-sm font-medium text-accent hover:underline">← Все ликбезы</Link>
+      <Link to={'/mathcenter/' + year + '/likbez' + search} className="self-start text-sm font-medium text-accent hover:underline">← Все ликбезы</Link>
       <header className="border-b border-line pb-5">
         <p className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Ликбез №{data.number} · {data.term_display_name}</p>
         <h1 className="mt-2 font-display text-3xl font-medium text-ink">{data.title}</h1>
@@ -174,6 +176,7 @@ function LikbezDetail({ likbezId, isTeacher }: { likbezId: number; isTeacher: bo
 
 function LikbezDraftEditor({ likbez, terms }: { likbez: Likbez; terms: MathCenterTerm[] }) {
   const { year } = useParams<{ year: string }>()
+  const { search } = useLocation()
   const update = useUpdateLikbez(likbez.id)
   const texQuery = useLikbezTex(likbez.id, true)
   const putTex = usePutLikbezTex(likbez.id)
@@ -222,7 +225,7 @@ function LikbezDraftEditor({ likbez, terms }: { likbez: Likbez; terms: MathCente
 
   return (
     <div className="animate-rise flex flex-col gap-6">
-      <Link to={'/mathcenter/' + year + '/likbez'} className="self-start text-sm font-medium text-accent hover:underline">← Все ликбезы</Link>
+      <Link to={'/mathcenter/' + year + '/likbez' + search} className="self-start text-sm font-medium text-accent hover:underline">← Все ликбезы</Link>
       <form className="flex flex-col gap-4 border-b border-line pb-6" noValidate onSubmit={saveDetails}>
         <p className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Черновик · ликбез №{likbez.number}</p>
         <div className="grid gap-4 lg:grid-cols-[minmax(11rem,1fr)_7rem_minmax(14rem,2fr)_11rem]">

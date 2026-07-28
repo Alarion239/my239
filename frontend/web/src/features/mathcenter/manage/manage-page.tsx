@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useCreateMathCenterTerm, useMathCenterMe } from '@my239/shared'
 import { Button, Card, PillTabs, Spinner, type PillTabOption } from '../../../design/ui'
 import { useAuth } from '../../../auth/auth-context'
@@ -30,6 +30,7 @@ export function ManagePage() {
   const centerId = useCenterIdContext()
   const { term } = useCenterTermContext()
   const { year, tab: tabParam } = useParams<{ year: string; tab?: string }>()
+  const { search } = useLocation()
   const navigate = useNavigate()
   const { user } = useAuth()
   const me = useMathCenterMe()
@@ -53,7 +54,7 @@ export function ManagePage() {
     ? (tabParam as Tab)
     : null
   if (!tab) {
-    return <Navigate to={'/mathcenter/' + year + '/manage/groups'} replace />
+    return <Navigate to={'/mathcenter/' + year + '/manage/groups' + search} replace />
   }
 
   return (
@@ -66,7 +67,7 @@ export function ManagePage() {
       ) : null}
       <PillTabs
         value={tab}
-        onChange={(t) => navigate('/mathcenter/' + year + '/manage/' + t)}
+        onChange={(t) => navigate('/mathcenter/' + year + '/manage/' + t + search)}
         options={TABS}
         ariaLabel="Раздел управления"
         className="self-start"

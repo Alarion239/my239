@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { Lock } from 'lucide-react'
 import {
   claimIsLive,
@@ -105,11 +105,12 @@ function QueueRow({
   seriesId: number
   item: QueueItem
 }) {
+  const { search } = useLocation()
   const locked = claimIsLive(item)
   const { meta, className } = displayPill(item.current_status, locked)
   return (
     <Link
-      to={threadPath(year, seriesId, item.thread_id)}
+      to={threadPath(year, seriesId, item.thread_id) + search}
       className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
     >
       <div className="min-w-0 flex-1">

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useLocation, useParams } from 'react-router-dom'
 import {
   initialsOf,
   useOfflineAccept,
@@ -140,6 +140,7 @@ function StudentOfflineGrader({
   onBack: () => void
 }) {
   const { year } = useParams<{ year: string }>()
+  const { search } = useLocation()
   const accept = useOfflineAccept()
   const [pendingSub, setPendingSub] = useState<number | null>(null)
   const [dialog, setDialog] = useState<OfflineCellTarget | null>(null)
@@ -170,7 +171,7 @@ function StudentOfflineGrader({
       lastGraderName: cell?.last_grader_name,
       threadHref:
         cell && cell.thread_id > 0
-          ? '/mathcenter/' + (year ?? '') + '/series/' + seriesId + '/thread/' + cell.thread_id
+          ? '/mathcenter/' + (year ?? '') + '/series/' + seriesId + '/thread/' + cell.thread_id + search
           : undefined,
     })
   }

@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import {
   displayStatusMeta,
   homeworkStatusMeta,
@@ -99,6 +99,7 @@ function ProblemRow({
   meta: Map<number, Subproblem>
   dueAt: string
 }) {
+  const { search } = useLocation()
   const summary = problemStateFromSubproblems(
     problem.subproblems.map((s) => s.current_status),
   )
@@ -142,7 +143,7 @@ function ProblemRow({
           return interactive ? (
             <Link
               key={sub.subproblem_id}
-              to={subproblemPath(year, seriesId, sub)}
+              to={subproblemPath(year, seriesId, sub) + search}
               title={tileLabel}
               className={cn(
                 'rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',

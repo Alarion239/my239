@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import {
   coffinOpen,
   initialsOf,
@@ -125,6 +125,7 @@ function ConduitTable({
   data: CenterGridResponse
 }) {
   const { year } = useParams<{ year: string }>()
+  const { search } = useLocation()
   const [query, setQuery] = useState('')
 
   // Offline-grading interaction state. A grader picks an active student (their
@@ -347,7 +348,7 @@ function ConduitTable({
       acceptedInitials: cellInitials(studentId, sub) || undefined,
       threadHref:
         cell && cell.thread_id > 0
-          ? '/mathcenter/' + (year ?? '') + '/series/' + fc.seriesId + '/thread/' + cell.thread_id
+          ? '/mathcenter/' + (year ?? '') + '/series/' + fc.seriesId + '/thread/' + cell.thread_id + search
           : undefined,
     })
   }
@@ -512,7 +513,7 @@ function ConduitTable({
                             teacher notes about them). Marking mode is entered by
                             touching one of the student's cells, not the name. */}
                         <Link
-                          to={'../students/' + st.user_id}
+                          to={'../students/' + st.user_id + search}
                           className={cn(
                             'inline-flex items-center gap-1.5 underline-offset-2 hover:underline',
                             isActiveRow && 'font-semibold text-ink',

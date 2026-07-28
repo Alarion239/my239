@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import {
   claimIsLive,
   coffinOpen,
@@ -171,6 +171,7 @@ function GroupRows({
   year: string
   seriesId: number
 }) {
+  const { search } = useLocation()
   return (
     <>
       <tr className="bg-surface-muted/60">
@@ -184,7 +185,7 @@ function GroupRows({
           <tr key={student.student_user_id} className="hover:bg-surface-muted/40">
             <td className={cn(nameCell, 'max-w-44')}>
               <Link
-                to={'/mathcenter/' + year + '/students/' + student.student_user_id}
+                to={'/mathcenter/' + year + '/students/' + student.student_user_id + search}
                 className="inline-flex items-center gap-1.5 truncate underline-offset-2 hover:underline"
               >
                 <span className="truncate">{student.student_name}</span>
@@ -222,7 +223,7 @@ function GroupRows({
                 >
                   {cell && cell.thread_id > 0 ? (
                     <Link
-                      to={threadPath(year, seriesId, cell.thread_id)}
+                      to={threadPath(year, seriesId, cell.thread_id) + search}
                       className="inline-block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                     >
                       <StatusTile status={status} beingGraded={beingGraded} label={label} />

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   claimIsLive,
   coffinOpen,
@@ -50,6 +50,7 @@ type Tab = 'current' | 'solved' | 'queue'
 
 function CoffinsView({ centerId, termId, isManager }: { centerId: number; termId: number; isManager: boolean }) {
   const { year, tab: tabParam } = useParams<{ year: string; tab?: string }>()
+  const { search } = useLocation()
   const navigate = useNavigate()
   const { data, isPending, isError } = useCenterCoffins(centerId, termId)
 
@@ -65,7 +66,7 @@ function CoffinsView({ centerId, termId, isManager }: { centerId: number; termId
     ? (tabParam as Tab)
     : null
   if (!tab) {
-    return <Navigate to={'/mathcenter/' + year + '/coffins/current'} replace />
+    return <Navigate to={'/mathcenter/' + year + '/coffins/current' + search} replace />
   }
 
   if (isPending) return <CenteredSpinner />
@@ -89,7 +90,7 @@ function CoffinsView({ centerId, termId, isManager }: { centerId: number; termId
             type="button"
             role="tab"
             aria-selected={tab === t.id}
-            onClick={() => navigate('/mathcenter/' + year + '/coffins/' + t.id)}
+            onClick={() => navigate('/mathcenter/' + year + '/coffins/' + t.id + search)}
             className={cn(
               'rounded-full px-3 py-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
               tab === t.id ? 'bg-accent-soft text-accent-ink' : 'text-muted hover:text-ink',
@@ -310,6 +311,7 @@ function ManagerControls({
 
 function SubTile({ coffin }: { coffin: Coffin }) {
   const { year } = useParams<{ year: string }>()
+  const { search } = useLocation()
   const status = coffin.current_status ?? 'ungraded'
   const beingGraded = coffin.being_graded ?? false
   const threadId = coffin.thread_id ?? 0
@@ -321,7 +323,7 @@ function SubTile({ coffin }: { coffin: Coffin }) {
       : base + '/submit/' + coffin.subproblem_id
   return (
     <Link
-      to={to}
+      to={to + search}
       title={meta.label}
       className="inline-flex rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
     >
@@ -356,6 +358,7 @@ function CoffinQueueList({ centerId }: { centerId: number }) {
 
 function CoffinQueueRow({ item }: { item: CoffinQueueItem }) {
   const { year } = useParams<{ year: string }>()
+  const { search } = useLocation()
   const locked = claimIsLive(item)
   const { meta, className } = displayPill(item.current_status, locked)
   const label = item.subproblem_label
@@ -363,7 +366,7 @@ function CoffinQueueRow({ item }: { item: CoffinQueueItem }) {
     : item.problem_display
   return (
     <Link
-      to={'/mathcenter/' + year + '/series/' + item.series_id + '/thread/' + item.thread_id}
+      to={'/mathcenter/' + year + '/series/' + item.series_id + '/thread/' + item.thread_id + search}
       className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
     >
       <div className="min-w-0 flex-1">

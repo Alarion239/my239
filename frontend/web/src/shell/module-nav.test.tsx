@@ -214,6 +214,19 @@ describe('module navigation', () => {
     expect(await screen.findByRole('link', { name: 'Серии' })).toBeInTheDocument()
   })
 
+  it('preserves the selected archive period on every module tab', async () => {
+    const member = makeUser({ is_admin: false })
+    mockFetch(member)
+    renderShell(<TopBar user={member} />, '/mathcenter/2026/series?term_id=70')
+
+    const tabNav = await screen.findByRole('navigation', { name: 'Разделы модуля' })
+    for (const label of ['Кондуит', 'Серии', 'Гробы', 'Ликбезы']) {
+      const link = screen.getByRole('link', { name: label })
+      expect(tabNav).toContainElement(link)
+      expect(link).toHaveAttribute('href', expect.stringContaining('?term_id=70'))
+    }
+  })
+
   it('orders the teacher math-center tabs with conduit first', async () => {
     const member = makeUser({ is_admin: false })
     mockFetch(member)

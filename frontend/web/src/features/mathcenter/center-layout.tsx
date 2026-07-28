@@ -78,7 +78,7 @@ function CenterTermScope({ centerId }: { centerId: number }) {
 // canonical /mathcenter/{year}/<suffix>, resolving id -> graduation year. Uses
 // <Navigate replace> so the legacy URL never enters history.
 function LegacyCenterRedirect({ legacyId }: { legacyId: number }) {
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
   const { year, isResolving, notFound } = useCenterYearFromId(legacyId)
 
   if (isResolving) {
@@ -94,7 +94,7 @@ function LegacyCenterRedirect({ legacyId }: { legacyId: number }) {
   // Replace the first two segments ("/mathcenter/{id}") with the year URL,
   // keeping whatever suffix the old link carried.
   const suffix = pathname.replace(/^\/mathcenter\/[^/]+/, '')
-  return <Navigate to={'/mathcenter/' + year + suffix} replace />
+  return <Navigate to={'/mathcenter/' + year + suffix + search} replace />
 }
 
 function NoAccess() {
