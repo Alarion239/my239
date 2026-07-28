@@ -269,3 +269,48 @@ func TestListCenterCoffins_ArchiveUsesOnlySelectedTerm(t *testing.T) {
 		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }
+
+func TestListCenterCoffins_CurrentTermIncludesCarriedOpenCoffins(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	mock.ExpectQuery(`FROM math_center_terms\s+WHERE id = \$1`).
+		WithArgs(int64(71)).
+		WillReturnRows(mock.NewRows([]string{
+			"id", "math_center_id", "kind", "grade", "is_active", "created_at", "archived_at",
+		}).AddRow(int64(71), int64(42), "academic", (*int32)(nil), true, now, (*time.Time)(nil)))
+	mock.ExpectQuery(`FROM math_center_subproblem_solutions ss\s+JOIN math_center_subproblems`).
+		WithArgs(int64(42), int64(71), true).
+		WillReturnRows(mock.NewRows([]string{
+			"subproblem_id", "is_coffin", "released_at", "solution_tex_source",
+			"solution_pdf_object_key", "solution_link", "created_at",
+			"subproblem_label", "problem_id", "problem_number",
+			"series_id", "series_number", "series_name", "series_due_at", "math_center_id",
+			"term_id", "term_kind", "term_grade",
+		}).
+			AddRow(int64(901), true, (*time.Time)(nil), (*string)(nil), (*string)(nil), (*string)(nil), now,
+				"b", int64(500), int32(4), int64(100), int32(2), "Архивная серия", now, int64(42),
+				int64(70), "academic", (*int32)(nil)))
+	mock.ExpectQuery(`FROM math_center_subproblem_solutions ss\s+JOIN math_center_subproblems sp[\s\S]*GROUP BY`).
+		WithArgs(int64(42)).
+		WillReturnRows(mock.NewRows([]string{"subproblem_id", "accepted", "total"}).
+			AddRow(int64(901), int64(3), int64(10)))
+
+	req := authedAdminRequest(t, access, 1, http.MethodGet, "/centers/42/coffins?term_id=71", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	var resp []map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &resp)
+	if len(resp) != 1 || resp[0]["term_id"] != float64(70) {
+		t.Errorf("unexpected current coffins list: %v", resp)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}

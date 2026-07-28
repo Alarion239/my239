@@ -146,7 +146,7 @@ func ListCenterCoffins(database *db.DB) http.HandlerFunc {
 			rows, err := q.ListCenterCoffinsForTerm(ctx, store.ListCenterCoffinsForTermParams{
 				MathCenterID:   centerID,
 				TermID:         selected.ID,
-				IncludeCarried: false,
+				IncludeCarried: selected.IsActive,
 			})
 			if err != nil {
 				logger.LogErrorContext(ctx, "coffins: list term", err)
