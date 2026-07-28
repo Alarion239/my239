@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -785,7 +784,7 @@ func PutSeriesTex(database *db.DB) http.HandlerFunc {
 			return
 		}
 
-		tex := req.Tex
+		tex := normalizeTexSource(req.Tex)
 		updated, err := q.SetSeriesTex(ctx, store.SetSeriesTexParams{
 			ID:        series.ID,
 			TexSource: &tex,
@@ -915,9 +914,6 @@ func validateTexSource(tex string) string {
 	}
 	if !utf8.ValidString(tex) {
 		return "tex source must be valid UTF-8"
-	}
-	if !strings.Contains(tex, "\\begin{document}") {
-		return "tex source must contain \\begin{document}"
 	}
 	return ""
 }

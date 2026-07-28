@@ -8,14 +8,16 @@ import { GroupsTab } from './groups-tab'
 import { TeachersTab } from './teachers-tab'
 import { StudentsTab } from './students-tab'
 import { GoogleSheetsTab } from './google-sheets-tab'
+import { LatexPreambleTab } from './latex-preamble-tab'
 
-type Tab = 'groups' | 'teachers' | 'students' | 'google-sheets'
+type Tab = 'groups' | 'teachers' | 'students' | 'google-sheets' | 'latex'
 
 const TABS: PillTabOption<Tab>[] = [
   { id: 'groups', label: 'Группы' },
   { id: 'teachers', label: 'Преподаватели' },
   { id: 'students', label: 'Ученики' },
   { id: 'google-sheets', label: 'Google Sheets' },
+  { id: 'latex', label: 'LaTeX' },
 ]
 
 const TAB_IDS = TABS.map((t) => t.id)
@@ -70,7 +72,9 @@ export function ManagePage() {
         className="self-start"
       />
 
-      {tab === 'groups' && (term === null || term.is_active) ? (
+      {tab === 'latex' ? (
+        <LatexPreambleTab centerId={centerId} />
+      ) : tab === 'groups' && (term === null || term.is_active) ? (
         <GroupsTab centerId={centerId} />
       ) : tab === 'teachers' ? (
         <TeachersTab centerId={centerId} />

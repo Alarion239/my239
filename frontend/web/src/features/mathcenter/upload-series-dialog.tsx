@@ -4,9 +4,11 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
   APIErrorImpl,
-  nextMathcenterDueAt,
+  normalizeLatexSource,
+  nextMathcenterDueAtForTerm,
   toDatetimeLocalValue,
   useCreateSeries,
+  useMathCenterLatexPreamble,
   usePutSeriesTex,
   useUpdateSeries,
   useUploadSeriesPdf,
@@ -44,6 +46,10 @@ export interface UploadSeriesDialogProps {
   series?: Series
   // Pre-filled series number for a fresh series (max existing + 1). Defaults 1.
   defaultNumber?: number
+  // Due date of the latest series in the selected period. Used only for a new
+  // series; editing keeps the existing date.
+  previousDueAt?: string | null
+  termKind?: 'academic' | 'camp' | 'legacy'
   // Custom trigger (defaults to a "Загрузить серию" button).
   trigger?: React.ReactNode
 }
@@ -101,9 +107,12 @@ export function UploadSeriesDialog({
   termId = 0,
   series,
   defaultNumber,
+  previousDueAt,
+  termKind = 'academic',
   trigger,
 }: UploadSeriesDialogProps) {
   const isEdit = !!series
+  const preamble = useMathCenterLatexPreamble(centerId)
   const [open, setOpen] = useState(false)
   // The series we're working on: the edited one, or the freshly created one.
   const [attachTo, setAttachTo] = useState<Series | null>(series ?? null)
@@ -136,6 +145,8 @@ export function UploadSeriesDialog({
             termId={termId}
             series={attachTo ?? undefined}
             defaultNumber={defaultNumber ?? 1}
+            previousDueAt={previousDueAt}
+            termKind={termKind}
             onSaved={(saved) => {
               setAttachTo(saved)
               setStep('statement')
@@ -144,6 +155,7 @@ export function UploadSeriesDialog({
         ) : attachTo && step === 'statement' ? (
           <StatementStep
             series={attachTo}
+            preamble={preamble.data?.preamble}
             onAttached={setAttachTo}
             onBack={() => setStep('meta')}
             onNext={() => setStep('problems')}
@@ -166,12 +178,16 @@ function MetaStep({
   termId,
   series,
   defaultNumber,
+  previousDueAt,
+  termKind,
   onSaved,
 }: {
   centerId: number
   termId: number
   series: Series | undefined
   defaultNumber: number
+  previousDueAt?: string | null
+  termKind: 'academic' | 'camp' | 'legacy'
   onSaved: (saved: Series) => void
 }) {
   const isEdit = !!series
@@ -195,8 +211,12 @@ function MetaStep({
       : {
           number: defaultNumber,
           name: '',
-          // Sessions run Wed/Sat 16:00 Moscow time — pre-fill the next one.
-          due_at: toDatetimeLocalValue(nextMathcenterDueAt(new Date())),
+          due_at: toDatetimeLocalValue(
+            nextMathcenterDueAtForTerm(
+              termKind,
+              previousDueAt ? new Date(previousDueAt) : null,
+            ),
+          ),
         },
   })
 
@@ -277,11 +297,13 @@ type AttachMode = 'tex' | 'pdf'
 
 function StatementStep({
   series,
+  preamble,
   onAttached,
   onBack,
   onNext,
 }: {
   series: Series
+  preamble?: string
   onAttached: (saved: Series) => void
   onBack: () => void
   onNext: () => void
@@ -294,11 +316,7 @@ function StatementStep({
 
   function submitTex() {
     setError(null)
-    if (!tex.includes('\\begin{document}')) {
-      setError('LaTeX должен содержать \\begin{document}.')
-      return
-    }
-    putTex.mutate(tex, {
+    putTex.mutate(normalizeLatexSource(tex, preamble), {
       onSuccess: (saved) => {
         onAttached(saved)
         onNext()

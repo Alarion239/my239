@@ -524,7 +524,7 @@ func PutSubproblemSolutionTex(database *db.DB, hub *live.Hub) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		tex := req.Tex
+		tex := normalizeTexSource(req.Tex)
 		s, err := q.SetSubproblemSolutionTex(ctx, store.SetSubproblemSolutionTexParams{SubproblemID: subproblemID, SolutionTexSource: &tex})
 		if err != nil {
 			logger.LogErrorContext(ctx, "coffins: set solution tex", err)

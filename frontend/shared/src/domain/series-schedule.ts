@@ -9,6 +9,9 @@ const MSK_OFFSET_MS = 3 * 60 * 60 * 1000
 const DUE_HOUR_MSK = 16
 // Day-of-week numbers (0=Sun) that hold a session: Wednesday and Saturday.
 const SESSION_DOW = new Set([3, 6])
+const DAY_MS = 24 * 60 * 60 * 1000
+
+export type MathcenterTermKind = 'academic' | 'camp' | 'legacy'
 
 // nextMathcenterDueAt returns the absolute instant of the next session deadline:
 // the soonest Wednesday or Saturday at 16:00 Europe/Moscow that is strictly
@@ -32,6 +35,23 @@ export function nextMathcenterDueAt(now: Date): Date {
   }
   // Unreachable: two session days recur within any 7-day window.
   return new Date(Date.UTC(y, m, d, DUE_HOUR_MSK - 3, 0, 0))
+}
+
+// nextMathcenterDueAtForTerm applies the period's scheduling rule to the
+// previous series in that period. Camp series are daily; ordinary school-year
+// series land on the next Wednesday or Saturday session. A first series uses
+// the current instant as its anchor so the field is still useful when a period
+// has no previous series yet.
+export function nextMathcenterDueAtForTerm(
+  kind: MathcenterTermKind,
+  previousDueAt: Date | null | undefined,
+  now: Date = new Date(),
+): Date {
+  const previous = previousDueAt && !Number.isNaN(previousDueAt.getTime()) ? previousDueAt : null
+  if (kind === 'camp') {
+    return new Date((previous ?? now).getTime() + DAY_MS)
+  }
+  return nextMathcenterDueAt(previous ?? now)
 }
 
 // toDatetimeLocalValue renders a Date into the value a <input type="datetime-local">

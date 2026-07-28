@@ -188,6 +188,22 @@ describe('module navigation', () => {
     )
   })
 
+  it('keeps the period list open after selecting an archived year and puts the current grade first', async () => {
+    const user = userEvent.setup()
+    const member = makeUser({ is_admin: false })
+    mockFetch(member)
+    renderShell(<NavRail />, '/mathcenter/2026/series')
+
+    await user.click(await screen.findByRole('link', { name: 'Матцентр 2026' }))
+    const periodNav = screen.getByLabelText('Периоды матцентра')
+    const periodLabels = Array.from(periodNav.children).map((element) => element.textContent)
+    expect(periodLabels.indexOf('9 класссейчас')).toBeLessThan(periodLabels.indexOf('Архив'))
+
+    await user.click(screen.getByRole('link', { name: '8 класс · Лагерь' }))
+    expect(screen.getByText('Архив')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '8 класс · Лагерь' })).toBeInTheDocument()
+  })
+
   it('exposes the per-center module tabs in the top bar', async () => {
     const member = makeUser({ is_admin: false })
     mockFetch(member)

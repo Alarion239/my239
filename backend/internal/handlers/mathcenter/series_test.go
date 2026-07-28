@@ -125,6 +125,7 @@ func TestRouter_RequiresAuth(t *testing.T) {
 		{http.MethodGet, "/series/1/pdf"},
 		{http.MethodGet, "/centers/1/likbez"},
 		{http.MethodPost, "/centers/1/likbez"},
+		{http.MethodGet, "/centers/1/latex-preamble"},
 		{http.MethodGet, "/likbez/1"},
 		{http.MethodPut, "/likbez/1"},
 		{http.MethodDelete, "/likbez/1"},
@@ -1108,14 +1109,13 @@ func TestPutSeriesTex_TeacherSucceeds(t *testing.T) {
 	}
 }
 
-func TestPutSeriesTex_RejectsMalformed(t *testing.T) {
+func TestPutSeriesTex_RejectsEmpty(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name string
 		tex  string
 	}{
 		{"empty", ""},
-		{"missing begin document", "\\documentclass{article}\nhi\n"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

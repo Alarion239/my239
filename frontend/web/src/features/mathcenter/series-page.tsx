@@ -12,6 +12,7 @@ import {
   useSeriesProblemStats,
   type MyRollup,
   type Series,
+  type MathCenterTerm,
 } from '@my239/shared'
 import {
   Button,
@@ -71,6 +72,7 @@ export function SeriesPage() {
         key={centerId + ':' + termId}
         centerId={centerId}
         termId={termId}
+        termKind={term?.kind ?? 'academic'}
         isArchived={term !== null && !term.is_active}
         isStudentView={ctx.isStudentView}
       />
@@ -93,11 +95,15 @@ function CreateSeriesCard({
   centerId,
   termId,
   defaultNumber,
+  previousDueAt,
+  termKind,
   highlight = false,
 }: {
   centerId: number
   termId: number
   defaultNumber: number
+  previousDueAt?: string | null
+  termKind: MathCenterTerm['kind']
   highlight?: boolean
 }) {
   return (
@@ -105,6 +111,8 @@ function CreateSeriesCard({
       centerId={centerId}
       termId={termId}
       defaultNumber={defaultNumber}
+      previousDueAt={previousDueAt}
+      termKind={termKind}
       trigger={
         <button
           type="button"
@@ -175,11 +183,13 @@ export function MathCenterIndex() {
 function CenterSeries({
   centerId,
   termId,
+  termKind,
   isArchived,
   isStudentView,
 }: {
   centerId: number
   termId: number
+  termKind: MathCenterTerm['kind']
   isArchived: boolean
   isStudentView: boolean
 }) {
@@ -210,11 +220,18 @@ function CenterSeries({
   // Pre-fill the next series number: one past the highest existing number.
   const nextNumber =
     list.length > 0 ? Math.max(...list.map((s) => s.number)) + 1 : 1
+  const previousDueAt =
+    list.reduce<string | null>((latest, series) => {
+      if (!latest) return series.due_at
+      return Date.parse(series.due_at) > Date.parse(latest) ? series.due_at : latest
+    }, null)
   const createCard = !isStudentView && !isArchived ? (
     <CreateSeriesCard
       centerId={centerId}
       termId={termId}
       defaultNumber={nextNumber}
+      previousDueAt={previousDueAt}
+      termKind={termKind}
       highlight={!current}
     />
   ) : undefined

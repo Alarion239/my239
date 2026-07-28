@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { APIErrorImpl } from '@my239/shared'
+import { APIErrorImpl, normalizeLatexSource } from '@my239/shared'
 import {
   Button,
   Dialog,
@@ -135,7 +135,7 @@ export function SolutionEditor({
               variant="secondary"
               className="self-start"
               disabled={busy !== null || tex.trim() === ''}
-              onClick={() => run('LaTeX', () => onPutTex(tex))}
+              onClick={() => run('LaTeX', () => onPutTex(normalizeLatexSource(tex)))}
             >
               {busy === 'LaTeX' ? 'Сохраняем…' : 'Сохранить LaTeX'}
             </Button>

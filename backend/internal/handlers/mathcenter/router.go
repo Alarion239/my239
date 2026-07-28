@@ -35,6 +35,7 @@ func Router(database *db.DB, hub *live.Hub, tokens *internalAuth.TokenService, b
 	// Live SSE stream of center-change signals (grading/coffins/membership).
 	r.Get("/centers/{centerID}/events", Events(hub, database))
 	r.Get("/centers/{centerID}/terms", ListTermsForCenter(database))
+	r.Get("/centers/{centerID}/latex-preamble", GetLatexPreamble(database))
 	r.Post("/centers/{centerID}/terms", CreateTerm(database))
 
 	r.Route("/centers/{centerID}/series", func(r chi.Router) {

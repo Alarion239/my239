@@ -1,0 +1,1 @@
+DROP TABLE math_center_latex_settings;

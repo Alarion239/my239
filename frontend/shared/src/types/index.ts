@@ -217,6 +217,10 @@ export interface MathCenterTerm {
   is_active: boolean
 }
 
+export interface LatexPreamble {
+  preamble: string
+}
+
 // Likbez is a center-wide lecture. Its number is continuous across all terms;
 // term_display_name is historical context, not a catalog filter.
 export interface Likbez {

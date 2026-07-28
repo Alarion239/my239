@@ -9,6 +9,7 @@ import type {
   GoogleSheetSyncRun,
   GoogleSheetTab,
   InviteContext,
+  LatexPreamble,
   MathCenterGroup,
   MathCenterStudent,
   MathCenterTeacher,
@@ -21,6 +22,20 @@ import { queryKeys } from './keys'
 
 function base(centerId: number): string {
   return '/mathcenter/centers/' + centerId + '/manage'
+}
+
+export function useUpdateMathCenterLatexPreamble(centerId: number) {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (preamble: string) =>
+      client.request<LatexPreamble>(base(centerId) + '/latex-preamble', {
+        method: 'PATCH',
+        body: { preamble },
+      }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: queryKeys.mathCenterLatexPreamble(centerId) }),
+  })
 }
 
 // --- Groups ------------------------------------------------------------------

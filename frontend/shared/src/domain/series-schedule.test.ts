@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { nextMathcenterDueAt, toDatetimeLocalValue } from './series-schedule'
+import {
+  nextMathcenterDueAt,
+  nextMathcenterDueAtForTerm,
+  toDatetimeLocalValue,
+} from './series-schedule'
 
 // mskParts reads the Moscow (UTC+3) calendar fields of an instant.
 function mskParts(d: Date) {
@@ -75,5 +79,19 @@ describe('toDatetimeLocalValue', () => {
 
   it('returns empty string for an invalid Date', () => {
     expect(toDatetimeLocalValue(new Date('nope'))).toBe('')
+  })
+})
+
+describe('nextMathcenterDueAtForTerm', () => {
+  it('puts camp series one day after the previous due date', () => {
+    const previous = new Date('2026-07-10T13:00:00Z')
+    expect(nextMathcenterDueAtForTerm('camp', previous).toISOString()).toBe('2026-07-11T13:00:00.000Z')
+  })
+
+  it('uses the closest next Wednesday or Saturday for the school year', () => {
+    const previous = new Date('2026-06-24T13:00:00Z') // Wednesday, 16:00 MSK.
+    const next = nextMathcenterDueAtForTerm('academic', previous)
+    expect(mskParts(next).dow).toBe(6)
+    expect(next.getTime()).toBeGreaterThan(previous.getTime())
   })
 })

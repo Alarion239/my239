@@ -5,6 +5,8 @@ export const queryKeys = {
   mathCenterMe: ['mathcenter', 'me'] as const,
   mathCenterTerms: (centerId: number) =>
     ['mathcenter', 'centers', centerId, 'terms'] as const,
+  mathCenterLatexPreamble: (centerId: number) =>
+    ['mathcenter', 'centers', centerId, 'latex-preamble'] as const,
   adminUsers: ['admin', 'users'] as const,
   adminUser: (id: number) => ['admin', 'users', id] as const,
   userEnrollments: (id: number) =>

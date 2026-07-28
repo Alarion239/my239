@@ -2,7 +2,7 @@
 // run unchanged on web and React Native — UI and routing stay platform-specific.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { MathCenterTerm, MeResponse } from '../types'
+import type { LatexPreamble, MathCenterTerm, MeResponse } from '../types'
 import { useApiClient } from './context'
 import { queryKeys } from './keys'
 
@@ -25,6 +25,16 @@ export function useMathCenterTerms(centerId: number, enabled = true) {
     queryFn: () =>
       client.request<MathCenterTerm[]>('/mathcenter/centers/' + centerId + '/terms'),
     enabled: enabled && centerId > 0,
+  })
+}
+
+export function useMathCenterLatexPreamble(centerId: number) {
+  const client = useApiClient()
+  return useQuery<LatexPreamble>({
+    queryKey: queryKeys.mathCenterLatexPreamble(centerId),
+    queryFn: () =>
+      client.request<LatexPreamble>('/mathcenter/centers/' + centerId + '/latex-preamble'),
+    enabled: centerId > 0,
   })
 }
 

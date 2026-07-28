@@ -5,8 +5,10 @@ import { useForm } from 'react-hook-form'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   APIErrorImpl,
+  DEFAULT_LATEX_PREAMBLE,
   likbezSchema,
   likbezDateFromISO,
+  normalizeLatexSource,
   russianLikbezDateToISO,
   todayLikbezDate,
   useCreateLikbez,
@@ -14,6 +16,7 @@ import {
   useLikbez,
   useLikbezList,
   useLikbezTex,
+  useMathCenterLatexPreamble,
   useMathCenterTerms,
   usePublishLikbez,
   usePutLikbezTex,
@@ -174,6 +177,7 @@ function LikbezDraftEditor({ likbez, terms }: { likbez: Likbez; terms: MathCente
   const update = useUpdateLikbez(likbez.id)
   const texQuery = useLikbezTex(likbez.id, true)
   const putTex = usePutLikbezTex(likbez.id)
+  const preambleQuery = useMathCenterLatexPreamble(likbez.math_center_id)
   const uploadPdf = useUploadLikbezPdf(likbez.id)
   const setVideo = useSetLikbezVideo(likbez.id)
   const [tex, setTex] = useState('')
@@ -181,6 +185,8 @@ function LikbezDraftEditor({ likbez, terms }: { likbez: Likbez; terms: MathCente
   const [materialError, setMaterialError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const previewTex = useDeferredValue(tex)
+  const preamble = preambleQuery.data?.preamble ?? DEFAULT_LATEX_PREAMBLE
+  const renderedPreviewTex = normalizeLatexSource(previewTex, preamble)
   const { register, handleSubmit, reset, setError, formState: { errors, isSubmitting } } = useForm<LikbezValues>({ resolver: zodResolver(likbezSchema) })
 
   useEffect(() => {
@@ -217,35 +223,34 @@ function LikbezDraftEditor({ likbez, terms }: { likbez: Likbez; terms: MathCente
   return (
     <div className="animate-rise flex flex-col gap-6">
       <Link to={'/mathcenter/' + year + '/likbez'} className="self-start text-sm font-medium text-accent hover:underline">← Все ликбезы</Link>
-      <form className="grid gap-4 border-b border-line pb-6 lg:grid-cols-[minmax(0,1fr)_12rem]" noValidate onSubmit={saveDetails}>
-        <div className="flex flex-col gap-4">
-          <p className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Черновик · ликбез №{likbez.number}</p>
-          <Field label="Название" error={errors.title?.message}>{({ id, invalid }) => <Input id={id} invalid={invalid} {...register('title')} />}</Field>
-          <Field label="Краткое описание" error={errors.description?.message}>{({ id, invalid }) => <Textarea id={id} invalid={invalid} {...register('description')} />}</Field>
-        </div>
-        <div className="flex flex-col gap-4">
+      <form className="flex flex-col gap-4 border-b border-line pb-6" noValidate onSubmit={saveDetails}>
+        <p className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Черновик · ликбез №{likbez.number}</p>
+        <div className="grid gap-4 lg:grid-cols-[minmax(11rem,1fr)_7rem_minmax(14rem,2fr)_11rem]">
           <Field label="Период" error={errors.term_id?.message}>{({ id, invalid }) => <Select id={id} invalid={invalid} {...register('term_id', { valueAsNumber: true })}>{terms.map((term) => <option key={term.id} value={term.id}>{term.display_name}</option>)}</Select>}</Field>
           <Field label="Номер" error={errors.number?.message}>{({ id, invalid }) => <Input id={id} type="number" min={1} invalid={invalid} {...register('number', { valueAsNumber: true })} />}</Field>
+          <Field label="Название" error={errors.title?.message}>{({ id, invalid }) => <Input id={id} invalid={invalid} {...register('title')} />}</Field>
           <Field label="Дата" error={errors.held_on?.message}>{({ id, invalid }) => <Input id={id} inputMode="numeric" placeholder="ДД-ММ-ГГГГ" invalid={invalid} {...register('held_on')} />}</Field>
-          <Button type="submit" disabled={isSubmitting || update.isPending}>{isSubmitting || update.isPending ? 'Сохраняем…' : 'Сохранить сведения'}</Button>
         </div>
+        <Field label="Краткое описание" error={errors.description?.message}>{({ id, invalid }) => <Textarea id={id} invalid={invalid} {...register('description')} />}</Field>
+        <Button type="submit" className="self-start" disabled={isSubmitting || update.isPending}>{isSubmitting || update.isPending ? 'Сохраняем…' : 'Сохранить сведения'}</Button>
       </form>
 
       <section className="flex flex-col gap-3" aria-labelledby="likbez-latex-heading">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <div><p className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Материал 01</p><h1 id="likbez-latex-heading" className="mt-1 font-display text-2xl font-medium text-ink">LaTeX-конспект</h1></div>
-          <Button size="sm" variant="secondary" disabled={busy || tex.trim() === ''} onClick={() => runMaterialAction(async () => { await putTex.mutateAsync(tex) })}>{putTex.isPending ? 'Сохраняем…' : 'Сохранить LaTeX'}</Button>
+          <Button size="sm" variant="secondary" disabled={busy || tex.trim() === ''} onClick={() => runMaterialAction(async () => { await putTex.mutateAsync(normalizeLatexSource(tex, preamble)) })}>{putTex.isPending ? 'Сохраняем…' : 'Сохранить LaTeX'}</Button>
         </div>
         {materialError ? <p className="text-sm text-danger" role="alert">{materialError}</p> : null}
         <div className="grid gap-4 lg:grid-cols-2">
-          <section className="flex min-w-0 flex-col gap-2"><label htmlFor="likbez-tex-source" className="text-sm font-medium text-ink">Исходник</label><Textarea id="likbez-tex-source" value={tex} onChange={(event) => setTex(event.target.value)} className="min-h-[32rem] flex-1 font-mono text-xs leading-6" placeholder={'\\documentclass{article}\n\\begin{document}…'} /></section>
-          <section className="flex min-w-0 flex-col gap-2"><p className="text-sm font-medium text-ink">Предпросмотр</p><div className="min-h-[32rem] overflow-auto rounded-lg border border-line bg-surface p-5">{previewTex.trim() === '' ? <p className="text-sm text-muted">Предпросмотр появится здесь.</p> : <TexViewer tex={previewTex} />}</div></section>
+          <section className="flex min-w-0 flex-col gap-2"><label htmlFor="likbez-tex-source" className="text-sm font-medium text-ink">Исходник</label><Textarea id="likbez-tex-source" value={tex} onChange={(event) => setTex(event.target.value)} className="min-h-[32rem] flex-1 font-mono text-xs leading-6" placeholder={'Введите текст и формулы без преамбулы…'} /></section>
+          <section className="flex min-w-0 flex-col gap-2"><p className="text-sm font-medium text-ink">Предпросмотр</p><div className="min-h-[32rem] overflow-auto rounded-lg border border-line bg-surface p-5">{renderedPreviewTex.trim() === '' ? <p className="text-sm text-muted">Предпросмотр появится здесь.</p> : <TexViewer tex={renderedPreviewTex} />}</div></section>
         </div>
       </section>
 
       <section className="flex flex-col gap-3 border-t border-line pt-6" aria-labelledby="likbez-pdf-heading">
         <div><p className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Материал 02</p><h2 id="likbez-pdf-heading" className="mt-1 font-display text-2xl font-medium text-ink">PDF</h2></div>
         <p className="text-sm text-muted">{likbez.has_pdf ? 'PDF уже загружен. Новая загрузка заменит его.' : 'Добавьте PDF-версию лекции.'}</p>
+        {likbez.has_pdf ? <PdfViewer path={'/mathcenter/likbez/' + likbez.id + '/pdf'} title={likbez.title + ' (PDF)'} /> : null}
         <input ref={fileRef} type="file" accept="application/pdf" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) runMaterialAction(async () => { await uploadPdf.mutateAsync(file) }) }} />
         <Button size="sm" variant="secondary" className="self-start" disabled={busy} onClick={() => fileRef.current?.click()}>{uploadPdf.isPending ? 'Загружаем…' : likbez.has_pdf ? 'Заменить PDF' : 'Загрузить PDF'}</Button>
       </section>
@@ -253,6 +258,7 @@ function LikbezDraftEditor({ likbez, terms }: { likbez: Likbez; terms: MathCente
       <section className="flex flex-col gap-3 border-t border-line pt-6" aria-labelledby="likbez-video-heading">
         <div><p className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Материал 03</p><h2 id="likbez-video-heading" className="mt-1 font-display text-2xl font-medium text-ink">Видео</h2></div>
         <Input value={link} onChange={(event) => setLink(event.target.value)} placeholder="https://youtube.com/watch?v=…" />
+        {likbez.video_url ? <VideoAttachment url={likbez.video_url} title={likbez.title + ' (видео)'} /> : null}
         <div className="flex gap-2"><Button size="sm" variant="secondary" disabled={busy || link.trim() === ''} onClick={() => runMaterialAction(async () => { await setVideo.mutateAsync(link.trim()) })}>{setVideo.isPending ? 'Сохраняем…' : 'Сохранить ссылку'}</Button>{likbez.video_url ? <Button size="sm" variant="ghost" disabled={busy} onClick={() => runMaterialAction(async () => { await setVideo.mutateAsync(''); setLink('') })}>Убрать</Button> : null}</div>
       </section>
     </div>
@@ -266,9 +272,35 @@ function LikbezMaterials({ likbez, tex }: { likbez: Likbez; tex: ReturnType<type
     <div className="flex flex-col gap-6">
       {likbez.has_tex ? <section><h2 className="mb-3 font-display text-xl font-medium text-ink">Конспект</h2>{tex.isPending ? <CenteredSpinner /> : tex.data ? <TexViewer tex={tex.data.tex} /> : <p className="text-danger">Не удалось загрузить TeX.</p>}</section> : null}
       {likbez.has_pdf ? <section><h2 className="mb-3 font-display text-xl font-medium text-ink">PDF</h2><PdfViewer path={'/mathcenter/likbez/' + likbez.id + '/pdf'} title={likbez.title + ' (PDF)'} /></section> : null}
-      {likbez.video_url ? <section><h2 className="mb-3 font-display text-xl font-medium text-ink">Видео</h2><a href={likbez.video_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm font-medium text-ink hover:bg-surface-muted"><ExternalLink className="h-4 w-4" />Открыть видео</a></section> : null}
+      {likbez.video_url ? <section><h2 className="mb-3 font-display text-xl font-medium text-ink">Видео</h2><VideoAttachment url={likbez.video_url} title={likbez.title + ' (видео)'} /></section> : null}
     </div>
   )
+}
+
+function VideoAttachment({ url, title }: { url: string; title: string }) {
+  const embed = youtubeEmbed(url)
+  return (
+    <div className="flex flex-col gap-2">
+      <iframe
+        src={embed ?? url}
+        title={title}
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+        className="aspect-video w-full rounded-lg border border-line bg-surface"
+      />
+      <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 self-start text-sm font-medium text-accent hover:underline">
+        <ExternalLink className="h-4 w-4" />Открыть видео в новой вкладке
+      </a>
+    </div>
+  )
+}
+
+function youtubeEmbed(url: string): string | null {
+  const match =
+    url.match(/[?&]v=([\w-]{11})/) ||
+    url.match(/youtu\.be\/([\w-]{11})/) ||
+    url.match(/youtube\.com\/embed\/([\w-]{11})/)
+  return match ? 'https://www.youtube.com/embed/' + match[1] : null
 }
 
 function LikbezFormDialog({ centerId, terms, likbez, trigger }: { centerId: number; terms: MathCenterTerm[]; likbez?: Likbez; trigger?: ReactNode }) {
@@ -331,6 +363,7 @@ function LikbezMaterialsDialog({ likbez }: { likbez: Likbez }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const texQuery = useLikbezTex(likbez.id, open && likbez.has_tex)
   const putTex = usePutLikbezTex(likbez.id)
+  const preambleQuery = useMathCenterLatexPreamble(likbez.math_center_id)
   const uploadPdf = useUploadLikbezPdf(likbez.id)
   const setVideo = useSetLikbezVideo(likbez.id)
 
@@ -351,7 +384,7 @@ function LikbezMaterialsDialog({ likbez }: { likbez: Likbez }) {
         <DialogDescription>Можно прикрепить несколько форматов; публикация остаётся отдельным действием.</DialogDescription>
         {error ? <p className="mt-3 text-sm text-danger" role="alert">{error}</p> : null}
         <div className="mt-4 flex flex-col gap-4">
-          <section className="flex flex-col gap-2"><label className="text-sm font-medium text-ink">LaTeX</label><Textarea value={tex} onChange={(event) => setTex(event.target.value)} className="min-h-32 font-mono text-xs" placeholder={'\\documentclass{article}\n\\begin{document}…'} /><Button size="sm" variant="secondary" className="self-start" disabled={busy || tex.trim() === ''} onClick={() => run(async () => { await putTex.mutateAsync(tex) })}>{putTex.isPending ? 'Сохраняем…' : 'Сохранить LaTeX'}</Button></section>
+          <section className="flex flex-col gap-2"><label className="text-sm font-medium text-ink">LaTeX</label><Textarea value={tex} onChange={(event) => setTex(event.target.value)} className="min-h-32 font-mono text-xs" placeholder={'Введите текст и формулы без преамбулы…'} /><Button size="sm" variant="secondary" className="self-start" disabled={busy || tex.trim() === ''} onClick={() => run(async () => { await putTex.mutateAsync(normalizeLatexSource(tex, preambleQuery.data?.preamble ?? DEFAULT_LATEX_PREAMBLE)) })}>{putTex.isPending ? 'Сохраняем…' : 'Сохранить LaTeX'}</Button></section>
           <section className="flex flex-col gap-2 border-t border-line pt-4"><span className="text-sm font-medium text-ink">PDF{likbez.has_pdf ? ' · загружен' : ''}</span><input ref={fileRef} type="file" accept="application/pdf" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) run(async () => { await uploadPdf.mutateAsync(file) }) }} /><Button size="sm" variant="secondary" className="self-start" disabled={busy} onClick={() => fileRef.current?.click()}>{uploadPdf.isPending ? 'Загружаем…' : 'Загрузить PDF'}</Button></section>
           <section className="flex flex-col gap-2 border-t border-line pt-4"><label className="text-sm font-medium text-ink">Ссылка на видео</label><Input value={link} onChange={(event) => setLink(event.target.value)} placeholder="https://youtube.com/watch?v=…" /><div className="flex gap-2"><Button size="sm" variant="secondary" disabled={busy || link.trim() === ''} onClick={() => run(async () => { await setVideo.mutateAsync(link.trim()) })}>{setVideo.isPending ? 'Сохраняем…' : 'Сохранить ссылку'}</Button>{likbez.video_url ? <Button size="sm" variant="ghost" disabled={busy} onClick={() => run(async () => { await setVideo.mutateAsync(''); setLink('') })}>Убрать</Button> : null}</div></section>
         </div>

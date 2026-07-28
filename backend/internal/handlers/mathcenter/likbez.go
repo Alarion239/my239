@@ -441,7 +441,8 @@ func PutLikbezTex(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, message)
 			return
 		}
-		if _, err := q.SetLikbezTex(r.Context(), store.SetLikbezTexParams{ID: row.ID, TexSource: &req.Tex}); err != nil {
+		tex := normalizeTexSource(req.Tex)
+		if _, err := q.SetLikbezTex(r.Context(), store.SetLikbezTexParams{ID: row.ID, TexSource: &tex}); err != nil {
 			logger.LogErrorContext(r.Context(), "likbez: set tex", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to save tex")
 			return

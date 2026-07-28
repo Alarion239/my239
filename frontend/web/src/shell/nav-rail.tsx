@@ -81,16 +81,36 @@ function MathCenterNavItem({ module }: { module: ModuleDef }) {
           className="mx-2.5 mt-1 border-l border-line pl-3"
           aria-label="Периоды матцентра"
         >
-          <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-faint">Архив</p>
           {terms.isPending ? <p className="py-1 text-xs text-faint">Загрузка…</p> : null}
           {terms.isError ? <p className="py-1 text-xs text-danger">Не удалось загрузить периоды.</p> : null}
-          {terms.data?.map((term) => {
+          {terms.data?.filter((term) => term.is_active).map((term) => {
             const selected = term.id === selectedTermID || (!selectedTermID && term.is_active)
             return (
               <NavLink
                 key={term.id}
                 to={module.path + '/series?term_id=' + term.id}
-                onClick={() => setArchiveOpen(false)}
+                className={cn(
+                  'mb-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
+                  selected
+                    ? 'bg-surface-muted font-medium text-ink'
+                    : 'text-muted hover:bg-surface-muted hover:text-ink',
+                )}
+              >
+                <Clock3 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                <span>{term.display_name}</span>
+                {term.is_active ? <span className="ml-auto text-[10px] text-faint">сейчас</span> : null}
+                </NavLink>
+            )
+          })}
+          {terms.data?.some((term) => !term.is_active) ? (
+            <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-faint">Архив</p>
+          ) : null}
+          {terms.data?.filter((term) => !term.is_active).map((term) => {
+            const selected = term.id === selectedTermID
+            return (
+              <NavLink
+                key={term.id}
+                to={module.path + '/series?term_id=' + term.id}
                 className={cn(
                   'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
                   selected
@@ -100,7 +120,6 @@ function MathCenterNavItem({ module }: { module: ModuleDef }) {
               >
                 <Clock3 className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 <span>{term.display_name}</span>
-                {term.is_active ? <span className="ml-auto text-[10px] text-faint">сейчас</span> : null}
               </NavLink>
             )
           })}
