@@ -71,6 +71,18 @@ interface TexAssets {
   styleText: string
 }
 
+const DOCUMENT_BODY = /\\begin\s*\{\s*document\s*\}([\s\S]*?)\\end\s*\{\s*document\s*\}/
+
+// latex.js runs in the browser without the filesystem-backed package loader
+// used by its CLI. Keep the stored source untouched, but give the browser
+// renderer only the document body inside a minimal article wrapper so a
+// preamble's \usepackage lines cannot turn a valid snippet into a preview
+// parse error.
+function browserPreviewSource(tex: string): string {
+  const body = tex.match(DOCUMENT_BODY)?.[1] ?? tex
+  return '\\documentclass{article}\n\\begin{document}\n' + body.trim() + '\n\\end{document}'
+}
+
 // Lazy-load latex.js + assemble the shadow-root stylesheet exactly once; cache
 // the promise so every viewer instance shares the same import and CSS work.
 let assetsPromise: Promise<TexAssets> | null = null
@@ -132,7 +144,7 @@ export function TexViewer({ tex, className }: TexViewerProps) {
         style.textContent = styleText
         shadow.appendChild(style)
 
-        const generator = parse(tex, { generator: new HtmlGenerator({ hyphenate: false }) })
+        const generator = parse(browserPreviewSource(tex), { generator: new HtmlGenerator({ hyphenate: false }) })
         // domFragment() returns the rendered document body fragment.
         shadow.appendChild(generator.domFragment())
         setError(null)
