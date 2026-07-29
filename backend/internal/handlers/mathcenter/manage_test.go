@@ -66,6 +66,40 @@ func TestManage_ListGroupsAdmin(t *testing.T) {
 	}
 }
 
+func TestManage_ListGroupsForArchivedTerm(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	mock.ExpectQuery(`FROM math_center_terms\s+WHERE id = \$1`).
+		WithArgs(int64(70)).
+		WillReturnRows(mock.NewRows([]string{"id", "math_center_id", "kind", "grade", "is_active", "created_at", "archived_at"}).
+			AddRow(int64(70), int64(42), "academic", (*int32)(nil), false, now, (*time.Time)(nil)))
+	mock.ExpectQuery(`FROM math_center_groups\s+WHERE term_id = \$1`).
+		WithArgs(int64(70)).
+		WillReturnRows(mock.NewRows([]string{"id", "math_center_id", "name", "created_at", "term_id"}).
+			AddRow(int64(16), int64(42), "16", now, int64(70)))
+
+	req := authedAdminRequest(t, access, 9, http.MethodGet, "/centers/42/manage/groups?term_id=70", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	var groups []struct {
+		ID     int64 `json:"id"`
+		TermID int64 `json:"term_id"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &groups); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(groups) != 1 || groups[0].ID != 16 || groups[0].TermID != 70 {
+		t.Fatalf("groups = %#v, want archived group 16 in term 70", groups)
+	}
+}
+
 func TestManage_CreateGroup(t *testing.T) {
 	t.Parallel()
 	mock, _ := pgxmock.NewPool()

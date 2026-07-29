@@ -41,11 +41,13 @@ export function useUpdateMathCenterLatexPreamble(centerId: number) {
 
 // --- Groups ------------------------------------------------------------------
 
-export function useManageGroups(centerId: number) {
+export function useManageGroups(centerId: number, termId = 0) {
   const client = useApiClient()
   return useQuery<MathCenterGroup[]>({
-    queryKey: queryKeys.manageGroups(centerId),
-    queryFn: () => client.request<MathCenterGroup[]>(base(centerId) + '/groups'),
+    queryKey: [...queryKeys.manageGroups(centerId), termId],
+    queryFn: () => client.request<MathCenterGroup[]>(
+      base(centerId) + '/groups' + (termId > 0 ? '?term_id=' + termId : ''),
+    ),
     enabled: centerId > 0,
   })
 }

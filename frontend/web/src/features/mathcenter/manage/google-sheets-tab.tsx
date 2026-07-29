@@ -19,7 +19,6 @@ import { ConfirmButton, SectionHeader } from '../../admin/_shared'
 export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; activeTermId: number }) {
   const terms = useMathCenterTerms(centerId)
   const serviceAccount = useGoogleSheetConfig(centerId)
-  const groups = useManageGroups(centerId)
   const links = useManageGoogleSheetLinks(centerId)
   const runs = useManageGoogleSheetRuns(centerId)
   const discover = useDiscoverGoogleSheet(centerId)
@@ -33,6 +32,7 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
   const [sheetId, setSheetId] = useState<number | null>(null)
   const [error, setError] = useState('')
   const [accountEmailCopied, setAccountEmailCopied] = useState(false)
+  const groups = useManageGroups(centerId, termId)
 
   const availableTabs = (discover.data?.tabs ?? []).filter((tab) => {
     const title = tab.title.trim().toLowerCase()
@@ -128,7 +128,7 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
                   Группа
                   <select className="rounded-lg border border-line bg-surface px-2 py-2 text-sm text-ink" value={groupId} onChange={(event) => setGroupId(Number(event.target.value))}>
                     <option value={0}>Выберите группу</option>
-                    {(groups.data ?? []).filter((group) => group.term_id === termId).map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+                    {(groups.data ?? []).map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
                   </select>
                 </label>
               ) : null}

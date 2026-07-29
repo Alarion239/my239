@@ -118,6 +118,31 @@ func manageListGroups(database *db.DB) http.HandlerFunc {
 		if !ok {
 			return
 		}
+		if termParam := r.URL.Query().Get("term_id"); termParam != "" {
+			termID, err := strconv.ParseInt(termParam, 10, 64)
+			if err != nil || termID <= 0 {
+				httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid term id")
+				return
+			}
+			term, err := q.GetTerm(r.Context(), termID)
+			if errors.Is(err, pgx.ErrNoRows) || (err == nil && term.MathCenterID != centerID) {
+				httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid term id")
+				return
+			}
+			if err != nil {
+				logger.LogErrorContext(r.Context(), "manage: validate groups term", err)
+				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to list groups")
+				return
+			}
+			groups, err := q.ListGroupsForTerm(r.Context(), termID)
+			if err != nil {
+				logger.LogErrorContext(r.Context(), "manage: list groups for term", err)
+				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to list groups")
+				return
+			}
+			httpx.WriteJSON(w, http.StatusOK, groups)
+			return
+		}
 		groups, err := q.ListGroupsForCenter(r.Context(), centerID)
 		if err != nil {
 			logger.LogErrorContext(r.Context(), "manage: list groups", err)
