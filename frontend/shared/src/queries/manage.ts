@@ -5,6 +5,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type {
   CenterInvite,
+  GoogleSheetConfig,
   GoogleSheetLink,
   GoogleSheetSyncRun,
   GoogleSheetTab,
@@ -243,6 +244,15 @@ export function useManageRevokeInvite(centerId: number) {
 }
 
 // --- Google Sheets conduit links -------------------------------------------
+
+export function useGoogleSheetConfig(centerId: number) {
+  const client = useApiClient()
+  return useQuery<GoogleSheetConfig>({
+    queryKey: queryKeys.googleSheetConfig(centerId),
+    queryFn: () => client.request('/mathcenter/centers/' + centerId + '/google-sheets/config'),
+    enabled: centerId > 0,
+  })
+}
 
 export function useManageGoogleSheetLinks(centerId: number) {
   const client = useApiClient()

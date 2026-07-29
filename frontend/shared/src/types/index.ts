@@ -244,6 +244,10 @@ export interface GoogleSheetTab {
   title: string
 }
 
+export interface GoogleSheetConfig {
+  service_account_email: string
+}
+
 // A conduit tab belongs to one group. The term-scoped initials legend is an
 // outbound-only exception: my239 publishes it but never imports it.
 export interface GoogleSheetLink {

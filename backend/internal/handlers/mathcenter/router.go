@@ -53,6 +53,9 @@ func Router(database *db.DB, hub *live.Hub, tokens *internalAuth.TokenService, b
 	r.Get("/centers/{centerID}/coffin-queue", ListCoffinQueue(database))
 	// Head-teacher self-service management panel ("Управление").
 	r.Mount("/centers/{centerID}/manage", ManageRouter(database, hub, sheets))
+	// Any teacher may copy the non-secret service-account identity when sharing
+	// a workbook; the credential JSON itself is never returned.
+	r.Get("/centers/{centerID}/google-sheets/config", GoogleSheetConfig(database, sheets))
 	// Any teacher may manually pull the linked tabs; only heads configure them.
 	r.Post("/centers/{centerID}/google-sheets/sync", SyncGoogleSheets(database, sheets))
 	// Teacher-facing student profile + internal teacher-only notes on a student

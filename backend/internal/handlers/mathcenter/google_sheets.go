@@ -34,6 +34,34 @@ type googleSheetSyncRequest struct {
 	TermID int64 `json:"term_id"`
 }
 
+type googleSheetConfigView struct {
+	ServiceAccountEmail string `json:"service_account_email"`
+}
+
+// GoogleSheetConfig exposes only the service account's public email identity
+// so a teacher can share a workbook with the server. The credential JSON and
+// private key remain inside the backend process.
+func GoogleSheetConfig(database *db.DB, sheets *googlesheets.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		centerID, err := strconv.ParseInt(chi.URLParam(r, "centerID"), 10, 64)
+		if err != nil {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid center id")
+			return
+		}
+		userID, err := ctxcache.UserID(r.Context())
+		if err != nil {
+			httpx.WriteAPIError(w, r, http.StatusUnauthorized, httpx.CodeUnauthenticated, "unauthenticated")
+			return
+		}
+		if !requireTeacher(r.Context(), w, r, store.New(database.Pool()), userID, centerID) {
+			return
+		}
+		httpx.WriteJSON(w, http.StatusOK, googleSheetConfigView{
+			ServiceAccountEmail: sheets.ServiceAccountEmail(),
+		})
+	}
+}
+
 func manageGoogleSheetLinks(database *db.DB, sheets *googlesheets.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := store.New(database.Pool())

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
+  useGoogleSheetConfig,
   useCreateGoogleSheetLink,
   useDeleteGoogleSheetLink,
   useDiscoverGoogleSheet,
@@ -17,6 +18,7 @@ import { ConfirmButton, SectionHeader } from '../../admin/_shared'
 // checked before a link is stored.
 export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; activeTermId: number }) {
   const terms = useMathCenterTerms(centerId)
+  const serviceAccount = useGoogleSheetConfig(centerId)
   const groups = useManageGroups(centerId)
   const links = useManageGoogleSheetLinks(centerId)
   const runs = useManageGoogleSheetRuns(centerId)
@@ -30,6 +32,7 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
   const [linkKind, setLinkKind] = useState<'conduit' | 'initials_legend'>('conduit')
   const [sheetId, setSheetId] = useState<number | null>(null)
   const [error, setError] = useState('')
+  const [accountEmailCopied, setAccountEmailCopied] = useState(false)
 
   const availableTabs = (discover.data?.tabs ?? []).filter((tab) => {
     const title = tab.title.trim().toLowerCase()
@@ -58,6 +61,40 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
 
   return (
     <div className="flex flex-col gap-5">
+      <Card>
+        <CardContent className="flex flex-col gap-3">
+          <SectionHeader
+            title="Адрес service account для доступа к таблице"
+            description="Скопируйте этот адрес и добавьте его в Google Sheets через «Настройки доступа» с ролью «Редактор»."
+          />
+          {serviceAccount.isPending ? <Spinner /> : serviceAccount.data?.service_account_email ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                readOnly
+                value={serviceAccount.data.service_account_email}
+                onFocus={(event) => event.target.select()}
+                aria-label="Адрес service account"
+                className="min-w-64 flex-1 font-mono text-sm"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  void navigator.clipboard.writeText(serviceAccount.data.service_account_email).then(() => {
+                    setAccountEmailCopied(true)
+                    window.setTimeout(() => setAccountEmailCopied(false), 1500)
+                  }).catch(() => setAccountEmailCopied(false))
+                }}
+              >
+                {accountEmailCopied ? 'Скопировано' : 'Копировать адрес'}
+              </Button>
+            </div>
+          ) : (
+            <p className="text-sm text-muted">Адрес service account пока не настроен на backend.</p>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardContent className="flex flex-col gap-4">
           <SectionHeader title="Google Sheets" description="Вкладки групп синхронизируются с кондуитом; «Расшифровка» только выгружается из my239. Вкладка ЗП исключена." />
@@ -120,7 +157,7 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
               <strong>Подготовьте вкладки.</strong> Названия вкладок групп должны совпадать с названиями групп в my239, например <code className="rounded bg-surface-muted px-1 py-0.5 text-xs">16</code>, <code className="rounded bg-surface-muted px-1 py-0.5 text-xs">17</code>, <code className="rounded bg-surface-muted px-1 py-0.5 text-xs">18</code> или <code className="rounded bg-surface-muted px-1 py-0.5 text-xs">онлайн</code>. Вкладка «Расшифровка» подключается отдельно; «ЗП» не подключается.
             </li>
             <li>
-              <strong>Дайте серверу доступ к таблице.</strong> В Google Sheet нажмите «Настройки доступа» → добавьте адрес service account, который вам сообщил администратор my239, и выберите роль <strong>Редактор</strong>. Не включайте доступ «у кого есть ссылка» специально для этого подключения: нужен именно адрес service account.
+              <strong>Дайте серверу доступ к таблице.</strong> Скопируйте адрес из блока выше, в Google Sheet нажмите «Настройки доступа», добавьте его и выберите роль <strong>Редактор</strong>. Не включайте доступ «у кого есть ссылка» специально для этого подключения: нужен именно адрес service account.
             </li>
             <li>
               <strong>Откройте этот раздел в my239.</strong> Вставьте ссылку на Google Sheet в поле «Ссылка на Google Sheet» и нажмите «Найти вкладки».

@@ -66,8 +66,9 @@ type SyncRun struct {
 // separate: it receives/produces semantic cell data only after an explicit
 // mapping contract exists.
 type Service struct {
-	pool   db.Pool
-	client Client
+	pool                db.Pool
+	client              Client
+	serviceAccountEmail string
 }
 
 func NewDisabledService(pool db.Pool) *Service { return &Service{pool: pool} }
@@ -80,10 +81,23 @@ func NewService(pool db.Pool, serviceAccountJSON string) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Service{pool: pool, client: client}, nil
+	return &Service{
+		pool:                pool,
+		client:              client,
+		serviceAccountEmail: client.email,
+	}, nil
 }
 
 func (s *Service) Configured() bool { return s != nil && s.client != nil }
+
+// ServiceAccountEmail returns the non-secret identity used for Google Sheets.
+// The private key and the rest of the credential JSON never leave the server.
+func (s *Service) ServiceAccountEmail() string {
+	if s == nil {
+		return ""
+	}
+	return s.serviceAccountEmail
+}
 
 func (s *Service) DiscoverTabs(ctx context.Context, spreadsheetURL string) (string, []Tab, error) {
 	if !s.Configured() {

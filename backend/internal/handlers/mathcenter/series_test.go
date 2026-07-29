@@ -126,6 +126,7 @@ func TestRouter_RequiresAuth(t *testing.T) {
 		{http.MethodGet, "/centers/1/likbez"},
 		{http.MethodPost, "/centers/1/likbez"},
 		{http.MethodGet, "/centers/1/latex-preamble"},
+		{http.MethodGet, "/centers/1/google-sheets/config"},
 		{http.MethodGet, "/likbez/1"},
 		{http.MethodPut, "/likbez/1"},
 		{http.MethodDelete, "/likbez/1"},
