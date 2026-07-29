@@ -102,6 +102,21 @@ function EventCard({
     event.actor_user_id === viewerUserId
       ? 'Вы'
       : userNameFromThread(thread, event.actor_user_id)
+  const actorFullName = userNameFromThread(thread, event.actor_user_id)
+  const attribution = (() => {
+    switch (event.kind) {
+      case 'graded':
+        return 'Проверил: ' + actorFullName
+      case 'accepted_offline':
+        return 'Проверил очно: ' + (event.credited_grader_name?.trim() || actorFullName)
+      case 'offline_retracted':
+        return 'Отменил очный зачёт: ' + actorFullName
+      case 'retracted':
+        return 'Отозвал оценку: ' + actorFullName
+      default:
+        return actorName
+    }
+  })()
   return (
     <div className={cn('border-l-2 pl-3', accent.border)}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
@@ -109,7 +124,7 @@ function EventCard({
           {eventKindLabel(event.kind, event.verdict)}
         </span>
         <span className="text-xs text-faint">
-          {actorName} · {formatDateTime(event.created_at)}
+          {attribution} · {formatDateTime(event.created_at)}
         </span>
       </div>
       {event.body ? (

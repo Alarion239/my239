@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   initialsOf,
@@ -55,6 +55,8 @@ export function OfflineCellDialog({
   const [status, setStatus] = useState<HomeworkStatus>(target.status)
   const [threadId, setThreadId] = useState(target.threadId)
   const [comment, setComment] = useState('')
+  const [focusCommentAfterUndo, setFocusCommentAfterUndo] = useState(false)
+  const commentRef = useRef<HTMLTextAreaElement>(null)
 
   // Reset transient state whenever the dialog (re)opens onto a cell.
   useEffect(() => {
@@ -63,8 +65,19 @@ export function OfflineCellDialog({
       setThreadId(target.threadId)
       setGrader(emptyGrader)
       setComment('')
+      setFocusCommentAfterUndo(false)
     }
   }, [open, target.status, target.threadId])
+
+  // Undo turns an accepted cell back into an actionable unsolved cell. Keep
+  // the newly-mounted grader input from stealing focus and put the caret in
+  // the teacher note instead: after an undo the likely next action is to
+  // explain why, not to accept the same problem again.
+  useEffect(() => {
+    if (open && focusCommentAfterUndo && threadId > 0) {
+      commentRef.current?.focus()
+    }
+  }, [focusCommentAfterUndo, open, threadId])
 
   const accept = useOfflineAccept()
   const undo = useOfflineUndo()
@@ -101,7 +114,12 @@ export function OfflineCellDialog({
   function doUndo() {
     undo.mutate(
       { student_user_id: target.studentUserId, subproblem_id: target.subproblemId },
-      { onSuccess: (thread) => setStatus(thread.current_status) },
+      {
+        onSuccess: (thread) => {
+          setStatus(thread.current_status)
+          setFocusCommentAfterUndo(true)
+        },
+      },
     )
   }
 
@@ -138,7 +156,12 @@ export function OfflineCellDialog({
         ) : (
           <div className="flex flex-col gap-2">
             {mode === 'conduit' ? (
-              <GraderInitialsInput centerId={centerId} value={grader} onChange={setGrader} autoFocus />
+              <GraderInitialsInput
+                centerId={centerId}
+                value={grader}
+                onChange={setGrader}
+                autoFocus={!focusCommentAfterUndo}
+              />
             ) : null}
             <Button onClick={doAccept} disabled={!canAccept || accept.isPending}>
               ✓ Отметить решённым
@@ -167,6 +190,7 @@ export function OfflineCellDialog({
               </ul>
             ) : null}
             <Textarea
+              ref={commentRef}
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               placeholder="Заметка для преподавателей (не видна ученику)…"

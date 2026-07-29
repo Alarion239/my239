@@ -72,6 +72,51 @@ describe('ThreadTimeline', () => {
     renderTimeline(thread(), false, 2)
     expect(screen.getByText('Решение')).toBeInTheDocument()
     expect(screen.getByText('Отклонено')).toBeInTheDocument()
+    expect(screen.getByText(/Проверил: Пётр Иванов/)).toBeInTheDocument()
+  })
+
+  it('shows the credited in-person grader rather than the shared-computer actor', () => {
+    renderTimeline(
+      thread({
+        current_status: 'accepted',
+        events: [
+          event({
+            id: 3,
+            kind: 'accepted_offline',
+            verdict: 'accepted',
+            actor_user_id: 2,
+            credited_grader_name: 'Мария Кузнецова',
+          }),
+        ],
+      }),
+      false,
+      2,
+    )
+
+    expect(
+      screen.getByText(/Проверил очно: Мария Кузнецова/),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Проверил очно: Пётр Иванов/)).not.toBeInTheDocument()
+  })
+
+  it('names who cancelled an in-person accept', () => {
+    renderTimeline(
+      thread({
+        events: [
+          event({
+            id: 4,
+            kind: 'offline_retracted',
+            actor_user_id: 2,
+          }),
+        ],
+      }),
+      false,
+      1,
+    )
+
+    expect(
+      screen.getByText(/Отменил очный зачёт: Пётр Иванов/),
+    ).toBeInTheDocument()
   })
 
   it('shows the inline appeal box for the owning student on a rejection', () => {
