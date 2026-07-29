@@ -1,6 +1,9 @@
 package googlesheets
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestValidateLinkTarget(t *testing.T) {
 	tests := []struct {
@@ -59,5 +62,86 @@ func TestParseConduitMarkers(t *testing.T) {
 	}
 	if got := markers[2]; got.Series != 2 || got.Problem != 3 || got.Initials != "ВГ" {
 		t.Fatalf("third marker = %#v", got)
+	}
+}
+
+func TestParseConduitRoster(t *testing.T) {
+	values := [][]string{
+		{"", "Серия 1"},
+		{"Фамилия Имя", "1"},
+		{"Идеальный Ученик", "1"},
+		{"  Иванов   Иван  "},
+		{},
+		{"Петров Пётр"},
+	}
+	roster, err := parseConduitRoster(values)
+	if err != nil {
+		t.Fatalf("parseConduitRoster() error = %v", err)
+	}
+	if roster.headerRow != 1 || roster.nameColumn != 0 || roster.lastNameRow != 5 {
+		t.Fatalf("roster coordinates = %#v", roster)
+	}
+	if len(roster.names) != 2 || roster.names[0] != "Иванов Иван" || roster.names[1] != "Петров Пётр" {
+		t.Fatalf("roster names = %#v", roster.names)
+	}
+	if _, exists := roster.nameKeys[normalizePersonName("Идеальный Ученик")]; exists {
+		t.Fatal("ideal student must not be imported")
+	}
+}
+
+func TestParseSheetSeries(t *testing.T) {
+	values := [][]string{
+		{"", "", "Серия 11", "", "", "Серия 12"},
+		{"Фамилия Имя", "Решено", "1a", "1b", "2", "3"},
+	}
+	layout, err := parseSheetSeries(values)
+	if err != nil {
+		t.Fatalf("parseSheetSeries() error = %v", err)
+	}
+	if layout.headerRow != 1 || len(layout.series) != 2 {
+		t.Fatalf("layout = %#v", layout)
+	}
+	wantFirst := sheetSeries{
+		number: 11,
+		problems: []sheetProblem{
+			{number: 1, label: "a"},
+			{number: 1, label: "b"},
+			{number: 2, label: ""},
+		},
+	}
+	if !sameSeriesLayout(layout.series[0], wantFirst) {
+		t.Fatalf("first series = %#v, want %#v", layout.series[0], wantFirst)
+	}
+	if got := layout.series[1]; got.number != 12 || len(got.problems) != 1 || got.problems[0].number != 3 {
+		t.Fatalf("second series = %#v", got)
+	}
+}
+
+func TestSeriesExportRows(t *testing.T) {
+	seriesRow, problemRow := seriesExportRows([]sheetSeries{
+		{number: 3, problems: []sheetProblem{{number: 1}, {number: 2, label: "a"}}},
+		{number: 4},
+	})
+	if got, want := strings.Join(seriesRow, "|"), "Серия 3||Серия 4"; got != want {
+		t.Fatalf("series row = %q, want %q", got, want)
+	}
+	if got, want := strings.Join(problemRow, "|"), "1|2a|"; got != want {
+		t.Fatalf("problem row = %q, want %q", got, want)
+	}
+}
+
+func TestSplitSheetName(t *testing.T) {
+	last, first, middle, err := splitSheetName("Иванов Иван Иванович")
+	if err != nil {
+		t.Fatalf("splitSheetName() error = %v", err)
+	}
+	if last != "Иванов" || first != "Иван" || middle == nil || *middle != "Иванович" {
+		t.Fatalf("split name = %q %q %#v", last, first, middle)
+	}
+	if _, _, _, err := splitSheetName("Мадонна"); err == nil {
+		t.Fatal("one-part name must be rejected")
+	}
+	if normalizePersonName("Петров Пётр") == normalizePersonName("Петров Петр") {
+		t.Fatal("student identity matching must preserve exact spelling")
 	}
 }

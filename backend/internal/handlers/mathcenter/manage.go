@@ -62,6 +62,8 @@ func ManageRouter(database *db.DB, hub *live.Hub, sheetServices ...*googlesheets
 	r.Patch("/google-sheets/links/{linkID}", manageGoogleSheetEnabled(database, sheets))
 	r.Delete("/google-sheets/links/{linkID}", manageGoogleSheetDelete(database, sheets))
 	r.Get("/google-sheets/runs", manageGoogleSheetRuns(database, sheets))
+	r.Post("/google-sheets/sync-students", manageGoogleSheetSyncStudents(database, sheets))
+	r.Post("/google-sheets/sync-series", manageGoogleSheetSyncSeries(database, sheets))
 	r.Patch("/latex-preamble", UpdateLatexPreamble(database))
 
 	return r

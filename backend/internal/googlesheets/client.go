@@ -19,6 +19,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -32,6 +33,7 @@ const (
 )
 
 var ErrNotConfigured = errors.New("google sheets integration is not configured")
+var updateRangePattern = regexp.MustCompile(`^[A-Z]+[1-9][0-9]*:[A-Z]+[1-9][0-9]*$`)
 
 // Tab is the immutable Google tab id plus its human-readable current title.
 type Tab struct {
@@ -52,6 +54,7 @@ type Client interface {
 	ListTabs(context.Context, string) ([]Tab, error)
 	Metadata(context.Context, string) (Metadata, error)
 	Values(context.Context, string, string) ([][]string, error)
+	UpdateValues(context.Context, string, string, string, [][]string) error
 }
 
 type serviceAccount struct {
@@ -183,16 +186,61 @@ func (c *HTTPClient) Values(ctx context.Context, spreadsheetID, sheetTitle strin
 	return response.Values, nil
 }
 
+// UpdateValues replaces one server-generated A1 range with raw values. The
+// sheet title is a title returned by Google, while rangeName is constructed by
+// the reconciliation code from numeric row/column positions.
+func (c *HTTPClient) UpdateValues(ctx context.Context, spreadsheetID, sheetTitle, rangeName string, values [][]string) error {
+	if err := validSpreadsheetID(spreadsheetID); err != nil {
+		return err
+	}
+	title := strings.TrimSpace(sheetTitle)
+	if title == "" {
+		return errors.New("google sheet title is required")
+	}
+	if !updateRangePattern.MatchString(rangeName) {
+		return errors.New("invalid google sheet update range")
+	}
+	fullRange := "'" + strings.ReplaceAll(title, "'", "''") + "'!" + rangeName
+	body := struct {
+		Range          string     `json:"range"`
+		MajorDimension string     `json:"majorDimension"`
+		Values         [][]string `json:"values"`
+	}{
+		Range:          fullRange,
+		MajorDimension: "ROWS",
+		Values:         values,
+	}
+	endpoint := "https://sheets.googleapis.com/v4/spreadsheets/" + url.PathEscape(spreadsheetID) +
+		"/values/" + url.PathEscape(fullRange) + "?valueInputOption=RAW"
+	return c.doJSON(ctx, http.MethodPut, endpoint, body, nil)
+}
+
 func (c *HTTPClient) getJSON(ctx context.Context, endpoint string, dst any) error {
+	return c.doJSON(ctx, http.MethodGet, endpoint, nil, dst)
+}
+
+func (c *HTTPClient) doJSON(ctx context.Context, method, endpoint string, body, dst any) error {
 	accessToken, err := c.accessToken(ctx)
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	var reader io.Reader
+	if body != nil {
+		var encoded []byte
+		encoded, err = json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("encoding google api request: %w", err)
+		}
+		reader = strings.NewReader(string(encoded))
+	}
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, reader)
 	if err != nil {
 		return fmt.Errorf("creating google api request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("calling google api: %w", err)
@@ -205,6 +253,13 @@ func (c *HTTPClient) getJSON(ctx context.Context, endpoint string, dst any) erro
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<10))
 		return fmt.Errorf("google api returned %s: %s", resp.Status, strings.TrimSpace(string(body)))
+	}
+	if dst == nil {
+		_, err = io.Copy(io.Discard, resp.Body)
+		if err != nil {
+			return fmt.Errorf("reading google api response: %w", err)
+		}
+		return nil
 	}
 	if err := json.NewDecoder(resp.Body).Decode(dst); err != nil {
 		return fmt.Errorf("decoding google api response: %w", err)

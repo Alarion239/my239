@@ -279,6 +279,20 @@ export interface GoogleSheetSyncRun {
   finished_at?: string | null
 }
 
+export interface GoogleSheetStudentSyncResult {
+  added_to_my239: number
+  added_to_sheets: number
+  matched: number
+  moved: number
+  ambiguous: number
+}
+
+export interface GoogleSheetSeriesSyncResult {
+  added_to_my239: number
+  added_to_sheets: number
+  matched: number
+}
+
 // --- Head-teacher management panel ("Управление") ----------------------------
 // Wire types for /mathcenter/centers/{id}/manage/*. Keep in sync with
 // backend/internal/handlers/mathcenter/manage.go.

@@ -9,6 +9,8 @@ import {
   useManageGoogleSheetRuns,
   useMathCenterTerms,
   useSetGoogleSheetLinkEnabled,
+  useSyncGoogleSheetSeries,
+  useSyncGoogleSheetStudents,
 } from '@my239/shared'
 import { Button, Card, CardContent, Input, Spinner } from '../../../design/ui'
 import { ConfirmButton, SectionHeader } from '../../admin/_shared'
@@ -25,12 +27,16 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
   const create = useCreateGoogleSheetLink(centerId)
   const setEnabled = useSetGoogleSheetLinkEnabled(centerId)
   const remove = useDeleteGoogleSheetLink(centerId)
+  const syncStudents = useSyncGoogleSheetStudents(centerId)
+  const syncSeries = useSyncGoogleSheetSeries(centerId)
   const [url, setURL] = useState('')
   const [termId, setTermId] = useState(activeTermId)
   const [groupId, setGroupId] = useState(0)
   const [linkKind, setLinkKind] = useState<'conduit' | 'initials_legend'>('conduit')
   const [sheetId, setSheetId] = useState<number | null>(null)
   const [error, setError] = useState('')
+  const [syncMessage, setSyncMessage] = useState('')
+  const [syncError, setSyncError] = useState('')
   const [accountEmailCopied, setAccountEmailCopied] = useState(false)
   const groups = useManageGroups(centerId, termId)
   const visibleRuns = (runs.data ?? []).filter((run) => run.error_message !== 'google sheets conduit parser is not configured')
@@ -57,6 +63,32 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
     create.mutate({ term_id: termId, group_id: linkKind === 'conduit' ? groupId : 0, link_kind: linkKind, spreadsheet_url: url, sheet_id: sheetId }, {
       onSuccess: () => { setGroupId(0); setSheetId(null) },
       onError: () => setError('Не удалось сохранить связь таблицы.'),
+    })
+  }
+
+  const synchronizeStudents = () => {
+    if (!termId) return
+    setSyncMessage('')
+    setSyncError('')
+    syncStudents.mutate(termId, {
+      onSuccess: (result) => setSyncMessage(
+        `Ученики: добавлено в my239 — ${result.added_to_my239}, в Google Sheets — ${result.added_to_sheets}, совпало — ${result.matched}` +
+        (result.moved > 0 ? `, перенесено в связанную группу — ${result.moved}` : '') +
+        (result.ambiguous > 0 ? `, пропущено неоднозначных имён — ${result.ambiguous}` : ''),
+      ),
+      onError: () => setSyncError('Не удалось синхронизировать учеников. Проверьте связанные вкладки и доступ к таблице.'),
+    })
+  }
+
+  const synchronizeSeries = () => {
+    if (!termId) return
+    setSyncMessage('')
+    setSyncError('')
+    syncSeries.mutate(termId, {
+      onSuccess: (result) => setSyncMessage(
+        `Серии: добавлено в my239 — ${result.added_to_my239}, в Google Sheets — ${result.added_to_sheets}, найдено в таблицах — ${result.matched}.`,
+      ),
+      onError: () => setSyncError('Не удалось синхронизировать серии. Проверьте разметку связанных вкладок и доступ к таблице.'),
     })
   }
 
@@ -161,6 +193,48 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
               Выберите период, группу и вкладку, затем нажмите «Связать». «Расшифровка» подключается отдельно.
             </li>
           </ol>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="flex flex-col gap-3">
+          <SectionHeader
+            title="Синхронизация структуры"
+            description="Объединяет данные my239 и всех включённых вкладок выбранного периода, ничего не удаляя."
+          />
+          <label className="flex w-fit flex-col gap-1 text-xs text-muted">
+            Период
+            <select
+              className="rounded-lg border border-line bg-surface px-2 py-2 text-sm text-ink"
+              value={termId}
+              onChange={(event) => setTermId(Number(event.target.value))}
+            >
+              <option value={0}>Выберите период</option>
+              {(terms.data ?? []).map((term) => <option key={term.id} value={term.id}>{term.display_name}</option>)}
+            </select>
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              disabled={!termId || syncStudents.isPending || syncSeries.isPending}
+              onClick={synchronizeStudents}
+            >
+              Синхронизировать учеников
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!termId || syncStudents.isPending || syncSeries.isPending}
+              onClick={synchronizeSeries}
+            >
+              Синхронизировать серии
+            </Button>
+          </div>
+          <p className="text-xs text-muted">
+            Ученики сопоставляются по точному полному имени из колонки «Фамилия Имя». Серии сопоставляются по номеру; для новой серии из таблицы my239 создаст опубликованную заглушку.
+          </p>
+          {syncMessage ? <p className="text-sm text-success">{syncMessage}</p> : null}
+          {syncError ? <p className="text-sm text-danger">{syncError}</p> : null}
         </CardContent>
       </Card>
 

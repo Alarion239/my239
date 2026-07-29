@@ -7,6 +7,8 @@ import type {
   CenterInvite,
   GoogleSheetConfig,
   GoogleSheetLink,
+  GoogleSheetSeriesSyncResult,
+  GoogleSheetStudentSyncResult,
   GoogleSheetSyncRun,
   GoogleSheetTab,
   InviteContext,
@@ -321,6 +323,38 @@ export function useDeleteGoogleSheetLink(centerId: number) {
   return useMutation({
     mutationFn: (linkId: number) => client.request(base(centerId) + '/google-sheets/links/' + linkId, { method: 'DELETE' }),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.manageGoogleSheetLinks(centerId) }),
+  })
+}
+
+export function useSyncGoogleSheetStudents(centerId: number) {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (term_id: number) =>
+      client.request<GoogleSheetStudentSyncResult>(
+        base(centerId) + '/google-sheets/sync-students',
+        { method: 'POST', body: { term_id } },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.manageStudents(centerId) })
+      qc.invalidateQueries({ queryKey: queryKeys.manageGoogleSheetLinks(centerId) })
+    },
+  })
+}
+
+export function useSyncGoogleSheetSeries(centerId: number) {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (term_id: number) =>
+      client.request<GoogleSheetSeriesSyncResult>(
+        base(centerId) + '/google-sheets/sync-series',
+        { method: 'POST', body: { term_id } },
+      ),
+    onSuccess: (_data, termId) => {
+      qc.invalidateQueries({ queryKey: queryKeys.seriesList(centerId, termId) })
+      qc.invalidateQueries({ queryKey: queryKeys.manageGoogleSheetLinks(centerId) })
+    },
   })
 }
 

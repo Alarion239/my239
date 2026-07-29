@@ -61,9 +61,7 @@ type SyncRun struct {
 	FinishedAt       *time.Time      `json:"finished_at"`
 }
 
-// Service owns persistence and the Google boundary. Parser execution is kept
-// separate: it receives/produces semantic cell data only after an explicit
-// mapping contract exists.
+// Service owns persistence, conduit parsing, and the narrow Google boundary.
 type Service struct {
 	pool                db.Pool
 	client              Client
@@ -248,10 +246,7 @@ func (s *Service) DeleteLink(ctx context.Context, centerID, linkID int64) error 
 	return nil
 }
 
-// SyncTerm records the remote workbook version for every enabled link. Actual
-// accept/retraction reconciliation returns ErrParserNotConfigured until the
-// approved parser is attached; this deliberately never mutates a conduit by
-// guessing the meaning of a cell.
+// SyncTerm imports accepted offline marks from every enabled conduit link.
 func (s *Service) SyncTerm(ctx context.Context, centerID, termID, actorID int64) ([]SyncRun, error) {
 	if !s.Configured() {
 		return nil, ErrNotConfigured
@@ -542,7 +537,7 @@ func conduitTargetKey(student string, series, problem int, label string) string 
 }
 
 func (s *Service) conduitTargets(ctx context.Context, link Link) (map[string]conduitTarget, error) {
-	const query = `SELECT mcs.user_id, group_.math_center_id, u.last_name, u.first_name, series.id, series.number,
+	const query = `SELECT mcs.user_id, group_.math_center_id, u.last_name, u.first_name, u.middle_name, series.id, series.number,
         problem.number, subproblem.label, subproblem.id, COALESCE(thread.current_status, 'ungraded')
         FROM math_center_students mcs
         JOIN users u ON u.id = mcs.user_id
@@ -563,12 +558,15 @@ func (s *Service) conduitTargets(ctx context.Context, link Link) (map[string]con
 	for rows.Next() {
 		var target conduitTarget
 		var lastName, firstName, label string
+		var middleName *string
 		var seriesNumber, problemNumber int
-		if err := rows.Scan(&target.studentID, &target.centerID, &lastName, &firstName, &target.seriesID,
+		if err := rows.Scan(&target.studentID, &target.centerID, &lastName, &firstName, &middleName, &target.seriesID,
 			&seriesNumber, &problemNumber, &label, &target.subproblemID, &target.status); err != nil {
 			return nil, fmt.Errorf("scanning conduit target: %w", err)
 		}
-		key := conduitTargetKey(lastName+" "+firstName, seriesNumber, problemNumber, label)
+		key := conduitTargetKey(sheetPersonName(userName{
+			firstName: firstName, middleName: middleName, lastName: lastName,
+		}), seriesNumber, problemNumber, label)
 		if _, duplicate := targets[key]; duplicate {
 			delete(targets, key)
 			ambiguous[key] = struct{}{}

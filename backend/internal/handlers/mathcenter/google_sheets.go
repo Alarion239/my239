@@ -12,6 +12,7 @@ import (
 	"github.com/Alarion239/my239/backend/internal/ctxcache"
 	"github.com/Alarion239/my239/backend/internal/googlesheets"
 	"github.com/Alarion239/my239/backend/internal/httpx"
+	"github.com/Alarion239/my239/backend/internal/live"
 	"github.com/Alarion239/my239/backend/internal/logger"
 	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/pkg/db"
@@ -93,6 +94,55 @@ func manageGoogleSheetRuns(database *db.DB, sheets *googlesheets.Service) http.H
 			return
 		}
 		httpx.WriteJSON(w, http.StatusOK, runs)
+	}
+}
+
+func manageGoogleSheetSyncStudents(database *db.DB, sheets *googlesheets.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		q := store.New(database.Pool())
+		centerID, _, ok := manageGate(w, r, q)
+		if !ok {
+			return
+		}
+		var request googleSheetSyncRequest
+		if !httpx.DecodeJSONBody(w, r, &request) {
+			return
+		}
+		if request.TermID <= 0 {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "term_id is required")
+			return
+		}
+		result, err := sheets.SyncStudents(r.Context(), centerID, request.TermID)
+		if writeGoogleSheetsError(w, r, err) {
+			return
+		}
+		if result.AddedToMy239 > 0 || result.Moved > 0 {
+			live.Publish(r.Context(), database.Pool(), live.Event{CenterID: centerID, Kind: live.KindMembership})
+		}
+		httpx.WriteJSON(w, http.StatusOK, result)
+	}
+}
+
+func manageGoogleSheetSyncSeries(database *db.DB, sheets *googlesheets.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		q := store.New(database.Pool())
+		centerID, _, ok := manageGate(w, r, q)
+		if !ok {
+			return
+		}
+		var request googleSheetSyncRequest
+		if !httpx.DecodeJSONBody(w, r, &request) {
+			return
+		}
+		if request.TermID <= 0 {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "term_id is required")
+			return
+		}
+		result, err := sheets.SyncSeries(r.Context(), centerID, request.TermID)
+		if writeGoogleSheetsError(w, r, err) {
+			return
+		}
+		httpx.WriteJSON(w, http.StatusOK, result)
 	}
 }
 
