@@ -112,31 +112,28 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
       <Card>
         <CardContent className="flex flex-col gap-4">
           <SectionHeader
-            title="Как настроить доступ service account"
-            description="Настройка выполняется один раз. Один service account можно использовать для всех рабочих таблиц проекта."
+            title="Как подключить таблицу"
+            description="Эта инструкция для преподавателей. Секретный JSON и настройки сервера здесь не нужны."
           />
           <ol className="flex list-decimal flex-col gap-3 pl-5 text-sm text-ink">
             <li>
-              <strong>Включите API в Google Cloud.</strong> Откройте проект, которому принадлежит service account, затем в разделе «APIs &amp; Services → Library» включите <strong>Google Sheets API</strong> и <strong>Google Drive API</strong>.
+              <strong>Подготовьте вкладки.</strong> Названия вкладок групп должны совпадать с названиями групп в my239, например <code className="rounded bg-surface-muted px-1 py-0.5 text-xs">16</code>, <code className="rounded bg-surface-muted px-1 py-0.5 text-xs">17</code>, <code className="rounded bg-surface-muted px-1 py-0.5 text-xs">18</code> или <code className="rounded bg-surface-muted px-1 py-0.5 text-xs">онлайн</code>. Вкладка «Расшифровка» подключается отдельно; «ЗП» не подключается.
             </li>
             <li>
-              <strong>Проверьте service account.</strong> В «IAM &amp; Admin → Service Accounts» откройте существующий аккаунт и скопируйте его адрес вида <code className="rounded bg-surface-muted px-1 py-0.5 text-xs">name@project.iam.gserviceaccount.com</code>. Если JSON-ключа нет или он утерян, во вкладке «Keys» создайте новый ключ типа JSON и скачайте его.
+              <strong>Дайте серверу доступ к таблице.</strong> В Google Sheet нажмите «Настройки доступа» → добавьте адрес service account, который вам сообщил администратор my239, и выберите роль <strong>Редактор</strong>. Не включайте доступ «у кого есть ссылка» специально для этого подключения: нужен именно адрес service account.
             </li>
             <li>
-              <strong>Откройте таблицу для этого адреса.</strong> В Google Sheet нажмите «Настройки доступа», добавьте скопированный адрес service account и выдайте роль <strong>Редактор</strong>. Доступ «у кого есть ссылка» сам по себе не заменяет это приглашение: API обращается к таблице от имени service account.
+              <strong>Откройте этот раздел в my239.</strong> Вставьте ссылку на Google Sheet в поле «Ссылка на Google Sheet» и нажмите «Найти вкладки».
             </li>
             <li>
-              <strong>Добавьте JSON в Railway.</strong> В настройках backend-сервиса откройте «Variables» и создайте переменную <code className="rounded bg-surface-muted px-1 py-0.5 text-xs">GOOGLE_SERVICE_ACCOUNT_JSON</code>. Вставьте в её значение весь JSON-файл целиком, включая поля <code className="rounded bg-surface-muted px-1 py-0.5 text-xs">client_email</code>, <code className="rounded bg-surface-muted px-1 py-0.5 text-xs">private_key</code> и <code className="rounded bg-surface-muted px-1 py-0.5 text-xs">token_uri</code>. Не публикуйте этот JSON и не добавляйте его в Git.
+              <strong>Выберите назначение.</strong> Для обычной вкладки группы выберите период, «Кондуит группы», нужную группу и вкладку, затем нажмите «Связать». Для «Расшифровки» выберите назначение «Расшифровка (только my239 → Sheets)».
             </li>
             <li>
-              <strong>Перезапустите или задеплойте backend.</strong> Переменная читается при запуске сервера, поэтому после изменения Railway должен выполнить новый deploy/restart.
-            </li>
-            <li>
-              <strong>Свяжите таблицу в my239.</strong> Вставьте ссылку на Google Sheet выше и нажмите «Найти вкладки». Затем выберите период и назначение: вкладки групп <code className="rounded bg-surface-muted px-1 py-0.5 text-xs">16</code>, <code className="rounded bg-surface-muted px-1 py-0.5 text-xs">17</code>, <code className="rounded bg-surface-muted px-1 py-0.5 text-xs">18</code> и <code className="rounded bg-surface-muted px-1 py-0.5 text-xs">онлайн</code> подключаются как кондуит группы; «Расшифровка» подключается отдельно и выгружается только из my239. Вкладка «ЗП» намеренно недоступна.
+              <strong>Синхронизируйте данные.</strong> После связывания откройте «Кондуит» и нажмите «Синхронизировать связанные Google Sheets», когда нужно перенести изменения.
             </li>
           </ol>
           <div className="rounded-lg bg-surface-muted px-3 py-3 text-sm text-muted">
-            <strong className="text-ink">Если вкладки не читаются:</strong> проверьте, что JSON вставлен без повреждений, API включены, таблица расшарена именно на <code className="rounded bg-surface px-1 py-0.5 text-xs">client_email</code> из JSON, а backend после добавления переменной был перезапущен. Самому service account не нужна роль владельца таблицы или широкая роль редактора проекта — достаточно доступа к конкретной таблице.
+            <strong className="text-ink">Если появляется ошибка доступа:</strong> проверьте, что таблица расшарена именно на адрес service account и с ролью «Редактор». Если адреса у вас нет, попросите его у администратора. JSON-ключ, Railway и Google Cloud на сайте преподавателю настраивать не нужно.
           </div>
         </CardContent>
       </Card>
