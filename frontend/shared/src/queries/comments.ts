@@ -104,7 +104,7 @@ export function useCreateStudentNote(centerId: number, studentUserId: number) {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.studentNotes(centerId, studentUserId) })
-      qc.invalidateQueries({ queryKey: queryKeys.centerGrid(centerId) })
+      qc.invalidateQueries({ queryKey: queryKeys.centerGrids(centerId) })
     },
   })
 }
@@ -133,7 +133,7 @@ export function useDeleteStudentNote(centerId: number, studentUserId: number) {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.studentNotes(centerId, studentUserId) })
-      qc.invalidateQueries({ queryKey: queryKeys.centerGrid(centerId) })
+      qc.invalidateQueries({ queryKey: queryKeys.centerGrids(centerId) })
     },
   })
 }

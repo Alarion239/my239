@@ -119,15 +119,53 @@ export function useCenterTeachers(centerId: number) {
 
 // --- Cache plumbing ----------------------------------------------------------
 
+// applyThreadToCenterGrid makes a successful mutation authoritative in every
+// matching term cache before the active-session overlay is cleared. The
+// subsequent invalidation still refetches the complete server representation.
+export function applyThreadToCenterGrid(
+  grid: CenterGridResponse | undefined,
+  thread: ThreadView,
+): CenterGridResponse | undefined {
+  if (!grid) return grid
+  const hasStudent = grid.groups.some((group) =>
+    group.students.some((student) => student.user_id === thread.student_user_id),
+  )
+  const hasSubproblem = grid.series.some((series) =>
+    series.columns.some((column) => column.subproblem_id === thread.subproblem_id),
+  )
+  if (!hasStudent || !hasSubproblem) return grid
+
+  const key = thread.student_user_id + ':' + thread.subproblem_id
+  return {
+    ...grid,
+    cells: {
+      ...grid.cells,
+      [key]: {
+        ...grid.cells[key],
+        thread_id: thread.id,
+        current_status: thread.current_status,
+        last_grader_user_id: thread.last_grader_user_id,
+        last_grader_name: thread.last_grader_name,
+        claim_holder_user_id: thread.claim_holder_user_id,
+        claim_expires_at: thread.claim_expires_at,
+      },
+    },
+  }
+}
+
 // applyThread writes a fresh ThreadView into the thread cache and invalidates
 // every list view that reflects its state (the student rollup, teacher stats,
 // the queue in both `mine` variants, the grid, and the center grader stats).
 function applyThread(qc: QueryClient, thread: ThreadView): void {
   qc.setQueryData(queryKeys.thread(thread.id), thread)
+  qc.setQueriesData<CenterGridResponse>(
+    { queryKey: queryKeys.centerGrids(thread.math_center_id) },
+    (grid) => applyThreadToCenterGrid(grid, thread),
+  )
   qc.invalidateQueries({ queryKey: queryKeys.myRollup(thread.series_id) })
   qc.invalidateQueries({ queryKey: queryKeys.problemStats(thread.series_id) })
   qc.invalidateQueries({ queryKey: queryKeys.teacherGrid(thread.series_id) })
-  qc.invalidateQueries({ queryKey: queryKeys.centerGrid(thread.math_center_id) })
+  qc.invalidateQueries({ queryKey: queryKeys.centerGrids(thread.math_center_id) })
   qc.invalidateQueries({ queryKey: queryKeys.graderStats(thread.math_center_id) })
   qc.invalidateQueries({ queryKey: queryKeys.coffinQueue(thread.math_center_id) })
   // Both `mine=true|false` queue variants share this prefix.

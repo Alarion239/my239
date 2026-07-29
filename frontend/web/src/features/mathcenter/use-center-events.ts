@@ -69,7 +69,7 @@ function handle(
         queryKey: ['homework', 'series', seriesId, 'queue'],
       })
     }
-    qc.invalidateQueries({ queryKey: queryKeys.centerGrid(centerId) })
+    qc.invalidateQueries({ queryKey: queryKeys.centerGrids(centerId) })
     qc.invalidateQueries({ queryKey: queryKeys.graderStats(centerId) })
     qc.invalidateQueries({ queryKey: queryKeys.coffinQueue(centerId) })
   } else if (kind === 'coffins') {
@@ -84,12 +84,12 @@ function handle(
     if (seriesId > 0) {
       qc.invalidateQueries({ queryKey: queryKeys.teacherGrid(seriesId) })
     }
-    qc.invalidateQueries({ queryKey: queryKeys.centerGrid(centerId) })
+    qc.invalidateQueries({ queryKey: queryKeys.centerGrids(centerId) })
   } else if (kind === 'membership') {
     qc.invalidateQueries({ queryKey: queryKeys.manageGroups(centerId) })
     qc.invalidateQueries({ queryKey: queryKeys.manageTeachers(centerId) })
     qc.invalidateQueries({ queryKey: queryKeys.manageStudents(centerId) })
     qc.invalidateQueries({ queryKey: queryKeys.mathCenterMe })
-    qc.invalidateQueries({ queryKey: queryKeys.centerGrid(centerId) })
+    qc.invalidateQueries({ queryKey: queryKeys.centerGrids(centerId) })
   }
 }

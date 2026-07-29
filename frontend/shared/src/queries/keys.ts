@@ -58,8 +58,10 @@ export const queryKeys = {
     ['homework', 'series', seriesId, 'queue', mine] as const,
   teacherGrid: (seriesId: number) =>
     ['homework', 'series', seriesId, 'grid'] as const,
+  centerGrids: (centerId: number) =>
+    ['homework', 'centers', centerId, 'terms'] as const,
   centerGrid: (centerId: number, termId = 0) =>
-    ['homework', 'centers', centerId, 'terms', termId, 'grid'] as const,
+    [...queryKeys.centerGrids(centerId), termId, 'grid'] as const,
   graderStats: (centerId: number) =>
     ['homework', 'centers', centerId, 'grader-stats'] as const,
   // Teachers of a center, for the offline-grading initials autocomplete.
