@@ -6,18 +6,17 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/Alarion239/my239/backend/internal/homework"
+	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/pkg/db"
 )
-
-// ErrParserNotConfigured deliberately blocks semantic synchronization until a
-// center-specific workbook mapping is supplied. Linking and Google access stay
-// usable, but no unreviewed row/column heuristic can alter student history.
-var ErrParserNotConfigured = errors.New("google sheets conduit parser is not configured")
 
 type LinkKind string
 
@@ -313,8 +312,9 @@ func (s *Service) syncLink(ctx context.Context, link Link, actorID int64) (SyncR
             SET last_google_version = $1, last_google_modified_at = $2, updated_at = NOW()
             WHERE id = $3`, metadata.Version, metadata.ModifiedAt, link.ID)
 	}
+	var summary syncSummary
 	if err == nil {
-		err = ErrParserNotConfigured
+		summary, err = s.importLink(ctx, link, actorID, metadata.Version)
 	}
 	if err != nil {
 		_, updateErr := s.pool.Exec(ctx, `UPDATE math_center_google_sheet_sync_runs
@@ -330,7 +330,255 @@ func (s *Service) syncLink(ctx context.Context, link Link, actorID int64) (SyncR
 		run.FinishedAt = &now
 		return run, nil
 	}
+	encodedSummary, err := json.Marshal(summary)
+	if err != nil {
+		return SyncRun{}, fmt.Errorf("encoding google sheet sync summary: %w", err)
+	}
+	if _, err := s.pool.Exec(ctx, `UPDATE math_center_google_sheet_sync_runs
+        SET status = 'succeeded', google_version = $1, google_modified_at = $2,
+            summary = $3, finished_at = NOW() WHERE id = $4`,
+		metadata.Version, nullableTime(metadata.ModifiedAt), encodedSummary, run.ID); err != nil {
+		return SyncRun{}, fmt.Errorf("recording google sheet sync success: %w", err)
+	}
+	run.Status, run.GoogleVersion, run.Summary = "succeeded", metadata.Version, encodedSummary
+	run.GoogleModifiedAt = nullableTime(metadata.ModifiedAt)
+	now := time.Now()
+	run.FinishedAt = &now
 	return run, nil
+}
+
+type syncSummary struct {
+	Imported int `json:"imported"`
+	Skipped  int `json:"skipped"`
+}
+
+type conduitMarker struct {
+	StudentName string
+	Series      int
+	Problem     int
+	Label       string
+	Initials    string
+	Cell        string
+}
+
+var seriesHeader = regexp.MustCompile(`(?i)^серия\s*(\d+)$`)
+var problemHeader = regexp.MustCompile(`^(\d+)(.*)$`)
+
+// parseConduitMarkers recognizes the established worksheet layout: a row
+// labelled «Фамилия Имя», a preceding series band, and problem headers on that
+// row. A non-empty initials cell is an accepted offline solution.
+func parseConduitMarkers(values [][]string) ([]conduitMarker, error) {
+	headerRow, nameColumn := -1, -1
+	for rowIndex, row := range values {
+		for columnIndex, value := range row {
+			if normalizeCell(value) == "фамилия имя" {
+				headerRow, nameColumn = rowIndex, columnIndex
+				break
+			}
+		}
+		if headerRow >= 0 {
+			break
+		}
+	}
+	if headerRow < 1 {
+		return nil, errors.New("google sheet conduit header «Фамилия Имя» was not found")
+	}
+	markers := make([]conduitMarker, 0)
+	currentSeries := 0
+	for columnIndex := nameColumn + 1; columnIndex < len(values[headerRow]); columnIndex++ {
+		if columnIndex < len(values[headerRow-1]) {
+			if match := seriesHeader.FindStringSubmatch(strings.TrimSpace(values[headerRow-1][columnIndex])); match != nil {
+				currentSeries, _ = strconv.Atoi(match[1])
+			}
+		}
+		if currentSeries == 0 {
+			continue
+		}
+		problem, label, ok := parseProblemHeader(values[headerRow][columnIndex])
+		if !ok {
+			continue
+		}
+		for rowIndex := headerRow + 1; rowIndex < len(values); rowIndex++ {
+			if nameColumn >= len(values[rowIndex]) || columnIndex >= len(values[rowIndex]) {
+				continue
+			}
+			name, initials := normalizeCell(values[rowIndex][nameColumn]), strings.TrimSpace(values[rowIndex][columnIndex])
+			if name == "" || initials == "" {
+				continue
+			}
+			markers = append(markers, conduitMarker{StudentName: name, Series: currentSeries, Problem: problem, Label: label, Initials: initials, Cell: columnName(columnIndex) + strconv.Itoa(rowIndex+1)})
+		}
+	}
+	return markers, nil
+}
+
+func parseProblemHeader(value string) (int, string, bool) {
+	match := problemHeader.FindStringSubmatch(strings.ReplaceAll(strings.TrimSpace(value), " ", ""))
+	if match == nil {
+		return 0, "", false
+	}
+	problem, err := strconv.Atoi(match[1])
+	if err != nil {
+		return 0, "", false
+	}
+	return problem, normalizeLabel(match[2]), true
+}
+
+func normalizeCell(value string) string {
+	value = strings.ToLower(strings.Join(strings.Fields(value), " "))
+	return strings.ReplaceAll(value, "ё", "е")
+}
+
+func normalizeLabel(value string) string {
+	return strings.NewReplacer("а", "a", "в", "b", "с", "c", "е", "e", "к", "k", "м", "m", "н", "h", "о", "o", "р", "p", "т", "t", "у", "y", "х", "x").Replace(normalizeCell(value))
+}
+
+func columnName(index int) string {
+	name := ""
+	for index >= 0 {
+		name = string(rune('A'+index%26)) + name
+		index = index/26 - 1
+	}
+	return name
+}
+
+type conduitTarget struct {
+	studentID    int64
+	centerID     int64
+	seriesID     int64
+	subproblemID int64
+	status       string
+}
+
+func (s *Service) importLink(ctx context.Context, link Link, actorID int64, version string) (syncSummary, error) {
+	if link.LinkKind == LinkKindInitialsLegend {
+		return syncSummary{}, nil
+	}
+	if link.GroupID == nil {
+		return syncSummary{}, errors.New("google sheet conduit link has no group")
+	}
+	values, err := s.client.Values(ctx, link.SpreadsheetID, link.SheetTitle)
+	if err != nil {
+		return syncSummary{}, fmt.Errorf("reading google sheet values: %w", err)
+	}
+	markers, err := parseConduitMarkers(values)
+	if err != nil {
+		return syncSummary{}, err
+	}
+	targets, err := s.conduitTargets(ctx, link)
+	if err != nil {
+		return syncSummary{}, err
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return syncSummary{}, fmt.Errorf("beginning google sheet import: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := store.New(tx)
+	summary := syncSummary{}
+	for _, marker := range markers {
+		target, ok := targets[conduitTargetKey(marker.StudentName, marker.Series, marker.Problem, marker.Label)]
+		if !ok {
+			summary.Skipped++
+			continue
+		}
+		// A spreadsheet never retracts accepted work by merely becoming blank,
+		// and an existing my239 state is never overwritten by a marker. This
+		// keeps the local event history authoritative.
+		if target.status != homework.StatusUngraded {
+			continue
+		}
+		thread, err := q.FindOrCreateThread(ctx, store.FindOrCreateThreadParams{
+			StudentUserID: target.studentID,
+			SubproblemID:  target.subproblemID,
+			SeriesID:      target.seriesID,
+			MathCenterID:  target.centerID,
+		})
+		if err != nil {
+			return syncSummary{}, fmt.Errorf("creating imported solution thread: %w", err)
+		}
+		if thread.CurrentStatus != homework.StatusUngraded {
+			continue
+		}
+		eventUUID, err := homework.NewEventUUID()
+		if err != nil {
+			return syncSummary{}, fmt.Errorf("creating imported solution event id: %w", err)
+		}
+		verdict := homework.VerdictAccepted
+		event, err := q.AppendOfflineEvent(ctx, store.AppendOfflineEventParams{
+			ThreadID:           thread.ID,
+			EventUuid:          eventUUID,
+			Kind:               homework.KindAcceptedOffline,
+			ActorUserID:        actorID,
+			Verdict:            &verdict,
+			CreditedGraderName: marker.Initials,
+		})
+		if err != nil {
+			return syncSummary{}, fmt.Errorf("recording imported solution event: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `UPDATE homework_thread_event
+            SET google_sheet_link_id = $1, google_sheet_cell = $2, google_sheet_version = $3
+            WHERE id = $4`, link.ID, marker.Cell, version, event.ID); err != nil {
+			return syncSummary{}, fmt.Errorf("recording imported solution source: %w", err)
+		}
+		if err := q.UpdateThreadAfterOfflineAccept(ctx, store.UpdateThreadAfterOfflineAcceptParams{
+			GradeEventID: event.ID, GraderName: marker.Initials, ID: thread.ID,
+		}); err != nil {
+			return syncSummary{}, fmt.Errorf("updating imported solution status: %w", err)
+		}
+		summary.Imported++
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return syncSummary{}, fmt.Errorf("committing google sheet import: %w", err)
+	}
+	return summary, nil
+}
+
+func conduitTargetKey(student string, series, problem int, label string) string {
+	return normalizeCell(student) + "|" + strconv.Itoa(series) + "|" + strconv.Itoa(problem) + "|" + normalizeLabel(label)
+}
+
+func (s *Service) conduitTargets(ctx context.Context, link Link) (map[string]conduitTarget, error) {
+	const query = `SELECT mcs.user_id, group_.math_center_id, u.last_name, u.first_name, series.id, series.number,
+        problem.number, subproblem.label, subproblem.id, COALESCE(thread.current_status, 'ungraded')
+        FROM math_center_students mcs
+        JOIN users u ON u.id = mcs.user_id
+		JOIN math_center_groups group_ ON group_.id = mcs.group_id
+        JOIN math_center_series series ON series.term_id = mcs.term_id
+        JOIN math_center_problems problem ON problem.series_id = series.id
+        JOIN math_center_subproblems subproblem ON subproblem.problem_id = problem.id
+        LEFT JOIN homework_thread thread
+          ON thread.student_user_id = mcs.user_id AND thread.subproblem_id = subproblem.id
+        WHERE mcs.group_id = $1 AND mcs.term_id = $2`
+	rows, err := s.pool.Query(ctx, query, *link.GroupID, link.TermID)
+	if err != nil {
+		return nil, fmt.Errorf("listing conduit targets: %w", err)
+	}
+	defer rows.Close()
+	targets := make(map[string]conduitTarget)
+	ambiguous := make(map[string]struct{})
+	for rows.Next() {
+		var target conduitTarget
+		var lastName, firstName, label string
+		var seriesNumber, problemNumber int
+		if err := rows.Scan(&target.studentID, &target.centerID, &lastName, &firstName, &target.seriesID,
+			&seriesNumber, &problemNumber, &label, &target.subproblemID, &target.status); err != nil {
+			return nil, fmt.Errorf("scanning conduit target: %w", err)
+		}
+		key := conduitTargetKey(lastName+" "+firstName, seriesNumber, problemNumber, label)
+		if _, duplicate := targets[key]; duplicate {
+			delete(targets, key)
+			ambiguous[key] = struct{}{}
+			continue
+		}
+		if _, duplicate := ambiguous[key]; !duplicate {
+			targets[key] = target
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating conduit targets: %w", err)
+	}
+	return targets, nil
 }
 
 type rowScanner interface{ Scan(...any) error }

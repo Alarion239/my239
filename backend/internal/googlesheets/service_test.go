@@ -36,3 +36,28 @@ func TestDirectionForKind(t *testing.T) {
 		t.Fatalf("conduit direction = %q, want %q", got, SyncDirectionTwoWay)
 	}
 }
+
+func TestParseConduitMarkers(t *testing.T) {
+	values := [][]string{
+		{"", "", "Серия 1", "", "Серия 2"},
+		{"Фамилия Имя", "Решено", "1", "2a", "3"},
+		{"Иванов Иван", "", "АБ", "", "ВГ"},
+		{"Петров Пётр", "", "", "ДЕ", ""},
+	}
+	markers, err := parseConduitMarkers(values)
+	if err != nil {
+		t.Fatalf("parseConduitMarkers() error = %v", err)
+	}
+	if len(markers) != 3 {
+		t.Fatalf("markers = %#v, want 3", markers)
+	}
+	if got := markers[0]; got.StudentName != "иванов иван" || got.Series != 1 || got.Problem != 1 || got.Cell != "C3" {
+		t.Fatalf("first marker = %#v", got)
+	}
+	if got := markers[1]; got.StudentName != "петров петр" || got.Label != "a" || got.Cell != "D4" {
+		t.Fatalf("second marker = %#v", got)
+	}
+	if got := markers[2]; got.Series != 2 || got.Problem != 3 || got.Initials != "ВГ" {
+		t.Fatalf("third marker = %#v", got)
+	}
+}

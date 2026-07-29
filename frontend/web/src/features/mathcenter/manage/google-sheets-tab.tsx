@@ -33,6 +33,7 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
   const [error, setError] = useState('')
   const [accountEmailCopied, setAccountEmailCopied] = useState(false)
   const groups = useManageGroups(centerId, termId)
+  const visibleRuns = (runs.data ?? []).filter((run) => run.error_message !== 'google sheets conduit parser is not configured')
 
   const availableTabs = (discover.data?.tabs ?? []).filter((tab) => {
     const title = tab.title.trim().toLowerCase()
@@ -181,12 +182,12 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
         </CardContent>
       </Card>
 
-      <Card>
+      {visibleRuns.length > 0 ? <Card>
         <CardContent className="flex flex-col gap-2">
           <SectionHeader title="История синхронизаций" description="Время Google относится ко всей книге, а не к отдельной ячейке." />
-          {runs.isPending ? <Spinner /> : runs.data?.length ? runs.data.slice(0, 5).map((run) => <p key={run.id} className="text-sm text-muted">{run.status === 'failed' ? 'Ошибка: ' + run.error_message : run.status} · {new Date(run.started_at).toLocaleString('ru-RU')}</p>) : <p className="text-sm text-muted">Синхронизаций ещё не было.</p>}
+          {runs.isPending ? <Spinner /> : visibleRuns.slice(0, 5).map((run) => <p key={run.id} className="text-sm text-muted">{run.status === 'failed' ? 'Ошибка: ' + run.error_message : run.status} · {new Date(run.started_at).toLocaleString('ru-RU')}</p>)}
         </CardContent>
-      </Card>
+      </Card> : null}
     </div>
   )
 }

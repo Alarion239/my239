@@ -228,10 +228,6 @@ func writeGoogleSheetsError(w http.ResponseWriter, r *http.Request, err error) b
 		httpx.WriteAPIError(w, r, http.StatusServiceUnavailable, httpx.CodeInternal, "Google Sheets is not configured")
 		return true
 	}
-	if errors.Is(err, googlesheets.ErrParserNotConfigured) {
-		httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "Google Sheets parsing is not configured yet")
-		return true
-	}
 	logger.LogErrorContext(r.Context(), "google sheets", err)
 	httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "Google Sheets operation failed")
 	return true

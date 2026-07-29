@@ -127,6 +127,7 @@ function ConduitTable({
   const { year } = useParams<{ year: string }>()
   const { search } = useLocation()
   const [query, setQuery] = useState('')
+  const [solvedSort, setSolvedSort] = useState<'none' | 'desc' | 'asc'>('none')
 
   // Offline-grading interaction state. A grader picks an active student (their
   // row lights up) and enters their initials once; tapping un-accepted cells in
@@ -265,18 +266,38 @@ function ConduitTable({
     [data.groups],
   )
 
+  const accepted = (studentId: number, subId: number): boolean =>
+    data.cells[studentId + ':' + subId]?.current_status === 'accepted'
+  const solvedTotals = useMemo(() => {
+    const totals = new Map<number, number>()
+    for (const student of students) {
+      totals.set(student.user_id, cols.reduce(
+        (count, column) => count + (data.cells[student.user_id + ':' + column.col.subproblem_id]?.current_status === 'accepted' ? 1 : 0),
+        0,
+      ))
+    }
+    return totals
+  }, [students, cols, data.cells])
+
   // Filtered groups for rendering: students whose name matches the query, with
   // empty groups dropped.
   const filteredGroups = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return data.groups
-    return data.groups
+    const groups = !q ? data.groups : data.groups
       .map((g) => ({
         ...g,
         students: g.students.filter((s) => s.name.toLowerCase().includes(q)),
       }))
       .filter((g) => g.students.length > 0)
-  }, [data.groups, query])
+    if (solvedSort === 'none') return groups
+    return groups.map((g) => ({
+      ...g,
+      students: [...g.students].sort((a, b) => {
+        const difference = (solvedTotals.get(a.user_id) ?? 0) - (solvedTotals.get(b.user_id) ?? 0)
+        return solvedSort === 'desc' ? -difference : difference
+      }),
+    }))
+  }, [data.groups, query, solvedSort, solvedTotals])
 
   const shown = useMemo(
     () => filteredGroups.reduce((n, g) => n + g.students.length, 0),
@@ -288,9 +309,6 @@ function ConduitTable({
     [students, activeStudentId],
   )
 
-  const accepted = (studentId: number, subId: number): boolean =>
-    data.cells[studentId + ':' + subId]?.current_status === 'accepted'
-
   const cellInitials = (studentId: number, subId: number): string => {
     const cell = data.cells[studentId + ':' + subId]
     if (!cell || cell.current_status !== 'accepted') return ''
@@ -300,8 +318,7 @@ function ConduitTable({
     return '✓'
   }
 
-  const rowTotal = (studentId: number): number =>
-    cols.reduce((n, c) => n + (accepted(studentId, c.col.subproblem_id) ? 1 : 0), 0)
+  const rowTotal = (studentId: number): number => solvedTotals.get(studentId) ?? 0
   const colTotal = (subId: number): number =>
     students.reduce((n, st) => n + (accepted(st.user_id, subId) ? 1 : 0), 0)
   const grandTotal = students.reduce((n, st) => n + rowTotal(st.user_id), 0)
@@ -371,12 +388,12 @@ function ConduitTable({
     <div className="flex min-w-0 items-center justify-end gap-2">
       <button
         type="button"
-        title="Синхронизировать связанные Google Sheets"
+        title="Импортировать отмеченные решения из связанных Google Sheets"
         disabled={termId <= 0 || syncGoogleSheets.isPending}
         onClick={() => syncGoogleSheets.mutate(termId)}
         className="h-8 shrink-0 rounded-lg border border-line px-2.5 text-xs text-muted hover:bg-surface-muted hover:text-ink disabled:opacity-50"
       >
-        {syncGoogleSheets.isPending ? 'Синхронизация…' : 'Sheets'}
+        {syncGoogleSheets.isPending ? 'Импорт…' : 'Sheets'}
       </button>
       <span className="hidden whitespace-nowrap text-xs text-faint xl:inline">Ваши инициалы</span>
       <div className="min-w-0 w-56 sm:w-64">
@@ -460,7 +477,15 @@ function ConduitTable({
                 rowSpan={2}
                 className="sticky right-0 top-0 z-40 border-b border-l border-r border-t border-line bg-surface-muted px-3 py-2 text-center font-medium text-ink"
               >
-                Решено
+                <button
+                  type="button"
+                  onClick={() => setSolvedSort((current) => current === 'desc' ? 'asc' : 'desc')}
+                  className="whitespace-nowrap hover:underline"
+                  title="Сортировать учеников каждой группы по числу решённых задач"
+                  aria-label="Сортировать учеников каждой группы по числу решённых задач"
+                >
+                  Решено{solvedSort === 'desc' ? ' ↓' : solvedSort === 'asc' ? ' ↑' : ''}
+                </button>
               </th>
             </tr>
             {/* Per-subproblem column labels. Coffins are tinted — amber while

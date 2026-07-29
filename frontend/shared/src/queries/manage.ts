@@ -333,7 +333,10 @@ export function useSyncGoogleSheets(centerId: number) {
       '/mathcenter/centers/' + centerId + '/google-sheets/sync',
       { method: 'POST', body: { term_id } },
     ),
-    onSettled: () => qc.invalidateQueries({ queryKey: queryKeys.manageGoogleSheetRuns(centerId) }),
+    onSettled: (_data, _error, termId) => {
+      qc.invalidateQueries({ queryKey: queryKeys.manageGoogleSheetRuns(centerId) })
+      qc.invalidateQueries({ queryKey: queryKeys.centerGrid(centerId, termId) })
+    },
   })
 }
 

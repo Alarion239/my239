@@ -51,6 +51,7 @@ type Metadata struct {
 type Client interface {
 	ListTabs(context.Context, string) ([]Tab, error)
 	Metadata(context.Context, string) (Metadata, error)
+	Values(context.Context, string, string) ([][]string, error)
 }
 
 type serviceAccount struct {
@@ -158,6 +159,28 @@ func (c *HTTPClient) Metadata(ctx context.Context, spreadsheetID string) (Metada
 		return Metadata{}, fmt.Errorf("parsing google file modified time: %w", err)
 	}
 	return Metadata{Version: response.Version, ModifiedAt: modifiedAt}, nil
+}
+
+// Values reads the visible values of one linked tab. The title came from
+// Google's own tab metadata when the link was created, and is escaped as an
+// A1 sheet name rather than being treated as a URL or SQL fragment.
+func (c *HTTPClient) Values(ctx context.Context, spreadsheetID, sheetTitle string) ([][]string, error) {
+	if err := validSpreadsheetID(spreadsheetID); err != nil {
+		return nil, err
+	}
+	title := strings.TrimSpace(sheetTitle)
+	if title == "" {
+		return nil, errors.New("google sheet title is required")
+	}
+	rangeName := "'" + strings.ReplaceAll(title, "'", "''") + "'!A1:ZZ1000"
+	var response struct {
+		Values [][]string `json:"values"`
+	}
+	path := "https://sheets.googleapis.com/v4/spreadsheets/" + url.PathEscape(spreadsheetID) + "/values/" + url.PathEscape(rangeName)
+	if err := c.getJSON(ctx, path, &response); err != nil {
+		return nil, err
+	}
+	return response.Values, nil
 }
 
 func (c *HTTPClient) getJSON(ctx context.Context, endpoint string, dst any) error {

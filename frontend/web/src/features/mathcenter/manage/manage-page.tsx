@@ -102,7 +102,7 @@ function TermRolloverCard({ centerId }: { centerId: number }) {
       <div className="mr-auto">
         <div className="font-medium text-ink">Открыть следующий период</div>
         <p className="text-sm text-muted">
-          После «{term.display_name}» будет открыт «{nextDisplayName}» с копированием только названий групп.
+          После «{term.display_name}» будет открыт «{nextDisplayName}» с теми же группами и учениками.
         </p>
       </div>
       <Button
