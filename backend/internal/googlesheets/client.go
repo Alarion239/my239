@@ -32,8 +32,10 @@ const (
 	googleAPITimeout = 15 * time.Second
 )
 
-var ErrNotConfigured = errors.New("google sheets integration is not configured")
-var updateRangePattern = regexp.MustCompile(`^[A-Z]+[1-9][0-9]*:[A-Z]+[1-9][0-9]*$`)
+var (
+	ErrNotConfigured   = errors.New("google sheets integration is not configured")
+	updateRangePattern = regexp.MustCompile(`^[A-Z]+[1-9][0-9]*:[A-Z]+[1-9][0-9]*$`)
+)
 
 // Tab is the immutable Google tab id plus its human-readable current title.
 type Tab struct {
