@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { APIErrorImpl, normalizeLatexSource } from '@my239/shared'
+import { APIErrorImpl, latexBodySource, normalizeLatexSource } from '@my239/shared'
 import {
   Button,
   Dialog,
@@ -53,7 +53,7 @@ export function SolutionEditor({
   resolveLabel,
 }: SolutionEditorProps) {
   const [open, setOpen] = useState(false)
-  const [tex, setTex] = useState(initialTex ?? '')
+  const [tex, setTex] = useState(latexBodySource(initialTex ?? ''))
   const [linkValue, setLinkValue] = useState(link ?? '')
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -98,7 +98,7 @@ export function SolutionEditor({
   function onOpenChange(next: boolean) {
     setOpen(next)
     if (next) {
-      setTex(initialTex ?? '')
+      setTex(latexBodySource(initialTex ?? ''))
       setLinkValue(link ?? '')
       setError(null)
       setDone(null)

@@ -43,7 +43,14 @@ export const DEFAULT_LATEX_PREAMBLE = [
 
 const DOCUMENT_BEGIN = /\\begin\s*\{\s*document\s*\}/
 const DOCUMENT_END = /\\end\s*\{\s*document\s*\}/
+const DOCUMENT_BODY = /\\begin\s*\{\s*document\s*\}([\s\S]*?)\\end\s*\{\s*document\s*\}/
 const PREAMBLE_COMMAND = /\\(?:documentclass|usepackage|newcommand|renewcommand|Declare[A-Za-z]+)\b/
+
+// The API stores a complete document, while editors show only the authored
+// body so saving does not unexpectedly fill the textarea with boilerplate.
+export function latexBodySource(source: string): string {
+  return source.match(DOCUMENT_BODY)?.[1].trim() ?? source
+}
 
 export function normalizeLatexSource(source: string, preamble = DEFAULT_LATEX_PREAMBLE): string {
   const input = source.trim()

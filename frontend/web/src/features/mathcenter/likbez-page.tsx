@@ -6,6 +6,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   APIErrorImpl,
   DEFAULT_LATEX_PREAMBLE,
+  latexBodySource,
   likbezSchema,
   likbezDateFromISO,
   normalizeLatexSource,
@@ -202,7 +203,7 @@ function LikbezDraftEditor({ likbez, terms }: { likbez: Likbez; terms: MathCente
   }, [likbez, reset])
 
   useEffect(() => {
-    setTex(texQuery.data?.tex ?? '')
+    setTex(latexBodySource(texQuery.data?.tex ?? ''))
   }, [texQuery.data?.tex])
 
   useEffect(() => {
@@ -377,7 +378,7 @@ function LikbezMaterialsDialog({ likbez }: { likbez: Likbez }) {
 
   useEffect(() => {
     if (!open) return
-    setTex(texQuery.data?.tex ?? '')
+    setTex(latexBodySource(texQuery.data?.tex ?? ''))
     setLink(likbez.video_url ?? '')
     setError(null)
   }, [likbez.video_url, open, texQuery.data?.tex])

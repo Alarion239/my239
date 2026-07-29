@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_LATEX_PREAMBLE, normalizeLatexSource } from './latex'
+import { DEFAULT_LATEX_PREAMBLE, latexBodySource, normalizeLatexSource } from './latex'
 
 describe('normalizeLatexSource', () => {
   it('wraps body-only text with the configured preamble and document markers', () => {
@@ -15,5 +15,11 @@ describe('normalizeLatexSource', () => {
   it('uses the standard Russian math preamble by default', () => {
     expect(normalizeLatexSource('Текст')).toContain(DEFAULT_LATEX_PREAMBLE)
     expect(normalizeLatexSource('Текст')).toContain('\\begin{document}')
+  })
+
+  it('hides the stored wrapper when loading a complete document into an editor', () => {
+    const source = '\\documentclass{article}\n\\begin{document}\nТекст\n\\end{document}'
+    expect(latexBodySource(source)).toBe('Текст')
+    expect(latexBodySource('Текст')).toBe('Текст')
   })
 })
