@@ -59,5 +59,31 @@ func TestSeedRun_Integration(t *testing.T) {
 		if res.Password != seed.DemoPassword {
 			t.Errorf("run %d: password = %q, want %q", run, res.Password, seed.DemoPassword)
 		}
+
+		var kind string
+		var grade int32
+		var active bool
+		var groupCount int
+		err = pool.QueryRow(ctx, `
+			SELECT t.kind, t.grade, t.is_active, COUNT(g.id)
+			FROM math_center_terms t
+			JOIN math_centers c ON c.id = t.math_center_id
+			LEFT JOIN math_center_groups g ON g.term_id = t.id
+			WHERE c.graduation_year = $1 AND t.is_active = TRUE
+			GROUP BY t.id`, int32(seed.DemoGraduationYear)).Scan(
+			&kind, &grade, &active, &groupCount)
+		if err != nil {
+			t.Fatalf("run %d: inspect active demo term: %v", run, err)
+		}
+		if kind != "academic" || grade != 5 || !active || groupCount != 3 {
+			t.Errorf(
+				"run %d: active term = %s grade %d active=%t groups=%d; want academic/5/true/3",
+				run,
+				kind,
+				grade,
+				active,
+				groupCount,
+			)
+		}
 	}
 }

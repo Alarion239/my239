@@ -7,6 +7,8 @@
 // "Demo data" is anything under the sentinel graduation year DemoGraduationYear
 // plus any non-admin user whose username starts with "demo-". Nothing else is
 // touched.
+// The demo center starts in the active academic term for grade 5, so all seeded
+// groups, students, and series have an explicit current-period owner.
 //
 // The 5 series form a realistic timeline: the first 3 are in the past, fully
 // graded, with разбор (solutions) posted (though some coffins are left open);
@@ -48,6 +50,7 @@ const (
 	demoStudents         = demoGroups * demoStudentsPerGroup // 90
 	demoHeadTeachers     = 2
 	demoRegularTeachers  = 10
+	demoTermGrade        = 5
 
 	// Timeline: of the 5 series, the first pastSeriesCount are finished, the next
 	// is the current/open one, and the rest are prepared for the future.
@@ -162,6 +165,7 @@ type seeder struct {
 	pwHash     string
 	now        time.Time
 	centerID   int64
+	termID     int64
 	graderIDs  []int64        // regular teachers, used as graders
 	studentIDs []int64        // seeded students, in creation order
 	timings    []seriesTiming // per series, by index
@@ -218,12 +222,22 @@ func (s *seeder) build(ctx context.Context) error {
 		return fmt.Errorf("seed: create center: %w", err)
 	}
 	s.centerID = center.ID
+	grade := int32(demoTermGrade)
+	term, err := s.q.CreateMathCenterTerm(ctx, store.CreateMathCenterTermParams{
+		MathCenterID: s.centerID,
+		Kind:         mc.TermKindAcademic,
+		Grade:        &grade,
+	})
+	if err != nil {
+		return fmt.Errorf("seed: create active term: %w", err)
+	}
+	s.termID = term.ID
 
 	groups := make([]int64, 0, demoGroups)
 	for i := range demoGroups {
-		g, err := s.q.CreateMathCenterGroup(ctx, store.CreateMathCenterGroupParams{
-			MathCenterID: center.ID,
-			Name:         fmt.Sprintf("Демо-группа %c", rune('А'+i)),
+		g, err := s.q.CreateMathCenterGroupForTerm(ctx, store.CreateMathCenterGroupForTermParams{
+			ID:   s.termID,
+			Name: fmt.Sprintf("Демо-группа %c", rune('А'+i)),
 		})
 		if err != nil {
 			return fmt.Errorf("seed: create group: %w", err)
@@ -340,8 +354,9 @@ func (s *seeder) createSeries(ctx context.Context) error {
 		t := s.timingFor(i)
 		s.timings = append(s.timings, t)
 
-		series, err := s.q.CreateSeries(ctx, store.CreateSeriesParams{
+		series, err := s.q.CreateSeriesInTerm(ctx, store.CreateSeriesInTermParams{
 			MathCenterID: s.centerID,
+			TermID:       s.termID,
 			Number:       int32(i + 1),
 			Name:         spec.name,
 			DueAt:        t.dueAt,
