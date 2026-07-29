@@ -54,7 +54,7 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
     if (!termId || sheetId == null || (linkKind === 'conduit' && !groupId)) return
     setError('')
     create.mutate({ term_id: termId, group_id: linkKind === 'conduit' ? groupId : 0, link_kind: linkKind, spreadsheet_url: url, sheet_id: sheetId }, {
-      onSuccess: () => { setURL(''); setSheetId(null) },
+      onSuccess: () => { setGroupId(0); setSheetId(null) },
       onError: () => setError('Не удалось сохранить связь таблицы.'),
     })
   }
@@ -97,7 +97,7 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
 
       <Card>
         <CardContent className="flex flex-col gap-4">
-          <SectionHeader title="Google Sheets" description="Вкладки групп синхронизируются с кондуитом; «Расшифровка» только выгружается из my239. Вкладка ЗП исключена." />
+          <SectionHeader title="Google Sheets" description="Свяжите вкладку таблицы с группой или «Расшифровкой»." />
           <div className="flex flex-wrap items-end gap-2">
             <label className="flex min-w-64 flex-1 flex-col gap-1 text-xs text-muted">
               Ссылка на Google Sheet
@@ -147,31 +147,19 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
       </Card>
 
       <Card>
-        <CardContent className="flex flex-col gap-4">
-          <SectionHeader
-            title="Как подключить таблицу"
-            description="Эта инструкция для преподавателей. Секретный JSON и настройки сервера здесь не нужны."
-          />
+        <CardContent className="flex flex-col gap-3">
+          <SectionHeader title="Как подключить" />
           <ol className="flex list-decimal flex-col gap-3 pl-5 text-sm text-ink">
             <li>
-              <strong>Подготовьте вкладки.</strong> Названия вкладок групп должны совпадать с названиями групп в my239, например <code className="rounded bg-surface-muted px-1 py-0.5 text-xs">16</code>, <code className="rounded bg-surface-muted px-1 py-0.5 text-xs">17</code>, <code className="rounded bg-surface-muted px-1 py-0.5 text-xs">18</code> или <code className="rounded bg-surface-muted px-1 py-0.5 text-xs">онлайн</code>. Вкладка «Расшифровка» подключается отдельно; «ЗП» не подключается.
+              В Google Sheets откройте «Настройки доступа», добавьте адрес service account выше и выберите роль «Редактор».
             </li>
             <li>
-              <strong>Дайте серверу доступ к таблице.</strong> Скопируйте адрес из блока выше, в Google Sheet нажмите «Настройки доступа», добавьте его и выберите роль <strong>Редактор</strong>. Не включайте доступ «у кого есть ссылка» специально для этого подключения: нужен именно адрес service account.
+              Вставьте ссылку на таблицу и нажмите «Найти вкладки».
             </li>
             <li>
-              <strong>Откройте этот раздел в my239.</strong> Вставьте ссылку на Google Sheet в поле «Ссылка на Google Sheet» и нажмите «Найти вкладки».
-            </li>
-            <li>
-              <strong>Выберите назначение.</strong> Для обычной вкладки группы выберите период, «Кондуит группы», нужную группу и вкладку, затем нажмите «Связать». Для «Расшифровки» выберите назначение «Расшифровка (только my239 → Sheets)».
-            </li>
-            <li>
-              <strong>Синхронизируйте данные.</strong> После связывания откройте «Кондуит» и нажмите «Синхронизировать связанные Google Sheets», когда нужно перенести изменения.
+              Выберите период, группу и вкладку, затем нажмите «Связать». «Расшифровка» подключается отдельно.
             </li>
           </ol>
-          <div className="rounded-lg bg-surface-muted px-3 py-3 text-sm text-muted">
-            <strong className="text-ink">Если появляется ошибка доступа:</strong> проверьте, что таблица расшарена именно на адрес service account и с ролью «Редактор». Если адреса у вас нет, попросите его у администратора. JSON-ключ, Railway и Google Cloud на сайте преподавателю настраивать не нужно.
-          </div>
         </CardContent>
       </Card>
 
