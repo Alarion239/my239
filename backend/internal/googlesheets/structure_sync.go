@@ -86,8 +86,9 @@ type enrollment struct {
 
 // SyncStudents performs a non-destructive roster union for every enabled
 // conduit link in the selected term. Reader-only workbooks are imported
-// without attempting an outbound update. A tab is already bound to one group,
-// so a matched student is enrolled in that group. No row is removed.
+// without attempting an outbound update. Exact-name duplicates across linked
+// tabs are one student: an existing my239 enrollment keeps its group, while a
+// student not enrolled in the term uses the first linked tab. No row is removed.
 func (s *Service) SyncStudents(ctx context.Context, centerID, termID int64) (StudentSyncResult, error) {
 	var result StudentSyncResult
 	if !s.Configured() {
@@ -98,7 +99,9 @@ func (s *Service) SyncStudents(ctx context.Context, centerID, termID int64) (Stu
 		return result, err
 	}
 	linked := make([]linkedRoster, 0, len(links))
-	nameGroups := make(map[string]int64)
+	studentKeys := make([]string, 0)
+	studentNames := make(map[string]string)
+	nameGroups := make(map[string][]int64)
 	writeAccess := make(map[string]bool)
 	for _, link := range links {
 		if link.LinkKind != LinkKindConduit || link.GroupID == nil {
@@ -121,10 +124,14 @@ func (s *Service) SyncStudents(ctx context.Context, centerID, termID int64) (Stu
 		}
 		for _, name := range roster.names {
 			key := normalizePersonName(name)
-			if groupID, exists := nameGroups[key]; exists && groupID != *link.GroupID {
-				return result, fmt.Errorf("student %q occurs in linked tabs for different groups", name)
+			if _, exists := studentNames[key]; !exists {
+				studentKeys = append(studentKeys, key)
+				studentNames[key] = name
 			}
-			nameGroups[key] = *link.GroupID
+			groups := nameGroups[key]
+			if len(groups) == 0 || groups[len(groups)-1] != *link.GroupID {
+				nameGroups[key] = append(groups, *link.GroupID)
+			}
 		}
 		linked = append(linked, linkedRoster{
 			link: link, values: values, roster: roster,
@@ -150,66 +157,71 @@ func (s *Service) SyncStudents(ctx context.Context, centerID, termID int64) (Stu
 		return result, err
 	}
 	passwordHash := ""
-	for _, item := range linked {
-		for _, sheetName := range item.roster.names {
-			key := normalizePersonName(sheetName)
-			user, ok := chooseUser(usersByName[key], enrollments)
-			if !ok && len(usersByName[key]) > 0 {
+	for _, key := range studentKeys {
+		sheetName := studentNames[key]
+		user, ok := chooseUser(usersByName[key], enrollments)
+		if !ok && len(usersByName[key]) > 0 {
+			result.Ambiguous++
+			continue
+		}
+		if !ok {
+			lastName, firstName, middleName, splitErr := splitSheetName(sheetName)
+			if splitErr != nil {
 				result.Ambiguous++
 				continue
 			}
-			if !ok {
-				lastName, firstName, middleName, splitErr := splitSheetName(sheetName)
-				if splitErr != nil {
-					result.Ambiguous++
-					continue
+			if passwordHash == "" {
+				passwordHash, err = unavailableAccountPasswordHash()
+				if err != nil {
+					return result, err
 				}
-				if passwordHash == "" {
-					passwordHash, err = unavailableAccountPasswordHash()
-					if err != nil {
-						return result, err
-					}
-				}
-				username, usernameErr := randomSheetsUsername()
-				if usernameErr != nil {
-					return result, usernameErr
-				}
-				q := store.New(tx)
-				created, createErr := q.CreateUser(ctx, store.CreateUserParams{
-					Username: username, PasswordHash: passwordHash,
-					FirstName: firstName, MiddleName: middleName, LastName: lastName,
-				})
-				if createErr != nil {
-					return result, fmt.Errorf("creating student %q: %w", sheetName, createErr)
-				}
-				user = userName{
-					id: created.ID, firstName: created.FirstName,
-					middleName: created.MiddleName, lastName: created.LastName,
-				}
-				usersByName[key] = []userName{user}
 			}
+			username, usernameErr := randomSheetsUsername()
+			if usernameErr != nil {
+				return result, usernameErr
+			}
+			q := store.New(tx)
+			created, createErr := q.CreateUser(ctx, store.CreateUserParams{
+				Username: username, PasswordHash: passwordHash,
+				FirstName: firstName, MiddleName: middleName, LastName: lastName,
+			})
+			if createErr != nil {
+				return result, fmt.Errorf("creating student %q: %w", sheetName, createErr)
+			}
+			user = userName{
+				id: created.ID, firstName: created.FirstName,
+				middleName: created.MiddleName, lastName: created.LastName,
+			}
+			usersByName[key] = []userName{user}
+		}
 
-			targetGroup := *item.link.GroupID
-			current, enrolled := enrollments[user.id]
-			switch {
-			case !enrolled:
-				if _, err := tx.Exec(ctx, `INSERT INTO math_center_students (user_id, group_id, term_id)
+		groups := nameGroups[key]
+		targetGroup := groups[0]
+		current, enrolled := enrollments[user.id]
+		// When the same student appears in more than one linked group, the
+		// spreadsheet does not provide an unambiguous move. Preserve the
+		// existing my239 enrollment instead of failing or moving repeatedly.
+		if enrolled && len(groups) > 1 {
+			targetGroup = current.groupID
+		}
+		switch {
+		case !enrolled:
+			if _, err := tx.Exec(ctx, `INSERT INTO math_center_students (user_id, group_id, term_id)
 					VALUES ($1, $2, $3)`, user.id, targetGroup, termID); err != nil {
-					return result, fmt.Errorf("enrolling student %q: %w", sheetName, err)
-				}
-				enrollments[user.id] = enrollment{groupID: targetGroup}
-				result.AddedToMy239++
-			case current.groupID != targetGroup:
-				if _, err := tx.Exec(ctx, `UPDATE math_center_students SET group_id = $1
-					WHERE id = $2 AND term_id = $3`, targetGroup, current.id, termID); err != nil {
-					return result, fmt.Errorf("moving student %q to linked group: %w", sheetName, err)
-				}
-				current.groupID = targetGroup
-				enrollments[user.id] = current
-				result.Moved++
-			default:
-				result.Matched++
+				return result, fmt.Errorf("enrolling student %q: %w", sheetName, err)
 			}
+			enrollments[user.id] = enrollment{groupID: targetGroup}
+			result.AddedToMy239++
+		case current.groupID != targetGroup:
+			if _, err := tx.Exec(ctx, `UPDATE math_center_students SET group_id = $1
+					WHERE id = $2 AND term_id = $3`, targetGroup, current.id, termID); err != nil {
+				return result, fmt.Errorf("moving student %q to linked group: %w", sheetName, err)
+			}
+			current.groupID = targetGroup
+			enrollments[user.id] = current
+			result.Moved++
+		default:
+			result.Matched++
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
