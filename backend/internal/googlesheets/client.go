@@ -46,8 +46,9 @@ type Tab struct {
 // Metadata is workbook-level only. Google does not expose a trustworthy
 // per-cell modification timestamp through this API.
 type Metadata struct {
-	Version    string
-	ModifiedAt time.Time
+	Version          string
+	ModifiedAt       time.Time
+	CanModifyContent bool
 }
 
 // Client is intentionally small so reconciliation can be tested without live
@@ -154,8 +155,12 @@ func (c *HTTPClient) Metadata(ctx context.Context, spreadsheetID string) (Metada
 	var response struct {
 		Version      string `json:"version"`
 		ModifiedTime string `json:"modifiedTime"`
+		Capabilities struct {
+			CanModifyContent bool `json:"canModifyContent"`
+		} `json:"capabilities"`
 	}
-	path := "https://www.googleapis.com/drive/v3/files/" + url.PathEscape(spreadsheetID) + "?fields=version,modifiedTime"
+	path := "https://www.googleapis.com/drive/v3/files/" + url.PathEscape(spreadsheetID) +
+		"?fields=version,modifiedTime,capabilities(canModifyContent)"
 	if err := c.getJSON(ctx, path, &response); err != nil {
 		return Metadata{}, err
 	}
@@ -163,7 +168,11 @@ func (c *HTTPClient) Metadata(ctx context.Context, spreadsheetID string) (Metada
 	if err != nil {
 		return Metadata{}, fmt.Errorf("parsing google file modified time: %w", err)
 	}
-	return Metadata{Version: response.Version, ModifiedAt: modifiedAt}, nil
+	return Metadata{
+		Version:          response.Version,
+		ModifiedAt:       modifiedAt,
+		CanModifyContent: response.Capabilities.CanModifyContent,
+	}, nil
 }
 
 // Values reads the visible values of one linked tab. The title came from

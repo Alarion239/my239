@@ -72,9 +72,12 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
     setSyncError('')
     syncStudents.mutate(termId, {
       onSuccess: (result) => setSyncMessage(
-        `Ученики: добавлено в my239 — ${result.added_to_my239}, в Google Sheets — ${result.added_to_sheets}, совпало — ${result.matched}` +
+        `Ученики: добавлено в my239 — ${result.added_to_my239}` +
+        (result.read_only ? '' : `, в Google Sheets — ${result.added_to_sheets}`) +
+        `, совпало — ${result.matched}` +
         (result.moved > 0 ? `, перенесено в связанную группу — ${result.moved}` : '') +
-        (result.ambiguous > 0 ? `, пропущено неоднозначных имён — ${result.ambiguous}` : ''),
+        (result.ambiguous > 0 ? `, пропущено неоднозначных имён — ${result.ambiguous}` : '') +
+        (result.read_only ? '. Таблица доступна только для чтения: импорт выполнен, запись в Google Sheets не производилась.' : ''),
       ),
       onError: () => setSyncError('Не удалось синхронизировать учеников. Проверьте связанные вкладки и доступ к таблице.'),
     })
@@ -86,7 +89,10 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
     setSyncError('')
     syncSeries.mutate(termId, {
       onSuccess: (result) => setSyncMessage(
-        `Серии: добавлено в my239 — ${result.added_to_my239}, в Google Sheets — ${result.added_to_sheets}, найдено в таблицах — ${result.matched}.`,
+        `Серии: добавлено в my239 — ${result.added_to_my239}` +
+        (result.read_only ? '' : `, в Google Sheets — ${result.added_to_sheets}`) +
+        `, найдено в таблицах — ${result.matched}.` +
+        (result.read_only ? ' Таблица доступна только для чтения: импорт выполнен, запись в Google Sheets не производилась.' : ''),
       ),
       onError: () => setSyncError('Не удалось синхронизировать серии. Проверьте разметку связанных вкладок и доступ к таблице.'),
     })
@@ -98,7 +104,7 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
         <CardContent className="flex flex-col gap-3">
           <SectionHeader
             title="Адрес service account для доступа к таблице"
-            description="Скопируйте этот адрес и добавьте его в Google Sheets через «Настройки доступа» с ролью «Редактор»."
+            description="Скопируйте этот адрес и добавьте его в Google Sheets через «Настройки доступа». Роли «Читатель» достаточно для одностороннего импорта; «Редактор» нужен только для записи обратно."
           />
           {serviceAccount.isPending ? <Spinner /> : serviceAccount.data?.service_account_email ? (
             <div className="flex flex-wrap items-center gap-2">
@@ -184,7 +190,7 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
           <SectionHeader title="Как подключить" />
           <ol className="flex list-decimal flex-col gap-3 pl-5 text-sm text-ink">
             <li>
-              В Google Sheets откройте «Настройки доступа», добавьте адрес service account выше и выберите роль «Редактор».
+              В Google Sheets откройте «Настройки доступа» и добавьте адрес service account выше. Выберите «Читатель» для безопасного одностороннего импорта или «Редактор» для двусторонней синхронизации.
             </li>
             <li>
               Вставьте ссылку на таблицу и нажмите «Найти вкладки».
@@ -200,7 +206,7 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
         <CardContent className="flex flex-col gap-3">
           <SectionHeader
             title="Синхронизация структуры"
-            description="Объединяет данные my239 и всех включённых вкладок выбранного периода, ничего не удаляя."
+            description="Импортирует данные из включённых вкладок выбранного периода. Если таблица доступна для редактирования, недостающие данные также добавляются в неё; ничего не удаляется."
           />
           <label className="flex w-fit flex-col gap-1 text-xs text-muted">
             Период

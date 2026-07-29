@@ -285,12 +285,14 @@ export interface GoogleSheetStudentSyncResult {
   matched: number
   moved: number
   ambiguous: number
+  read_only: boolean
 }
 
 export interface GoogleSheetSeriesSyncResult {
   added_to_my239: number
   added_to_sheets: number
   matched: number
+  read_only: boolean
 }
 
 // --- Head-teacher management panel ("Управление") ----------------------------

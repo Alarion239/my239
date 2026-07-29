@@ -7,7 +7,11 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestSpreadsheetIDFromURL(t *testing.T) {
@@ -70,4 +74,57 @@ func TestServiceAccountEmailExtractedFromJSON(t *testing.T) {
 	if got := service.ServiceAccountEmail(); got != "my239-sheets@my239-503914.iam.gserviceaccount.com" {
 		t.Fatalf("ServiceAccountEmail() = %q, want JSON client_email", got)
 	}
+}
+
+func TestMetadataReportsContentWriteCapability(t *testing.T) {
+	t.Parallel()
+	const spreadsheetID = "1Abcdefghijklmnopqrstuvwxyz_0123456789"
+	for _, test := range []struct {
+		name             string
+		canModifyContent bool
+	}{
+		{name: "reader", canModifyContent: false},
+		{name: "editor", canModifyContent: true},
+	} {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			client := &HTTPClient{
+				httpClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+					if got := request.URL.Query().Get("fields"); got != "version,modifiedTime,capabilities(canModifyContent)" {
+						t.Fatalf("metadata fields = %q", got)
+					}
+					body, err := json.Marshal(map[string]any{
+						"version":      "17",
+						"modifiedTime": "2026-07-29T12:00:00Z",
+						"capabilities": map[string]bool{"canModifyContent": test.canModifyContent},
+					})
+					if err != nil {
+						t.Fatalf("marshal response: %v", err)
+					}
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Body:       io.NopCloser(strings.NewReader(string(body))),
+						Header:     make(http.Header),
+					}, nil
+				})},
+				accessTok: "test-token",
+				expiresAt: time.Now().Add(time.Hour),
+			}
+
+			metadata, err := client.Metadata(t.Context(), spreadsheetID)
+			if err != nil {
+				t.Fatalf("Metadata() error = %v", err)
+			}
+			if metadata.CanModifyContent != test.canModifyContent {
+				t.Fatalf("CanModifyContent = %v, want %v", metadata.CanModifyContent, test.canModifyContent)
+			}
+		})
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return fn(request)
 }

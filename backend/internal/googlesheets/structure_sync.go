@@ -20,17 +20,19 @@ import (
 const unavailableSeriesTex = "Серия недоступна. Попросите преподавателя загрузить её в систему"
 
 type StudentSyncResult struct {
-	AddedToMy239  int `json:"added_to_my239"`
-	AddedToSheets int `json:"added_to_sheets"`
-	Matched       int `json:"matched"`
-	Moved         int `json:"moved"`
-	Ambiguous     int `json:"ambiguous"`
+	AddedToMy239  int  `json:"added_to_my239"`
+	AddedToSheets int  `json:"added_to_sheets"`
+	Matched       int  `json:"matched"`
+	Moved         int  `json:"moved"`
+	Ambiguous     int  `json:"ambiguous"`
+	ReadOnly      bool `json:"read_only"`
 }
 
 type SeriesSyncResult struct {
-	AddedToMy239  int `json:"added_to_my239"`
-	AddedToSheets int `json:"added_to_sheets"`
-	Matched       int `json:"matched"`
+	AddedToMy239  int  `json:"added_to_my239"`
+	AddedToSheets int  `json:"added_to_sheets"`
+	Matched       int  `json:"matched"`
+	ReadOnly      bool `json:"read_only"`
 }
 
 type conduitRoster struct {
@@ -42,9 +44,10 @@ type conduitRoster struct {
 }
 
 type linkedRoster struct {
-	link   Link
-	values [][]string
-	roster conduitRoster
+	link             Link
+	values           [][]string
+	roster           conduitRoster
+	canModifyContent bool
 }
 
 type sheetProblem struct {
@@ -63,9 +66,10 @@ type sheetLayout struct {
 }
 
 type linkedSeries struct {
-	link   Link
-	values [][]string
-	layout sheetLayout
+	link             Link
+	values           [][]string
+	layout           sheetLayout
+	canModifyContent bool
 }
 
 type userName struct {
@@ -80,10 +84,10 @@ type enrollment struct {
 	groupID int64
 }
 
-// SyncStudents performs a non-destructive two-way roster union for every
-// enabled conduit link in the selected term. A tab is already bound to one
-// group, so a matched student is enrolled in that group. No row is removed
-// from either system.
+// SyncStudents performs a non-destructive roster union for every enabled
+// conduit link in the selected term. Reader-only workbooks are imported
+// without attempting an outbound update. A tab is already bound to one group,
+// so a matched student is enrolled in that group. No row is removed.
 func (s *Service) SyncStudents(ctx context.Context, centerID, termID int64) (StudentSyncResult, error) {
 	var result StudentSyncResult
 	if !s.Configured() {
@@ -95,6 +99,7 @@ func (s *Service) SyncStudents(ctx context.Context, centerID, termID int64) (Stu
 	}
 	linked := make([]linkedRoster, 0, len(links))
 	nameGroups := make(map[string]int64)
+	writeAccess := make(map[string]bool)
 	for _, link := range links {
 		if link.LinkKind != LinkKindConduit || link.GroupID == nil {
 			continue
@@ -107,6 +112,13 @@ func (s *Service) SyncStudents(ctx context.Context, centerID, termID int64) (Stu
 		if err != nil {
 			return result, fmt.Errorf("reading student roster from %q: %w", link.SheetTitle, err)
 		}
+		canModifyContent, err := s.spreadsheetWriteAccess(ctx, link.SpreadsheetID, writeAccess)
+		if err != nil {
+			return result, fmt.Errorf("reading access to %q: %w", link.SheetTitle, err)
+		}
+		if !canModifyContent {
+			result.ReadOnly = true
+		}
 		for _, name := range roster.names {
 			key := normalizePersonName(name)
 			if groupID, exists := nameGroups[key]; exists && groupID != *link.GroupID {
@@ -114,7 +126,10 @@ func (s *Service) SyncStudents(ctx context.Context, centerID, termID int64) (Stu
 			}
 			nameGroups[key] = *link.GroupID
 		}
-		linked = append(linked, linkedRoster{link: link, values: values, roster: roster})
+		linked = append(linked, linkedRoster{
+			link: link, values: values, roster: roster,
+			canModifyContent: canModifyContent,
+		})
 	}
 	if len(linked) == 0 {
 		return result, nil
@@ -217,6 +232,9 @@ func (s *Service) SyncStudents(ctx context.Context, centerID, termID int64) (Stu
 		if len(missing) == 0 {
 			continue
 		}
+		if !item.canModifyContent {
+			continue
+		}
 		startRow := item.roster.lastNameRow + 2
 		endRow := startRow + len(missing) - 1
 		values := make([][]string, len(missing))
@@ -234,6 +252,7 @@ func (s *Service) SyncStudents(ctx context.Context, centerID, termID int64) (Stu
 }
 
 // SyncSeries unions series numbers in my239 and each enabled conduit tab.
+// Reader-only workbooks are imported without attempting an outbound update.
 // Sheet-only series receive visible placeholder LaTeX and the exact problem
 // columns found in the conduit. Existing my239 series are never overwritten.
 func (s *Service) SyncSeries(ctx context.Context, centerID, termID int64) (SeriesSyncResult, error) {
@@ -247,6 +266,7 @@ func (s *Service) SyncSeries(ctx context.Context, centerID, termID int64) (Serie
 	}
 	linked := make([]linkedSeries, 0, len(links))
 	importLayouts := make(map[int]sheetSeries)
+	writeAccess := make(map[string]bool)
 	for _, link := range links {
 		if link.LinkKind != LinkKindConduit {
 			continue
@@ -259,13 +279,23 @@ func (s *Service) SyncSeries(ctx context.Context, centerID, termID int64) (Serie
 		if err != nil {
 			return result, fmt.Errorf("reading series from %q: %w", link.SheetTitle, err)
 		}
+		canModifyContent, err := s.spreadsheetWriteAccess(ctx, link.SpreadsheetID, writeAccess)
+		if err != nil {
+			return result, fmt.Errorf("reading access to %q: %w", link.SheetTitle, err)
+		}
+		if !canModifyContent {
+			result.ReadOnly = true
+		}
 		for _, series := range layout.series {
 			if previous, exists := importLayouts[series.number]; exists && !sameSeriesLayout(previous, series) {
 				return result, fmt.Errorf("series %d has different problem columns in linked tabs", series.number)
 			}
 			importLayouts[series.number] = series
 		}
-		linked = append(linked, linkedSeries{link: link, values: values, layout: layout})
+		linked = append(linked, linkedSeries{
+			link: link, values: values, layout: layout,
+			canModifyContent: canModifyContent,
+		})
 	}
 	if len(linked) == 0 {
 		return result, nil
@@ -326,6 +356,9 @@ func (s *Service) SyncSeries(ctx context.Context, centerID, termID int64) (Serie
 		if len(missing) == 0 {
 			continue
 		}
+		if !item.canModifyContent {
+			continue
+		}
 		startColumn := lastUsedColumn(item.values) + 1
 		seriesRow, problemRow := seriesExportRows(missing)
 		endColumn := startColumn + len(seriesRow) - 1
@@ -338,6 +371,22 @@ func (s *Service) SyncSeries(ctx context.Context, centerID, termID int64) (Serie
 		result.AddedToSheets += len(missing)
 	}
 	return result, nil
+}
+
+func (s *Service) spreadsheetWriteAccess(
+	ctx context.Context,
+	spreadsheetID string,
+	cache map[string]bool,
+) (bool, error) {
+	if canModifyContent, ok := cache[spreadsheetID]; ok {
+		return canModifyContent, nil
+	}
+	metadata, err := s.client.Metadata(ctx, spreadsheetID)
+	if err != nil {
+		return false, fmt.Errorf("reading google sheet capabilities: %w", err)
+	}
+	cache[spreadsheetID] = metadata.CanModifyContent
+	return metadata.CanModifyContent, nil
 }
 
 func parseConduitRoster(values [][]string) (conduitRoster, error) {

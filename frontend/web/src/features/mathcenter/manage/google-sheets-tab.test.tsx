@@ -36,8 +36,8 @@ describe('GoogleSheetsTab structure synchronization', () => {
         const body = JSON.parse(String(init.body))
         calls.push({ url, body })
         const result = url.endsWith('/sync-students')
-          ? { added_to_my239: 2, added_to_sheets: 3, matched: 4, moved: 0, ambiguous: 0 }
-          : { added_to_my239: 1, added_to_sheets: 2, matched: 5 }
+          ? { added_to_my239: 2, added_to_sheets: 3, matched: 4, moved: 0, ambiguous: 0, read_only: false }
+          : { added_to_my239: 1, added_to_sheets: 2, matched: 5, read_only: false }
         return new Response(JSON.stringify(result), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
@@ -76,5 +76,51 @@ describe('GoogleSheetsTab structure synchronization', () => {
     expect(calls[0]).toEqual(expect.objectContaining({ body: { term_id: 11 } }))
     expect(calls[0].url).toContain('/manage/google-sheets/sync-students')
     expect(calls[1].url).toContain('/manage/google-sheets/sync-series')
+  })
+
+  it('reports successful one-way synchronization for a reader account', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input)
+      if (init?.method === 'POST' && url.endsWith('/google-sheets/sync-students')) {
+        return new Response(JSON.stringify({
+          added_to_my239: 2,
+          added_to_sheets: 0,
+          matched: 4,
+          moved: 0,
+          ambiguous: 0,
+          read_only: true,
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      if (url.endsWith('/mathcenter/centers/7/terms')) {
+        return new Response(JSON.stringify([{
+          id: 11,
+          math_center_id: 7,
+          kind: 'academic',
+          display_name: '2026–2027',
+          is_active: true,
+          created_at: '2026-07-01T00:00:00Z',
+        }]), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      }
+      if (url.endsWith('/google-sheets/config')) {
+        return new Response(JSON.stringify({ service_account_email: 'sync@example.test' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }))
+
+    renderTab()
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Синхронизировать учеников' }))
+
+    expect(await screen.findByText(/Таблица доступна только для чтения: импорт выполнен/)).toBeInTheDocument()
+    expect(screen.queryByText(/в Google Sheets —/)).not.toBeInTheDocument()
   })
 })
