@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useCreateMathCenterTerm, useMathCenterMe } from '@my239/shared'
 import { Button, Card, PillTabs, Spinner, type PillTabOption } from '../../../design/ui'
@@ -9,6 +8,7 @@ import { TeachersTab } from './teachers-tab'
 import { StudentsTab } from './students-tab'
 import { GoogleSheetsTab } from './google-sheets-tab'
 import { LatexPreambleTab } from './latex-preamble-tab'
+import { nextMathCenterTerm, nextTermDisplayName, shouldShowTermRollover } from './term-rollover'
 
 type Tab = 'groups' | 'teachers' | 'students' | 'google-sheets' | 'latex'
 
@@ -91,40 +91,27 @@ export function ManagePage() {
 function TermRolloverCard({ centerId }: { centerId: number }) {
   const { term } = useCenterTermContext()
   const create = useCreateMathCenterTerm(centerId)
-  const [kind, setKind] = useState<'academic' | 'camp'>('academic')
-  const [grade, setGrade] = useState(5)
-  const isCamp = kind === 'camp'
+  const nextTerm = nextMathCenterTerm(term)
+
+  if (!term || !nextTerm || !shouldShowTermRollover(term)) return null
+
+  const nextDisplayName = nextTermDisplayName(nextTerm)
 
   return (
     <Card className="flex flex-wrap items-end gap-3 p-4">
       <div className="mr-auto">
-        <div className="font-medium text-ink">Новый период</div>
+        <div className="font-medium text-ink">Открыть следующий период</div>
         <p className="text-sm text-muted">
-          Завершает «{term?.display_name ?? 'текущий период'}», копируя только названия групп.
+          После «{term.display_name}» будет открыт «{nextDisplayName}» с копированием только названий групп.
         </p>
       </div>
-      <label className="flex flex-col gap-1 text-xs text-muted">
-        Вид
-        <select value={kind} onChange={(event) => setKind(event.target.value as 'academic' | 'camp')} className="rounded-lg border border-line bg-surface px-2 py-1 text-sm text-ink">
-          <option value="academic">Учебный год</option>
-          <option value="camp">Лагерь</option>
-        </select>
-      </label>
-      <label className="flex flex-col gap-1 text-xs text-muted">
-        Класс
-        <select value={grade} onChange={(event) => setGrade(Number(event.target.value))} className="rounded-lg border border-line bg-surface px-2 py-1 text-sm text-ink">
-          {Array.from({ length: isCamp ? 6 : 7 }, (_, index) => index + 5).map((value) => (
-            <option key={value} value={value}>{value}</option>
-          ))}
-        </select>
-      </label>
       <Button
         type="button"
         size="sm"
         disabled={create.isPending}
-        onClick={() => create.mutate({ kind, grade })}
+        onClick={() => create.mutate(nextTerm)}
       >
-        Открыть период
+        Открыть «{nextDisplayName}»
       </Button>
     </Card>
   )
