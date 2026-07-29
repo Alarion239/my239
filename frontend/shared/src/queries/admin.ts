@@ -235,7 +235,11 @@ export function useCreateMathCenter() {
   const client = useApiClient()
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { graduation_year: number }) =>
+    mutationFn: (body: {
+      graduation_year: number
+      term_kind: 'academic' | 'camp'
+      term_grade: number
+    }) =>
       client.request<MathCenter>('/admin/mathcenter', {
         method: 'POST',
         body,

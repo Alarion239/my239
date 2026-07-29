@@ -79,34 +79,78 @@ describe('createTokenSchema', () => {
 describe('createMathCenterSchema', () => {
   it('accepts a valid graduation year', () => {
     expect(
-      createMathCenterSchema.safeParse({ graduation_year: 2025 }).success,
+      createMathCenterSchema.safeParse({
+        graduation_year: 2025,
+        term_kind: 'academic',
+        term_grade: 5,
+      }).success,
     ).toBe(true)
   })
 
   it('accepts the lower and upper bounds', () => {
     expect(
-      createMathCenterSchema.safeParse({ graduation_year: 1900 }).success,
+      createMathCenterSchema.safeParse({
+        graduation_year: 1900,
+        term_kind: 'academic',
+        term_grade: 5,
+      }).success,
     ).toBe(true)
     expect(
-      createMathCenterSchema.safeParse({ graduation_year: 2100 }).success,
+      createMathCenterSchema.safeParse({
+        graduation_year: 2100,
+        term_kind: 'camp',
+        term_grade: 10,
+      }).success,
     ).toBe(true)
   })
 
   it('rejects a year below 1900', () => {
     expect(
-      createMathCenterSchema.safeParse({ graduation_year: 1899 }).success,
+      createMathCenterSchema.safeParse({
+        graduation_year: 1899,
+        term_kind: 'academic',
+        term_grade: 5,
+      }).success,
     ).toBe(false)
   })
 
   it('rejects a year above 2100', () => {
     expect(
-      createMathCenterSchema.safeParse({ graduation_year: 2101 }).success,
+      createMathCenterSchema.safeParse({
+        graduation_year: 2101,
+        term_kind: 'academic',
+        term_grade: 5,
+      }).success,
     ).toBe(false)
   })
 
   it('rejects a non-integer year', () => {
     expect(
-      createMathCenterSchema.safeParse({ graduation_year: 2025.5 }).success,
+      createMathCenterSchema.safeParse({
+        graduation_year: 2025.5,
+        term_kind: 'academic',
+        term_grade: 5,
+      }).success,
+    ).toBe(false)
+  })
+
+  it('accepts a past period independently of the graduation year', () => {
+    expect(
+      createMathCenterSchema.safeParse({
+        graduation_year: 2026,
+        term_kind: 'academic',
+        term_grade: 5,
+      }).success,
+    ).toBe(true)
+  })
+
+  it('rejects a camp after grade 11', () => {
+    expect(
+      createMathCenterSchema.safeParse({
+        graduation_year: 2026,
+        term_kind: 'camp',
+        term_grade: 11,
+      }).success,
     ).toBe(false)
   })
 })

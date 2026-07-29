@@ -17,9 +17,33 @@ import {
   DialogTrigger,
   Field,
   Input,
+  Select,
 } from '../../design/ui'
 
-// CreateMathCenterDialog mints a math center for a graduation year.
+const termOptions = Array.from({ length: 7 }, (_, index) => index + 5).flatMap(
+  (grade) => [
+    { kind: 'academic' as const, grade },
+    ...(grade < 11 ? [{ kind: 'camp' as const, grade }] : []),
+  ],
+)
+
+function termLabel(
+  kind: CreateMathCenterValues['term_kind'],
+  grade: number,
+  graduationYear: number,
+) {
+  const endingYear = graduationYear - (11 - grade)
+  const calendar =
+    Number.isInteger(endingYear) && endingYear >= 1900 && endingYear <= 2100
+      ? kind === 'camp'
+        ? `лето ${endingYear}`
+        : `${endingYear - 1}–${endingYear}`
+      : null
+  const name = kind === 'camp' ? `${grade} класс · Лагерь` : `${grade} класс`
+  return calendar ? `${name} · ${calendar}` : name
+}
+
+// CreateMathCenterDialog mints a cohort and its explicitly selected first term.
 export function CreateMathCenterDialog() {
   const [open, setOpen] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -30,11 +54,20 @@ export function CreateMathCenterDialog() {
     handleSubmit,
     reset,
     setError,
+    setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<CreateMathCenterValues>({
     resolver: zodResolver(createMathCenterSchema),
-    defaultValues: { graduation_year: new Date().getFullYear() },
+    defaultValues: {
+      graduation_year: new Date().getFullYear(),
+      term_kind: 'academic',
+      term_grade: 11,
+    },
   })
+  const graduationYear = watch('graduation_year')
+  const termKind = watch('term_kind')
+  const termGrade = watch('term_grade')
 
   const onSubmit = handleSubmit((values) => {
     setFormError(null)
@@ -76,7 +109,10 @@ export function CreateMathCenterDialog() {
       </DialogTrigger>
       <DialogContent>
         <DialogTitle>Создать матцентр</DialogTitle>
-        <DialogDescription>Когорта учеников, сгруппированная по году выпуска.</DialogDescription>
+        <DialogDescription>
+          Укажите год выпуска и период, с которого начинается работа этой когорты.
+          Можно выбрать период в прошлом.
+        </DialogDescription>
 
         <form onSubmit={onSubmit} className="mt-4 flex flex-col gap-4" noValidate>
           <Field label="Год выпуска" error={errors.graduation_year?.message}>
@@ -88,6 +124,46 @@ export function CreateMathCenterDialog() {
                 autoFocus
                 {...register('graduation_year', { valueAsNumber: true })}
               />
+            )}
+          </Field>
+
+          <Field
+            label="Учебный период"
+            error={errors.term_kind?.message ?? errors.term_grade?.message}
+          >
+            {({ id, invalid }) => (
+              <>
+                <Select
+                  id={id}
+                  invalid={invalid}
+                  value={`${termKind}:${termGrade}`}
+                  onChange={(event) => {
+                    const [kind, grade] = event.target.value.split(':')
+                    setValue(
+                      'term_kind',
+                      kind as CreateMathCenterValues['term_kind'],
+                      { shouldValidate: true },
+                    )
+                    setValue('term_grade', Number(grade), {
+                      shouldValidate: true,
+                    })
+                  }}
+                >
+                  {termOptions.map((term) => (
+                    <option
+                      key={`${term.kind}:${term.grade}`}
+                      value={`${term.kind}:${term.grade}`}
+                    >
+                      {termLabel(term.kind, term.grade, graduationYear)}
+                    </option>
+                  ))}
+                </Select>
+                <input type="hidden" {...register('term_kind')} />
+                <input
+                  type="hidden"
+                  {...register('term_grade', { valueAsNumber: true })}
+                />
+              </>
             )}
           </Field>
 

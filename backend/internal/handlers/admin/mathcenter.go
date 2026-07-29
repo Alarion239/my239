@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -13,6 +14,7 @@ import (
 	"github.com/Alarion239/my239/backend/internal/auth"
 	"github.com/Alarion239/my239/backend/internal/httpx"
 	"github.com/Alarion239/my239/backend/internal/logger"
+	mc "github.com/Alarion239/my239/backend/internal/mathcenter"
 	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/pkg/db"
 )
@@ -20,7 +22,9 @@ import (
 // Centers --------------------------------------------------------------------
 
 type createCenterRequest struct {
-	GraduationYear int32 `json:"graduation_year"`
+	GraduationYear int32  `json:"graduation_year"`
+	TermKind       string `json:"term_kind"`
+	TermGrade      int32  `json:"term_grade"`
 }
 
 func ListMathCenters(database *db.DB) http.HandlerFunc {
@@ -46,8 +50,14 @@ func CreateMathCenter(database *db.DB) http.HandlerFunc {
 			return
 		}
 
-		center, err := store.New(database.Pool()).CreateMathCenter(r.Context(), req.GraduationYear)
+		center, err := mc.CreateCenterWithInitialTerm(
+			r.Context(), database.Pool(), req.GraduationYear, req.TermKind, req.TermGrade,
+		)
 		if err != nil {
+			if errors.Is(err, mc.ErrInvalidInitialTerm) {
+				httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid initial term")
+				return
+			}
 			if isUniqueViolation(err) {
 				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "math center for that graduation year already exists")
 				return
@@ -120,11 +130,16 @@ func CreateGroup(database *db.DB) http.HandlerFunc {
 			return
 		}
 
-		group, err := store.New(database.Pool()).CreateMathCenterGroup(r.Context(), store.CreateMathCenterGroupParams{
-			MathCenterID: centerID,
-			Name:         req.Name,
-		})
+		group, err := mc.CreateGroupForCurrentTerm(r.Context(), database.Pool(), centerID, req.Name, time.Now())
 		if err != nil {
+			if errors.Is(err, mc.ErrCohortOutsideMathCenterGrades) {
+				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "this center has no term and its cohort is not currently in grades 5–11")
+				return
+			}
+			if errors.Is(err, pgx.ErrNoRows) {
+				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "center not found")
+				return
+			}
 			if isUniqueViolation(err) {
 				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "group with that name already exists in this center")
 				return

@@ -19,6 +19,7 @@ import (
 	"github.com/Alarion239/my239/backend/internal/httpx"
 	"github.com/Alarion239/my239/backend/internal/live"
 	"github.com/Alarion239/my239/backend/internal/logger"
+	mcdomain "github.com/Alarion239/my239/backend/internal/mathcenter"
 	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/internal/tokenpreset"
 	"github.com/Alarion239/my239/backend/pkg/db"
@@ -175,10 +176,14 @@ func manageCreateGroup(database *db.DB, hub *live.Hub) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "name must be 1–50 chars")
 			return
 		}
-		group, err := q.CreateMathCenterGroup(r.Context(), store.CreateMathCenterGroupParams{
-			MathCenterID: centerID, Name: name,
-		})
+		group, err := mcdomain.CreateGroupForCurrentTerm(
+			r.Context(), database.Pool(), centerID, name, time.Now(),
+		)
 		if err != nil {
+			if errors.Is(err, mcdomain.ErrCohortOutsideMathCenterGrades) {
+				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "this center has no term and its cohort is not currently in grades 5–11")
+				return
+			}
 			if isUniqueViolation(err) {
 				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "group with that name already exists")
 				return

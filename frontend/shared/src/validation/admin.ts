@@ -27,6 +27,22 @@ export const createMathCenterSchema = z.object({
     .int('Целое число')
     .min(1900, 'Минимум 1900')
     .max(2100, 'Максимум 2100'),
+  term_kind: z.enum(['academic', 'camp'], {
+    message: 'Выберите учебный период',
+  }),
+  term_grade: z
+    .number({ message: 'Выберите учебный период' })
+    .int('Выберите учебный период')
+    .min(5, 'Выберите класс с 5 по 11')
+    .max(11, 'Выберите класс с 5 по 11'),
+}).superRefine((value, ctx) => {
+  if (value.term_kind === 'camp' && value.term_grade === 11) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['term_grade'],
+      message: 'После 11 класса лагерь недоступен',
+    })
+  }
 })
 export type CreateMathCenterValues = z.infer<typeof createMathCenterSchema>
 

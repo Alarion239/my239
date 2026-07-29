@@ -17,7 +17,10 @@ var (
 	manageTeacherColumns = []string{"id", "user_id", "math_center_id", "is_head_teacher", "created_at"}
 	manageStudentColumns = []string{"id", "user_id", "group_id", "created_at"}
 	manageCenterColumns  = []string{"id", "graduation_year", "created_at"}
-	manageTokenColumns   = []string{
+	manageTermColumns    = []string{
+		"id", "math_center_id", "kind", "grade", "is_active", "created_at", "archived_at",
+	}
+	manageTokenColumns = []string{
 		"id", "token", "description", "max_uses", "expires_at", "created_at", "preset", "math_center_id",
 	}
 )
@@ -107,10 +110,21 @@ func TestManage_CreateGroup(t *testing.T) {
 	r, access, _ := newRouter(t, mock)
 
 	now := time.Now()
+	grade := int32(5)
 	expectHeadCheck(mock, 3, 42, true)
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT graduation_year FROM math_centers`).
+		WithArgs(int64(42)).
+		WillReturnRows(mock.NewRows([]string{"graduation_year"}).AddRow(int32(2032)))
+	mock.ExpectQuery(`FROM math_center_terms\s+WHERE math_center_id = \$1\s+AND is_active = TRUE`).
+		WithArgs(int64(42)).
+		WillReturnRows(mock.NewRows(manageTermColumns).
+			AddRow(int64(70), int64(42), "academic", &grade, true, now, (*time.Time)(nil)))
 	mock.ExpectQuery(`INSERT INTO math_center_groups`).
-		WithArgs(int64(42), "Б").
-		WillReturnRows(mock.NewRows(manageGroupColumns).AddRow(int64(7), int64(42), "Б", now))
+		WithArgs(int64(70), "Б").
+		WillReturnRows(mock.NewRows(append(manageGroupColumns, "term_id")).
+			AddRow(int64(7), int64(42), "Б", now, int64(70)))
+	mock.ExpectCommit()
 
 	body := strings.NewReader(`{"name":"Б"}`)
 	req := authedRequest(t, access, 3, http.MethodPost, "/centers/42/manage/groups", body)

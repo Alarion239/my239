@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pashagolub/pgxmock/v4"
 
@@ -33,6 +34,14 @@ var studentColumns = []string{"id", "user_id", "group_id", "created_at"}
 
 // groupColumns matches `SELECT * FROM math_center_groups` (GetGroup).
 var groupColumns = []string{"id", "math_center_id", "name", "created_at"}
+
+var centerColumns = []string{"id", "graduation_year", "created_at"}
+
+var termColumns = []string{
+	"id", "math_center_id", "kind", "grade", "is_active", "created_at", "archived_at",
+}
+
+var termGroupColumns = []string{"id", "math_center_id", "name", "created_at", "term_id"}
 
 // newAdminRouter wires the admin router around a mock pool, returning the
 // handler plus the access service used to mint tokens (so the AuthMiddleware
@@ -87,6 +96,91 @@ func accountBody(t *testing.T, m map[string]any) []byte {
 		t.Fatalf("marshal body: %v", err)
 	}
 	return b
+}
+
+func TestCreateMathCenter_CreatesInitialTerm(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access := newAdminRouter(t, mock)
+
+	now := time.Now()
+	graduationYear := int32(2026)
+	grade := int32(5)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`INSERT INTO math_centers`).
+		WithArgs(graduationYear).
+		WillReturnRows(mock.NewRows(centerColumns).
+			AddRow(int64(12), graduationYear, now))
+	mock.ExpectQuery(`INSERT INTO math_center_terms`).
+		WithArgs(int64(12), "academic", pgxmock.AnyArg()).
+		WillReturnRows(mock.NewRows(termColumns).
+			AddRow(int64(21), int64(12), "academic", &grade, true, now, (*time.Time)(nil)))
+	mock.ExpectCommit()
+
+	body := accountBody(t, map[string]any{
+		"graduation_year": graduationYear,
+		"term_kind":       "academic",
+		"term_grade":      5,
+	})
+	req := adminRequest(t, access, true, http.MethodPost, "/mathcenter/", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("status: got %d, want 201, body=%s", rr.Code, rr.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestCreateGroup_RepairsCenterWithoutTerm(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access := newAdminRouter(t, mock)
+
+	now := time.Now()
+	academicEndYear := now.Year()
+	if now.Month() >= time.September {
+		academicEndYear++
+	}
+	graduationYear := int32(academicEndYear + 6)
+	grade := int32(5)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT graduation_year FROM math_centers`).
+		WithArgs(int64(12)).
+		WillReturnRows(mock.NewRows([]string{"graduation_year"}).AddRow(graduationYear))
+	mock.ExpectQuery(`FROM math_center_terms\s+WHERE math_center_id = \$1\s+AND is_active = TRUE`).
+		WithArgs(int64(12)).
+		WillReturnError(pgx.ErrNoRows)
+	mock.ExpectQuery(`FROM math_center_terms\s+WHERE math_center_id = \$1\s+AND kind = 'legacy'`).
+		WithArgs(int64(12)).
+		WillReturnError(pgx.ErrNoRows)
+	mock.ExpectQuery(`INSERT INTO math_center_terms`).
+		WithArgs(int64(12), "academic", pgxmock.AnyArg()).
+		WillReturnRows(mock.NewRows(termColumns).
+			AddRow(int64(21), int64(12), "academic", &grade, true, now, (*time.Time)(nil)))
+	mock.ExpectQuery(`INSERT INTO math_center_groups`).
+		WithArgs(int64(21), "А").
+		WillReturnRows(mock.NewRows(termGroupColumns).
+			AddRow(int64(31), int64(12), "А", now, int64(21)))
+	mock.ExpectCommit()
+
+	body := accountBody(t, map[string]any{"name": "А"})
+	req := adminRequest(t, access, true, http.MethodPost, "/mathcenter/12/groups", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("status: got %d, want 201, body=%s", rr.Code, rr.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
 }
 
 func TestCreateMathCenterAccount_Success(t *testing.T) {

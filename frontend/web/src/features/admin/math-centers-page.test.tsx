@@ -21,7 +21,11 @@ const centers: MathCenter[] = [
   { id: 1, graduation_year: 2025, created_at: '2024-01-01T00:00:00Z' },
 ]
 
-let postedCenter: { graduation_year: number } | null = null
+let postedCenter: {
+  graduation_year: number
+  term_kind: 'academic' | 'camp'
+  term_grade: number
+} | null = null
 
 function mockFetch() {
   postedCenter = null
@@ -86,9 +90,15 @@ describe('MathCentersPage', () => {
     const yearField = screen.getByLabelText('Год выпуска') as HTMLInputElement
     await user.clear(yearField)
     await user.type(yearField, '2030')
+    await user.selectOptions(
+      screen.getByLabelText('Учебный период'),
+      'academic:5',
+    )
     await user.click(screen.getByRole('button', { name: 'Создать' }))
 
     await waitFor(() => expect(postedCenter).not.toBeNull())
     expect(postedCenter?.graduation_year).toBe(2030)
+    expect(postedCenter?.term_kind).toBe('academic')
+    expect(postedCenter?.term_grade).toBe(5)
   })
 })
