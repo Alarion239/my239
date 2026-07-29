@@ -1,5 +1,4 @@
 import {
-  GraduationCap,
   ShieldCheck,
   type LucideIcon,
 } from 'lucide-react'
@@ -45,14 +44,6 @@ export const modules: ModuleDef[] = [
       { label: 'Пользователи', path: '/admin/users' },
       { label: 'Матцентры', path: '/admin/math-centers' },
     ],
-  },
-  {
-    id: 'alumni',
-    label: 'Выпускники',
-    description: 'Сообщество, встречи и связи',
-    path: '/alumni',
-    icon: GraduationCap,
-    status: 'soon',
   },
 ]
 

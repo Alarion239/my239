@@ -146,6 +146,7 @@ describe('module navigation', () => {
     expect(
       screen.queryByRole('link', { name: 'Администрирование' }),
     ).not.toBeInTheDocument()
+    expect(screen.queryByText('Выпускники')).not.toBeInTheDocument()
   })
 
   it('shows the admin module in the rail for an admin', async () => {

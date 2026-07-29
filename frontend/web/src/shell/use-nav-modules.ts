@@ -5,8 +5,8 @@ import { modules, type ModuleDef } from './modules'
 
 // useNavModules builds the full module list for the current user: one "Матцентр
 // {year}" module per math center they belong to (teacher centers + their own
-// student center), sorted by graduation year descending, followed by the STATIC
-// modules (admin, alumni). The nav rail, top bar, and home page all render from
+// student center), sorted by graduation year descending, followed by the static
+// admin module. The nav rail, top bar, and home page all render from
 // this so adding a center is automatic.
 export function useNavModules(): ModuleDef[] {
   const me = useMathCenterMe()
