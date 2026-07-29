@@ -303,7 +303,8 @@ func (s *Service) syncLink(ctx context.Context, link Link, actorID int64) (SyncR
         RETURNING id, link_id, status, google_version, google_modified_at, summary,
           error_message, started_at, finished_at`, link.ID, actorID).Scan(
 		&run.ID, &run.LinkID, &run.Status, &run.GoogleVersion, &run.GoogleModifiedAt,
-		&run.Summary, &run.ErrorMessage, &run.StartedAt, &run.FinishedAt); err != nil {
+		&run.Summary, &run.ErrorMessage, &run.StartedAt, &run.FinishedAt,
+	); err != nil {
 		return SyncRun{}, fmt.Errorf("creating google sheet sync run: %w", err)
 	}
 	metadata, err := s.client.Metadata(ctx, link.SpreadsheetID)
@@ -361,8 +362,10 @@ type conduitMarker struct {
 	Cell        string
 }
 
-var seriesHeader = regexp.MustCompile(`(?i)^серия\s*(\d+)$`)
-var problemHeader = regexp.MustCompile(`^(\d+)(.*)$`)
+var (
+	seriesHeader  = regexp.MustCompile(`(?i)^серия\s*(\d+)$`)
+	problemHeader = regexp.MustCompile(`^(\d+)(.*)$`)
+)
 
 // parseConduitMarkers recognizes the established worksheet layout: a row
 // labelled «Фамилия Имя», a preceding series band, and problem headers on that
