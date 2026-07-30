@@ -65,6 +65,7 @@ RETURNING id, user_id, group_id, created_at;
 SELECT s.id          AS id,
        s.user_id     AS user_id,
        s.group_id    AS group_id,
+       s.can_view_razbors AS can_view_razbors,
        g.name        AS group_name,
        g.math_center_id AS math_center_id,
        mc.graduation_year AS graduation_year
@@ -85,6 +86,7 @@ LIMIT 1;
 SELECT s.id        AS id,
        s.user_id   AS user_id,
        s.group_id  AS group_id,
+       s.can_view_razbors AS can_view_razbors,
        g.name      AS group_name,
        u.first_name AS first_name,
        u.middle_name AS middle_name,
@@ -239,7 +241,7 @@ FROM math_center_teachers
 WHERE id = $1;
 
 -- name: GetStudent :one
-SELECT id, user_id, group_id, created_at
+SELECT id, user_id, group_id, created_at, can_view_razbors
 FROM math_center_students
 WHERE id = $1;
 
@@ -247,6 +249,34 @@ WHERE id = $1;
 UPDATE math_center_students
 SET group_id = $2
 WHERE id = $1;
+
+-- name: SetStudentRazborAccess :execrows
+UPDATE math_center_students
+SET can_view_razbors = $2
+WHERE id = $1;
+
+-- name: CanStudentViewRazbors :one
+-- Match the current-enrollment semantics used by IsStudentInCenter. The legacy
+-- fallback keeps pre-term centers working until they open an active term.
+SELECT COALESCE((
+    SELECT s.can_view_razbors
+    FROM math_center_students s
+             JOIN math_center_groups g ON g.id = s.group_id
+             JOIN math_center_terms t ON t.id = s.term_id
+    WHERE s.user_id = $1
+      AND g.math_center_id = $2
+      AND (
+          t.is_active = TRUE
+          OR NOT EXISTS (
+              SELECT 1
+              FROM math_center_terms active
+              WHERE active.math_center_id = $2
+                AND active.is_active = TRUE
+          )
+      )
+    ORDER BY t.is_active DESC, s.id DESC
+    LIMIT 1
+), FALSE)::boolean AS can_view_razbors;
 
 -- name: SearchUsers :many
 SELECT id, username, first_name, middle_name, last_name

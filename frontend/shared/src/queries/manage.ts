@@ -176,6 +176,26 @@ export function useManageSetStudentGroup(centerId: number) {
   })
 }
 
+export function useManageSetStudentRazborAccess(centerId: number) {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      studentId,
+      canViewRazbors,
+    }: {
+      studentId: number
+      canViewRazbors: boolean
+    }) =>
+      client.request(base(centerId) + '/students/' + studentId + '/razbor-access', {
+        method: 'PATCH',
+        body: { can_view_razbors: canViewRazbors },
+      }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: queryKeys.manageStudents(centerId) }),
+  })
+}
+
 export function useManageRemoveStudent(centerId: number) {
   const client = useApiClient()
   const qc = useQueryClient()

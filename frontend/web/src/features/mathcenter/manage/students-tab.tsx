@@ -5,10 +5,12 @@ import {
   useManageStudents,
   useManageAddStudent,
   useManageSetStudentGroup,
+  useManageSetStudentRazborAccess,
   useManageRemoveStudent,
   type UserSearchResult,
 } from '@my239/shared'
 import { Button, Card, CardContent, Select, Spinner } from '../../../design/ui'
+import { cn } from '../../../design/cn'
 import { ConfirmButton, SectionHeader } from '../../admin/_shared'
 import { UserSearchSelect } from './user-search-select'
 import { InviteSection } from './invite-section'
@@ -21,6 +23,7 @@ export function StudentsTab({ centerId }: { centerId: number }) {
   const { data: groups } = useManageGroups(centerId)
   const addStudent = useManageAddStudent(centerId)
   const setGroup = useManageSetStudentGroup(centerId)
+  const setRazborAccess = useManageSetStudentRazborAccess(centerId)
   const remove = useManageRemoveStudent(centerId)
 
   const [picked, setPicked] = useState<UserSearchResult | null>(null)
@@ -48,7 +51,10 @@ export function StudentsTab({ centerId }: { centerId: number }) {
   return (
     <Card>
       <CardContent className="flex flex-col gap-4">
-        <SectionHeader title="Ученики" description="Ученики этого матцентра по группам." />
+        <SectionHeader
+          title="Ученики"
+          description="Группы и доступ к разборам. По умолчанию разборы доступны всем."
+        />
 
         {isPending ? (
           <Spinner />
@@ -63,8 +69,56 @@ export function StudentsTab({ centerId }: { centerId: number }) {
                 key={s.id}
                 className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-muted px-3 py-2"
               >
-                <span className="text-sm text-ink">{fullName(s)}</span>
-                <div className="flex items-center gap-2">
+                <span className="min-w-40 flex-1 text-sm text-ink">{fullName(s)}</span>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={s.can_view_razbors}
+                    aria-label={
+                      (s.can_view_razbors ? 'Закрыть' : 'Открыть') +
+                      ' доступ к разборам для ' +
+                      fullName(s)
+                    }
+                    disabled={setRazborAccess.isPending}
+                    onClick={() => {
+                      setError(null)
+                      setRazborAccess.mutate(
+                        {
+                          studentId: s.id,
+                          canViewRazbors: !s.can_view_razbors,
+                        },
+                        {
+                          onError: () =>
+                            setError('Не удалось изменить доступ к разборам'),
+                        },
+                      )
+                    }}
+                    className="flex h-9 items-center gap-2 rounded-lg px-2 text-xs font-medium text-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50"
+                  >
+                    <span>Разборы</span>
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'relative inline-flex h-5 w-9 rounded-full border transition-colors',
+                        s.can_view_razbors
+                          ? 'border-accent bg-accent'
+                          : 'border-line-strong bg-surface',
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'absolute top-0.5 h-3.5 w-3.5 rounded-full transition-transform',
+                          s.can_view_razbors
+                            ? 'translate-x-[1.125rem] bg-white'
+                            : 'translate-x-0.5 bg-faint',
+                        )}
+                      />
+                    </span>
+                    <span className="w-16 text-left">
+                      {s.can_view_razbors ? 'доступны' : 'закрыты'}
+                    </span>
+                  </button>
                   <Select
                     value={s.group_id}
                     aria-label="Группа ученика"
@@ -96,6 +150,7 @@ export function StudentsTab({ centerId }: { centerId: number }) {
             ))}
           </ul>
         )}
+        {error ? <p className="text-sm text-danger">{error}</p> : null}
 
         <div className="flex flex-col gap-2 border-t border-line pt-4">
           <p className="text-sm font-medium text-ink">Добавить из пользователей</p>
@@ -129,7 +184,6 @@ export function StudentsTab({ centerId }: { centerId: number }) {
               </Button>
             </div>
           ) : null}
-          {error ? <p className="text-sm text-danger">{error}</p> : null}
         </div>
 
         <InviteSection centerId={centerId} role="student" />

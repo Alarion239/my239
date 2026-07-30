@@ -103,6 +103,7 @@ type seriesView struct {
 	PublishedAt  *time.Time    `json:"published_at,omitempty"`
 	HasPDF       bool          `json:"has_pdf"`
 	HasTex       bool          `json:"has_tex"`
+	RazborAccess bool          `json:"razbor_access"`
 	Problems     []problemView `json:"problems"`
 }
 
@@ -335,6 +336,19 @@ func ListSeriesForCenter(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
+		if isStudent && !isTeacher {
+			canView, err := studentCanViewRazbors(ctx, q, userID, centerID)
+			if err != nil {
+				logger.LogErrorContext(ctx, "series: razbor access", err)
+				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+				return
+			}
+			if !canView {
+				for i := range out {
+					restrictSeriesRazbors(&out[i])
+				}
+			}
+		}
 		httpx.WriteJSON(w, http.StatusOK, out)
 	}
 }
@@ -387,6 +401,17 @@ func GetSeries(database *db.DB) http.HandlerFunc {
 			logger.LogErrorContext(ctx, "series: build view", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
+		}
+		if isStudent && !isTeacher {
+			canView, err := studentCanViewRazbors(ctx, q, userID, series.MathCenterID)
+			if err != nil {
+				logger.LogErrorContext(ctx, "series: razbor access", err)
+				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+				return
+			}
+			if !canView {
+				restrictSeriesRazbors(view)
+			}
 		}
 		httpx.WriteJSON(w, http.StatusOK, view)
 	}
@@ -968,6 +993,12 @@ func membership(ctx context.Context, r *http.Request, q *store.Queries, userID, 
 	return teacher, student, nil
 }
 
+func studentCanViewRazbors(ctx context.Context, q *store.Queries, userID, centerID int64) (bool, error) {
+	return q.CanStudentViewRazbors(ctx, store.CanStudentViewRazborsParams{
+		UserID: userID, MathCenterID: centerID,
+	})
+}
+
 // requireTeacher gates teacher-only routes. Returns true if the request can
 // continue; otherwise it has already written a 403/500 and the caller should
 // just return.
@@ -1340,7 +1371,24 @@ func assembleSeriesView(s store.MathCenterSeries, problems []store.MathCenterPro
 		PublishedAt:  s.PublishedAt,
 		HasPDF:       s.PdfObjectKey != nil,
 		HasTex:       s.TexSource != nil,
+		RazborAccess: true,
 		Problems:     pviews,
+	}
+}
+
+// restrictSeriesRazbors keeps homework/coffin state visible while removing all
+// solution discovery data, especially raw external links. Direct content reads
+// are independently denied by loadSubproblemForRead.
+func restrictSeriesRazbors(view *seriesView) {
+	view.RazborAccess = false
+	for problemIndex := range view.Problems {
+		for subproblemIndex := range view.Problems[problemIndex].Subproblems {
+			sub := &view.Problems[problemIndex].Subproblems[subproblemIndex]
+			sub.HasSolutionTex = false
+			sub.HasSolutionPDF = false
+			sub.SolutionLink = nil
+			sub.SolutionGroupID = nil
+		}
 	}
 }
 

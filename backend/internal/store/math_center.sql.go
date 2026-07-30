@@ -67,6 +67,42 @@ func (q *Queries) AddTeacherToCenter(ctx context.Context, arg AddTeacherToCenter
 	return i, err
 }
 
+const canStudentViewRazbors = `-- name: CanStudentViewRazbors :one
+SELECT COALESCE((
+    SELECT s.can_view_razbors
+    FROM math_center_students s
+             JOIN math_center_groups g ON g.id = s.group_id
+             JOIN math_center_terms t ON t.id = s.term_id
+    WHERE s.user_id = $1
+      AND g.math_center_id = $2
+      AND (
+          t.is_active = TRUE
+          OR NOT EXISTS (
+              SELECT 1
+              FROM math_center_terms active
+              WHERE active.math_center_id = $2
+                AND active.is_active = TRUE
+          )
+      )
+    ORDER BY t.is_active DESC, s.id DESC
+    LIMIT 1
+), FALSE)::boolean AS can_view_razbors
+`
+
+type CanStudentViewRazborsParams struct {
+	UserID       int64 `json:"user_id"`
+	MathCenterID int64 `json:"math_center_id"`
+}
+
+// Match the current-enrollment semantics used by IsStudentInCenter. The legacy
+// fallback keeps pre-term centers working until they open an active term.
+func (q *Queries) CanStudentViewRazbors(ctx context.Context, arg CanStudentViewRazborsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, canStudentViewRazbors, arg.UserID, arg.MathCenterID)
+	var can_view_razbors bool
+	err := row.Scan(&can_view_razbors)
+	return can_view_razbors, err
+}
+
 const countHeadTeachersForCenter = `-- name: CountHeadTeachersForCenter :one
 SELECT COUNT(*)
 FROM math_center_teachers
@@ -213,16 +249,17 @@ func (q *Queries) GetMathCenter(ctx context.Context, id int64) (MathCenter, erro
 }
 
 const getStudent = `-- name: GetStudent :one
-SELECT id, user_id, group_id, created_at
+SELECT id, user_id, group_id, created_at, can_view_razbors
 FROM math_center_students
 WHERE id = $1
 `
 
 type GetStudentRow struct {
-	ID        int64     `json:"id"`
-	UserID    int64     `json:"user_id"`
-	GroupID   int64     `json:"group_id"`
-	CreatedAt time.Time `json:"created_at"`
+	ID             int64     `json:"id"`
+	UserID         int64     `json:"user_id"`
+	GroupID        int64     `json:"group_id"`
+	CreatedAt      time.Time `json:"created_at"`
+	CanViewRazbors bool      `json:"can_view_razbors"`
 }
 
 func (q *Queries) GetStudent(ctx context.Context, id int64) (GetStudentRow, error) {
@@ -233,6 +270,7 @@ func (q *Queries) GetStudent(ctx context.Context, id int64) (GetStudentRow, erro
 		&i.UserID,
 		&i.GroupID,
 		&i.CreatedAt,
+		&i.CanViewRazbors,
 	)
 	return i, err
 }
@@ -241,6 +279,7 @@ const getStudentByUserID = `-- name: GetStudentByUserID :one
 SELECT s.id          AS id,
        s.user_id     AS user_id,
        s.group_id    AS group_id,
+       s.can_view_razbors AS can_view_razbors,
        g.name        AS group_name,
        g.math_center_id AS math_center_id,
        mc.graduation_year AS graduation_year
@@ -262,6 +301,7 @@ type GetStudentByUserIDRow struct {
 	ID             int64  `json:"id"`
 	UserID         int64  `json:"user_id"`
 	GroupID        int64  `json:"group_id"`
+	CanViewRazbors bool   `json:"can_view_razbors"`
 	GroupName      string `json:"group_name"`
 	MathCenterID   int64  `json:"math_center_id"`
 	GraduationYear int32  `json:"graduation_year"`
@@ -274,6 +314,7 @@ func (q *Queries) GetStudentByUserID(ctx context.Context, userID int64) (GetStud
 		&i.ID,
 		&i.UserID,
 		&i.GroupID,
+		&i.CanViewRazbors,
 		&i.GroupName,
 		&i.MathCenterID,
 		&i.GraduationYear,
@@ -524,6 +565,7 @@ const listStudentsForCenter = `-- name: ListStudentsForCenter :many
 SELECT s.id        AS id,
        s.user_id   AS user_id,
        s.group_id  AS group_id,
+       s.can_view_razbors AS can_view_razbors,
        g.name      AS group_name,
        u.first_name AS first_name,
        u.middle_name AS middle_name,
@@ -539,13 +581,14 @@ ORDER BY g.name ASC, u.last_name ASC, u.first_name ASC
 `
 
 type ListStudentsForCenterRow struct {
-	ID         int64   `json:"id"`
-	UserID     int64   `json:"user_id"`
-	GroupID    int64   `json:"group_id"`
-	GroupName  string  `json:"group_name"`
-	FirstName  string  `json:"first_name"`
-	MiddleName *string `json:"middle_name"`
-	LastName   string  `json:"last_name"`
+	ID             int64   `json:"id"`
+	UserID         int64   `json:"user_id"`
+	GroupID        int64   `json:"group_id"`
+	CanViewRazbors bool    `json:"can_view_razbors"`
+	GroupName      string  `json:"group_name"`
+	FirstName      string  `json:"first_name"`
+	MiddleName     *string `json:"middle_name"`
+	LastName       string  `json:"last_name"`
 }
 
 func (q *Queries) ListStudentsForCenter(ctx context.Context, mathCenterID int64) ([]ListStudentsForCenterRow, error) {
@@ -561,6 +604,7 @@ func (q *Queries) ListStudentsForCenter(ctx context.Context, mathCenterID int64)
 			&i.ID,
 			&i.UserID,
 			&i.GroupID,
+			&i.CanViewRazbors,
 			&i.GroupName,
 			&i.FirstName,
 			&i.MiddleName,
@@ -876,6 +920,25 @@ type SetStudentGroupParams struct {
 
 func (q *Queries) SetStudentGroup(ctx context.Context, arg SetStudentGroupParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setStudentGroup, arg.ID, arg.GroupID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setStudentRazborAccess = `-- name: SetStudentRazborAccess :execrows
+UPDATE math_center_students
+SET can_view_razbors = $2
+WHERE id = $1
+`
+
+type SetStudentRazborAccessParams struct {
+	ID             int64 `json:"id"`
+	CanViewRazbors bool  `json:"can_view_razbors"`
+}
+
+func (q *Queries) SetStudentRazborAccess(ctx context.Context, arg SetStudentRazborAccessParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setStudentRazborAccess, arg.ID, arg.CanViewRazbors)
 	if err != nil {
 		return 0, err
 	}

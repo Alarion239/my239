@@ -15,7 +15,7 @@ import (
 var (
 	manageGroupColumns   = []string{"id", "math_center_id", "name", "created_at"}
 	manageTeacherColumns = []string{"id", "user_id", "math_center_id", "is_head_teacher", "created_at"}
-	manageStudentColumns = []string{"id", "user_id", "group_id", "created_at"}
+	manageStudentColumns = []string{"id", "user_id", "group_id", "created_at", "can_view_razbors"}
 	manageCenterColumns  = []string{"id", "graduation_year", "created_at"}
 	manageTermColumns    = []string{
 		"id", "math_center_id", "kind", "grade", "is_active", "created_at", "archived_at",
@@ -242,7 +242,7 @@ func TestManage_MoveStudent(t *testing.T) {
 	// Resolve the student, then its current group (in center), then the target.
 	mock.ExpectQuery(`FROM math_center_students\s+WHERE id = \$1`).
 		WithArgs(int64(11)).
-		WillReturnRows(mock.NewRows(manageStudentColumns).AddRow(int64(11), int64(55), int64(1), now))
+		WillReturnRows(mock.NewRows(manageStudentColumns).AddRow(int64(11), int64(55), int64(1), now, true))
 	mock.ExpectQuery(`FROM math_center_groups\s+WHERE id = \$1`).
 		WithArgs(int64(1)).
 		WillReturnRows(mock.NewRows(manageGroupColumns).AddRow(int64(1), int64(42), "А", now))
@@ -255,6 +255,36 @@ func TestManage_MoveStudent(t *testing.T) {
 
 	body := strings.NewReader(`{"group_id":2}`)
 	req := authedRequest(t, access, 3, http.MethodPatch, "/centers/42/manage/students/11/group", body)
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("got %d, want 204; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestManage_SetStudentRazborAccess(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	expectHeadCheck(mock, 3, 42, true)
+	mock.ExpectQuery(`FROM math_center_students\s+WHERE id = \$1`).
+		WithArgs(int64(11)).
+		WillReturnRows(mock.NewRows(manageStudentColumns).
+			AddRow(int64(11), int64(55), int64(1), now, true))
+	mock.ExpectQuery(`FROM math_center_groups\s+WHERE id = \$1`).
+		WithArgs(int64(1)).
+		WillReturnRows(mock.NewRows(manageGroupColumns).
+			AddRow(int64(1), int64(42), "А", now))
+	mock.ExpectExec(`UPDATE math_center_students\s+SET can_view_razbors`).
+		WithArgs(int64(11), false).
+		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+
+	body := strings.NewReader(`{"can_view_razbors":false}`)
+	req := authedRequest(t, access, 3, http.MethodPatch, "/centers/42/manage/students/11/razbor-access", body)
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)

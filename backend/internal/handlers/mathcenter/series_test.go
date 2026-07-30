@@ -721,6 +721,9 @@ func TestListSeries_StudentSeesOnlyPublished(t *testing.T) {
 	mock.ExpectQuery(`FROM math_center_subproblem_solutions ss`).
 		WithArgs([]int64{100}).
 		WillReturnRows(mock.NewRows(subproblemSolutionMetaColumns))
+	mock.ExpectQuery(`SELECT COALESCE`).
+		WithArgs(int64(7), int64(42)).
+		WillReturnRows(mock.NewRows([]string{"can_view_razbors"}).AddRow(true))
 
 	req := authedRequest(t, access, 7, http.MethodGet, "/centers/42/series", nil)
 	rr := httptest.NewRecorder()
@@ -736,6 +739,70 @@ func TestListSeries_StudentSeesOnlyPublished(t *testing.T) {
 	}
 	if !list[0]["published"].(bool) {
 		t.Error("student listing should only include published series")
+	}
+}
+
+func TestListSeries_RestrictedStudentCannotDiscoverRazbors(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	releasedAt := now.Add(-time.Hour)
+	publishedAt := now.Add(-24 * time.Hour)
+	link := "https://example.com/private-razbor"
+
+	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
+		WithArgs(int64(7), int64(42)).
+		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(false))
+	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_students`).
+		WithArgs(int64(7), int64(42)).
+		WillReturnRows(mock.NewRows([]string{"is_student"}).AddRow(true))
+	mock.ExpectQuery(`FROM math_center_series s\s+WHERE s.math_center_id = \$1.*s.published_at IS NOT NULL`).
+		WithArgs(int64(42)).
+		WillReturnRows(mock.NewRows(seriesColumns).
+			AddRow(int64(100), int64(42), int32(1), "Опубликованная", now.Add(time.Hour), (*string)(nil), &publishedAt, now, (*string)(nil)))
+	mock.ExpectQuery(`SELECT .* FROM math_center_problems WHERE series_id = ANY`).
+		WithArgs([]int64{100}).
+		WillReturnRows(mock.NewRows(problemColumns).
+			AddRow(int64(500), int64(100), int32(1), now))
+	mock.ExpectQuery(`FROM math_center_subproblems s\s+JOIN math_center_problems`).
+		WithArgs([]int64{100}).
+		WillReturnRows(mock.NewRows(subproblemRowColumns).
+			AddRow(int64(900), int64(500), ""))
+	mock.ExpectQuery(`FROM math_center_subproblem_solutions ss`).
+		WithArgs([]int64{100}).
+		WillReturnRows(mock.NewRows(subproblemSolutionMetaColumns).
+			AddRow(int64(900), int64(500), true, &releasedAt, true, true, &link, ptrInt64(8)))
+	mock.ExpectQuery(`SELECT COALESCE`).
+		WithArgs(int64(7), int64(42)).
+		WillReturnRows(mock.NewRows([]string{"can_view_razbors"}).AddRow(false))
+
+	req := authedRequest(t, access, 7, http.MethodGet, "/centers/42/series", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	var list []map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &list); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if list[0]["razbor_access"] != false {
+		t.Fatalf("razbor_access = %v, want false", list[0]["razbor_access"])
+	}
+	problems := list[0]["problems"].([]any)
+	subproblems := problems[0].(map[string]any)["subproblems"].([]any)
+	subproblem := subproblems[0].(map[string]any)
+	if subproblem["has_solution_tex"] != false || subproblem["has_solution_pdf"] != false {
+		t.Fatalf("solution flags leaked: %v", subproblem)
+	}
+	if _, ok := subproblem["solution_link"]; ok {
+		t.Fatalf("solution link leaked: %v", subproblem)
+	}
+	if subproblem["is_coffin"] != true {
+		t.Fatalf("coffin state was redacted with solution data: %v", subproblem)
 	}
 }
 

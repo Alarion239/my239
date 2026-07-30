@@ -128,11 +128,12 @@ type MathCenterSolutionGroup struct {
 }
 
 type MathCenterStudent struct {
-	ID        int64     `json:"id"`
-	UserID    int64     `json:"user_id"`
-	GroupID   int64     `json:"group_id"`
-	CreatedAt time.Time `json:"created_at"`
-	TermID    int64     `json:"term_id"`
+	ID             int64     `json:"id"`
+	UserID         int64     `json:"user_id"`
+	GroupID        int64     `json:"group_id"`
+	CreatedAt      time.Time `json:"created_at"`
+	TermID         int64     `json:"term_id"`
+	CanViewRazbors bool      `json:"can_view_razbors"`
 }
 
 type MathCenterStudentNote struct {

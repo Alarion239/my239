@@ -50,6 +50,7 @@ type coffinView struct {
 	HasSolutionTex  bool       `json:"has_solution_tex"`
 	HasSolutionPDF  bool       `json:"has_solution_pdf"`
 	SolutionLink    *string    `json:"solution_link,omitempty"`
+	RazborAccess    bool       `json:"razbor_access"`
 	// Teacher-only "solved N of M" stats.
 	AcceptedCount int `json:"accepted_count"`
 	TotalCount    int `json:"total_count"`
@@ -134,6 +135,15 @@ func ListCenterCoffins(database *db.DB) http.HandlerFunc {
 		if !isTeacher && !isStudent {
 			httpx.WriteAPIError(w, r, http.StatusForbidden, httpx.CodeForbidden, "no access to this center")
 			return
+		}
+		canViewRazbors := true
+		if isStudent && !isTeacher {
+			canViewRazbors, err = studentCanViewRazbors(ctx, q, userID, centerID)
+			if err != nil {
+				logger.LogErrorContext(ctx, "coffins: razbor access", err)
+				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+				return
+			}
 		}
 		records := []coffinRecord{}
 		selected, hasSelectedTerm := store.MathCenterTerm{}, r.URL.Query().Get("term_id") != ""
@@ -233,9 +243,12 @@ func ListCenterCoffins(database *db.DB) http.HandlerFunc {
 				TermGrade:       c.TermGrade,
 				IsCoffin:        c.IsCoffin,
 				ReleasedAt:      c.ReleasedAt,
-				HasSolutionTex:  c.SolutionTexSource != nil,
-				HasSolutionPDF:  c.SolutionPdfObjectKey != nil,
-				SolutionLink:    c.SolutionLink,
+				HasSolutionTex:  canViewRazbors && c.SolutionTexSource != nil,
+				HasSolutionPDF:  canViewRazbors && c.SolutionPdfObjectKey != nil,
+				RazborAccess:    canViewRazbors,
+			}
+			if canViewRazbors {
+				v.SolutionLink = c.SolutionLink
 			}
 			if st, ok := statusBySub[c.SubproblemID]; ok {
 				v.ThreadID = st.ThreadID
@@ -360,6 +373,18 @@ func loadSubproblemForRead(ctx context.Context, w http.ResponseWriter, r *http.R
 	if !isTeacher && !isStudent {
 		httpx.WriteAPIError(w, r, http.StatusForbidden, httpx.CodeForbidden, "no access to this subproblem")
 		return store.MathCenterSubproblemSolution{}, time.Time{}, false, false
+	}
+	if isStudent && !isTeacher {
+		canView, err := studentCanViewRazbors(ctx, q, userID, sc.MathCenterID)
+		if err != nil {
+			logger.LogErrorContext(ctx, "coffins: razbor access", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return store.MathCenterSubproblemSolution{}, time.Time{}, false, false
+		}
+		if !canView {
+			httpx.WriteAPIError(w, r, http.StatusForbidden, httpx.CodeForbidden, "razbor access is disabled")
+			return store.MathCenterSubproblemSolution{}, time.Time{}, false, false
+		}
 	}
 	s, err := q.GetSubproblemSolution(ctx, subproblemID)
 	if err != nil {

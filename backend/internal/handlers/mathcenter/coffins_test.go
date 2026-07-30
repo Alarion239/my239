@@ -111,6 +111,32 @@ func TestPutSubproblemSolutionTex_AdminClosesCoffin(t *testing.T) {
 	}
 }
 
+func TestGetSubproblemSolutionTex_RestrictedStudentForbidden(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	expectSubproblemCenter(mock, 900, 42, "b", 5, now.Add(-time.Hour))
+	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
+		WithArgs(int64(7), int64(42)).
+		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(false))
+	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_students`).
+		WithArgs(int64(7), int64(42)).
+		WillReturnRows(mock.NewRows([]string{"is_student"}).AddRow(true))
+	mock.ExpectQuery(`SELECT COALESCE`).
+		WithArgs(int64(7), int64(42)).
+		WillReturnRows(mock.NewRows([]string{"can_view_razbors"}).AddRow(false))
+
+	req := authedRequest(t, access, 7, http.MethodGet, "/subproblems/900/solution/tex", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("got %d, want 403; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestListCoffinQueue_AdminReturnsRows(t *testing.T) {
 	t.Parallel()
 	mock, _ := pgxmock.NewPool()
@@ -230,6 +256,64 @@ func TestListCenterCoffins_AdminReturnsRows(t *testing.T) {
 	}
 	if resp[0]["accepted_count"] != float64(3) || resp[0]["total_count"] != float64(10) {
 		t.Errorf("solved counts: got %v / %v, want 3 / 10", resp[0]["accepted_count"], resp[0]["total_count"])
+	}
+}
+
+func TestListCenterCoffins_RestrictedStudentDoesNotReceiveSolutionMetadata(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	releasedAt := now.Add(-time.Hour)
+	tex := "private"
+	key := "private.pdf"
+	link := "https://example.com/private"
+
+	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
+		WithArgs(int64(7), int64(42)).
+		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(false))
+	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_students`).
+		WithArgs(int64(7), int64(42)).
+		WillReturnRows(mock.NewRows([]string{"is_student"}).AddRow(true))
+	mock.ExpectQuery(`SELECT COALESCE`).
+		WithArgs(int64(7), int64(42)).
+		WillReturnRows(mock.NewRows([]string{"can_view_razbors"}).AddRow(false))
+	mock.ExpectQuery(`FROM math_center_subproblem_solutions ss\s+JOIN math_center_subproblems`).
+		WithArgs(int64(42)).
+		WillReturnRows(mock.NewRows([]string{
+			"subproblem_id", "is_coffin", "released_at", "solution_tex_source",
+			"solution_pdf_object_key", "solution_link", "created_at",
+			"subproblem_label", "problem_id", "problem_number",
+			"series_id", "series_number", "series_name", "series_due_at", "math_center_id",
+		}).
+			AddRow(int64(901), true, &releasedAt, &tex, &key, &link, now,
+				"b", int64(500), int32(4), int64(100), int32(2), "Геометрия", now, int64(42)))
+	mock.ExpectQuery(`FROM math_center_subproblem_solutions ss[\s\S]*LEFT JOIN homework_thread`).
+		WithArgs(int64(42), int64(7)).
+		WillReturnRows(mock.NewRows([]string{
+			"subproblem_id", "released_at", "subproblem_label", "problem_number",
+			"thread_id", "current_status", "being_graded",
+		}).AddRow(int64(901), &releasedAt, "b", int32(4), int64(0), "ungraded", false))
+
+	req := authedRequest(t, access, 7, http.MethodGet, "/centers/42/coffins", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	var resp []map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp[0]["razbor_access"] != false ||
+		resp[0]["has_solution_tex"] != false ||
+		resp[0]["has_solution_pdf"] != false {
+		t.Fatalf("solution metadata leaked: %v", resp[0])
+	}
+	if _, ok := resp[0]["solution_link"]; ok {
+		t.Fatalf("solution link leaked: %v", resp[0])
 	}
 }
 

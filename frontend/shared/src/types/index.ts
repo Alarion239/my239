@@ -315,6 +315,7 @@ export interface ManageStudent {
   id: number
   user_id: number
   group_id: number
+  can_view_razbors: boolean
   group_name: string
   first_name: string
   middle_name?: string | null
@@ -441,6 +442,8 @@ export interface Series {
   published_at?: string | null
   has_pdf: boolean
   has_tex: boolean
+  // False only when a head teacher has restricted this student's access.
+  razbor_access?: boolean
   problems: SeriesProblem[]
 }
 
@@ -647,6 +650,7 @@ export interface Coffin {
   has_solution_tex: boolean
   has_solution_pdf: boolean
   solution_link?: string | null
+  razbor_access?: boolean
   // Teacher-only "solved N of M" stats.
   accepted_count: number
   total_count: number

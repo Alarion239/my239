@@ -31,6 +31,19 @@ function razborReleased(sub: Subproblem, dueAt: string): boolean {
 // top (released ones are pressable; coffins carry a skull), and on click the
 // solution renders below while every problem the same разбор covers lights up.
 export function StudentRazbor({ series }: { series: Series }) {
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+
+  if (series.razbor_access === false) {
+    return (
+      <div className="rounded-xl border border-line bg-surface-muted px-5 py-6">
+        <p className="font-medium text-ink">Доступ к разборам закрыт.</p>
+        <p className="mt-1 text-sm text-muted">
+          Условия серий и сдача задач по-прежнему доступны.
+        </p>
+      </div>
+    )
+  }
+
   const chips: Chip[] = []
   for (const p of series.problems) {
     for (const sub of p.subproblems) {
@@ -38,7 +51,6 @@ export function StudentRazbor({ series }: { series: Series }) {
     }
   }
 
-  const [selectedId, setSelectedId] = useState<number | null>(null)
   const selected = chips.find((c) => c.sub.id === selectedId)?.sub
 
   // The set lit up = subproblems sharing the selected разбор's group (or just

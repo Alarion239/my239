@@ -150,6 +150,14 @@ function CoffinGroups({
   }
   return (
     <div className="flex flex-col gap-6">
+      {!isManager && solved && coffins.some((c) => c.razbor_access === false) ? (
+        <Card className="px-5 py-4">
+          <p className="font-medium text-ink">Доступ к разборам закрыт.</p>
+          <p className="mt-1 text-sm text-muted">
+            Список разобранных гробов остаётся видимым, но сами разборы недоступны.
+          </p>
+        </Card>
+      ) : null}
       {groups.map((g) => (
         <section key={g.key} className="flex flex-col gap-3">
           <h2 className="font-display text-lg font-medium text-ink">{g.label}</h2>

@@ -18,6 +18,9 @@ type Querier interface {
 	// teacher isn't registered. actor_user_id stays the session account.
 	AppendOfflineEvent(ctx context.Context, arg AppendOfflineEventParams) (HomeworkThreadEvent, error)
 	ArchiveActiveTermsForCenter(ctx context.Context, mathCenterID int64) error
+	// Match the current-enrollment semantics used by IsStudentInCenter. The legacy
+	// fallback keeps pre-term centers working until they open an active term.
+	CanStudentViewRazbors(ctx context.Context, arg CanStudentViewRazborsParams) (bool, error)
 	ClearSeriesTex(ctx context.Context, id int64) (ClearSeriesTexRow, error)
 	CopyGroupsToTerm(ctx context.Context, arg CopyGroupsToTermParams) error
 	CountHeadTeachersForCenter(ctx context.Context, mathCenterID int64) (int64, error)
@@ -221,6 +224,7 @@ type Querier interface {
 	// a series with any rendered content is considered visible to students.
 	SetSeriesTex(ctx context.Context, arg SetSeriesTexParams) (SetSeriesTexRow, error)
 	SetStudentGroup(ctx context.Context, arg SetStudentGroupParams) (int64, error)
+	SetStudentRazborAccess(ctx context.Context, arg SetStudentRazborAccessParams) (int64, error)
 	// Assign a (just-minted) group to every subproblem in the set. The solution
 	// rows must already exist (content was set first); only existing rows update.
 	SetSubproblemSolutionGroup(ctx context.Context, arg SetSubproblemSolutionGroupParams) error
