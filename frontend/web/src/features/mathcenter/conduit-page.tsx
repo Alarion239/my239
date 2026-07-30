@@ -105,6 +105,32 @@ interface FlatCol {
   firstInSeries: boolean
 }
 
+type SolvedSort = 'none' | 'desc' | 'asc'
+
+const studentNameCollator = new Intl.Collator('ru', {
+  sensitivity: 'base',
+})
+
+function compareStudentNames(
+  left: CenterGridStudentEntry,
+  right: CenterGridStudentEntry,
+): number {
+  return studentNameCollator.compare(left.name, right.name)
+}
+
+function compareStudentsBySolved(
+  left: CenterGridStudentEntry,
+  right: CenterGridStudentEntry,
+  sort: Exclude<SolvedSort, 'none'>,
+  solvedTotals: Map<number, number>,
+): number {
+  const difference =
+    (solvedTotals.get(left.user_id) ?? 0) -
+    (solvedTotals.get(right.user_id) ?? 0)
+  if (difference !== 0) return sort === 'desc' ? -difference : difference
+  return compareStudentNames(left, right)
+}
+
 // currentSeriesId picks the series to centre on: the soonest deadline at/after
 // now, else the latest one.
 function currentSeriesId(series: CenterGridSeries[]): number | null {
@@ -363,7 +389,8 @@ export function ConduitTable({
   const { year } = useParams<{ year: string }>()
   const { search } = useLocation()
   const [query, setQuery] = useState('')
-  const [solvedSort, setSolvedSort] = useState<'none' | 'desc' | 'asc'>('none')
+  const [solvedSort, setSolvedSort] = useState<SolvedSort>('none')
+  const [groupSolvedRanking, setGroupSolvedRanking] = useState(true)
 
   // Offline-grading interaction state. A grader picks an active student (their
   // row lights up) and enters their initials once; tapping un-accepted cells in
@@ -528,47 +555,80 @@ export function ConduitTable({
   }, [students, cols, data.cells])
   const solvedTotals = solvedSummary.rowTotals
 
-  // Filtered groups for rendering: students whose name matches the query, with
-  // empty groups dropped.
+  // Search only controls which students are rendered. Sorting is layered on
+  // afterwards so the third «Решено» click can restore a true alphabetical
+  // view instead of relying on whichever order happened to arrive from the API.
   const filteredGroups = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const groups = !q ? data.groups : data.groups
-      .map((g) => ({
-        ...g,
-        students: g.students.filter((s) => s.name.toLowerCase().includes(q)),
+    return data.groups
+      .map((group) => ({
+        ...group,
+        students: q
+          ? group.students.filter((student) =>
+              student.name.toLowerCase().includes(q),
+            )
+          : group.students,
       }))
       .filter((g) => g.students.length > 0)
-    if (solvedSort === 'none') return groups
-    return groups.map((g) => ({
-      ...g,
-      students: [...g.students].sort((a, b) => {
-        const difference = (solvedTotals.get(a.user_id) ?? 0) - (solvedTotals.get(b.user_id) ?? 0)
-        return solvedSort === 'desc' ? -difference : difference
-      }),
-    }))
-  }, [data.groups, query, solvedSort, solvedTotals])
+  }, [data.groups, query])
+
+  const displayedGroups = useMemo(
+    () =>
+      filteredGroups.map((group) => ({
+        ...group,
+        students: [...group.students].sort((left, right) =>
+          solvedSort === 'none'
+            ? compareStudentNames(left, right)
+            : compareStudentsBySolved(
+                left,
+                right,
+                solvedSort,
+                solvedTotals,
+              ),
+        ),
+      })),
+    [filteredGroups, solvedSort, solvedTotals],
+  )
+
+  const globalRanking = solvedSort !== 'none' && !groupSolvedRanking
 
   const shown = useMemo(
     () => filteredGroups.reduce((n, g) => n + g.students.length, 0),
     [filteredGroups],
   )
 
-  const virtualRows = useMemo<ConduitVirtualRow[]>(
-    () =>
-      filteredGroups.flatMap((group) => [
-        {
-          kind: 'group' as const,
-          key: 'group:' + group.group_id,
-          name: group.name,
-        },
-        ...group.students.map((student) => ({
+  const virtualRows = useMemo<ConduitVirtualRow[]>(() => {
+    if (globalRanking) {
+      return filteredGroups
+        .flatMap((group) => group.students)
+        .sort((left, right) =>
+          compareStudentsBySolved(left, right, solvedSort, solvedTotals),
+        )
+        .map((student) => ({
           kind: 'student' as const,
           key: 'student:' + student.user_id,
           student,
-        })),
-      ]),
-    [filteredGroups],
-  )
+        }))
+    }
+    return displayedGroups.flatMap((group) => [
+      {
+        kind: 'group' as const,
+        key: 'group:' + group.group_id,
+        name: group.name,
+      },
+      ...group.students.map((student) => ({
+        kind: 'student' as const,
+        key: 'student:' + student.user_id,
+        student,
+      })),
+    ])
+  }, [
+    displayedGroups,
+    filteredGroups,
+    globalRanking,
+    solvedSort,
+    solvedTotals,
+  ])
   const scrollerRef = useRef<HTMLDivElement>(null)
   const [rowWindow, setRowWindow] = useState({
     start: 0,
@@ -852,30 +912,96 @@ export function ConduitTable({
                     'sticky top-0 z-20 h-9 whitespace-nowrap border-b border-t border-line bg-surface-muted px-3 text-center font-medium text-ink',
                     vert(true),
                   )}
-                  title={s.display_name}
+                  title={s.display_name + ' — открыть условие'}
                 >
-                  Серия {s.number}
+                  <Link
+                    to={
+                      '/mathcenter/' +
+                      (year ?? '') +
+                      '/series/' +
+                      s.series_id +
+                      '/statement' +
+                      search
+                    }
+                    aria-label={'Серия ' + s.number + ' — открыть условие'}
+                    className="rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                  >
+                    Серия {s.number}
+                  </Link>
                 </th>
               ))}
               <th
                 rowSpan={2}
-                className="sticky right-0 top-0 z-40 border-b border-l border-r border-t border-line bg-surface-muted px-3 py-2 text-center font-medium text-ink"
+                className="sticky right-0 top-0 z-40 border-b border-l border-r border-t border-line bg-surface-muted px-2 py-1 text-center font-medium text-ink"
               >
-                <button
-                  type="button"
-                  onClick={() => setSolvedSort((current) => current === 'desc' ? 'asc' : 'desc')}
-                  className="whitespace-nowrap hover:underline"
-                  title="Сортировать учеников каждой группы по числу решённых задач"
-                  aria-label="Сортировать учеников каждой группы по числу решённых задач"
-                >
-                  Решено{solvedSort === 'desc' ? ' ↓' : solvedSort === 'asc' ? ' ↑' : ''}
-                </button>
+                <div className="flex min-h-14 flex-col items-center justify-center">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSolvedSort((current) =>
+                        current === 'none'
+                          ? 'desc'
+                          : current === 'desc'
+                            ? 'asc'
+                            : 'none',
+                      )
+                    }
+                    className="whitespace-nowrap rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                    title={
+                      solvedSort === 'none'
+                        ? 'Сортировать по убыванию числа решённых задач'
+                        : solvedSort === 'desc'
+                          ? 'Сортировать по возрастанию числа решённых задач'
+                          : 'Вернуть алфавитный порядок'
+                    }
+                    aria-label="Сортировать учеников по числу решённых задач"
+                  >
+                    Решено
+                    {solvedSort === 'desc'
+                      ? ' ↓'
+                      : solvedSort === 'asc'
+                        ? ' ↑'
+                        : ''}
+                  </button>
+                  {solvedSort !== 'none' ? (
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={groupSolvedRanking}
+                      aria-label="Группировать рейтинг по группам"
+                      onClick={() =>
+                        setGroupSolvedRanking((current) => !current)
+                      }
+                      className="mt-1 flex items-center gap-1 rounded-sm text-[0.625rem] font-normal text-faint hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          'relative inline-flex h-3.5 w-6 rounded-full border transition-colors',
+                          groupSolvedRanking
+                            ? 'border-accent bg-accent'
+                            : 'border-line-strong bg-surface',
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            'absolute top-0.5 h-2.5 w-2.5 rounded-full transition-transform',
+                            groupSolvedRanking
+                              ? 'translate-x-2.5 bg-white'
+                              : 'translate-x-0.5 bg-faint',
+                          )}
+                        />
+                      </span>
+                      по группам
+                    </button>
+                  ) : null}
+                </div>
               </th>
             </tr>
             {/* Per-subproblem column labels. Coffins are tinted — amber while
                 open for submission, gray once разобрана (solved). */}
             <tr>
-              {cols.map(({ col, firstInSeries }) => {
+              {cols.map(({ col, seriesId, firstInSeries }) => {
                 const open = col.is_coffin && coffinOpen(col.coffin_released_at)
                 return (
                   <th
@@ -893,7 +1019,22 @@ export function ConduitTable({
                       coffinColumnClasses(col.is_coffin, open),
                     )}
                   >
-                    {col.column_label}
+                    <Link
+                      to={
+                        '/mathcenter/' +
+                        (year ?? '') +
+                        '/series/' +
+                        seriesId +
+                        '/razbor' +
+                        search
+                      }
+                      aria-label={
+                        'Задача ' + col.column_label + ' — открыть разбор'
+                      }
+                      className="inline-flex min-h-6 min-w-6 items-center justify-center rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                    >
+                      {col.column_label}
+                    </Link>
                   </th>
                 )
               })}

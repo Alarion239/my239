@@ -130,6 +130,44 @@ function dataWithColumnCount(count: number): CenterGridResponse {
   }
 }
 
+function rankingData(): CenterGridResponse {
+  return {
+    ...data,
+    groups: [
+      {
+        group_id: 1,
+        name: '16',
+        students: [
+          { user_id: 10, name: 'Анна' },
+          { user_id: 20, name: 'Борис' },
+        ],
+      },
+      {
+        group_id: 2,
+        name: '17',
+        students: [
+          { user_id: 30, name: 'Вера' },
+          { user_id: 40, name: 'Глеб' },
+        ],
+      },
+    ],
+    cells: {
+      '10:1001': { thread_id: 1, current_status: 'accepted' },
+      '10:1002': { thread_id: 2, current_status: 'accepted' },
+      '10:1003': { thread_id: 3, current_status: 'accepted' },
+      '30:1001': { thread_id: 4, current_status: 'accepted' },
+      '40:1001': { thread_id: 5, current_status: 'accepted' },
+      '40:1002': { thread_id: 6, current_status: 'accepted' },
+    },
+  }
+}
+
+function renderedStudentNames(container: HTMLElement): string[] {
+  return Array.from(container.querySelectorAll('tbody a')).map(
+    (link) => link.textContent ?? '',
+  )
+}
+
 describe('ConduitTable', () => {
   it('uses the table cells themselves as controls and sorts existing rows', () => {
     const { container } = renderConduit()
@@ -139,15 +177,96 @@ describe('ConduitTable', () => {
     expect(container.querySelectorAll('tbody button')).toHaveLength(0)
 
     const sort = screen.getByRole('button', {
-      name: 'Сортировать учеников каждой группы по числу решённых задач',
+      name: 'Сортировать учеников по числу решённых задач',
     })
     fireEvent.click(sort)
 
-    const studentLinks = screen.getAllByRole('link')
-    expect(studentLinks.map((link) => link.textContent)).toEqual([
+    expect(renderedStudentNames(container)).toEqual([
       'Второй Ученик',
       'Первый Ученик',
     ])
+  })
+
+  it('links series to its statement and problems to its razbor', () => {
+    renderConduit()
+
+    expect(
+      screen.getByRole('link', {
+        name: 'Серия 1 — открыть условие',
+      }),
+    ).toHaveAttribute(
+      'href',
+      '/mathcenter/2099/series/100/statement?term_id=1',
+    )
+    expect(
+      screen.getByRole('link', {
+        name: 'Задача 1 — открыть разбор',
+      }),
+    ).toHaveAttribute(
+      'href',
+      '/mathcenter/2099/series/100/razbor?term_id=1',
+    )
+  })
+
+  it('cycles solved ranking and toggles between group and global order', () => {
+    const { container } = renderConduit(rankingData())
+    const sort = screen.getByRole('button', {
+      name: 'Сортировать учеников по числу решённых задач',
+    })
+
+    expect(renderedStudentNames(container)).toEqual([
+      'Анна',
+      'Борис',
+      'Вера',
+      'Глеб',
+    ])
+
+    // First click: descending rating within each group.
+    fireEvent.click(sort)
+    expect(renderedStudentNames(container)).toEqual([
+      'Анна',
+      'Борис',
+      'Глеб',
+      'Вера',
+    ])
+    const grouping = screen.getByRole('switch', {
+      name: 'Группировать рейтинг по группам',
+    })
+    expect(grouping).toHaveAttribute('aria-checked', 'true')
+
+    // Switch off group boundaries: one center-wide rating.
+    fireEvent.click(grouping)
+    expect(renderedStudentNames(container)).toEqual([
+      'Анна',
+      'Глеб',
+      'Вера',
+      'Борис',
+    ])
+    expect(screen.queryByText('16')).not.toBeInTheDocument()
+    expect(screen.queryByText('17')).not.toBeInTheDocument()
+
+    // Switch grouping back on, then cycle ascending → alphabetical.
+    fireEvent.click(grouping)
+    fireEvent.click(sort)
+    expect(renderedStudentNames(container)).toEqual([
+      'Борис',
+      'Анна',
+      'Вера',
+      'Глеб',
+    ])
+
+    fireEvent.click(sort)
+    expect(renderedStudentNames(container)).toEqual([
+      'Анна',
+      'Борис',
+      'Вера',
+      'Глеб',
+    ])
+    expect(
+      screen.queryByRole('switch', {
+        name: 'Группировать рейтинг по группам',
+      }),
+    ).not.toBeInTheDocument()
   })
 
   it('activates an unsolved cell with mouse or keyboard without a nested button', () => {
