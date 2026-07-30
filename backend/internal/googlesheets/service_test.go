@@ -65,6 +65,26 @@ func TestParseConduitMarkers(t *testing.T) {
 	}
 }
 
+func TestParseConduitMarkersSkipsNonSeriesSections(t *testing.T) {
+	values := [][]string{
+		{"", "", "Серия 37", "", "КР", "Олимпиада", "Серия 38"},
+		{"Фамилия Имя", "Решено", "1", "2", "0", "1", "1"},
+		{"Иванов Иван", "", "АБ", "АБ", "АБ", "АБ", "АБ"},
+	}
+	markers, err := parseConduitMarkers(values)
+	if err != nil {
+		t.Fatalf("parseConduitMarkers() error = %v", err)
+	}
+	if len(markers) != 3 {
+		t.Fatalf("markers = %#v, want only the three series markers", markers)
+	}
+	if markers[0].Series != 37 || markers[0].Problem != 1 ||
+		markers[1].Series != 37 || markers[1].Problem != 2 ||
+		markers[2].Series != 38 || markers[2].Problem != 1 {
+		t.Fatalf("markers = %#v, want non-series sections skipped", markers)
+	}
+}
+
 func TestParseConduitRoster(t *testing.T) {
 	values := [][]string{
 		{"", "Серия 1"},
@@ -114,6 +134,57 @@ func TestParseSheetSeries(t *testing.T) {
 	}
 	if got := layout.series[1]; got.number != 12 || len(got.problems) != 1 || got.problems[0].number != 3 {
 		t.Fatalf("second series = %#v", got)
+	}
+}
+
+func TestParseSheetSeriesSkipsNonSeriesSections(t *testing.T) {
+	values := [][]string{
+		{"", "", "Серия 37", "", "КР", "Олимпиада", "Серия 38"},
+		{"Фамилия Имя", "Решено", "1", "2", "0", "1", "1"},
+	}
+	layout, err := parseSheetSeries(values)
+	if err != nil {
+		t.Fatalf("parseSheetSeries() error = %v", err)
+	}
+	if len(layout.series) != 2 {
+		t.Fatalf("layout = %#v, want two series", layout)
+	}
+	if got := layout.series[0]; got.number != 37 || len(got.problems) != 2 ||
+		got.problems[0].number != 1 || got.problems[1].number != 2 {
+		t.Fatalf("series 37 = %#v, want only its own problem columns", got)
+	}
+	if got := layout.series[1]; got.number != 38 || len(got.problems) != 1 ||
+		got.problems[0].number != 1 {
+		t.Fatalf("series 38 = %#v, want its own problem column", got)
+	}
+}
+
+func TestMergeSeriesLayoutUnionsDifferentGroupColumns(t *testing.T) {
+	merged := mergeSeriesLayout(
+		sheetSeries{
+			number:   5,
+			problems: []sheetProblem{{number: 1}, {number: 2}},
+		},
+		sheetSeries{
+			number: 5,
+			problems: []sheetProblem{
+				{number: 0},
+				{number: 2},
+				{number: 2, label: "a"},
+			},
+		},
+	)
+	want := sheetSeries{
+		number: 5,
+		problems: []sheetProblem{
+			{number: 0},
+			{number: 1},
+			{number: 2},
+			{number: 2, label: "a"},
+		},
+	}
+	if !sameSeriesLayout(merged, want) {
+		t.Fatalf("merged layout = %#v, want %#v", merged, want)
 	}
 }
 

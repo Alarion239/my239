@@ -385,8 +385,14 @@ func parseConduitMarkers(values [][]string) ([]conduitMarker, error) {
 	currentSeries := 0
 	for columnIndex := nameColumn + 1; columnIndex < len(values[headerRow]); columnIndex++ {
 		if columnIndex < len(values[headerRow-1]) {
-			if match := seriesHeader.FindStringSubmatch(strings.TrimSpace(values[headerRow-1][columnIndex])); match != nil {
-				currentSeries, _ = strconv.Atoi(match[1])
+			section := strings.TrimSpace(values[headerRow-1][columnIndex])
+			if section != "" {
+				// A named block such as «КР» or «Олимпиада» ends the
+				// preceding series and is not part of conduit mark import.
+				currentSeries = 0
+				if match := seriesHeader.FindStringSubmatch(section); match != nil {
+					currentSeries, _ = strconv.Atoi(match[1])
+				}
 			}
 		}
 		if currentSeries == 0 {

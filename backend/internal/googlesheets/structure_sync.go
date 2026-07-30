@@ -299,8 +299,9 @@ func (s *Service) SyncSeries(ctx context.Context, centerID, termID int64) (Serie
 			result.ReadOnly = true
 		}
 		for _, series := range layout.series {
-			if previous, exists := importLayouts[series.number]; exists && !sameSeriesLayout(previous, series) {
-				return result, fmt.Errorf("series %d has different problem columns in linked tabs", series.number)
+			if previous, exists := importLayouts[series.number]; exists {
+				importLayouts[series.number] = mergeSeriesLayout(previous, series)
+				continue
 			}
 			importLayouts[series.number] = series
 		}
@@ -449,10 +450,16 @@ func parseSheetSeries(values [][]string) (sheetLayout, error) {
 	current := -1
 	for columnIndex := nameColumn + 1; columnIndex < maxColumn; columnIndex++ {
 		if columnIndex < len(values[headerRow-1]) {
-			if match := seriesHeader.FindStringSubmatch(strings.TrimSpace(values[headerRow-1][columnIndex])); match != nil {
-				number, _ := strconv.Atoi(match[1])
-				layout.series = append(layout.series, sheetSeries{number: number})
-				current = len(layout.series) - 1
+			section := strings.TrimSpace(values[headerRow-1][columnIndex])
+			if section != "" {
+				// A named block such as «КР» or «Олимпиада» ends the
+				// preceding series and is excluded from structure sync.
+				current = -1
+				if match := seriesHeader.FindStringSubmatch(section); match != nil {
+					number, _ := strconv.Atoi(match[1])
+					layout.series = append(layout.series, sheetSeries{number: number})
+					current = len(layout.series) - 1
+				}
 			}
 		}
 		if current < 0 || columnIndex >= len(values[headerRow]) {
@@ -607,6 +614,27 @@ func sameSeriesLayout(left, right sheetSeries) bool {
 		}
 	}
 	return true
+}
+
+func mergeSeriesLayout(left, right sheetSeries) sheetSeries {
+	merged := sheetSeries{number: left.number}
+	seen := make(map[sheetProblem]struct{}, len(left.problems)+len(right.problems))
+	for _, problems := range [][]sheetProblem{left.problems, right.problems} {
+		for _, problem := range problems {
+			if _, exists := seen[problem]; exists {
+				continue
+			}
+			seen[problem] = struct{}{}
+			merged.problems = append(merged.problems, problem)
+		}
+	}
+	sort.Slice(merged.problems, func(i, j int) bool {
+		if merged.problems[i].number != merged.problems[j].number {
+			return merged.problems[i].number < merged.problems[j].number
+		}
+		return merged.problems[i].label < merged.problems[j].label
+	})
+	return merged
 }
 
 func loadSeriesNumbers(ctx context.Context, tx pgx.Tx, centerID, termID int64) (map[int]int64, error) {
