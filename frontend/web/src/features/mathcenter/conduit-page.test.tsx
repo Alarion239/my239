@@ -110,6 +110,26 @@ function dataWithStudentCount(count: number): CenterGridResponse {
   }
 }
 
+function dataWithColumnCount(count: number): CenterGridResponse {
+  return {
+    ...data,
+    series: [
+      {
+        ...data.series[0],
+        columns: Array.from({ length: count }, (_, index) => ({
+          subproblem_id: 1000 + index,
+          subproblem_label: '',
+          problem_id: 500 + index,
+          problem_number: index + 1,
+          column_label: String(index + 1),
+          is_coffin: false,
+        })),
+      },
+    ],
+    cells: {},
+  }
+}
+
 describe('ConduitTable', () => {
   it('uses the table cells themselves as controls and sorts existing rows', () => {
     const { container } = renderConduit()
@@ -170,5 +190,26 @@ describe('ConduitTable', () => {
     expect(
       screen.queryByRole('link', { name: 'Ученик 080' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('mounts only the visible task columns in student rows', () => {
+    const wideData = dataWithColumnCount(100)
+    const { container } = render(
+      <MemoryRouter initialEntries={['/mathcenter/2099/conduit?term_id=1']}>
+        <Routes>
+          <Route
+            path="/mathcenter/:year/conduit"
+            element={<ConduitTable centerId={2} termId={1} data={wideData} />}
+          />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(
+      container.querySelectorAll('td[data-conduit-cell]').length,
+    ).toBeLessThan(100 * 2)
+    expect(
+      container.querySelector('[data-conduit-column-spacer="right"]'),
+    ).not.toBeNull()
   })
 })

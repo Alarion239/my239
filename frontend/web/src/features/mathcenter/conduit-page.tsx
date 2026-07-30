@@ -129,6 +129,10 @@ const EMPTY_MARKED_SUBPROBLEMS = new Map<number, string>()
 const CONDUIT_ROW_HEIGHT = 36
 const CONDUIT_ROW_OVERSCAN = 8
 const CONDUIT_INITIAL_ROWS = 30
+const CONDUIT_COLUMN_WIDTH = 36
+const CONDUIT_COLUMN_OVERSCAN = 8
+const CONDUIT_INITIAL_COLUMNS = 60
+const CONDUIT_STUDENT_COLUMN_WIDTH = 176
 
 type ConduitCellAction = (
   student: CenterGridStudentEntry,
@@ -150,6 +154,8 @@ type ConduitVirtualRow =
 interface ConduitStudentRowProps {
   student: CenterGridStudentEntry
   cols: FlatCol[]
+  leadingColumns: number
+  trailingColumns: number
   cells: Record<string, CenterGridCell>
   graders: Record<string, string>
   search: string
@@ -180,6 +186,8 @@ function persistedCellInitials(
 const ConduitStudentRow = memo(function ConduitStudentRow({
   student,
   cols,
+  leadingColumns,
+  trailingColumns,
   cells,
   graders,
   search,
@@ -216,6 +224,14 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
           ) : null}
         </Link>
       </td>
+      {leadingColumns > 0 ? (
+        <td
+          aria-hidden="true"
+          colSpan={leadingColumns}
+          className="h-9 border-b border-line p-0"
+          data-conduit-column-spacer="left"
+        />
+      ) : null}
       {cols.map((fc) => {
         const { col, firstInSeries } = fc
         const key = student.user_id + ':' + col.subproblem_id
@@ -275,6 +291,14 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
           </ThreadCommentCell>
         )
       })}
+      {trailingColumns > 0 ? (
+        <td
+          aria-hidden="true"
+          colSpan={trailingColumns}
+          className="h-9 border-b border-line p-0"
+          data-conduit-column-spacer="right"
+        />
+      ) : null}
       <td className="sticky right-0 z-10 border-b border-l border-r border-line bg-surface px-3 py-1.5 text-center font-medium text-ink">
         {solvedTotal}
       </td>
@@ -289,6 +313,8 @@ function sameConduitStudentRowProps(
   if (
     previous.student !== next.student ||
     previous.cols !== next.cols ||
+    previous.leadingColumns !== next.leadingColumns ||
+    previous.trailingColumns !== next.trailingColumns ||
     previous.graders !== next.graders ||
     previous.search !== next.search ||
     previous.active !== next.active ||
@@ -531,6 +557,10 @@ export function ConduitTable({
     start: 0,
     end: CONDUIT_INITIAL_ROWS,
   })
+  const [columnWindow, setColumnWindow] = useState({
+    start: 0,
+    end: CONDUIT_INITIAL_COLUMNS,
+  })
 
   // A synced center can exceed 50k task cells. Keep only the rows around the
   // viewport mounted; fixed-height spacer rows preserve the full scrollbar and
@@ -559,6 +589,31 @@ export function ConduitTable({
           ? current
           : { start, end },
       )
+
+      const firstVisibleColumn = Math.floor(
+        Math.max(
+          0,
+          scroller.scrollLeft - CONDUIT_STUDENT_COLUMN_WIDTH,
+        ) / CONDUIT_COLUMN_WIDTH,
+      )
+      const visibleColumnCount = Math.ceil(
+        scroller.clientWidth / CONDUIT_COLUMN_WIDTH,
+      )
+      const columnStart = Math.max(
+        0,
+        firstVisibleColumn - CONDUIT_COLUMN_OVERSCAN,
+      )
+      const columnEnd = Math.min(
+        cols.length,
+        firstVisibleColumn +
+          visibleColumnCount +
+          CONDUIT_COLUMN_OVERSCAN,
+      )
+      setColumnWindow((current) =>
+        current.start === columnStart && current.end === columnEnd
+          ? current
+          : { start: columnStart, end: columnEnd },
+      )
     }
     const scheduleMeasure = () => {
       if (animationFrame === 0) {
@@ -578,9 +633,14 @@ export function ConduitTable({
       resizeObserver?.disconnect()
       if (animationFrame !== 0) window.cancelAnimationFrame(animationFrame)
     }
-  }, [virtualRows.length])
+  }, [virtualRows.length, cols.length])
 
   const visibleRows = virtualRows.slice(rowWindow.start, rowWindow.end)
+  const visibleCols = useMemo(
+    () => cols.slice(columnWindow.start, columnWindow.end),
+    [cols, columnWindow.start, columnWindow.end],
+  )
+  const trailingColumns = Math.max(0, cols.length - columnWindow.end)
   const topSpacerHeight = rowWindow.start * CONDUIT_ROW_HEIGHT
   const bottomSpacerHeight =
     Math.max(0, virtualRows.length - rowWindow.end) * CONDUIT_ROW_HEIGHT
@@ -857,7 +917,9 @@ export function ConduitTable({
                 <ConduitStudentRow
                   key={row.key}
                   student={st}
-                  cols={cols}
+                  cols={visibleCols}
+                  leadingColumns={columnWindow.start}
+                  trailingColumns={trailingColumns}
                   cells={data.cells}
                   graders={data.graders}
                   search={search}
