@@ -77,20 +77,25 @@ func TestMarkCoffin_NonTeacherForbidden(t *testing.T) {
 	}
 }
 
-func TestReleaseCoffin_AdminSucceeds(t *testing.T) {
+func TestPutSubproblemSolutionTex_AdminClosesCoffin(t *testing.T) {
 	t.Parallel()
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
 	r, access, _ := newRouter(t, mock)
 
 	now := time.Now()
+	tex := `\documentclass{article}\begin{document}Разбор\end{document}`
 	expectSubproblemCenter(mock, 900, 42, "b", 5, now)
-	mock.ExpectQuery(`UPDATE math_center_subproblem_solutions\s+SET released_at`).
-		WithArgs(int64(900)).
+	mock.ExpectQuery(
+		`DO UPDATE SET solution_tex_source = EXCLUDED.solution_tex_source,[\s\S]*released_at = CASE`,
+	).
+		WithArgs(int64(900), pgxmock.AnyArg()).
 		WillReturnRows(mock.NewRows(subproblemSolutionColumns).
-			AddRow(int64(9), int64(900), true, &now, (*string)(nil), (*string)(nil), (*string)(nil), now, now, (*int64)(nil)))
+			AddRow(int64(9), int64(900), true, &now, &tex, (*string)(nil), (*string)(nil), now, now, (*int64)(nil)))
 
-	req := authedAdminRequest(t, access, 1, http.MethodPost, "/subproblems/900/solution/release", nil)
+	body, _ := json.Marshal(map[string]string{"tex": tex})
+	req := authedAdminRequest(t, access, 1, http.MethodPut, "/subproblems/900/solution/tex", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
@@ -99,7 +104,10 @@ func TestReleaseCoffin_AdminSucceeds(t *testing.T) {
 	var resp map[string]any
 	_ = json.Unmarshal(rr.Body.Bytes(), &resp)
 	if resp["released_at"] == nil {
-		t.Errorf("expected released_at set, got %v", resp)
+		t.Errorf("expected posting the разбор to release the coffin, got %v", resp)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
 	}
 }
 

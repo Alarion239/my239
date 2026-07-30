@@ -76,9 +76,14 @@ export function handleCenterEvent(
     qc.invalidateQueries({ queryKey: queryKeys.graderStats(centerId) })
     qc.invalidateQueries({ queryKey: queryKeys.coffinQueue(centerId) })
   } else if (kind === 'coffins') {
-    qc.invalidateQueries({ queryKey: queryKeys.centerCoffins(centerId) })
-    qc.invalidateQueries({ queryKey: queryKeys.coffinQueue(centerId) })
-    qc.invalidateQueries({ queryKey: queryKeys.seriesList(centerId) })
+    // Term is part of both the series and coffin query keys. Invalidate the
+    // center prefix so whichever current/archive term is open refreshes, not
+    // only the legacy term_id=0 key.
+    qc.invalidateQueries({
+      queryKey: ['mathcenter', 'centers', centerId],
+    })
+    // An already-open разбор preview is keyed by subproblem rather than center.
+    qc.invalidateQueries({ queryKey: ['mathcenter', 'subproblems'] })
   } else if (kind === 'likbez') {
     qc.invalidateQueries({ queryKey: queryKeys.likbezList(centerId) })
     qc.invalidateQueries({ queryKey: ['mathcenter', 'likbez'] })
@@ -108,4 +113,6 @@ export function refreshCenterViews(
   qc.invalidateQueries({ queryKey: queryKeys.centerGrids(centerId) })
   qc.invalidateQueries({ queryKey: queryKeys.graderStats(centerId) })
   qc.invalidateQueries({ queryKey: queryKeys.coffinQueue(centerId) })
+  qc.invalidateQueries({ queryKey: ['mathcenter', 'centers', centerId] })
+  qc.invalidateQueries({ queryKey: ['mathcenter', 'subproblems'] })
 }

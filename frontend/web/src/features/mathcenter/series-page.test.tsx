@@ -81,7 +81,8 @@ const seriesList: Series[] = [
             id: 900,
             label: 'а',
             display: 'Задача 1 (а)',
-            is_coffin: false,
+            is_coffin: true,
+            released_at: null,
             has_solution_tex: false,
             has_solution_pdf: false,
           },
@@ -255,14 +256,22 @@ describe('SeriesPage — teacher view', () => {
     expect(await screen.findByText('Очередь пуста.')).toBeInTheDocument()
     const user = userEvent.setup()
     await user.click(screen.getByRole('tab', { name: 'Разбор' }))
-    expect(
-      await screen.findByRole('img', {
+    const distribution = await screen.findByRole('img', {
         name: /Распределение статусов по задаче Задача 1: Принято — 5/,
-      }),
-    ).toBeInTheDocument()
+      })
+    expect(distribution).toBeInTheDocument()
     expect(screen.queryByText('12 учеников')).not.toBeInTheDocument()
     expect(screen.queryByText('Принято:', { exact: false })).not.toBeInTheDocument()
     expect(screen.getByText('Принято — 5')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Закрыть' })).not.toBeInTheDocument()
+
+    // Selecting a task puts the compact batch action in the same toolbar row
+    // as the tabs instead of adding a separate panel above the statistics.
+    await user.click(distribution.closest('[role="button"]') as HTMLElement)
+    const attach = screen.getByRole('button', {
+      name: 'Прикрепить разбор 1 задач',
+    })
+    expect(tabList.parentElement).toContainElement(attach)
 
     await user.click(screen.getByRole('tab', { name: /Серия 2/ }))
     expect(screen.getByRole('button', { name: 'Редактировать серию' })).toBeInTheDocument()

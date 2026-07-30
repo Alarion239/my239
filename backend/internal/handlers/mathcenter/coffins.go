@@ -78,7 +78,7 @@ type coffinRecord struct {
 	TermGrade            *int32
 }
 
-// coffinActionView is the lean response for mark/release/solution actions; the
+// coffinActionView is the lean response for mark/solution actions; the
 // client refetches the list/series view for labels.
 type coffinActionView struct {
 	SubproblemID   int64      `json:"subproblem_id"`
@@ -460,40 +460,6 @@ func UnmarkCoffin(database *db.DB, hub *live.Hub, blobs objectstore.Store) http.
 		}
 		live.Publish(ctx, database.Pool(), live.Event{CenterID: sc.MathCenterID, Kind: live.KindCoffins})
 		w.WriteHeader(http.StatusNoContent)
-	}
-}
-
-// ReleaseCoffin — teacher-only. Stamps released_at, closing a coffin's
-// submission window and making its разбор available.
-func ReleaseCoffin(database *db.DB, hub *live.Hub) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		userID, ok := requireUser(w, r)
-		if !ok {
-			return
-		}
-		subproblemID, err := pathInt64(r, "subproblemID")
-		if err != nil {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid subproblem id")
-			return
-		}
-		q := store.New(database.Pool())
-		sc, ok := loadSubproblemForWrite(ctx, w, r, q, userID, subproblemID)
-		if !ok {
-			return
-		}
-		s, err := q.ReleaseSubproblemSolution(ctx, subproblemID)
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "subproblem is not a coffin")
-				return
-			}
-			logger.LogErrorContext(ctx, "coffins: release", err)
-			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to release coffin")
-			return
-		}
-		live.Publish(ctx, database.Pool(), live.Event{CenterID: sc.MathCenterID, Kind: live.KindCoffins})
-		httpx.WriteJSON(w, http.StatusOK, toCoffinActionView(s))
 	}
 }
 

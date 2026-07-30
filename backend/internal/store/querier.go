@@ -193,9 +193,6 @@ type Querier interface {
 	// responsible for deleting the prior key first if needed).
 	PublishSeries(ctx context.Context, arg PublishSeriesParams) (PublishSeriesRow, error)
 	ReleaseClaim(ctx context.Context, arg ReleaseClaimParams) (int64, error)
-	// Stamp released_at (first release wins) — closes a coffin's submission window
-	// and makes its разбор available.
-	ReleaseSubproblemSolution(ctx context.Context, subproblemID int64) (MathCenterSubproblemSolution, error)
 	RemoveStudent(ctx context.Context, id int64) (int64, error)
 	RemoveTeacher(ctx context.Context, id int64) (int64, error)
 	RevokeAllRefreshTokensForUser(ctx context.Context, userID int64) error

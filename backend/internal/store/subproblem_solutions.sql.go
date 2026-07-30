@@ -610,34 +610,6 @@ func (q *Queries) ListSubproblemSolutionsForSeriesIDs(ctx context.Context, serie
 	return items, nil
 }
 
-const releaseSubproblemSolution = `-- name: ReleaseSubproblemSolution :one
-UPDATE math_center_subproblem_solutions
-SET released_at = COALESCE(released_at, NOW()),
-    updated_at  = NOW()
-WHERE subproblem_id = $1
-RETURNING id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at, solution_group_id
-`
-
-// Stamp released_at (first release wins) — closes a coffin's submission window
-// and makes its разбор available.
-func (q *Queries) ReleaseSubproblemSolution(ctx context.Context, subproblemID int64) (MathCenterSubproblemSolution, error) {
-	row := q.db.QueryRow(ctx, releaseSubproblemSolution, subproblemID)
-	var i MathCenterSubproblemSolution
-	err := row.Scan(
-		&i.ID,
-		&i.SubproblemID,
-		&i.IsCoffin,
-		&i.ReleasedAt,
-		&i.SolutionTexSource,
-		&i.SolutionPdfObjectKey,
-		&i.SolutionLink,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.SolutionGroupID,
-	)
-	return i, err
-}
-
 const setSubproblemSolutionGroup = `-- name: SetSubproblemSolutionGroup :exec
 UPDATE math_center_subproblem_solutions
 SET solution_group_id = $1::bigint,
@@ -661,7 +633,14 @@ const setSubproblemSolutionLink = `-- name: SetSubproblemSolutionLink :one
 INSERT INTO math_center_subproblem_solutions (subproblem_id, solution_link)
 VALUES ($1, $2)
 ON CONFLICT (subproblem_id)
-    DO UPDATE SET solution_link = EXCLUDED.solution_link, updated_at = NOW()
+    DO UPDATE SET solution_link = EXCLUDED.solution_link,
+                  released_at = CASE
+                                    WHEN math_center_subproblem_solutions.is_coffin
+                                         AND EXCLUDED.solution_link IS NOT NULL
+                                        THEN COALESCE(math_center_subproblem_solutions.released_at, NOW())
+                                    ELSE math_center_subproblem_solutions.released_at
+                      END,
+                  updated_at = NOW()
 RETURNING id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at, solution_group_id
 `
 
@@ -692,7 +671,13 @@ const setSubproblemSolutionPdf = `-- name: SetSubproblemSolutionPdf :one
 INSERT INTO math_center_subproblem_solutions (subproblem_id, solution_pdf_object_key)
 VALUES ($1, $2)
 ON CONFLICT (subproblem_id)
-    DO UPDATE SET solution_pdf_object_key = EXCLUDED.solution_pdf_object_key, updated_at = NOW()
+    DO UPDATE SET solution_pdf_object_key = EXCLUDED.solution_pdf_object_key,
+                  released_at = CASE
+                                    WHEN math_center_subproblem_solutions.is_coffin
+                                        THEN COALESCE(math_center_subproblem_solutions.released_at, NOW())
+                                    ELSE math_center_subproblem_solutions.released_at
+                      END,
+                  updated_at = NOW()
 RETURNING id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at, solution_group_id
 `
 
@@ -723,7 +708,13 @@ const setSubproblemSolutionTex = `-- name: SetSubproblemSolutionTex :one
 INSERT INTO math_center_subproblem_solutions (subproblem_id, solution_tex_source)
 VALUES ($1, $2)
 ON CONFLICT (subproblem_id)
-    DO UPDATE SET solution_tex_source = EXCLUDED.solution_tex_source, updated_at = NOW()
+    DO UPDATE SET solution_tex_source = EXCLUDED.solution_tex_source,
+                  released_at = CASE
+                                    WHEN math_center_subproblem_solutions.is_coffin
+                                        THEN COALESCE(math_center_subproblem_solutions.released_at, NOW())
+                                    ELSE math_center_subproblem_solutions.released_at
+                      END,
+                  updated_at = NOW()
 RETURNING id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at, solution_group_id
 `
 
@@ -732,7 +723,8 @@ type SetSubproblemSolutionTexParams struct {
 	SolutionTexSource *string `json:"solution_tex_source"`
 }
 
-// Upsert: authoring разбор on a non-coffin subproblem creates the row.
+// Upsert: authoring разбор on a non-coffin subproblem creates the row. Posting
+// content to a coffin releases it in the same atomic write.
 func (q *Queries) SetSubproblemSolutionTex(ctx context.Context, arg SetSubproblemSolutionTexParams) (MathCenterSubproblemSolution, error) {
 	row := q.db.QueryRow(ctx, setSubproblemSolutionTex, arg.SubproblemID, arg.SolutionTexSource)
 	var i MathCenterSubproblemSolution

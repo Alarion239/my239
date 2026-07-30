@@ -1,11 +1,11 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Skull, X } from 'lucide-react'
 import {
   coffinOpen,
   formatDateTime,
   useMarkCoffin,
   usePutSubproblemSolutionTexBatch,
-  useReleaseCoffin,
   useSetSubproblemSolutionLinkBatch,
   useSubproblemSolutionTex,
   useUnmarkCoffin,
@@ -64,6 +64,7 @@ export interface TeacherProblemStatsProps {
   stats: SeriesProblemStats
   series: Series
   centerId: number
+  toolbarSlot?: HTMLElement | null
 }
 
 // TeacherProblemStats renders the per-subproblem aggregate across all students.
@@ -72,11 +73,15 @@ export interface TeacherProblemStatsProps {
 // Each subproblem (the atomic unit) also carries its own coffin toggle and
 // «Разбор» authoring, so teachers manage 5а, 5б, 6 independently straight from
 // the stats they just read.
-export function TeacherProblemStats({ stats, series, centerId }: TeacherProblemStatsProps) {
+export function TeacherProblemStats({
+  stats,
+  series,
+  centerId,
+  toolbarSlot,
+}: TeacherProblemStatsProps) {
   const mark = useMarkCoffin(centerId)
   const unmark = useUnmarkCoffin(centerId)
-  const release = useReleaseCoffin(centerId)
-  const busy = mark.isPending || unmark.isPending || release.isPending
+  const busy = mark.isPending || unmark.isPending
 
   // Per-subproblem разбор/coffin metadata, keyed by subproblem id.
   const metaById = new Map<number, Subproblem>()
@@ -114,6 +119,14 @@ export function TeacherProblemStats({ stats, series, centerId }: TeacherProblemS
     previewId != null && hasRazbor(metaById.get(previewId))
       ? metaById.get(previewId)
       : undefined
+  const batchAction =
+    selectedIds.length > 0 ? (
+      <BatchRazborBar
+        centerId={centerId}
+        subproblemIds={selectedIds}
+        onClear={() => setSelected(new Set())}
+      />
+    ) : null
 
   return (
     // Side-by-side master-detail on ≥md; on phones the разбор preview stacks
@@ -140,11 +153,12 @@ export function TeacherProblemStats({ stats, series, centerId }: TeacherProblemS
 
       {/* The statistics list + batch разбор bar. */}
       <div className="flex min-w-0 flex-1 flex-col gap-3">
-        <BatchRazborBar
-          centerId={centerId}
-          subproblemIds={selectedIds}
-          onClear={() => setSelected(new Set())}
-        />
+        {toolbarSlot && batchAction
+          ? createPortal(batchAction, toolbarSlot)
+          : batchAction}
+        {selectedIds.length === 0 ? (
+          <p className="text-xs text-muted">Выберите задачи без разбора.</p>
+        ) : null}
         {stats.problems.map((p) => (
           <ProblemStatRow
             key={p.subproblem_id}
@@ -159,7 +173,6 @@ export function TeacherProblemStats({ stats, series, centerId }: TeacherProblemS
             onPress={() => press(p.subproblem_id)}
             onMark={() => mark.mutate(p.subproblem_id)}
             onUnmark={() => unmark.mutate(p.subproblem_id)}
-            onRelease={() => release.mutate(p.subproblem_id)}
           />
         ))}
       </div>
@@ -210,7 +223,7 @@ function RazborPreview({
             type="button"
             size="icon"
             variant="ghost"
-            aria-label="Закрыть разбор"
+            aria-label="Скрыть разбор"
             onClick={onClose}
           >
             <X className="h-4 w-4" aria-hidden />
@@ -243,19 +256,10 @@ function BatchRazborBar({
   const uploadPdf = useUploadSubproblemSolutionPdfBatch(centerId)
   const setLink = useSetSubproblemSolutionLinkBatch(centerId)
 
-  if (subproblemIds.length === 0) {
-    return (
-      <p className="text-xs text-muted">
-        Нажмите на одну или несколько подзадач, чтобы выбрать их, затем
-        прикрепите общий разбор (PDF / LaTeX / ссылку) сразу ко всем.
-      </p>
-    )
-  }
+  if (subproblemIds.length === 0) return null
+
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-accent/40 bg-accent-soft px-3 py-2">
-      <span className="text-sm font-medium text-accent-ink">
-        Выбрано подзадач: {subproblemIds.length}
-      </span>
+    <div className="flex items-center gap-1">
       <SolutionEditor
         title={'Общий разбор для выбранных (' + subproblemIds.length + ')'}
         hasTex={false}
@@ -267,13 +271,20 @@ function BatchRazborBar({
         closeOnSave
         onSaved={onClear}
         trigger={
-          <Button type="button" size="sm">
-            Прикрепить общий разбор
+          <Button type="button" size="sm" className="whitespace-nowrap">
+            Прикрепить разбор {subproblemIds.length} задач
           </Button>
         }
       />
-      <Button type="button" size="sm" variant="ghost" onClick={onClear}>
-        Снять выбор
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
+        onClick={onClear}
+        aria-label="Снять выбор задач"
+        title="Снять выбор задач"
+      >
+        <X className="h-4 w-4" aria-hidden />
       </Button>
     </div>
   )
@@ -287,7 +298,6 @@ function ProblemStatRow({
   onPress,
   onMark,
   onUnmark,
-  onRelease,
 }: {
   stat: SeriesProblemStat
   meta: Subproblem | undefined
@@ -296,7 +306,6 @@ function ProblemStatRow({
   onPress: () => void
   onMark: () => void
   onUnmark: () => void
-  onRelease: () => void
 }) {
   const total =
     stat.accepted + stat.submitted + stat.rejected + stat.appealed + stat.unsolved
@@ -393,18 +402,6 @@ function ProblemStatRow({
               Разбор ✓
             </span>
           ) : null}
-          {isCoffin && open ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              disabled={busy}
-              onClick={onRelease}
-              title="Закрыть сдачу и опубликовать разбор"
-            >
-              Закрыть
-            </Button>
-          ) : null}
           {/* Coffin marking is for problems WITHOUT a разбор yet. */}
           {!hasSolution ? (
             <CoffinBadge
@@ -422,7 +419,7 @@ function ProblemStatRow({
         <p className="mt-2 text-xs text-status-checking">
           {open
             ? 'Гроб — открыта для сдачи после дедлайна'
-            : 'Гроб закрыт · разбор ' + formatDateTime(meta?.released_at ?? null)}
+            : 'Разбор опубликован · ' + formatDateTime(meta?.released_at ?? null)}
         </p>
       ) : null}
     </div>

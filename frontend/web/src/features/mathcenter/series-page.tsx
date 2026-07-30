@@ -465,21 +465,30 @@ function TeacherSeriesView({
   termSearch: string
 }) {
   const navigate = useNavigate()
+  const [razborToolbarSlot, setRazborToolbarSlot] =
+    useState<HTMLDivElement | null>(null)
   return (
     <div className="flex flex-col gap-4">
-      <PillTabs
-        value={tab}
-        onChange={(t) =>
-          navigate('/mathcenter/' + year + '/series/' + series.id + '/' + t + termSearch)
-        }
-        options={TEACHER_TABS}
-        ariaLabel="Раздел проверки"
-        className="min-w-0 self-start"
-      />
+      <div className="flex min-w-0 items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <PillTabs
+          value={tab}
+          onChange={(t) =>
+            navigate('/mathcenter/' + year + '/series/' + series.id + '/' + t + termSearch)
+          }
+          options={TEACHER_TABS}
+          ariaLabel="Раздел проверки"
+          className="shrink-0"
+        />
+        <div ref={setRazborToolbarSlot} className="shrink-0" />
+      </div>
       {tab === 'statement' ? (
         <StatementPanel series={series} bare />
       ) : tab === 'razbor' ? (
-        <StatsTab series={series} centerId={centerId} />
+        <StatsTab
+          series={series}
+          centerId={centerId}
+          toolbarSlot={razborToolbarSlot}
+        />
       ) : tab === 'queue' ? (
         <GraderQueue seriesId={series.id} />
       ) : (
@@ -601,13 +610,26 @@ function DeleteSeriesButton({
   )
 }
 
-function StatsTab({ series, centerId }: { series: Series; centerId: number }) {
+function StatsTab({
+  series,
+  centerId,
+  toolbarSlot,
+}: {
+  series: Series
+  centerId: number
+  toolbarSlot: HTMLDivElement | null
+}) {
   const { data, isPending, isError } = useSeriesProblemStats(series.id)
   return (
     <div className="flex flex-col gap-4">
       <AsyncGate isPending={isPending} isError={isError} hasData={!!data}>
         {data ? (
-          <TeacherProblemStats stats={data} series={series} centerId={centerId} />
+          <TeacherProblemStats
+            stats={data}
+            series={series}
+            centerId={centerId}
+            toolbarSlot={toolbarSlot}
+          />
         ) : null}
       </AsyncGate>
       <p className="text-xs text-muted">

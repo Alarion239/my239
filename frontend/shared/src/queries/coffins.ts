@@ -1,5 +1,5 @@
 // Coffins ("гробы") + per-subproblem «Разбор» data layer: the center-wide list
-// + teacher actions (mark/unmark/release) and each subproblem's own разбор
+// + teacher actions (mark/unmark) and each subproblem's own разбор
 // (TeX/PDF/link). Everything keys on the subproblem id (the atomic unit).
 // Mutations invalidate the center coffins list AND the center's series list so
 // both the Гробы tab and the series Разбор tab refresh.
@@ -20,7 +20,7 @@ async function groupSolutions(client: ApiClient, subproblemIds: number[]) {
   })
 }
 
-// CoffinAction is the lean response of mark/release/solution actions (no labels
+// CoffinAction is the lean response of mark/solution actions (no labels
 // — the client refetches the list/series view for those).
 export interface CoffinAction {
   subproblem_id: number
@@ -79,20 +79,6 @@ export function useUnmarkCoffin(centerId: number) {
       client.request<void>(
         '/mathcenter/subproblems/' + subproblemId + '/coffin',
         { method: 'DELETE' },
-      ),
-    onSuccess: () => invalidate(qc, centerId),
-  })
-}
-
-// useReleaseCoffin stamps released_at — closing submission + revealing разбор.
-export function useReleaseCoffin(centerId: number) {
-  const client = useApiClient()
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (subproblemId: number) =>
-      client.request<CoffinAction>(
-        '/mathcenter/subproblems/' + subproblemId + '/solution/release',
-        { method: 'POST' },
       ),
     onSuccess: () => invalidate(qc, centerId),
   })

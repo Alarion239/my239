@@ -96,11 +96,11 @@ func Router(database *db.DB, hub *live.Hub, tokens *internalAuth.TokenService, b
 	})
 
 	// Per-subproblem coffins ("гробы") + официальный «Разбор». The subproblem is
-	// the unit: mark/unmark/release + разбор (TeX/PDF/link) all key on it.
+	// the unit: mark/unmark + разбор (TeX/PDF/link) all key on it. Publishing
+	// any разбор format releases an open coffin automatically.
 	r.Route("/subproblems/{subproblemID}", func(r chi.Router) {
 		r.Post("/coffin", MarkCoffin(database, hub))
 		r.Delete("/coffin", UnmarkCoffin(database, hub, blobs))
-		r.Post("/solution/release", ReleaseCoffin(database, hub))
 		r.Get("/solution/tex", GetSubproblemSolutionTex(database))
 		r.Put("/solution/tex", PutSubproblemSolutionTex(database, hub))
 		r.Post("/solution/pdf/upload-url", IssueSubproblemSolutionPDFUploadURL(database, blobs, uploadTTL))

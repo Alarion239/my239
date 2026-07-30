@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   ApiClient,
@@ -112,5 +113,19 @@ describe('TeacherProblemStats — разбор frame', () => {
     const rowWithout = barWithout.closest('[role="button"]') as HTMLElement
     expect(rowWith.className).toContain('border-status-accepted')
     expect(rowWithout.className).not.toContain('border-status-accepted')
+  })
+
+  it('shows the compact batch action after selecting a problem', async () => {
+    renderStats()
+    const user = userEvent.setup()
+    const bar = screen.getByRole('img', { name: /по задаче Задача 1 \(б\)/ })
+
+    await user.click(bar.closest('[role="button"]') as HTMLElement)
+
+    expect(
+      screen.getByRole('button', { name: 'Прикрепить разбор 1 задач' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Снять выбор задач' })).toBeInTheDocument()
+    expect(screen.queryByText('Выбрано подзадач: 1')).not.toBeInTheDocument()
   })
 })

@@ -6,7 +6,6 @@ import {
   displayStatusMeta,
   formatDateTime,
   usePutSubproblemSolutionTex,
-  useReleaseCoffin,
   useSetSubproblemSolutionLink,
   useSubproblemSolutionTex,
   useCenterCoffins,
@@ -258,14 +257,13 @@ function ManagerControls({
   solved: boolean
   hasSolution: boolean
 }) {
-  const release = useReleaseCoffin(centerId)
   const putTex = usePutSubproblemSolutionTex(coffin.subproblem_id, centerId)
   const uploadPdf = useUploadSubproblemSolutionPdf(coffin.subproblem_id, centerId)
   const setLink = useSetSubproblemSolutionLink(coffin.subproblem_id, centerId)
-  // Load the existing LaTeX so a разобранный coffin's editor opens on its code.
+  // Load existing LaTeX whenever present so either editor opens on its code.
   const texQuery = useSubproblemSolutionTex(
     coffin.subproblem_id,
-    solved && coffin.has_solution_tex,
+    coffin.has_solution_tex,
   )
 
   if (solved) {
@@ -288,21 +286,21 @@ function ManagerControls({
       />
     )
   }
-  // Open coffin: one «Снять» — attach the разбор (optional) and close it.
+  // Publishing any разбор format closes an open coffin automatically.
   return (
     <SolutionEditor
-      title={'Снять гроб · ' + coffin.display}
+      title={'Прикрепить разбор · ' + coffin.display}
       hasTex={coffin.has_solution_tex}
       hasPdf={coffin.has_solution_pdf}
       link={coffin.solution_link}
+      initialTex={texQuery.data?.tex}
       onPutTex={(tex) => putTex.mutateAsync(tex)}
       onUploadPdf={(file) => uploadPdf.mutateAsync(file)}
       onSetLink={(link) => setLink.mutateAsync(link)}
-      onResolve={() => release.mutateAsync(coffin.subproblem_id)}
-      resolveLabel="Снять гроб (закрыть)"
+      closeOnSave
       trigger={
         <Button type="button" size="sm">
-          Снять
+          Прикрепить разбор
         </Button>
       }
     />

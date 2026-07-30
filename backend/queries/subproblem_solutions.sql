@@ -22,35 +22,46 @@ DELETE
 FROM math_center_subproblem_solutions
 WHERE subproblem_id = $1;
 
--- name: ReleaseSubproblemSolution :one
--- Stamp released_at (first release wins) — closes a coffin's submission window
--- and makes its разбор available.
-UPDATE math_center_subproblem_solutions
-SET released_at = COALESCE(released_at, NOW()),
-    updated_at  = NOW()
-WHERE subproblem_id = $1
-RETURNING *;
-
 -- name: SetSubproblemSolutionTex :one
--- Upsert: authoring разбор on a non-coffin subproblem creates the row.
+-- Upsert: authoring разбор on a non-coffin subproblem creates the row. Posting
+-- content to a coffin releases it in the same atomic write.
 INSERT INTO math_center_subproblem_solutions (subproblem_id, solution_tex_source)
 VALUES ($1, $2)
 ON CONFLICT (subproblem_id)
-    DO UPDATE SET solution_tex_source = EXCLUDED.solution_tex_source, updated_at = NOW()
+    DO UPDATE SET solution_tex_source = EXCLUDED.solution_tex_source,
+                  released_at = CASE
+                                    WHEN math_center_subproblem_solutions.is_coffin
+                                        THEN COALESCE(math_center_subproblem_solutions.released_at, NOW())
+                                    ELSE math_center_subproblem_solutions.released_at
+                      END,
+                  updated_at = NOW()
 RETURNING *;
 
 -- name: SetSubproblemSolutionPdf :one
 INSERT INTO math_center_subproblem_solutions (subproblem_id, solution_pdf_object_key)
 VALUES ($1, $2)
 ON CONFLICT (subproblem_id)
-    DO UPDATE SET solution_pdf_object_key = EXCLUDED.solution_pdf_object_key, updated_at = NOW()
+    DO UPDATE SET solution_pdf_object_key = EXCLUDED.solution_pdf_object_key,
+                  released_at = CASE
+                                    WHEN math_center_subproblem_solutions.is_coffin
+                                        THEN COALESCE(math_center_subproblem_solutions.released_at, NOW())
+                                    ELSE math_center_subproblem_solutions.released_at
+                      END,
+                  updated_at = NOW()
 RETURNING *;
 
 -- name: SetSubproblemSolutionLink :one
 INSERT INTO math_center_subproblem_solutions (subproblem_id, solution_link)
 VALUES ($1, $2)
 ON CONFLICT (subproblem_id)
-    DO UPDATE SET solution_link = EXCLUDED.solution_link, updated_at = NOW()
+    DO UPDATE SET solution_link = EXCLUDED.solution_link,
+                  released_at = CASE
+                                    WHEN math_center_subproblem_solutions.is_coffin
+                                         AND EXCLUDED.solution_link IS NOT NULL
+                                        THEN COALESCE(math_center_subproblem_solutions.released_at, NOW())
+                                    ELSE math_center_subproblem_solutions.released_at
+                      END,
+                  updated_at = NOW()
 RETURNING *;
 
 -- name: GetSubproblemSolutionCenter :one

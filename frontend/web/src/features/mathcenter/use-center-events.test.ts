@@ -47,4 +47,20 @@ describe('center live events', () => {
     expect(client.getQueryState(conduitKey)?.isInvalidated).toBe(true)
     expect(client.getQueryState(sharedQueueKey)?.isInvalidated).toBe(true)
   })
+
+  it('refreshes the active term and open solution previews after posting a разбор', () => {
+    const client = queryClient()
+    const coffinsKey = queryKeys.centerCoffins(2, 71)
+    const seriesKey = queryKeys.seriesList(2, 71)
+    const texKey = queryKeys.subproblemSolutionTex(900)
+    seed(client, coffinsKey)
+    seed(client, seriesKey)
+    seed(client, texKey)
+
+    handleCenterEvent(client, 2, 'coffins', '{"center_id":2}')
+
+    expect(client.getQueryState(coffinsKey)?.isInvalidated).toBe(true)
+    expect(client.getQueryState(seriesKey)?.isInvalidated).toBe(true)
+    expect(client.getQueryState(texKey)?.isInvalidated).toBe(true)
+  })
 })
