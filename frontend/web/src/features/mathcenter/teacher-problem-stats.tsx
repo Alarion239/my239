@@ -2,8 +2,6 @@ import { useId, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Skull, X } from 'lucide-react'
 import {
-  coffinOpen,
-  formatDateTime,
   useMarkCoffin,
   usePutSubproblemSolutionTexBatch,
   useSetSubproblemSolutionLinkBatch,
@@ -315,7 +313,6 @@ function ProblemStatRow({
   const total =
     stat.accepted + stat.submitted + stat.rejected + stat.appealed + stat.unsolved
   const isCoffin = meta?.is_coffin ?? false
-  const open = isCoffin && coffinOpen(meta?.released_at)
   const hasSolution = hasRazbor(meta)
   const distributionLabel = SEGMENTS.map(
     (seg) => seg.label + ' — ' + stat[seg.key],
@@ -419,14 +416,6 @@ function ProblemStatRow({
           ) : null}
         </div>
       </div>
-
-      {isCoffin ? (
-        <p className="mt-2 text-xs text-status-checking">
-          {open
-            ? 'Гроб — открыта для сдачи после дедлайна'
-            : 'Разбор опубликован · ' + formatDateTime(meta?.released_at ?? null)}
-        </p>
-      ) : null}
     </div>
   )
 }

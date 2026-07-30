@@ -272,6 +272,10 @@ describe('SeriesPage — teacher view', () => {
     })
     expect(coffinButton).toHaveAttribute('aria-describedby', coffinHint.id)
     expect(coffinButton).not.toHaveAttribute('title')
+    expect(
+      screen.queryByText('Гроб — открыта для сдачи после дедлайна'),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/Разбор опубликован ·/)).not.toBeInTheDocument()
 
     // Selecting a task puts the compact batch action in the same toolbar row
     // as the tabs instead of adding a separate panel above the statistics.
