@@ -41,15 +41,14 @@ interface Segment {
   >
   label: string
   bar: string
-  dot: string
 }
 
 const SEGMENTS: Segment[] = [
-  { key: 'accepted', label: 'Принято', bar: 'bg-status-accepted', dot: 'bg-status-accepted' },
-  { key: 'submitted', label: 'Проверяется', bar: 'bg-status-checking', dot: 'bg-status-checking' },
-  { key: 'rejected', label: 'Отклонено', bar: 'bg-status-rejected', dot: 'bg-status-rejected' },
-  { key: 'appealed', label: 'Апелляция', bar: 'bg-status-appeal', dot: 'bg-status-appeal' },
-  { key: 'unsolved', label: 'Не решено', bar: 'bg-status-unsolved', dot: 'bg-status-unsolved' },
+  { key: 'accepted', label: 'Принято', bar: 'bg-status-accepted' },
+  { key: 'submitted', label: 'Проверяется', bar: 'bg-status-checking' },
+  { key: 'rejected', label: 'Отклонено', bar: 'bg-status-rejected' },
+  { key: 'appealed', label: 'Апелляция', bar: 'bg-status-appeal' },
+  { key: 'unsolved', label: 'Не решено', bar: 'bg-status-unsolved' },
 ]
 
 // subStatLabel composes the user-facing name of a stat line: the problem name
@@ -67,10 +66,12 @@ export interface TeacherProblemStatsProps {
   centerId: number
 }
 
-// TeacherProblemStats renders the per-subproblem aggregate across all students:
-// a stacked bar + numeric breakdown. Each subproblem (the atomic unit) also
-// carries its own coffin toggle and «Разбор» authoring, so teachers manage
-// 5а, 5б, 6 independently straight from the stats they just read.
+// TeacherProblemStats renders the per-subproblem aggregate across all students.
+// The counts live directly inside one thick status rail; hovering a segment
+// names its status, avoiding a separate legend and duplicated student total.
+// Each subproblem (the atomic unit) also carries its own coffin toggle and
+// «Разбор» authoring, so teachers manage 5а, 5б, 6 independently straight from
+// the stats they just read.
 export function TeacherProblemStats({ stats, series, centerId }: TeacherProblemStatsProps) {
   const mark = useMarkCoffin(centerId)
   const unmark = useUnmarkCoffin(centerId)
@@ -302,6 +303,9 @@ function ProblemStatRow({
   const isCoffin = meta?.is_coffin ?? false
   const open = isCoffin && coffinOpen(meta?.released_at)
   const hasSolution = hasRazbor(meta)
+  const distributionLabel = SEGMENTS.map(
+    (seg) => seg.label + ' — ' + stat[seg.key],
+  ).join('; ')
 
   // Pressing the row previews its разбор (solved) or selects it for a shared
   // разбор (unsolved). The right-hand controls stop propagation so they don't
@@ -319,7 +323,7 @@ function ProblemStatRow({
         }
       }}
       className={cn(
-        'cursor-pointer rounded-xl border bg-surface px-4 py-3 transition-colors',
+        'cursor-pointer rounded-xl border bg-surface px-3 py-2.5 transition-colors',
         'hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
         // A green frame marks a subproblem that already has a разбор, and stays
         // visible while it's being previewed (the accent ring layers on top).
@@ -333,17 +337,61 @@ function ProblemStatRow({
         active ? 'ring-2 ring-accent/50' : '',
       )}
     >
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <span className="font-medium text-ink">{subStatLabel(stat)}</span>
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="w-28 shrink-0 truncate font-medium text-ink sm:w-32">
+          {subStatLabel(stat)}
+        </span>
+
         <div
-          className="flex shrink-0 flex-wrap items-center gap-2"
+          className="flex h-8 min-w-0 flex-1 rounded-lg bg-surface-muted"
+          role="img"
+          aria-label={
+            'Распределение статусов по задаче ' +
+            subStatLabel(stat) +
+            ': ' +
+            distributionLabel
+          }
+        >
+          {SEGMENTS.map((seg) => {
+            const value = stat[seg.key]
+            if (value === 0 || total === 0) return null
+            const percentage = (value / total) * 100
+            return (
+              <span
+                key={seg.key}
+                className={cn(
+                  'group relative flex h-full min-w-0 items-center justify-center first:rounded-l-lg last:rounded-r-lg',
+                  seg.bar,
+                )}
+                style={{ width: percentage + '%' }}
+                aria-hidden
+              >
+                {percentage >= 5 ? (
+                  <span className="truncate px-1 text-sm font-medium tabular-nums text-surface">
+                    {value}
+                  </span>
+                ) : null}
+                <span
+                  role="tooltip"
+                  className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-line bg-ink px-2 py-1 text-xs font-medium text-paper opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
+                >
+                  {seg.label} — {value}
+                </span>
+              </span>
+            )
+          })}
+        </div>
+
+        <div
+          className="flex shrink-0 items-center gap-2"
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
           role="presentation"
         >
-          <span className="text-xs text-muted">{total} учеников</span>
           {hasSolution ? (
-            <span className="text-xs font-medium text-status-accepted">Разбор ✓</span>
+            <span className="hidden text-xs font-medium text-status-accepted sm:inline">
+              Разбор ✓
+            </span>
           ) : null}
           {isCoffin && open ? (
             <Button
@@ -371,41 +419,12 @@ function ProblemStatRow({
       </div>
 
       {isCoffin ? (
-        <p className="mb-2 text-xs text-status-checking">
+        <p className="mt-2 text-xs text-status-checking">
           {open
             ? 'Гроб — открыта для сдачи после дедлайна'
             : 'Гроб закрыт · разбор ' + formatDateTime(meta?.released_at ?? null)}
         </p>
       ) : null}
-
-      <div
-        className="flex h-2.5 w-full overflow-hidden rounded-full bg-surface-muted"
-        role="img"
-        aria-label={'Распределение статусов по задаче ' + subStatLabel(stat)}
-      >
-        {SEGMENTS.map((seg) => {
-          const value = stat[seg.key]
-          if (value === 0 || total === 0) return null
-          return (
-            <span
-              key={seg.key}
-              className={cn('h-full', seg.bar)}
-              style={{ width: (value / total) * 100 + '%' }}
-            />
-          )
-        })}
-      </div>
-
-      <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
-        {SEGMENTS.map((seg) => (
-          <li key={seg.key} className="flex items-center gap-1.5">
-            <span className={cn('h-2 w-2 rounded-full', seg.dot)} aria-hidden />
-            <span>
-              {seg.label}: <span className="font-medium text-ink">{stat[seg.key]}</span>
-            </span>
-          </li>
-        ))}
-      </ul>
     </div>
   )
 }

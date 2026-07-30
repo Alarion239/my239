@@ -254,8 +254,14 @@ describe('SeriesPage — teacher view', () => {
     expect(await screen.findByText('Очередь пуста.')).toBeInTheDocument()
     const user = userEvent.setup()
     await user.click(screen.getByRole('tab', { name: 'Разбор' }))
-    expect(await screen.findByText('Принято:', { exact: false })).toBeInTheDocument()
-    expect(screen.getByText('5')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('img', {
+        name: /Распределение статусов по задаче Задача 1: Принято — 5/,
+      }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('12 учеников')).not.toBeInTheDocument()
+    expect(screen.queryByText('Принято:', { exact: false })).not.toBeInTheDocument()
+    expect(screen.getByText('Принято — 5')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: /Серия 2/ }))
     expect(screen.getByRole('button', { name: 'Редактировать серию' })).toBeInTheDocument()
@@ -282,12 +288,20 @@ describe('SeriesPage — teacher view', () => {
     renderPage('/mathcenter/' + GRAD_YEAR + '/series/' + SERIES_ID + '/razbor')
 
     // Разбор content is present at the start.
-    expect(await screen.findByText('Принято:', { exact: false })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('img', {
+        name: /Распределение статусов по задаче Задача 1: Принято — 5/,
+      }),
+    ).toBeInTheDocument()
 
     // Clicking «Очередь» navigates to series/:id/queue and swaps the content.
     const user = userEvent.setup()
     await user.click(screen.getByRole('tab', { name: 'Очередь' }))
     expect(await screen.findByText('Очередь пуста.')).toBeInTheDocument()
-    expect(screen.queryByText('Принято:', { exact: false })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('img', {
+        name: /Распределение статусов по задаче Задача 1/,
+      }),
+    ).not.toBeInTheDocument()
   })
 })
