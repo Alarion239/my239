@@ -1,5 +1,4 @@
 import {
-  Fragment,
   memo,
   useCallback,
   useEffect,
@@ -127,11 +126,26 @@ function currentSeriesId(series: CenterGridSeries[]): number | null {
 }
 
 const EMPTY_MARKED_SUBPROBLEMS = new Map<number, string>()
+const CONDUIT_ROW_HEIGHT = 36
+const CONDUIT_ROW_OVERSCAN = 8
+const CONDUIT_INITIAL_ROWS = 30
 
 type ConduitCellAction = (
   student: CenterGridStudentEntry,
   column: FlatCol,
 ) => void
+
+type ConduitVirtualRow =
+  | {
+      kind: 'group'
+      key: string
+      name: string
+    }
+  | {
+      kind: 'student'
+      key: string
+      student: CenterGridStudentEntry
+    }
 
 interface ConduitStudentRowProps {
   student: CenterGridStudentEntry
@@ -179,7 +193,7 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
   return (
     <tr
       className={cn(
-        'hover:bg-surface-muted/40',
+        'h-9 hover:bg-surface-muted/40',
         active && 'bg-amber-50/60 dark:bg-amber-500/10',
       )}
     >
@@ -496,6 +510,81 @@ export function ConduitTable({
     [filteredGroups],
   )
 
+  const virtualRows = useMemo<ConduitVirtualRow[]>(
+    () =>
+      filteredGroups.flatMap((group) => [
+        {
+          kind: 'group' as const,
+          key: 'group:' + group.group_id,
+          name: group.name,
+        },
+        ...group.students.map((student) => ({
+          kind: 'student' as const,
+          key: 'student:' + student.user_id,
+          student,
+        })),
+      ]),
+    [filteredGroups],
+  )
+  const scrollerRef = useRef<HTMLDivElement>(null)
+  const [rowWindow, setRowWindow] = useState({
+    start: 0,
+    end: CONDUIT_INITIAL_ROWS,
+  })
+
+  // A synced center can exceed 50k task cells. Keep only the rows around the
+  // viewport mounted; fixed-height spacer rows preserve the full scrollbar and
+  // sticky header/total geometry. Sorting now replaces a few visible rows
+  // instead of asking the browser to move every 400-cell row in the table.
+  useEffect(() => {
+    const scroller = scrollerRef.current
+    if (!scroller) return
+
+    let animationFrame = 0
+    const measure = () => {
+      animationFrame = 0
+      const firstVisible = Math.floor(
+        scroller.scrollTop / CONDUIT_ROW_HEIGHT,
+      )
+      const visibleCount = Math.ceil(
+        scroller.clientHeight / CONDUIT_ROW_HEIGHT,
+      )
+      const start = Math.max(0, firstVisible - CONDUIT_ROW_OVERSCAN)
+      const end = Math.min(
+        virtualRows.length,
+        firstVisible + visibleCount + CONDUIT_ROW_OVERSCAN,
+      )
+      setRowWindow((current) =>
+        current.start === start && current.end === end
+          ? current
+          : { start, end },
+      )
+    }
+    const scheduleMeasure = () => {
+      if (animationFrame === 0) {
+        animationFrame = window.requestAnimationFrame(measure)
+      }
+    }
+
+    measure()
+    scroller.addEventListener('scroll', scheduleMeasure, { passive: true })
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(scheduleMeasure)
+    resizeObserver?.observe(scroller)
+    return () => {
+      scroller.removeEventListener('scroll', scheduleMeasure)
+      resizeObserver?.disconnect()
+      if (animationFrame !== 0) window.cancelAnimationFrame(animationFrame)
+    }
+  }, [virtualRows.length])
+
+  const visibleRows = virtualRows.slice(rowWindow.start, rowWindow.end)
+  const topSpacerHeight = rowWindow.start * CONDUIT_ROW_HEIGHT
+  const bottomSpacerHeight =
+    Math.max(0, virtualRows.length - rowWindow.end) * CONDUIT_ROW_HEIGHT
+
   const activeStudent = useMemo(
     () => students.find((s) => s.user_id === activeStudentId) ?? null,
     [students, activeStudentId],
@@ -590,7 +679,6 @@ export function ConduitTable({
   )
 
   // Centre the current series on open.
-  const scrollerRef = useRef<HTMLDivElement>(null)
   const currentThRef = useRef<HTMLTableCellElement | null>(null)
   const currentId = useMemo(() => currentSeriesId(data.series), [data.series])
   useEffect(() => {
@@ -735,45 +823,68 @@ export function ConduitTable({
             </tr>
           </thead>
           <tbody>
-            {filteredGroups.map((g) => (
-              <Fragment key={g.group_id}>
-                <tr className="bg-surface-muted/60">
-                  <td colSpan={cols.length + 2} className="border-b border-line p-0">
-                    <div className={groupLabel}>{g.name}</div>
-                  </td>
-                </tr>
-                {g.students.map((st) => {
-                  const isActiveRow = activeStudentId === st.user_id
-                  const pendingPrefix = st.user_id + ':'
-                  const pendingSubproblemId =
-                    pendingKey?.startsWith(pendingPrefix)
-                      ? Number(pendingKey.slice(pendingPrefix.length))
-                      : null
-                  return (
-                    <ConduitStudentRow
-                      key={st.user_id}
-                      student={st}
-                      cols={cols}
-                      cells={data.cells}
-                      graders={data.graders}
-                      search={search}
-                      active={isActiveRow}
-                      markedSubs={
-                        isActiveRow
-                          ? markedSubs
-                          : EMPTY_MARKED_SUBPROBLEMS
-                      }
-                      pendingSubproblemId={pendingSubproblemId}
-                      currentGraderInitials={
-                        isActiveRow ? initialsOf(grader.name) : ''
-                      }
-                      solvedTotal={solvedTotals.get(st.user_id) ?? 0}
-                      onCellAction={onCellAction}
-                    />
-                  )
-                })}
-              </Fragment>
-            ))}
+            {topSpacerHeight > 0 ? (
+              <tr aria-hidden="true" data-conduit-virtual-spacer="top">
+                <td
+                  colSpan={cols.length + 2}
+                  className="border-0 p-0"
+                  style={{ height: topSpacerHeight }}
+                />
+              </tr>
+            ) : null}
+            {visibleRows.map((row) => {
+              if (row.kind === 'group') {
+                return (
+                  <tr key={row.key} className="h-9 bg-surface-muted/60">
+                    <td
+                      colSpan={cols.length + 2}
+                      className="border-b border-line p-0"
+                    >
+                      <div className={groupLabel}>{row.name}</div>
+                    </td>
+                  </tr>
+                )
+              }
+
+              const st = row.student
+              const isActiveRow = activeStudentId === st.user_id
+              const pendingPrefix = st.user_id + ':'
+              const pendingSubproblemId =
+                pendingKey?.startsWith(pendingPrefix)
+                  ? Number(pendingKey.slice(pendingPrefix.length))
+                  : null
+              return (
+                <ConduitStudentRow
+                  key={row.key}
+                  student={st}
+                  cols={cols}
+                  cells={data.cells}
+                  graders={data.graders}
+                  search={search}
+                  active={isActiveRow}
+                  markedSubs={
+                    isActiveRow
+                      ? markedSubs
+                      : EMPTY_MARKED_SUBPROBLEMS
+                  }
+                  pendingSubproblemId={pendingSubproblemId}
+                  currentGraderInitials={
+                    isActiveRow ? initialsOf(grader.name) : ''
+                  }
+                  solvedTotal={solvedTotals.get(st.user_id) ?? 0}
+                  onCellAction={onCellAction}
+                />
+              )
+            })}
+            {bottomSpacerHeight > 0 ? (
+              <tr aria-hidden="true" data-conduit-virtual-spacer="bottom">
+                <td
+                  colSpan={cols.length + 2}
+                  className="border-0 p-0"
+                  style={{ height: bottomSpacerHeight }}
+                />
+              </tr>
+            ) : null}
             {/* Column totals: people who solved each problem — pinned to the
                 bottom so it's always on screen. Always over ALL students. */}
             <tr>

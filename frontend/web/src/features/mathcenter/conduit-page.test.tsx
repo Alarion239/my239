@@ -93,6 +93,23 @@ function renderConduit() {
   )
 }
 
+function dataWithStudentCount(count: number): CenterGridResponse {
+  return {
+    ...data,
+    groups: [
+      {
+        group_id: 1,
+        name: '16',
+        students: Array.from({ length: count }, (_, index) => ({
+          user_id: index + 1,
+          name: `Ученик ${String(index + 1).padStart(3, '0')}`,
+        })),
+      },
+    ],
+    cells: {},
+  }
+}
+
 describe('ConduitTable', () => {
   it('uses the table cells themselves as controls and sorts existing rows', () => {
     const { container } = renderConduit()
@@ -127,5 +144,31 @@ describe('ConduitTable', () => {
 
     fireEvent.keyDown(emptyCells[1], { key: 'Enter' })
     expect(container.querySelectorAll('td[data-conduit-cell]')).toHaveLength(6)
+  })
+
+  it('mounts only the visible window for a large student list', () => {
+    const largeData = dataWithStudentCount(80)
+    const { container } = render(
+      <MemoryRouter initialEntries={['/mathcenter/2099/conduit?term_id=1']}>
+        <Routes>
+          <Route
+            path="/mathcenter/:year/conduit"
+            element={
+              <ConduitTable centerId={2} termId={1} data={largeData} />
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(
+      container.querySelectorAll('td[data-conduit-cell]').length,
+    ).toBeLessThan(80 * 3)
+    expect(
+      container.querySelector('[data-conduit-virtual-spacer="bottom"]'),
+    ).not.toBeNull()
+    expect(
+      screen.queryByRole('link', { name: 'Ученик 080' }),
+    ).not.toBeInTheDocument()
   })
 })
