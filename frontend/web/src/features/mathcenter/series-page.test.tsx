@@ -277,7 +277,7 @@ describe('SeriesPage — teacher view', () => {
     // as the tabs instead of adding a separate panel above the statistics.
     await user.click(distribution.closest('[role="button"]') as HTMLElement)
     const attach = screen.getByRole('button', {
-      name: 'Прикрепить разбор 1 задач',
+      name: 'Прикрепить разбор 1 задачи',
     })
     expect(tabList.parentElement).toContainElement(attach)
 

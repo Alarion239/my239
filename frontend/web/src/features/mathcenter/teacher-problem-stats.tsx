@@ -240,6 +240,11 @@ function RazborPreview({
 
 // BatchRazborBar lets a teacher attach ONE разбор (TeX/PDF/link) to all the
 // subproblems they've ticked — so a shared solution covers several problems.
+function taskGenitive(count: number): 'задачи' | 'задач' {
+  const lastTwo = count % 100
+  return count % 10 === 1 && lastTwo !== 11 ? 'задачи' : 'задач'
+}
+
 function BatchRazborBar({
   centerId,
   subproblemIds,
@@ -256,7 +261,7 @@ function BatchRazborBar({
   if (subproblemIds.length === 0) return null
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="inline-flex items-center rounded-full border border-line bg-surface-muted p-0.5">
       <SolutionEditor
         title={'Общий разбор для выбранных (' + subproblemIds.length + ')'}
         hasTex={false}
@@ -268,21 +273,24 @@ function BatchRazborBar({
         closeOnSave
         onSaved={onClear}
         trigger={
-          <Button type="button" size="sm" className="whitespace-nowrap">
-            Прикрепить разбор {subproblemIds.length} задач
-          </Button>
+          <button
+            type="button"
+            className="whitespace-nowrap rounded-full bg-accent-soft px-3 py-1 text-sm font-medium text-accent-ink transition-colors hover:bg-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          >
+            Прикрепить разбор {subproblemIds.length}{' '}
+            {taskGenitive(subproblemIds.length)}
+          </button>
         }
       />
-      <Button
+      <button
         type="button"
-        size="icon"
-        variant="ghost"
         onClick={onClear}
         aria-label="Снять выбор задач"
         title="Снять выбор задач"
+        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
       >
         <X className="h-4 w-4" aria-hidden />
-      </Button>
+      </button>
     </div>
   )
 }

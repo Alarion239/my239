@@ -52,6 +52,7 @@ function makeSeries(): Series {
         subproblems: [
           sub({ id: 1000, label: 'а', display: 'Задача 1 (а)', has_solution_tex: true }),
           sub({ id: 1001, label: 'б', display: 'Задача 1 (б)' }),
+          sub({ id: 1002, label: 'в', display: 'Задача 1 (в)' }),
         ],
       },
     ],
@@ -85,6 +86,18 @@ function makeStats(): SeriesProblemStats {
         rejected: 0,
         submitted: 1,
         unsolved: 2,
+      },
+      {
+        problem_id: 1,
+        problem_number: 1,
+        problem_display: 'Задача 1',
+        subproblem_id: 1002,
+        subproblem_label: 'в',
+        accepted: 0,
+        appealed: 0,
+        rejected: 0,
+        submitted: 0,
+        unsolved: 3,
       },
     ],
   }
@@ -122,10 +135,22 @@ describe('TeacherProblemStats — разбор frame', () => {
 
     await user.click(bar.closest('[role="button"]') as HTMLElement)
 
-    expect(
-      screen.getByRole('button', { name: 'Прикрепить разбор 1 задач' }),
-    ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Снять выбор задач' })).toBeInTheDocument()
+    const attach = screen.getByRole('button', {
+      name: 'Прикрепить разбор 1 задачи',
+    })
+    const clear = screen.getByRole('button', { name: 'Снять выбор задач' })
+    expect(attach.parentElement).toHaveClass('rounded-full', 'p-0.5')
+    expect(attach).toHaveClass('rounded-full', 'py-1')
+    expect(clear).toHaveClass('h-7', 'w-7', 'rounded-full')
     expect(screen.queryByText('Выбрано подзадач: 1')).not.toBeInTheDocument()
+
+    await user.click(
+      screen
+        .getByRole('img', { name: /по задаче Задача 1 \(в\)/ })
+        .closest('[role="button"]') as HTMLElement,
+    )
+    expect(
+      screen.getByRole('button', { name: 'Прикрепить разбор 2 задач' }),
+    ).toBeInTheDocument()
   })
 })
