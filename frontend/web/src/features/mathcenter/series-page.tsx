@@ -621,22 +621,16 @@ function StatsTab({
 }) {
   const { data, isPending, isError } = useSeriesProblemStats(series.id)
   return (
-    <div className="flex flex-col gap-4">
-      <AsyncGate isPending={isPending} isError={isError} hasData={!!data}>
-        {data ? (
-          <TeacherProblemStats
-            stats={data}
-            series={series}
-            centerId={centerId}
-            toolbarSlot={toolbarSlot}
-          />
-        ) : null}
-      </AsyncGate>
-      <p className="text-xs text-muted">
-        Значок <span aria-hidden>☠</span> отмечает гроб; «Разбор» — чтобы
-        прикрепить официальное решение.
-      </p>
-    </div>
+    <AsyncGate isPending={isPending} isError={isError} hasData={!!data}>
+      {data ? (
+        <TeacherProblemStats
+          stats={data}
+          series={series}
+          centerId={centerId}
+          toolbarSlot={toolbarSlot}
+        />
+      ) : null}
+    </AsyncGate>
   )
 }
 

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Skull, X } from 'lucide-react'
 import {
@@ -156,9 +156,6 @@ export function TeacherProblemStats({
         {toolbarSlot && batchAction
           ? createPortal(batchAction, toolbarSlot)
           : batchAction}
-        {selectedIds.length === 0 ? (
-          <p className="text-xs text-muted">Выберите задачи без разбора.</p>
-        ) : null}
         {stats.problems.map((p) => (
           <ProblemStatRow
             key={p.subproblem_id}
@@ -442,16 +439,21 @@ function CoffinBadge({
   onMark: () => void
   onUnmark: () => void
 }) {
+  const hintId = useId()
+  const hint = isCoffin
+    ? 'Гроб открыт до публикации разбора'
+    : 'Открыть сдачу после дедлайна до публикации разбора'
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
           disabled={busy}
-          title={isCoffin ? 'Гроб — нажмите, чтобы снять' : 'Отметить гробом'}
           aria-label={isCoffin ? 'Гроб: снять пометку' : 'Отметить гробом'}
+          aria-describedby={hintId}
           className={cn(
-            'inline-flex h-10 w-10 items-center justify-center rounded-xl border transition-colors disabled:opacity-55',
+            'group relative inline-flex h-10 w-10 items-center justify-center rounded-xl border transition-colors disabled:opacity-55',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
             isCoffin
               ? 'border-status-checking bg-status-checking-soft text-status-checking'
@@ -459,6 +461,13 @@ function CoffinBadge({
           )}
         >
           <Skull className="h-5 w-5" aria-hidden />
+          <span
+            id={hintId}
+            role="tooltip"
+            className="pointer-events-none absolute bottom-full right-0 z-30 mb-2 w-max max-w-56 rounded-md border border-line bg-ink px-2 py-1 text-left text-[11px] font-normal leading-snug text-paper opacity-0 shadow-md transition-opacity duration-150 delay-0 group-hover:opacity-100 group-hover:delay-[700ms] group-focus-visible:opacity-100 group-focus-visible:delay-0 group-data-[state=open]:hidden"
+          >
+            {hint}
+          </span>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent

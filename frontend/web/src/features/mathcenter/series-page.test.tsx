@@ -263,7 +263,15 @@ describe('SeriesPage — teacher view', () => {
     expect(screen.queryByText('12 учеников')).not.toBeInTheDocument()
     expect(screen.queryByText('Принято:', { exact: false })).not.toBeInTheDocument()
     expect(screen.getByText('Принято — 5')).toBeInTheDocument()
+    expect(screen.queryByText('Выберите задачи без разбора.')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Значок.*отмечает гроб/)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Закрыть' })).not.toBeInTheDocument()
+    const coffinButton = screen.getByRole('button', { name: 'Гроб: снять пометку' })
+    const coffinHint = screen.getByRole('tooltip', {
+      name: 'Гроб открыт до публикации разбора',
+    })
+    expect(coffinButton).toHaveAttribute('aria-describedby', coffinHint.id)
+    expect(coffinButton).not.toHaveAttribute('title')
 
     // Selecting a task puts the compact batch action in the same toolbar row
     // as the tabs instead of adding a separate panel above the statistics.
