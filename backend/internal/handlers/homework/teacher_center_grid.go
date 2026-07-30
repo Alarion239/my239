@@ -81,7 +81,7 @@ type centerGridCell struct {
 	ClaimExpiresAt    *time.Time `json:"claim_expires_at,omitempty"`
 	// HasInternalComment marks the cell when its thread carries at least one
 	// internal teacher note.
-	HasInternalComment bool `json:"has_internal_comment"`
+	HasInternalComment bool `json:"has_internal_comment,omitempty"`
 }
 
 // GetCenterGrid — teacher of the center. Returns the matrix used by the

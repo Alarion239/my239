@@ -1,4 +1,13 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Fragment,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import {
@@ -8,9 +17,11 @@ import {
   useOfflineAccept,
   useOfflineUndo,
   useSyncGoogleSheets,
+  type CenterGridCell,
   type CenterGridColumn,
   type CenterGridResponse,
   type CenterGridSeries,
+  type CenterGridStudentEntry,
 } from '@my239/shared'
 import { Card, Input, Spinner } from '../../design/ui'
 import { cn } from '../../design/cn'
@@ -115,7 +126,175 @@ function currentSeriesId(series: CenterGridSeries[]): number | null {
   return best ?? last
 }
 
-function ConduitTable({
+const EMPTY_MARKED_SUBPROBLEMS = new Map<number, string>()
+
+type ConduitCellAction = (
+  student: CenterGridStudentEntry,
+  column: FlatCol,
+) => void
+
+interface ConduitStudentRowProps {
+  student: CenterGridStudentEntry
+  cols: FlatCol[]
+  cells: Record<string, CenterGridCell>
+  graders: Record<string, string>
+  search: string
+  active: boolean
+  markedSubs: Map<number, string>
+  pendingSubproblemId: number | null
+  currentGraderInitials: string
+  solvedTotal: number
+  onCellAction: ConduitCellAction
+}
+
+function persistedCellInitials(
+  cell: CenterGridCell | undefined,
+  graders: Record<string, string>,
+): string {
+  if (!cell || cell.current_status !== 'accepted') return ''
+  const graderID = cell.last_grader_user_id
+  if (graderID != null && graders[String(graderID)]) {
+    return graders[String(graderID)]
+  }
+  if (cell.last_grader_name) return initialsOf(cell.last_grader_name)
+  return '✓'
+}
+
+// One center can have 50k+ cells. Keeping each student's row memoized means a
+// sort only moves existing <tr> nodes and a cell click only rebuilds the row
+// whose active/pending state changed.
+const ConduitStudentRow = memo(function ConduitStudentRow({
+  student,
+  cols,
+  cells,
+  graders,
+  search,
+  active,
+  markedSubs,
+  pendingSubproblemId,
+  currentGraderInitials,
+  solvedTotal,
+  onCellAction,
+}: ConduitStudentRowProps) {
+  return (
+    <tr
+      className={cn(
+        'hover:bg-surface-muted/40',
+        active && 'bg-amber-50/60 dark:bg-amber-500/10',
+      )}
+    >
+      <td className={nameCell}>
+        {/* Names stay profile/comment links; grading starts from a task cell. */}
+        <Link
+          to={'../students/' + student.user_id + search}
+          className={cn(
+            'inline-flex items-center gap-1.5 underline-offset-2 hover:underline',
+            active && 'font-semibold text-ink',
+          )}
+        >
+          <span>{student.name}</span>
+          {student.has_student_comment ? (
+            <span
+              title="Есть заметки об ученике"
+              aria-label="Есть заметки об ученике"
+              className="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-500"
+            />
+          ) : null}
+        </Link>
+      </td>
+      {cols.map((fc) => {
+        const { col, firstInSeries } = fc
+        const key = student.user_id + ':' + col.subproblem_id
+        const cell = cells[key]
+        const marked = active && markedSubs.has(col.subproblem_id)
+        const accepted = cell?.current_status === 'accepted' || marked
+        const coffinIsOpen =
+          col.is_coffin && coffinOpen(col.coffin_released_at)
+        const threadId = cell?.thread_id ?? 0
+        const hasComment = !!cell?.has_internal_comment && threadId > 0
+        const pending = pendingSubproblemId === col.subproblem_id
+        const shownInitials = marked
+          ? currentGraderInitials
+          : persistedCellInitials(cell, graders)
+        const cellAria = marked
+          ? 'Снять отметку'
+          : accepted
+            ? 'Открыть проверку'
+            : 'Отметить решённым'
+        const activate = () => onCellAction(student, fc)
+        const onKeyDown = (event: ReactKeyboardEvent<HTMLTableCellElement>) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return
+          event.preventDefault()
+          activate()
+        }
+        return (
+          <ThreadCommentCell
+            key={col.subproblem_id}
+            threadId={threadId}
+            hasComment={hasComment}
+            data-conduit-cell
+            tabIndex={pending ? -1 : 0}
+            aria-label={cellAria}
+            aria-disabled={pending || undefined}
+            onClick={pending ? undefined : activate}
+            onKeyDown={pending ? undefined : onKeyDown}
+            className={cn(
+              'h-9 min-w-9 cursor-pointer select-none border-b border-line px-1.5 text-center align-middle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40',
+              vert(firstInSeries),
+              accepted
+                ? 'bg-status-accepted-soft font-medium text-status-accepted'
+                : cn(
+                    coffinCellClasses(col.is_coffin, coffinIsOpen),
+                    active
+                      ? 'text-status-accepted hover:bg-status-accepted-soft'
+                      : 'text-faint hover:bg-surface-muted',
+                  ),
+            )}
+          >
+            {pending
+              ? '…'
+              : accepted
+                ? shownInitials
+                : active
+                  ? '＋'
+                  : ''}
+          </ThreadCommentCell>
+        )
+      })}
+      <td className="sticky right-0 z-10 border-b border-l border-r border-line bg-surface px-3 py-1.5 text-center font-medium text-ink">
+        {solvedTotal}
+      </td>
+    </tr>
+  )
+}, sameConduitStudentRowProps)
+
+function sameConduitStudentRowProps(
+  previous: ConduitStudentRowProps,
+  next: ConduitStudentRowProps,
+): boolean {
+  if (
+    previous.student !== next.student ||
+    previous.cols !== next.cols ||
+    previous.graders !== next.graders ||
+    previous.search !== next.search ||
+    previous.active !== next.active ||
+    previous.markedSubs !== next.markedSubs ||
+    previous.pendingSubproblemId !== next.pendingSubproblemId ||
+    previous.currentGraderInitials !== next.currentGraderInitials ||
+    previous.solvedTotal !== next.solvedTotal ||
+    previous.onCellAction !== next.onCellAction
+  ) {
+    return false
+  }
+  if (previous.cells === next.cells) return true
+  for (const { col } of next.cols) {
+    const key = next.student.user_id + ':' + col.subproblem_id
+    if (previous.cells[key] !== next.cells[key]) return false
+  }
+  return true
+}
+
+export function ConduitTable({
   centerId,
   termId,
   data,
@@ -266,18 +445,31 @@ function ConduitTable({
     [data.groups],
   )
 
-  const accepted = (studentId: number, subId: number): boolean =>
-    data.cells[studentId + ':' + subId]?.current_status === 'accepted'
-  const solvedTotals = useMemo(() => {
-    const totals = new Map<number, number>()
+  const solvedSummary = useMemo(() => {
+    const rowTotals = new Map<number, number>()
+    const columnTotals = new Map<number, number>()
+    let grandTotal = 0
     for (const student of students) {
-      totals.set(student.user_id, cols.reduce(
-        (count, column) => count + (data.cells[student.user_id + ':' + column.col.subproblem_id]?.current_status === 'accepted' ? 1 : 0),
-        0,
-      ))
+      let rowTotal = 0
+      for (const { col } of cols) {
+        if (
+          data.cells[student.user_id + ':' + col.subproblem_id]
+            ?.current_status !== 'accepted'
+        ) {
+          continue
+        }
+        rowTotal++
+        grandTotal++
+        columnTotals.set(
+          col.subproblem_id,
+          (columnTotals.get(col.subproblem_id) ?? 0) + 1,
+        )
+      }
+      rowTotals.set(student.user_id, rowTotal)
     }
-    return totals
+    return { rowTotals, columnTotals, grandTotal }
   }, [students, cols, data.cells])
+  const solvedTotals = solvedSummary.rowTotals
 
   // Filtered groups for rendering: students whose name matches the query, with
   // empty groups dropped.
@@ -308,20 +500,6 @@ function ConduitTable({
     () => students.find((s) => s.user_id === activeStudentId) ?? null,
     [students, activeStudentId],
   )
-
-  const cellInitials = (studentId: number, subId: number): string => {
-    const cell = data.cells[studentId + ':' + subId]
-    if (!cell || cell.current_status !== 'accepted') return ''
-    const g = cell.last_grader_user_id
-    if (g != null && data.graders[String(g)]) return data.graders[String(g)]
-    if (cell.last_grader_name) return initialsOf(cell.last_grader_name)
-    return '✓'
-  }
-
-  const rowTotal = (studentId: number): number => solvedTotals.get(studentId) ?? 0
-  const colTotal = (subId: number): number =>
-    students.reduce((n, st) => n + (accepted(st.user_id, subId) ? 1 : 0), 0)
-  const grandTotal = students.reduce((n, st) => n + rowTotal(st.user_id), 0)
 
   // markCell fast-paths an offline accept using the initials bar's grader and
   // remembers which grader credited it (for later re-crediting on a correction).
@@ -362,13 +540,54 @@ function ConduitTable({
       threadId: cell?.thread_id ?? 0,
       status: cell?.current_status ?? 'ungraded',
       lastGraderName: cell?.last_grader_name,
-      acceptedInitials: cellInitials(studentId, sub) || undefined,
+      acceptedInitials:
+        persistedCellInitials(cell, data.graders) || undefined,
       threadHref:
         cell && cell.thread_id > 0
           ? '/mathcenter/' + (year ?? '') + '/series/' + fc.seriesId + '/thread/' + cell.thread_id + search
           : undefined,
     })
   }
+
+  // Student rows retain this stable callback across sorting/dialog/toolbar
+  // state changes. The ref delegates to the newest interaction state so a
+  // memoized row never acts with stale initials or active-student data.
+  const cellActionRef = useRef<ConduitCellAction>(() => {})
+  cellActionRef.current = (student, fc) => {
+    const sid = student.user_id
+    const { col } = fc
+    const marked =
+      activeStudentId === sid && markedSubs.has(col.subproblem_id)
+    const isAccepted =
+      data.cells[sid + ':' + col.subproblem_id]?.current_status === 'accepted'
+
+    if (activeStudentId !== sid) {
+      if (isAccepted) {
+        openCellDialog(sid, student.name, fc)
+        return
+      }
+      const remembered = recentGrader()
+      selectStudent(sid)
+      focusGraderInput()
+      if (remembered.name.trim()) markCell(sid, col, remembered)
+      return
+    }
+    if (marked) {
+      unmarkCell(sid, col)
+      focusGraderInput()
+    } else if (isAccepted) {
+      openCellDialog(sid, student.name, fc)
+    } else if (grader.name.trim()) {
+      markCell(sid, col)
+      focusGraderInput()
+    } else {
+      focusGraderInput()
+    }
+  }
+  const onCellAction = useCallback<ConduitCellAction>(
+    (student, column) => cellActionRef.current(student, column),
+    [],
+  )
 
   // Centre the current series on open.
   const scrollerRef = useRef<HTMLDivElement>(null)
@@ -525,137 +744,32 @@ function ConduitTable({
                 </tr>
                 {g.students.map((st) => {
                   const isActiveRow = activeStudentId === st.user_id
+                  const pendingPrefix = st.user_id + ':'
+                  const pendingSubproblemId =
+                    pendingKey?.startsWith(pendingPrefix)
+                      ? Number(pendingKey.slice(pendingPrefix.length))
+                      : null
                   return (
-                    <tr
+                    <ConduitStudentRow
                       key={st.user_id}
-                      className={cn(
-                        'hover:bg-surface-muted/40',
-                        isActiveRow && 'bg-amber-50/60 dark:bg-amber-500/10',
-                      )}
-                    >
-                      <td className={nameCell}>
-                        {/* The name opens the student's profile (identity +
-                            teacher notes about them). Marking mode is entered by
-                            touching one of the student's cells, not the name. */}
-                        <Link
-                          to={'../students/' + st.user_id + search}
-                          className={cn(
-                            'inline-flex items-center gap-1.5 underline-offset-2 hover:underline',
-                            isActiveRow && 'font-semibold text-ink',
-                          )}
-                        >
-                          <span>{st.name}</span>
-                          {st.has_student_comment ? (
-                            <span
-                              title="Есть заметки об ученике"
-                              aria-label="Есть заметки об ученике"
-                              className="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-500"
-                            />
-                          ) : null}
-                        </Link>
-                      </td>
-                      {cols.map((fc) => {
-                        const { col, firstInSeries } = fc
-                        // A cell marked this session shows green + the CURRENT
-                        // initials immediately, so correcting the bar updates the
-                        // letters live (the persisted credit is reconciled on
-                        // «Готово»).
-                        const marked =
-                          isActiveRow && markedSubs.has(col.subproblem_id)
-                        const acc = accepted(st.user_id, col.subproblem_id) || marked
-                        const open = col.is_coffin && coffinOpen(col.coffin_released_at)
-                        const cell = data.cells[st.user_id + ':' + col.subproblem_id]
-                        const threadId = cell?.thread_id ?? 0
-                        const hasComment = !!cell?.has_internal_comment && threadId > 0
-                        const key = st.user_id + ':' + col.subproblem_id
-                        const pending = pendingKey === key
-                        const shownInitials = marked
-                          ? initialsOf(grader.name)
-                          : cellInitials(st.user_id, col.subproblem_id)
-                        // Tapping a cell acts on THAT cell. If the student
-                        // wasn't active yet, the same tap also enters marking
-                        // mode for them (committing the previous student) — the
-                        // tap isn't spent just selecting the row. Within a row:
-                        // a square you marked this session toggles off (undo a
-                        // misclick); a pre-existing accept opens the detail
-                        // dialog; an empty cell fast-marks with the current
-                        // initials. If none is available yet, the same tap
-                        // activates the row and focuses the initials field.
-                        const onClick = () => {
-                          const sid = st.user_id
-                          if (!isActiveRow) {
-                            if (accepted(sid, col.subproblem_id)) {
-                              openCellDialog(sid, st.name, fc)
-                              return
-                            }
-
-                            // An empty cell starts the active marking mode. If
-                            // a grader was entered recently, reuse it for the
-                            // first mark; either way, put the cursor in the
-                            // top field so a new grader can start typing.
-                            const remembered = recentGrader()
-                            selectStudent(sid)
-                            focusGraderInput()
-                            if (remembered.name.trim()) markCell(sid, col, remembered)
-                            return
-                          }
-
-                          if (marked) {
-                            unmarkCell(sid, col)
-                            focusGraderInput()
-                          } else if (accepted(sid, col.subproblem_id)) {
-                            openCellDialog(sid, st.name, fc)
-                          } else if (grader.name.trim()) {
-                            markCell(sid, col)
-                            focusGraderInput()
-                          } else {
-                            focusGraderInput()
-                          }
-                        }
-                        const cellAria = marked
-                          ? 'Снять отметку'
-                          : acc
-                            ? 'Открыть проверку'
-                            : 'Отметить решённым'
-                        return (
-                          <ThreadCommentCell
-                            key={col.subproblem_id}
-                            threadId={threadId}
-                            hasComment={hasComment}
-                            className={cn(
-                              'min-w-9 border-b border-line p-0 text-center align-middle',
-                              vert(firstInSeries),
-                              acc
-                                ? 'bg-status-accepted-soft font-medium text-status-accepted'
-                                : cn(coffinCellClasses(col.is_coffin, open), 'text-faint'),
-                            )}
-                          >
-                            <button
-                              type="button"
-                              onClick={onClick}
-                              disabled={pending}
-                              aria-label={cellAria}
-                              className={cn(
-                                'flex h-9 w-full min-w-full items-center justify-center px-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-                                !acc && isActiveRow && 'text-status-accepted hover:bg-status-accepted-soft',
-                                !acc && !isActiveRow && 'hover:bg-surface-muted',
-                              )}
-                            >
-                              {pending
-                                ? '…'
-                                : acc
-                                  ? shownInitials
-                                  : isActiveRow
-                                    ? '＋'
-                                    : ''}
-                            </button>
-                          </ThreadCommentCell>
-                        )
-                      })}
-                      <td className="sticky right-0 z-10 border-b border-l border-r border-line bg-surface px-3 py-1.5 text-center font-medium text-ink">
-                        {rowTotal(st.user_id)}
-                      </td>
-                    </tr>
+                      student={st}
+                      cols={cols}
+                      cells={data.cells}
+                      graders={data.graders}
+                      search={search}
+                      active={isActiveRow}
+                      markedSubs={
+                        isActiveRow
+                          ? markedSubs
+                          : EMPTY_MARKED_SUBPROBLEMS
+                      }
+                      pendingSubproblemId={pendingSubproblemId}
+                      currentGraderInitials={
+                        isActiveRow ? initialsOf(grader.name) : ''
+                      }
+                      solvedTotal={solvedTotals.get(st.user_id) ?? 0}
+                      onCellAction={onCellAction}
+                    />
                   )
                 })}
               </Fragment>
@@ -674,11 +788,11 @@ function ConduitTable({
                     vert(firstInSeries),
                   )}
                 >
-                  {colTotal(col.subproblem_id)}
+                  {solvedSummary.columnTotals.get(col.subproblem_id) ?? 0}
                 </td>
               ))}
               <td className="sticky bottom-0 right-0 z-30 border-b border-l border-r border-t border-line bg-surface-muted px-3 py-1.5 text-center font-medium text-ink">
-                {grandTotal}
+                {solvedSummary.grandTotal}
               </td>
             </tr>
           </tbody>

@@ -1,4 +1,9 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ComponentPropsWithoutRef,
+} from 'react'
 import { createPortal } from 'react-dom'
 import { useThreadNotes } from '@my239/shared'
 import { cn } from '../../design/cn'
@@ -76,38 +81,62 @@ function CommentPopup({
   )
 }
 
-export interface ThreadCommentCellProps {
+export interface ThreadCommentCellProps extends ComponentPropsWithoutRef<'td'> {
   threadId: number
   hasComment: boolean
-  className?: string
-  children?: ReactNode
 }
 
 // ThreadCommentCell renders a grid <td> that, when it carries an internal note,
 // shows the amber mark and surfaces the note text in a custom popup the instant
 // the cell is hovered or focused — no system-tooltip delay, bigger and readable.
+// The common no-comment case stays a plain, hook-free <td>; a center-wide
+// conduit can contain tens of thousands of these cells.
 export function ThreadCommentCell({
   threadId,
   hasComment,
-  className,
-  children,
+  ...cellProps
 }: ThreadCommentCellProps) {
+  if (!hasComment) {
+    return <td {...cellProps} />
+  }
+  return <CommentedThreadCell threadId={threadId} {...cellProps} />
+}
+
+function CommentedThreadCell({
+  threadId,
+  onMouseEnter,
+  onMouseLeave,
+  onFocus,
+  onBlur,
+  ...cellProps
+}: Omit<ThreadCommentCellProps, 'hasComment'>) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLTableCellElement>(null)
-  const show = hasComment ? () => setOpen(true) : undefined
-  const hide = hasComment ? () => setOpen(false) : undefined
   return (
     <td
       ref={ref}
-      className={cn(hasComment && 'relative', className)}
-      onMouseEnter={show}
-      onMouseLeave={hide}
-      onFocus={show}
-      onBlur={hide}
+      {...cellProps}
+      className={cn('relative', cellProps.className)}
+      onMouseEnter={(event) => {
+        setOpen(true)
+        onMouseEnter?.(event)
+      }}
+      onMouseLeave={(event) => {
+        setOpen(false)
+        onMouseLeave?.(event)
+      }}
+      onFocus={(event) => {
+        setOpen(true)
+        onFocus?.(event)
+      }}
+      onBlur={(event) => {
+        setOpen(false)
+        onBlur?.(event)
+      }}
     >
-      {children}
-      {hasComment ? <CommentMark /> : null}
-      {hasComment && open ? <CommentPopup anchorRef={ref} threadId={threadId} /> : null}
+      {cellProps.children}
+      <CommentMark />
+      {open ? <CommentPopup anchorRef={ref} threadId={threadId} /> : null}
     </td>
   )
 }

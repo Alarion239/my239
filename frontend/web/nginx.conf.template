@@ -30,6 +30,17 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # The center-wide conduit is intentionally one JSON response, but a
+    # populated term contains many repeated cell keys/statuses. Compress API
+    # JSON at the edge so that payload crosses the public network once in its
+    # compact form; SSE stays uncompressed because text/event-stream is not in
+    # this allow-list.
+    gzip on;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_vary on;
+    gzip_types application/json application/problem+json;
+
     # SPA fallback: unknown paths fall through to index.html so client-side
     # routing survives a hard reload.
     location / {

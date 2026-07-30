@@ -1,6 +1,7 @@
 package homework_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -49,12 +50,13 @@ func TestGetCenterGrid_HappyPath(t *testing.T) {
 				int64(10), "А",
 				int64(901), "a", int64(501), int32(1), false, (*time.Time)(nil),
 				int64(0), "ungraded", (*int64)(nil), "", (*string)(nil), (*string)(nil), (*int64)(nil), (*time.Time)(nil), false, true).
-			// Series 2, problem 1, no subparts, student A
+			// Series 2, problem 1, no subparts, student A — accepted with no
+			// internal comment, so the false flag can be omitted from JSON.
 			AddRow(int64(200), int32(2), "Геометрия", due,
 				int64(7), "Аня", (*string)(nil), "Иванова",
 				int64(10), "А",
 				int64(910), "", int64(600), int32(1), false, (*time.Time)(nil),
-				int64(0), "ungraded", (*int64)(nil), "", (*string)(nil), (*string)(nil), (*int64)(nil), (*time.Time)(nil), false, true))
+				int64(2), "accepted", (*int64)(nil), "Анна А", (*string)(nil), (*string)(nil), (*int64)(nil), (*time.Time)(nil), false, true))
 
 	req := authedRequest(t, access, 3, false, http.MethodGet, "/centers/42/grid", nil)
 	rr := httptest.NewRecorder()
@@ -81,8 +83,9 @@ func TestGetCenterGrid_HappyPath(t *testing.T) {
 			} `json:"columns"`
 		} `json:"series"`
 		Cells map[string]struct {
-			ThreadID      int64  `json:"thread_id"`
-			CurrentStatus string `json:"current_status"`
+			ThreadID           int64  `json:"thread_id"`
+			CurrentStatus      string `json:"current_status"`
+			HasInternalComment bool   `json:"has_internal_comment"`
 		} `json:"cells"`
 		Graders map[string]string `json:"graders"`
 	}
@@ -111,12 +114,18 @@ func TestGetCenterGrid_HappyPath(t *testing.T) {
 	if resp.Series[1].Columns[0].ColumnLabel != "1" {
 		t.Errorf("series 1 col 0 label: got %q, want 1", resp.Series[1].Columns[0].ColumnLabel)
 	}
-	// Cells: only the (7, 900) thread is non-empty.
+	// Cells: both accepted threads are present; untouched cells stay absent.
 	if c, ok := resp.Cells["7:900"]; !ok || c.ThreadID != 1 || c.CurrentStatus != "accepted" {
 		t.Errorf("cell 7:900: %+v ok=%v", c, ok)
 	}
 	if _, ok := resp.Cells["7:901"]; ok {
 		t.Error("cell 7:901 should be absent (ungraded)")
+	}
+	if c, ok := resp.Cells["7:910"]; !ok || c.ThreadID != 2 || c.HasInternalComment {
+		t.Errorf("cell 7:910: %+v ok=%v", c, ok)
+	}
+	if bytes.Contains(rr.Body.Bytes(), []byte(`"has_internal_comment":false`)) {
+		t.Error("false cell comment flags should be omitted from the large grid payload")
 	}
 	// The grader of the accepted cell is exposed by initials for the Кондуит.
 	if resp.Graders["3"] != "ПС" {
