@@ -31,6 +31,16 @@ function hasRazbor(meta: Subproblem | undefined): boolean {
   return !!(meta && (meta.has_solution_tex || meta.has_solution_pdf || meta.solution_link))
 }
 
+function sharesRazbor(
+  first: Subproblem | undefined,
+  second: Subproblem | undefined,
+): boolean {
+  if (!first || !second) return false
+  return first.solution_group_id != null
+    ? first.solution_group_id === second.solution_group_id
+    : first.id === second.id
+}
+
 // Each segment maps a stat field to its status colour token + Russian label.
 interface Segment {
   key: keyof Pick<
@@ -94,8 +104,11 @@ export function TeacherProblemStats({
   const [previewId, setPreviewId] = useState<number | null>(null)
 
   const press = (id: number) => {
-    if (hasRazbor(metaById.get(id))) {
-      setPreviewId((cur) => (cur === id ? null : id))
+    const pressed = metaById.get(id)
+    if (hasRazbor(pressed)) {
+      setPreviewId((cur) =>
+        cur != null && sharesRazbor(metaById.get(cur), pressed) ? null : id,
+      )
     } else {
       setSelected((prev) => {
         const next = new Set(prev)

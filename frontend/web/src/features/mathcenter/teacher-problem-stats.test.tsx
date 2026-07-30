@@ -195,6 +195,12 @@ describe('TeacherProblemStats — разбор frame', () => {
     expect(unrelatedRow).toHaveAttribute('aria-pressed', 'false')
     expect(firstRow).toHaveClass('ring-2', 'ring-accent/50')
     expect(secondRow).toHaveClass('ring-2', 'ring-accent/50')
+
+    await user.click(secondRow)
+
+    expect(firstRow).toHaveAttribute('aria-pressed', 'false')
+    expect(secondRow).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.queryByRole('button', { name: 'Редактировать' })).not.toBeInTheDocument()
   })
 
   it('keeps a shared разбор together when editing it', async () => {
