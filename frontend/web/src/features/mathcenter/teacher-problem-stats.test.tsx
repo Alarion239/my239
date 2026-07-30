@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
@@ -59,6 +59,25 @@ function makeSeries(): Series {
   }
 }
 
+function makeSharedSeries(): Series {
+  const series = makeSeries()
+  series.problems[0].subproblems[0] = sub({
+    id: 1000,
+    label: 'а',
+    display: 'Задача 1 (а)',
+    solution_link: 'https://example.com/shared',
+    solution_group_id: 77,
+  })
+  series.problems[0].subproblems[1] = sub({
+    id: 1001,
+    label: 'б',
+    display: 'Задача 1 (б)',
+    solution_link: 'https://example.com/shared',
+    solution_group_id: 77,
+  })
+  return series
+}
+
 function makeStats(): SeriesProblemStats {
   return {
     total_students: 3,
@@ -103,19 +122,21 @@ function makeStats(): SeriesProblemStats {
   }
 }
 
-function renderStats() {
+function renderStats(series = makeSeries()) {
   const client = new ApiClient({ baseURL: '/api/v1', tokenStore: noopStore })
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={queryClient}>
       <ApiClientProvider client={client}>
-        <TeacherProblemStats stats={makeStats()} series={makeSeries()} centerId={7} />
+        <TeacherProblemStats stats={makeStats()} series={series} centerId={7} />
       </ApiClientProvider>
     </QueryClientProvider>,
   )
 }
 
 describe('TeacherProblemStats — разбор frame', () => {
+  afterEach(() => vi.restoreAllMocks())
+
   it('puts a green frame on rows whose subproblem has a разбор, not on others', () => {
     renderStats()
     // The distribution bar carries a per-row aria-label; the row is its closest
@@ -152,5 +173,67 @@ describe('TeacherProblemStats — разбор frame', () => {
     expect(
       screen.getByRole('button', { name: 'Прикрепить разбор 2 задач' }),
     ).toBeInTheDocument()
+  })
+
+  it('highlights every problem covered by the selected shared разбор', async () => {
+    renderStats(makeSharedSeries())
+    const user = userEvent.setup()
+    const firstRow = screen
+      .getByRole('img', { name: /по задаче Задача 1 \(а\)/ })
+      .closest('[role="button"]') as HTMLElement
+    const secondRow = screen
+      .getByRole('img', { name: /по задаче Задача 1 \(б\)/ })
+      .closest('[role="button"]') as HTMLElement
+    const unrelatedRow = screen
+      .getByRole('img', { name: /по задаче Задача 1 \(в\)/ })
+      .closest('[role="button"]') as HTMLElement
+
+    await user.click(firstRow)
+
+    expect(firstRow).toHaveAttribute('aria-pressed', 'true')
+    expect(secondRow).toHaveAttribute('aria-pressed', 'true')
+    expect(unrelatedRow).toHaveAttribute('aria-pressed', 'false')
+    expect(firstRow).toHaveClass('ring-2', 'ring-accent/50')
+    expect(secondRow).toHaveClass('ring-2', 'ring-accent/50')
+  })
+
+  it('keeps a shared разбор together when editing it', async () => {
+    const request = vi
+      .spyOn(ApiClient.prototype, 'request')
+      .mockResolvedValue({} as never)
+    renderStats(makeSharedSeries())
+    const user = userEvent.setup()
+
+    await user.click(
+      screen
+        .getByRole('img', { name: /по задаче Задача 1 \(а\)/ })
+        .closest('[role="button"]') as HTMLElement,
+    )
+    await user.click(screen.getByRole('button', { name: 'Редактировать' }))
+    await user.click(screen.getByRole('button', { name: 'Сохранить ссылку' }))
+
+    await waitFor(() => {
+      expect(request).toHaveBeenCalledWith(
+        '/mathcenter/subproblems/1000/solution/link',
+        {
+          method: 'PUT',
+          body: { link: 'https://example.com/shared' },
+        },
+      )
+      expect(request).toHaveBeenCalledWith(
+        '/mathcenter/subproblems/1001/solution/link',
+        {
+          method: 'PUT',
+          body: { link: 'https://example.com/shared' },
+        },
+      )
+      expect(request).toHaveBeenCalledWith(
+        '/mathcenter/subproblem-solutions/group',
+        {
+          method: 'POST',
+          body: { subproblem_ids: [1000, 1001] },
+        },
+      )
+    })
   })
 })

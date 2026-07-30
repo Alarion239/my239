@@ -117,6 +117,20 @@ export function TeacherProblemStats({
     previewId != null && hasRazbor(metaById.get(previewId))
       ? metaById.get(previewId)
       : undefined
+  // A shared разбор is one selectable unit: pressing any covered problem
+  // previews that source and lights up every sibling in the same group.
+  const previewIds = new Set<number>()
+  if (previewSub) {
+    if (previewSub.solution_group_id != null) {
+      for (const [id, meta] of metaById) {
+        if (meta.solution_group_id === previewSub.solution_group_id) {
+          previewIds.add(id)
+        }
+      }
+    } else {
+      previewIds.add(previewSub.id)
+    }
+  }
   const batchAction =
     selectedIds.length > 0 ? (
       <BatchRazborBar
@@ -143,6 +157,7 @@ export function TeacherProblemStats({
             <RazborPreview
               centerId={centerId}
               sub={previewSub}
+              subproblemIds={[...previewIds]}
               onClose={() => setPreviewId(null)}
             />
           ) : null}
@@ -162,7 +177,7 @@ export function TeacherProblemStats({
             busy={busy}
             active={
               hasRazbor(metaById.get(p.subproblem_id))
-                ? previewId === p.subproblem_id
+                ? previewIds.has(p.subproblem_id)
                 : selected.has(p.subproblem_id)
             }
             onPress={() => press(p.subproblem_id)}
@@ -180,17 +195,18 @@ export function TeacherProblemStats({
 function RazborPreview({
   centerId,
   sub,
+  subproblemIds,
   onClose,
 }: {
   centerId: number
   sub: Subproblem
+  subproblemIds: number[]
   onClose: () => void
 }) {
   const texQuery = useSubproblemSolutionTex(sub.id, sub.has_solution_tex)
   const putTex = usePutSubproblemSolutionTexBatch(centerId)
   const uploadPdf = useUploadSubproblemSolutionPdfBatch(centerId)
   const setLink = useSetSubproblemSolutionLinkBatch(centerId)
-  const ids = [sub.id]
   return (
     <div className="animate-rise rounded-xl border border-accent/40 bg-surface p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -204,9 +220,13 @@ function RazborPreview({
             hasPdf={sub.has_solution_pdf}
             link={sub.solution_link}
             initialTex={texQuery.data?.tex}
-            onPutTex={(tex) => putTex.mutateAsync({ subproblemIds: ids, tex })}
-            onUploadPdf={(file) => uploadPdf.mutateAsync({ subproblemIds: ids, file })}
-            onSetLink={(link) => setLink.mutateAsync({ subproblemIds: ids, link })}
+            onPutTex={(tex) => putTex.mutateAsync({ subproblemIds, tex })}
+            onUploadPdf={(file) =>
+              uploadPdf.mutateAsync({ subproblemIds, file })
+            }
+            onSetLink={(link) =>
+              setLink.mutateAsync({ subproblemIds, link })
+            }
             closeOnSave
             trigger={
               <Button type="button" size="sm" variant="secondary">
