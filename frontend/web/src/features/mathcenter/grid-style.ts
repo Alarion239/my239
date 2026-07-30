@@ -1,7 +1,5 @@
-// grid-style.ts — the shared visual vocabulary for the two mathcenter grids:
-// the «Кондуит» (conduit-page.tsx, center-wide) and the per-series «Таблица»
-// (teacher-grid.tsx). Both import these so their borders, sticky behaviour,
-// header look and coffin tint can't drift apart.
+// grid-style.ts — the visual vocabulary for the center-wide «Кондуит»:
+// borders, sticky behaviour, header look, and coffin tint.
 //
 // STICKY BORDER RULE (the important bit): the table uses `border-separate` so
 // every border belongs to exactly ONE cell. A frozen (position: sticky) cell
@@ -16,8 +14,7 @@
 import { cn } from '../../design/cn'
 
 // One full-width scroll surface (not a small rounded box); hides its own
-// scrollbar. Callers add a height (`h-full` for the full-bleed Кондуит, a
-// `max-h-[…]` for the «Таблица» that sits under the series tabs).
+// scrollbar. The caller adds the full-bleed height.
 export const gridScroller =
   'overflow-auto overscroll-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
 
@@ -35,12 +32,6 @@ export function vert(firstInSeries: boolean): string {
   return firstInSeries
     ? 'border-l-2 border-l-line-strong'
     : 'border-l border-line'
-}
-
-// dataCell(firstInSeries) — the owned grid borders for a body data cell:
-// bottom + its left vertical.
-export function dataCell(firstInSeries: boolean): string {
-  return cn('border-b border-line', vert(firstInSeries))
 }
 
 // The corner «Ученик» header cell — sticky on both axes, top z-index so the

@@ -402,7 +402,7 @@ function ProblemStatRow({
               onClick={onRelease}
               title="Закрыть сдачу и опубликовать разбор"
             >
-              Освободить
+              Закрыть
             </Button>
           ) : null}
           {/* Coffin marking is for problems WITHOUT a разбор yet. */}

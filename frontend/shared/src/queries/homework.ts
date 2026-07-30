@@ -65,7 +65,8 @@ export function useGraderQueue(seriesId: number, mine: boolean) {
   })
 }
 
-// useTeacherGrid fetches the students × subproblems status grid for a series.
+// useTeacherGrid supplies the compact per-series roster/status data used by the
+// phone-oriented «Очно» workflow. The shared computer matrix is «Кондуит».
 export function useTeacherGrid(seriesId: number) {
   const client = useApiClient()
   return useQuery<GridResponse>({

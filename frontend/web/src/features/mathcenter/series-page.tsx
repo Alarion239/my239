@@ -33,7 +33,6 @@ import { StudentProblemList } from './student-problem-list'
 import { StudentRazbor } from './student-razbor'
 import { TeacherProblemStats } from './teacher-problem-stats'
 import { GraderQueue } from './grader-queue'
-import { TeacherGrid } from './teacher-grid'
 import { OfflineGradingTab } from './offline-grading-tab'
 import { UploadSeriesDialog } from './upload-series-dialog'
 import { useSeriesContext } from './use-series-context'
@@ -42,7 +41,7 @@ import { useCenterIdContext, useCenterTermContext } from './center-id-context'
 // Allowed tab ids per view, with the default first. The route carries the tab
 // (e.g. /mathcenter/2027/series/42/razbor) so it survives reload + back/forward.
 const STUDENT_TAB_IDS = ['progress', 'statement', 'razbor'] as const
-const TEACHER_TAB_IDS = ['queue', 'statement', 'razbor', 'grid', 'offline'] as const
+const TEACHER_TAB_IDS = ['queue', 'statement', 'razbor', 'offline'] as const
 
 export function SeriesPage() {
   const centerId = useCenterIdContext()
@@ -309,8 +308,9 @@ function CenterSeries({
           termSearch={termSearch}
         />
       ) : (
-        // Teachers get Очередь / Условие / Разбор / Таблица as full-width tabs;
-        // разбор carries the statistics + coffin handling.
+        // Teachers get Очередь / Условие / Разбор / Очно as full-width tabs;
+        // разбор carries the statistics + coffin handling, while the
+        // center-wide Кондуит owns the shared computer grid.
         <TeacherSeriesView
           centerId={centerId}
           series={selected}
@@ -448,8 +448,9 @@ function StudentProblemListWithCounts({
 type TeacherTab = (typeof TEACHER_TAB_IDS)[number]
 
 // TeacherSeriesView gives teachers full-width tabs in workflow order:
-// «Очередь», «Условие», «Разбор», «Таблица», then «Очно». A 60+ student grid
-// or a long queue needs the room, so each tab takes the full width.
+// «Очередь», «Условие», «Разбор», then «Очно». The shared computer matrix
+// lives only in the center-wide «Кондуит»; the queue stays the compact
+// per-series workflow suitable for phones.
 function TeacherSeriesView({
   centerId,
   series,
@@ -481,10 +482,8 @@ function TeacherSeriesView({
         <StatsTab series={series} centerId={centerId} />
       ) : tab === 'queue' ? (
         <GraderQueue seriesId={series.id} />
-      ) : tab === 'offline' ? (
-        <OfflineGradingTab centerId={centerId} seriesId={series.id} />
       ) : (
-        <TeacherGrid seriesId={series.id} />
+        <OfflineGradingTab centerId={centerId} seriesId={series.id} />
       )}
     </div>
   )
@@ -494,7 +493,6 @@ const TEACHER_TABS: { id: TeacherTab; label: string }[] = [
   { id: 'queue', label: 'Очередь' },
   { id: 'statement', label: 'Условие' },
   { id: 'razbor', label: 'Разбор' },
-  { id: 'grid', label: 'Таблица' },
   { id: 'offline', label: 'Очно' },
 ]
 

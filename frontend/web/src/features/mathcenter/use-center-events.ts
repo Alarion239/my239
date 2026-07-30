@@ -1,9 +1,8 @@
 import { useEffect } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { queryKeys, useApiClient } from '@my239/shared'
 
-// NOTE: this hook is intentionally NOT mounted anywhere yet. CenterLayout (added
-// in the routing work) mounts it once per center so every open page under the
+// CenterLayout mounts this hook once per center so every open page under the
 // layout shares one SSE stream. Do not mount it from individual pages.
 
 // useCenterEvents opens ONE SSE stream for a center and translates each pushed
@@ -25,8 +24,12 @@ export function useCenterEvents(centerId: number): void {
       client
         .streamEvents(
           '/mathcenter/centers/' + centerId + '/events',
-          (kind, data) => handle(qc, centerId, kind, data),
+          (kind, data) => handleCenterEvent(qc, centerId, kind, data),
           controller.signal,
+          // The server does not replay events. Refresh on the initial
+          // connection and every reconnect so a transient network gap cannot
+          // leave either the conduit or phone queue stale.
+          () => refreshCenterViews(qc, centerId),
         )
         .catch(() => undefined)
     }
@@ -48,8 +51,8 @@ export function useCenterEvents(centerId: number): void {
   }, [centerId, client, qc])
 }
 
-function handle(
-  qc: ReturnType<typeof useQueryClient>,
+export function handleCenterEvent(
+  qc: QueryClient,
   centerId: number,
   kind: string,
   data: string,
@@ -92,4 +95,17 @@ function handle(
     qc.invalidateQueries({ queryKey: queryKeys.mathCenterMe })
     qc.invalidateQueries({ queryKey: queryKeys.centerGrids(centerId) })
   }
+}
+
+// refreshCenterViews repairs gaps in the SSE model: events that happened while
+// the document was hidden or the connection was down. Invalidating prefixes is
+// cheap because TanStack Query refetches only currently observed views.
+export function refreshCenterViews(
+  qc: QueryClient,
+  centerId: number,
+): void {
+  qc.invalidateQueries({ queryKey: ['homework', 'series'] })
+  qc.invalidateQueries({ queryKey: queryKeys.centerGrids(centerId) })
+  qc.invalidateQueries({ queryKey: queryKeys.graderStats(centerId) })
+  qc.invalidateQueries({ queryKey: queryKeys.coffinQueue(centerId) })
 }

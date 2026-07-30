@@ -36,10 +36,10 @@ function solutionsFirst(items: QueueItem[]): QueueItem[] {
 }
 
 // GraderQueue lists submissions/appeals to grade in a series. The backend
-// returns the caller's own active claims plus the unclaimed pool (items another
-// grader is actively holding are excluded — they live in the "Таблица" view).
-// Anything the caller currently holds ("В работе") is pulled to the top so they
-// can resume it; the rest is the scrollable available pool below.
+// returns the caller's own active claims plus the unclaimed pool; items another
+// grader is actively holding are excluded from this actionable phone list but
+// remain visible in the shared «Кондуит». Anything the caller currently holds
+// ("В работе") is pulled to the top so they can resume it.
 export function GraderQueue({ seriesId }: GraderQueueProps) {
   const { year } = useParams<{ year: string }>()
   const queue = useGraderQueue(seriesId, false)

@@ -10,7 +10,9 @@ import {
 import { createPortal } from 'react-dom'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import {
+  claimIsLive,
   coffinOpen,
+  displayStatusMeta,
   initialsOf,
   useCenterGrid,
   useOfflineAccept,
@@ -32,6 +34,7 @@ import {
   emptyGrader,
   type CreditedGrader,
 } from './grader-initials-input'
+import { statusPillClasses } from './status-style'
 import { useSeriesContext } from './use-series-context'
 import { useCenterIdContext, useCenterTermContext } from './center-id-context'
 import {
@@ -238,6 +241,13 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
         const cell = cells[key]
         const marked = active && markedSubs.has(col.subproblem_id)
         const accepted = cell?.current_status === 'accepted' || marked
+        const pendingStatus =
+          !marked &&
+          cell &&
+          (cell.current_status === 'submitted' ||
+            cell.current_status === 'appealed')
+            ? displayStatusMeta(cell.current_status, claimIsLive(cell))
+            : null
         const coffinIsOpen =
           col.is_coffin && coffinOpen(col.coffin_released_at)
         const threadId = cell?.thread_id ?? 0
@@ -250,7 +260,9 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
           ? 'Снять отметку'
           : accepted
             ? 'Открыть проверку'
-            : 'Отметить решённым'
+            : pendingStatus
+              ? pendingStatus.label + '. Отметить решённым'
+              : 'Отметить решённым'
         const activate = () => onCellAction(student, fc)
         const onKeyDown = (event: ReactKeyboardEvent<HTMLTableCellElement>) => {
           if (event.key !== 'Enter' && event.key !== ' ') return
@@ -265,6 +277,7 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
             data-conduit-cell
             tabIndex={pending ? -1 : 0}
             aria-label={cellAria}
+            title={pendingStatus?.label}
             aria-disabled={pending || undefined}
             onClick={pending ? undefined : activate}
             onKeyDown={pending ? undefined : onKeyDown}
@@ -273,21 +286,25 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
               vert(firstInSeries),
               accepted
                 ? 'bg-status-accepted-soft font-medium text-status-accepted'
-                : cn(
-                    coffinCellClasses(col.is_coffin, coffinIsOpen),
-                    active
-                      ? 'text-status-accepted hover:bg-status-accepted-soft'
-                      : 'text-faint hover:bg-surface-muted',
-                  ),
+                : pendingStatus
+                  ? cn('font-medium', statusPillClasses(pendingStatus.tone))
+                  : cn(
+                      coffinCellClasses(col.is_coffin, coffinIsOpen),
+                      active
+                        ? 'text-status-accepted hover:bg-status-accepted-soft'
+                        : 'text-faint hover:bg-surface-muted',
+                    ),
             )}
           >
             {pending
               ? '…'
               : accepted
                 ? shownInitials
-                : active
-                  ? '＋'
-                  : ''}
+                : pendingStatus
+                  ? pendingStatus.glyph
+                  : active
+                    ? '＋'
+                    : ''}
           </ThreadCommentCell>
         )
       })}

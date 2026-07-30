@@ -120,12 +120,14 @@ export class ApiClient {
     path: string,
     onEvent: (kind: string, data: string) => void,
     signal: AbortSignal,
+    onConnected?: () => void,
   ): Promise<void> {
     await openEventStream({
       url: `${this.baseURL}${path}`,
       getToken: () => this.accessToken,
       refresh: () => this.refresh(),
       onEvent,
+      onConnected,
       signal,
       extraHeaders: () => this.actingAsHeaders(),
     })

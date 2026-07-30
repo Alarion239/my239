@@ -15,6 +15,7 @@ function streamResponse(chunks: string[]): Response {
 }
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.restoreAllMocks()
 })
 
@@ -31,6 +32,7 @@ describe('openEventStream', () => {
 
     const events: Array<[string, string]> = []
     const controller = new AbortController()
+    const onConnected = vi.fn()
 
     await openEventStream({
       url: 'http://test.local/api/v1/mathcenter/centers/7/events',
@@ -41,9 +43,11 @@ describe('openEventStream', () => {
         // Stop after we've seen both real frames so the loop doesn't reconnect.
         if (events.length === 2) controller.abort()
       },
+      onConnected,
       signal: controller.signal,
     })
 
+    expect(onConnected).toHaveBeenCalledTimes(1)
     expect(events).toEqual([
       ['grading', '{"center_id":7,"kind":"grading","series_id":42}'],
       ['coffins', '{"center_id":7,"kind":"coffins"}'],
@@ -84,5 +88,31 @@ describe('openEventStream', () => {
     expect((firstInit.headers as Record<string, string>)['Authorization']).toBe(
       'Bearer access-1',
     )
+  })
+
+  it('notifies consumers after every successful reconnect', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(streamResponse([]))
+    const controller = new AbortController()
+    const onConnected = vi.fn(() => {
+      if (onConnected.mock.calls.length === 2) controller.abort()
+    })
+
+    const stream = openEventStream({
+      url: 'http://test.local/api/v1/mathcenter/centers/7/events',
+      getToken: () => 'access-1',
+      refresh: async () => null,
+      onEvent: () => {},
+      onConnected,
+      signal: controller.signal,
+    })
+
+    await vi.advanceTimersByTimeAsync(1000)
+    await stream
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(onConnected).toHaveBeenCalledTimes(2)
   })
 })

@@ -8,6 +8,9 @@ export interface EventStreamOptions {
   getToken: () => string | null
   refresh: () => Promise<string | null>
   onEvent: (kind: string, data: string) => void
+  // Called after each successful connection, including reconnects. Consumers
+  // can use it to refresh data in case events were missed while disconnected.
+  onConnected?: () => void
   signal: AbortSignal
   // extraHeaders lets the caller attach request-scoped headers (e.g. the admin
   // act-as header) to every (re)connect.
@@ -34,6 +37,7 @@ export async function openEventStream(opts: EventStreamOptions): Promise<void> {
         throw new Error(`SSE failed (${res.status})`)
       }
       backoff = 1000 // healthy connection resets backoff
+      opts.onConnected?.()
       await pump(res.body, opts.onEvent, opts.signal)
     } catch {
       if (opts.signal.aborted) return

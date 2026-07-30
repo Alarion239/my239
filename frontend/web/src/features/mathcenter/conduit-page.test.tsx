@@ -80,13 +80,13 @@ const data: CenterGridResponse = {
   graders: {},
 }
 
-function renderConduit() {
+function renderConduit(grid: CenterGridResponse = data) {
   return render(
     <MemoryRouter initialEntries={['/mathcenter/2099/conduit?term_id=1']}>
       <Routes>
         <Route
           path="/mathcenter/:year/conduit"
-          element={<ConduitTable centerId={2} termId={1} data={data} />}
+          element={<ConduitTable centerId={2} termId={1} data={grid} />}
         />
       </Routes>
     </MemoryRouter>,
@@ -164,6 +164,59 @@ describe('ConduitTable', () => {
 
     fireEvent.keyDown(emptyCells[1], { key: 'Enter' })
     expect(container.querySelectorAll('td[data-conduit-cell]')).toHaveLength(6)
+  })
+
+  it('color-codes submitted and appealed cells, including active claims', () => {
+    const pendingData: CenterGridResponse = {
+      ...data,
+      cells: {
+        '10:1001': {
+          thread_id: 1,
+          current_status: 'submitted',
+        },
+        '10:1002': {
+          thread_id: 2,
+          current_status: 'appealed',
+        },
+        '10:1003': {
+          thread_id: 3,
+          current_status: 'submitted',
+          claim_holder_user_id: 99,
+          claim_expires_at: '2999-01-01T00:00:00Z',
+        },
+      },
+    }
+    renderConduit(pendingData)
+
+    const row = screen.getByRole('link', { name: 'Первый Ученик' }).closest('tr')
+    expect(row).not.toBeNull()
+
+    const submitted = within(row!).getByLabelText(
+      'В очереди. Отметить решённым',
+    )
+    expect(submitted).toHaveTextContent('…')
+    expect(submitted).toHaveClass(
+      'bg-status-checking-soft',
+      'text-status-checking',
+    )
+
+    const appealed = within(row!).getByLabelText(
+      'Апелляция в очереди. Отметить решённым',
+    )
+    expect(appealed).toHaveTextContent('?')
+    expect(appealed).toHaveClass(
+      'bg-status-appeal-soft',
+      'text-status-appeal',
+    )
+
+    const claimed = within(row!).getByLabelText(
+      'На проверке. Отметить решённым',
+    )
+    expect(claimed).toHaveTextContent('◐')
+    expect(claimed).toHaveClass(
+      'bg-status-grading-soft',
+      'text-status-grading',
+    )
   })
 
   it('mounts only the visible window for a large student list', () => {

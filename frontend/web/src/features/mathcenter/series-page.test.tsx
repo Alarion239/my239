@@ -247,7 +247,8 @@ describe('SeriesPage — teacher view', () => {
     const tabs = Array.from(tabList.querySelectorAll('[role="tab"]')).map(
       (tab) => tab.textContent,
     )
-    expect(tabs.slice(0, 5)).toEqual(['Очередь', 'Условие', 'Разбор', 'Таблица', 'Очно'])
+    expect(tabs).toEqual(['Очередь', 'Условие', 'Разбор', 'Очно'])
+    expect(screen.queryByRole('tab', { name: 'Таблица' })).not.toBeInTheDocument()
 
     // The queue is now the default teacher tab; the Разбор tab still renders
     // the per-subproblem stats breakdown when selected.
@@ -303,5 +304,29 @@ describe('SeriesPage — teacher view', () => {
         name: /Распределение статусов по задаче Задача 1/,
       }),
     ).not.toBeInTheDocument()
+  })
+
+  it('redirects the removed table route to the shared queue', async () => {
+    const me: MeResponse = {
+      teacher: {
+        centers: [
+          {
+            id: CENTER_ID,
+            graduation_year: GRAD_YEAR,
+            grade: 9,
+            is_head_teacher: true,
+            teachers: [],
+            groups: [],
+          },
+        ],
+      },
+    }
+    mockFetch(me, makeUser())
+    renderPage(
+      '/mathcenter/' + GRAD_YEAR + '/series/' + SERIES_ID + '/grid',
+    )
+
+    expect(await screen.findByText('Очередь пуста.')).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Таблица' })).not.toBeInTheDocument()
   })
 })
