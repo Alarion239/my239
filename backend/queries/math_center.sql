@@ -278,6 +278,94 @@ SELECT COALESCE((
     LIMIT 1
 ), FALSE)::boolean AS can_view_razbors;
 
+-- name: ListStudentSeriesRazborAccessForManage :many
+-- The management panel is term-scoped through the selected student enrollment.
+-- Missing overrides inherit the enrollment-wide default.
+SELECT series.id AS series_id,
+       series.number AS series_number,
+       series.name AS series_name,
+       COALESCE(access.can_view_video, student.can_view_razbors)::boolean AS can_view_video,
+       COALESCE(access.can_view_pdf_tex, student.can_view_razbors)::boolean AS can_view_pdf_tex
+FROM math_center_students student
+         JOIN math_center_series series ON series.term_id = student.term_id
+         LEFT JOIN math_center_student_series_razbor_access access
+                   ON access.student_user_id = student.user_id
+                       AND access.series_id = series.id
+WHERE student.id = $1
+ORDER BY series.number ASC;
+
+-- name: SetStudentSeriesRazborAccess :execrows
+-- The INSERT ... SELECT is also the same-center/same-term authorization check:
+-- a series outside this enrollment produces zero affected rows.
+INSERT INTO math_center_student_series_razbor_access (
+    student_user_id,
+    series_id,
+    can_view_video,
+    can_view_pdf_tex
+)
+SELECT student.user_id,
+       series.id,
+       sqlc.arg(can_view_video),
+       sqlc.arg(can_view_pdf_tex)
+FROM math_center_students student
+         JOIN math_center_groups student_group ON student_group.id = student.group_id
+         JOIN math_center_series series
+              ON series.id = sqlc.arg(series_id)
+                  AND series.term_id = student.term_id
+                  AND series.math_center_id = student_group.math_center_id
+WHERE student.id = sqlc.arg(student_id)
+ON CONFLICT (student_user_id, series_id)
+    DO UPDATE SET can_view_video = EXCLUDED.can_view_video,
+                  can_view_pdf_tex = EXCLUDED.can_view_pdf_tex,
+                  updated_at = NOW();
+
+-- name: ListStudentSeriesRazborAccessForCenter :many
+-- Use the enrollment belonging to the series' term when it exists; otherwise
+-- fall back to the student's current center enrollment for carried coffins.
+SELECT series.id AS series_id,
+       COALESCE(access.can_view_video, enrollment.can_view_razbors, FALSE)::boolean AS can_view_video,
+       COALESCE(access.can_view_pdf_tex, enrollment.can_view_razbors, FALSE)::boolean AS can_view_pdf_tex
+FROM math_center_series series
+         LEFT JOIN LATERAL (
+             SELECT student.can_view_razbors
+             FROM math_center_students student
+                      JOIN math_center_groups student_group ON student_group.id = student.group_id
+                      JOIN math_center_terms term ON term.id = student.term_id
+             WHERE student.user_id = $1
+               AND student_group.math_center_id = series.math_center_id
+             ORDER BY (student.term_id = series.term_id) DESC,
+                      term.is_active DESC,
+                      student.id DESC
+             LIMIT 1
+         ) enrollment ON TRUE
+         LEFT JOIN math_center_student_series_razbor_access access
+                   ON access.student_user_id = $1
+                       AND access.series_id = series.id
+WHERE series.math_center_id = $2
+ORDER BY series.number ASC;
+
+-- name: GetStudentSeriesRazborAccess :one
+SELECT series.id AS series_id,
+       COALESCE(access.can_view_video, enrollment.can_view_razbors, FALSE)::boolean AS can_view_video,
+       COALESCE(access.can_view_pdf_tex, enrollment.can_view_razbors, FALSE)::boolean AS can_view_pdf_tex
+FROM math_center_series series
+         LEFT JOIN LATERAL (
+             SELECT student.can_view_razbors
+             FROM math_center_students student
+                      JOIN math_center_groups student_group ON student_group.id = student.group_id
+                      JOIN math_center_terms term ON term.id = student.term_id
+             WHERE student.user_id = $1
+               AND student_group.math_center_id = series.math_center_id
+             ORDER BY (student.term_id = series.term_id) DESC,
+                      term.is_active DESC,
+                      student.id DESC
+             LIMIT 1
+         ) enrollment ON TRUE
+         LEFT JOIN math_center_student_series_razbor_access access
+                   ON access.student_user_id = $1
+                       AND access.series_id = series.id
+WHERE series.id = $2;
+
 -- name: SearchUsers :many
 SELECT id, username, first_name, middle_name, last_name
 FROM users

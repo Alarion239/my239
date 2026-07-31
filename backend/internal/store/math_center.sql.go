@@ -322,6 +322,47 @@ func (q *Queries) GetStudentByUserID(ctx context.Context, userID int64) (GetStud
 	return i, err
 }
 
+const getStudentSeriesRazborAccess = `-- name: GetStudentSeriesRazborAccess :one
+SELECT series.id AS series_id,
+       COALESCE(access.can_view_video, enrollment.can_view_razbors, FALSE)::boolean AS can_view_video,
+       COALESCE(access.can_view_pdf_tex, enrollment.can_view_razbors, FALSE)::boolean AS can_view_pdf_tex
+FROM math_center_series series
+         LEFT JOIN LATERAL (
+             SELECT student.can_view_razbors
+             FROM math_center_students student
+                      JOIN math_center_groups student_group ON student_group.id = student.group_id
+                      JOIN math_center_terms term ON term.id = student.term_id
+             WHERE student.user_id = $1
+               AND student_group.math_center_id = series.math_center_id
+             ORDER BY (student.term_id = series.term_id) DESC,
+                      term.is_active DESC,
+                      student.id DESC
+             LIMIT 1
+         ) enrollment ON TRUE
+         LEFT JOIN math_center_student_series_razbor_access access
+                   ON access.student_user_id = $1
+                       AND access.series_id = series.id
+WHERE series.id = $2
+`
+
+type GetStudentSeriesRazborAccessParams struct {
+	UserID int64 `json:"user_id"`
+	ID     int64 `json:"id"`
+}
+
+type GetStudentSeriesRazborAccessRow struct {
+	SeriesID      int64 `json:"series_id"`
+	CanViewVideo  bool  `json:"can_view_video"`
+	CanViewPdfTex bool  `json:"can_view_pdf_tex"`
+}
+
+func (q *Queries) GetStudentSeriesRazborAccess(ctx context.Context, arg GetStudentSeriesRazborAccessParams) (GetStudentSeriesRazborAccessRow, error) {
+	row := q.db.QueryRow(ctx, getStudentSeriesRazborAccess, arg.UserID, arg.ID)
+	var i GetStudentSeriesRazborAccessRow
+	err := row.Scan(&i.SeriesID, &i.CanViewVideo, &i.CanViewPdfTex)
+	return i, err
+}
+
 const getTeacher = `-- name: GetTeacher :one
 SELECT id, user_id, math_center_id, is_head_teacher, created_at
 FROM math_center_teachers
@@ -551,6 +592,114 @@ func (q *Queries) ListMathCenters(ctx context.Context) ([]MathCenter, error) {
 	for rows.Next() {
 		var i MathCenter
 		if err := rows.Scan(&i.ID, &i.GraduationYear, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStudentSeriesRazborAccessForCenter = `-- name: ListStudentSeriesRazborAccessForCenter :many
+SELECT series.id AS series_id,
+       COALESCE(access.can_view_video, enrollment.can_view_razbors, FALSE)::boolean AS can_view_video,
+       COALESCE(access.can_view_pdf_tex, enrollment.can_view_razbors, FALSE)::boolean AS can_view_pdf_tex
+FROM math_center_series series
+         LEFT JOIN LATERAL (
+             SELECT student.can_view_razbors
+             FROM math_center_students student
+                      JOIN math_center_groups student_group ON student_group.id = student.group_id
+                      JOIN math_center_terms term ON term.id = student.term_id
+             WHERE student.user_id = $1
+               AND student_group.math_center_id = series.math_center_id
+             ORDER BY (student.term_id = series.term_id) DESC,
+                      term.is_active DESC,
+                      student.id DESC
+             LIMIT 1
+         ) enrollment ON TRUE
+         LEFT JOIN math_center_student_series_razbor_access access
+                   ON access.student_user_id = $1
+                       AND access.series_id = series.id
+WHERE series.math_center_id = $2
+ORDER BY series.number ASC
+`
+
+type ListStudentSeriesRazborAccessForCenterParams struct {
+	UserID       int64 `json:"user_id"`
+	MathCenterID int64 `json:"math_center_id"`
+}
+
+type ListStudentSeriesRazborAccessForCenterRow struct {
+	SeriesID      int64 `json:"series_id"`
+	CanViewVideo  bool  `json:"can_view_video"`
+	CanViewPdfTex bool  `json:"can_view_pdf_tex"`
+}
+
+// Use the enrollment belonging to the series' term when it exists; otherwise
+// fall back to the student's current center enrollment for carried coffins.
+func (q *Queries) ListStudentSeriesRazborAccessForCenter(ctx context.Context, arg ListStudentSeriesRazborAccessForCenterParams) ([]ListStudentSeriesRazborAccessForCenterRow, error) {
+	rows, err := q.db.Query(ctx, listStudentSeriesRazborAccessForCenter, arg.UserID, arg.MathCenterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListStudentSeriesRazborAccessForCenterRow{}
+	for rows.Next() {
+		var i ListStudentSeriesRazborAccessForCenterRow
+		if err := rows.Scan(&i.SeriesID, &i.CanViewVideo, &i.CanViewPdfTex); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStudentSeriesRazborAccessForManage = `-- name: ListStudentSeriesRazborAccessForManage :many
+SELECT series.id AS series_id,
+       series.number AS series_number,
+       series.name AS series_name,
+       COALESCE(access.can_view_video, student.can_view_razbors)::boolean AS can_view_video,
+       COALESCE(access.can_view_pdf_tex, student.can_view_razbors)::boolean AS can_view_pdf_tex
+FROM math_center_students student
+         JOIN math_center_series series ON series.term_id = student.term_id
+         LEFT JOIN math_center_student_series_razbor_access access
+                   ON access.student_user_id = student.user_id
+                       AND access.series_id = series.id
+WHERE student.id = $1
+ORDER BY series.number ASC
+`
+
+type ListStudentSeriesRazborAccessForManageRow struct {
+	SeriesID      int64  `json:"series_id"`
+	SeriesNumber  int32  `json:"series_number"`
+	SeriesName    string `json:"series_name"`
+	CanViewVideo  bool   `json:"can_view_video"`
+	CanViewPdfTex bool   `json:"can_view_pdf_tex"`
+}
+
+// The management panel is term-scoped through the selected student enrollment.
+// Missing overrides inherit the enrollment-wide default.
+func (q *Queries) ListStudentSeriesRazborAccessForManage(ctx context.Context, id int64) ([]ListStudentSeriesRazborAccessForManageRow, error) {
+	rows, err := q.db.Query(ctx, listStudentSeriesRazborAccessForManage, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListStudentSeriesRazborAccessForManageRow{}
+	for rows.Next() {
+		var i ListStudentSeriesRazborAccessForManageRow
+		if err := rows.Scan(
+			&i.SeriesID,
+			&i.SeriesNumber,
+			&i.SeriesName,
+			&i.CanViewVideo,
+			&i.CanViewPdfTex,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -939,6 +1088,49 @@ type SetStudentRazborAccessParams struct {
 
 func (q *Queries) SetStudentRazborAccess(ctx context.Context, arg SetStudentRazborAccessParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setStudentRazborAccess, arg.ID, arg.CanViewRazbors)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setStudentSeriesRazborAccess = `-- name: SetStudentSeriesRazborAccess :execrows
+INSERT INTO math_center_student_series_razbor_access (
+    student_user_id,
+    series_id,
+    can_view_video,
+    can_view_pdf_tex
+)
+SELECT student.user_id, series.id, $3, $4
+FROM math_center_students student
+         JOIN math_center_groups student_group ON student_group.id = student.group_id
+         JOIN math_center_series series
+              ON series.id = $2
+                  AND series.term_id = student.term_id
+                  AND series.math_center_id = student_group.math_center_id
+WHERE student.id = $1
+ON CONFLICT (student_user_id, series_id)
+    DO UPDATE SET can_view_video = EXCLUDED.can_view_video,
+                  can_view_pdf_tex = EXCLUDED.can_view_pdf_tex,
+                  updated_at = NOW()
+`
+
+type SetStudentSeriesRazborAccessParams struct {
+	StudentID     int64 `json:"student_id"`
+	SeriesID      int64 `json:"series_id"`
+	CanViewVideo  bool  `json:"can_view_video"`
+	CanViewPdfTex bool  `json:"can_view_pdf_tex"`
+}
+
+// The INSERT ... SELECT is also the same-center/same-term authorization check:
+// a series outside this enrollment produces zero affected rows.
+func (q *Queries) SetStudentSeriesRazborAccess(ctx context.Context, arg SetStudentSeriesRazborAccessParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setStudentSeriesRazborAccess,
+		arg.StudentID,
+		arg.SeriesID,
+		arg.CanViewVideo,
+		arg.CanViewPdfTex,
+	)
 	if err != nil {
 		return 0, err
 	}

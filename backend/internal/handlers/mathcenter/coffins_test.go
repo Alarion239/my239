@@ -31,6 +31,10 @@ func expectSubproblemCenter(mock pgxmock.PgxPoolIface, subproblemID, centerID in
 			AddRow(subproblemID, label, int64(500), problemNumber, int64(100), centerID, now))
 }
 
+func ptrString(value string) *string {
+	return &value
+}
+
 func TestMarkCoffin_AdminSucceeds(t *testing.T) {
 	t.Parallel()
 	mock, _ := pgxmock.NewPool()
@@ -111,29 +115,46 @@ func TestPutSubproblemSolutionTex_AdminClosesCoffin(t *testing.T) {
 	}
 }
 
-func TestGetSubproblemSolutionTex_RestrictedStudentForbidden(t *testing.T) {
-	t.Parallel()
-	mock, _ := pgxmock.NewPool()
-	defer mock.Close()
-	r, access, _ := newRouter(t, mock)
+func TestRestrictedStudentCannotReadPDFOrTex(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+	}{
+		{name: "LaTeX", path: "/subproblems/900/solution/tex"},
+		{name: "PDF", path: "/subproblems/900/solution/pdf"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			mock, _ := pgxmock.NewPool()
+			defer mock.Close()
+			r, access, _ := newRouter(t, mock)
 
-	now := time.Now()
-	expectSubproblemCenter(mock, 900, 42, "b", 5, now.Add(-time.Hour))
-	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
-		WithArgs(int64(7), int64(42)).
-		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(false))
-	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_students`).
-		WithArgs(int64(7), int64(42)).
-		WillReturnRows(mock.NewRows([]string{"is_student"}).AddRow(true))
-	mock.ExpectQuery(`SELECT COALESCE`).
-		WithArgs(int64(7), int64(42)).
-		WillReturnRows(mock.NewRows([]string{"can_view_razbors"}).AddRow(false))
+			now := time.Now()
+			expectSubproblemCenter(mock, 900, 42, "b", 5, now.Add(-time.Hour))
+			mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_teachers`).
+				WithArgs(int64(7), int64(42)).
+				WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(false))
+			mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_students`).
+				WithArgs(int64(7), int64(42)).
+				WillReturnRows(mock.NewRows([]string{"is_student"}).AddRow(true))
+			mock.ExpectQuery(`SELECT series.id AS series_id`).
+				WithArgs(int64(7), int64(100)).
+				WillReturnRows(mock.NewRows([]string{
+					"series_id", "can_view_video", "can_view_pdf_tex",
+				}).AddRow(int64(100), true, false))
+			mock.ExpectQuery(`FROM math_center_subproblem_solutions`).
+				WithArgs(int64(900)).
+				WillReturnRows(mock.NewRows(subproblemSolutionColumns).
+					AddRow(int64(9), int64(900), false, (*time.Time)(nil), ptrString("private"), ptrString("private.pdf"), ptrString("https://example.com/video"), now, now, (*int64)(nil)))
 
-	req := authedRequest(t, access, 7, http.MethodGet, "/subproblems/900/solution/tex", nil)
-	rr := httptest.NewRecorder()
-	r.ServeHTTP(rr, req)
-	if rr.Code != http.StatusForbidden {
-		t.Fatalf("got %d, want 403; body=%s", rr.Code, rr.Body.String())
+			req := authedRequest(t, access, 7, http.MethodGet, test.path, nil)
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req)
+			if rr.Code != http.StatusForbidden {
+				t.Fatalf("got %d, want 403; body=%s", rr.Code, rr.Body.String())
+			}
+		})
 	}
 }
 
@@ -277,9 +298,11 @@ func TestListCenterCoffins_RestrictedStudentDoesNotReceiveSolutionMetadata(t *te
 	mock.ExpectQuery(`SELECT EXISTS .* FROM math_center_students`).
 		WithArgs(int64(7), int64(42)).
 		WillReturnRows(mock.NewRows([]string{"is_student"}).AddRow(true))
-	mock.ExpectQuery(`SELECT COALESCE`).
+	mock.ExpectQuery(`SELECT series.id AS series_id`).
 		WithArgs(int64(7), int64(42)).
-		WillReturnRows(mock.NewRows([]string{"can_view_razbors"}).AddRow(false))
+		WillReturnRows(mock.NewRows([]string{
+			"series_id", "can_view_video", "can_view_pdf_tex",
+		}).AddRow(int64(100), false, true))
 	mock.ExpectQuery(`FROM math_center_subproblem_solutions ss\s+JOIN math_center_subproblems`).
 		WithArgs(int64(42)).
 		WillReturnRows(mock.NewRows([]string{
@@ -307,10 +330,12 @@ func TestListCenterCoffins_RestrictedStudentDoesNotReceiveSolutionMetadata(t *te
 	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if resp[0]["razbor_access"] != false ||
-		resp[0]["has_solution_tex"] != false ||
-		resp[0]["has_solution_pdf"] != false {
-		t.Fatalf("solution metadata leaked: %v", resp[0])
+	if resp[0]["razbor_access"] != true ||
+		resp[0]["razbor_video_access"] != false ||
+		resp[0]["razbor_pdf_tex_access"] != true ||
+		resp[0]["has_solution_tex"] != true ||
+		resp[0]["has_solution_pdf"] != true {
+		t.Fatalf("unexpected format redaction: %v", resp[0])
 	}
 	if _, ok := resp[0]["solution_link"]; ok {
 		t.Fatalf("solution link leaked: %v", resp[0])

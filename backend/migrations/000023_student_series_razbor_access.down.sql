@@ -1,0 +1,1 @@
+DROP TABLE IF EXISTS math_center_student_series_razbor_access;

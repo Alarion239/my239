@@ -16,6 +16,7 @@ import type {
   MathCenterGroup,
   MathCenterStudent,
   MathCenterTeacher,
+  ManageSeriesRazborAccess,
   ManageStudent,
   ManageTeacher,
   UserSearchResult,
@@ -193,6 +194,86 @@ export function useManageSetStudentRazborAccess(centerId: number) {
       }),
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: queryKeys.manageStudents(centerId) }),
+  })
+}
+
+export function useManageStudentSeriesRazborAccess(
+  centerId: number,
+  studentId: number,
+) {
+  const client = useApiClient()
+  return useQuery<ManageSeriesRazborAccess[]>({
+    queryKey: queryKeys.manageStudentRazborAccess(centerId, studentId),
+    queryFn: () =>
+      client.request<ManageSeriesRazborAccess[]>(
+        base(centerId) + '/students/' + studentId + '/razbor-access',
+      ),
+    enabled: centerId > 0 && studentId > 0,
+  })
+}
+
+export function useManageSetStudentSeriesRazborAccess(centerId: number) {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      studentId,
+      seriesId,
+      canViewVideo,
+      canViewPDFTex,
+    }: {
+      studentId: number
+      seriesId: number
+      canViewVideo: boolean
+      canViewPDFTex: boolean
+    }) =>
+      client.request(
+        base(centerId) +
+          '/students/' +
+          studentId +
+          '/series/' +
+          seriesId +
+          '/razbor-access',
+        {
+          method: 'PATCH',
+          body: {
+            can_view_video: canViewVideo,
+            can_view_pdf_tex: canViewPDFTex,
+          },
+        },
+      ),
+    onMutate: async (variables) => {
+      const key = queryKeys.manageStudentRazborAccess(
+        centerId,
+        variables.studentId,
+      )
+      await qc.cancelQueries({ queryKey: key })
+      const previous = qc.getQueryData<ManageSeriesRazborAccess[]>(key)
+      qc.setQueryData<ManageSeriesRazborAccess[]>(key, (rows) =>
+        rows?.map((row) =>
+          row.series_id === variables.seriesId
+            ? {
+                ...row,
+                can_view_video: variables.canViewVideo,
+                can_view_pdf_tex: variables.canViewPDFTex,
+              }
+            : row,
+        ),
+      )
+      return { key, previous }
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) {
+        qc.setQueryData(context.key, context.previous)
+      }
+    },
+    onSettled: (_data, _error, variables) =>
+      qc.invalidateQueries({
+        queryKey: queryKeys.manageStudentRazborAccess(
+          centerId,
+          variables.studentId,
+        ),
+      }),
   })
 }
 

@@ -22,6 +22,8 @@ export const queryKeys = {
     ['mathcenter', 'manage', centerId, 'teachers'] as const,
   manageStudents: (centerId: number) =>
     ['mathcenter', 'manage', centerId, 'students'] as const,
+  manageStudentRazborAccess: (centerId: number, studentId: number) =>
+    ['mathcenter', 'manage', centerId, 'students', studentId, 'razbor-access'] as const,
   manageInvites: (centerId: number) =>
     ['mathcenter', 'manage', centerId, 'invites'] as const,
   manageGoogleSheetLinks: (centerId: number) =>

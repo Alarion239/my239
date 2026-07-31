@@ -721,9 +721,11 @@ func TestListSeries_StudentSeesOnlyPublished(t *testing.T) {
 	mock.ExpectQuery(`FROM math_center_subproblem_solutions ss`).
 		WithArgs([]int64{100}).
 		WillReturnRows(mock.NewRows(subproblemSolutionMetaColumns))
-	mock.ExpectQuery(`SELECT COALESCE`).
+	mock.ExpectQuery(`SELECT series.id AS series_id`).
 		WithArgs(int64(7), int64(42)).
-		WillReturnRows(mock.NewRows([]string{"can_view_razbors"}).AddRow(true))
+		WillReturnRows(mock.NewRows([]string{
+			"series_id", "can_view_video", "can_view_pdf_tex",
+		}).AddRow(int64(100), true, true))
 
 	req := authedRequest(t, access, 7, http.MethodGet, "/centers/42/series", nil)
 	rr := httptest.NewRecorder()
@@ -742,7 +744,7 @@ func TestListSeries_StudentSeesOnlyPublished(t *testing.T) {
 	}
 }
 
-func TestListSeries_RestrictedStudentCannotDiscoverRazbors(t *testing.T) {
+func TestListSeries_StudentCanSeeVideoWithoutPDFOrTex(t *testing.T) {
 	t.Parallel()
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
@@ -775,9 +777,11 @@ func TestListSeries_RestrictedStudentCannotDiscoverRazbors(t *testing.T) {
 		WithArgs([]int64{100}).
 		WillReturnRows(mock.NewRows(subproblemSolutionMetaColumns).
 			AddRow(int64(900), int64(500), true, &releasedAt, true, true, &link, ptrInt64(8)))
-	mock.ExpectQuery(`SELECT COALESCE`).
+	mock.ExpectQuery(`SELECT series.id AS series_id`).
 		WithArgs(int64(7), int64(42)).
-		WillReturnRows(mock.NewRows([]string{"can_view_razbors"}).AddRow(false))
+		WillReturnRows(mock.NewRows([]string{
+			"series_id", "can_view_video", "can_view_pdf_tex",
+		}).AddRow(int64(100), true, false))
 
 	req := authedRequest(t, access, 7, http.MethodGet, "/centers/42/series", nil)
 	rr := httptest.NewRecorder()
@@ -789,8 +793,10 @@ func TestListSeries_RestrictedStudentCannotDiscoverRazbors(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &list); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if list[0]["razbor_access"] != false {
-		t.Fatalf("razbor_access = %v, want false", list[0]["razbor_access"])
+	if list[0]["razbor_access"] != true ||
+		list[0]["razbor_video_access"] != true ||
+		list[0]["razbor_pdf_tex_access"] != false {
+		t.Fatalf("unexpected series access: %v", list[0])
 	}
 	problems := list[0]["problems"].([]any)
 	subproblems := problems[0].(map[string]any)["subproblems"].([]any)
@@ -798,8 +804,11 @@ func TestListSeries_RestrictedStudentCannotDiscoverRazbors(t *testing.T) {
 	if subproblem["has_solution_tex"] != false || subproblem["has_solution_pdf"] != false {
 		t.Fatalf("solution flags leaked: %v", subproblem)
 	}
-	if _, ok := subproblem["solution_link"]; ok {
-		t.Fatalf("solution link leaked: %v", subproblem)
+	if subproblem["solution_link"] != link {
+		t.Fatalf("video link = %v, want %q", subproblem["solution_link"], link)
+	}
+	if subproblem["solution_group_id"] != float64(8) {
+		t.Fatalf("solution group was removed with an accessible format: %v", subproblem)
 	}
 	if subproblem["is_coffin"] != true {
 		t.Fatalf("coffin state was redacted with solution data: %v", subproblem)

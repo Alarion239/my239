@@ -32,8 +32,11 @@ function razborReleased(sub: Subproblem, dueAt: string): boolean {
 // solution renders below while every problem the same разбор covers lights up.
 export function StudentRazbor({ series }: { series: Series }) {
   const [selectedId, setSelectedId] = useState<number | null>(null)
+  const legacyAccess = series.razbor_access !== false
+  const videoAccess = series.razbor_video_access ?? legacyAccess
+  const pdfTexAccess = series.razbor_pdf_tex_access ?? legacyAccess
 
-  if (series.razbor_access === false) {
+  if (!videoAccess && !pdfTexAccess) {
     return (
       <div className="rounded-xl border border-line bg-surface-muted px-5 py-6">
         <p className="font-medium text-ink">Доступ к разборам закрыт.</p>
@@ -72,6 +75,13 @@ export function StudentRazbor({ series }: { series: Series }) {
 
   return (
     <div className="flex flex-col gap-4">
+      {!videoAccess || !pdfTexAccess ? (
+        <div className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-sm text-muted">
+          {videoAccess
+            ? 'Доступны только видеоразборы этой серии.'
+            : 'Доступны только PDF и LaTeX этой серии.'}
+        </div>
+      ) : null}
       <div className="flex flex-wrap gap-2">
         {chips.map(({ sub, token }) => {
           const released = razborReleased(sub, series.due_at)

@@ -82,6 +82,10 @@ export function handleCenterEvent(
     qc.invalidateQueries({
       queryKey: ['mathcenter', 'centers', centerId],
     })
+    qc.invalidateQueries({ queryKey: ['mathcenter', 'series'] })
+    qc.invalidateQueries({
+      queryKey: ['mathcenter', 'manage', centerId, 'students'],
+    })
     // An already-open разбор preview is keyed by subproblem rather than center.
     qc.invalidateQueries({ queryKey: ['mathcenter', 'subproblems'] })
   } else if (kind === 'likbez') {

@@ -92,19 +92,26 @@ type problemView struct {
 }
 
 type seriesView struct {
-	ID           int64         `json:"id"`
-	MathCenterID int64         `json:"math_center_id"`
-	TermID       int64         `json:"term_id"`
-	Number       int           `json:"number"`
-	Name         string        `json:"name"`
-	DisplayName  string        `json:"display_name"`
-	DueAt        time.Time     `json:"due_at"`
-	Published    bool          `json:"published"`
-	PublishedAt  *time.Time    `json:"published_at,omitempty"`
-	HasPDF       bool          `json:"has_pdf"`
-	HasTex       bool          `json:"has_tex"`
-	RazborAccess bool          `json:"razbor_access"`
-	Problems     []problemView `json:"problems"`
+	ID                 int64         `json:"id"`
+	MathCenterID       int64         `json:"math_center_id"`
+	TermID             int64         `json:"term_id"`
+	Number             int           `json:"number"`
+	Name               string        `json:"name"`
+	DisplayName        string        `json:"display_name"`
+	DueAt              time.Time     `json:"due_at"`
+	Published          bool          `json:"published"`
+	PublishedAt        *time.Time    `json:"published_at,omitempty"`
+	HasPDF             bool          `json:"has_pdf"`
+	HasTex             bool          `json:"has_tex"`
+	RazborAccess       bool          `json:"razbor_access"`
+	RazborVideoAccess  bool          `json:"razbor_video_access"`
+	RazborPDFTexAccess bool          `json:"razbor_pdf_tex_access"`
+	Problems           []problemView `json:"problems"`
+}
+
+type razborAccess struct {
+	Video  bool
+	PDFTex bool
 }
 
 // subIdent is a subproblem's identity (id + label), unifying the single-series
@@ -337,16 +344,14 @@ func ListSeriesForCenter(database *db.DB) http.HandlerFunc {
 			return
 		}
 		if isStudent && !isTeacher {
-			canView, err := studentCanViewRazbors(ctx, q, userID, centerID)
+			accessBySeries, err := studentRazborAccessForCenter(ctx, q, userID, centerID)
 			if err != nil {
 				logger.LogErrorContext(ctx, "series: razbor access", err)
 				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 				return
 			}
-			if !canView {
-				for i := range out {
-					restrictSeriesRazbors(&out[i])
-				}
+			for i := range out {
+				restrictSeriesRazbors(&out[i], accessBySeries[out[i].ID])
 			}
 		}
 		httpx.WriteJSON(w, http.StatusOK, out)
@@ -403,15 +408,19 @@ func GetSeries(database *db.DB) http.HandlerFunc {
 			return
 		}
 		if isStudent && !isTeacher {
-			canView, err := studentCanViewRazbors(ctx, q, userID, series.MathCenterID)
+			accessRow, err := q.GetStudentSeriesRazborAccess(ctx, store.GetStudentSeriesRazborAccessParams{
+				UserID: userID,
+				ID:     seriesID,
+			})
 			if err != nil {
 				logger.LogErrorContext(ctx, "series: razbor access", err)
 				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 				return
 			}
-			if !canView {
-				restrictSeriesRazbors(view)
-			}
+			restrictSeriesRazbors(view, razborAccess{
+				Video:  accessRow.CanViewVideo,
+				PDFTex: accessRow.CanViewPdfTex,
+			})
 		}
 		httpx.WriteJSON(w, http.StatusOK, view)
 	}
@@ -993,10 +1002,21 @@ func membership(ctx context.Context, r *http.Request, q *store.Queries, userID, 
 	return teacher, student, nil
 }
 
-func studentCanViewRazbors(ctx context.Context, q *store.Queries, userID, centerID int64) (bool, error) {
-	return q.CanStudentViewRazbors(ctx, store.CanStudentViewRazborsParams{
+func studentRazborAccessForCenter(ctx context.Context, q *store.Queries, userID, centerID int64) (map[int64]razborAccess, error) {
+	rows, err := q.ListStudentSeriesRazborAccessForCenter(ctx, store.ListStudentSeriesRazborAccessForCenterParams{
 		UserID: userID, MathCenterID: centerID,
 	})
+	if err != nil {
+		return nil, err
+	}
+	accessBySeries := make(map[int64]razborAccess, len(rows))
+	for _, row := range rows {
+		accessBySeries[row.SeriesID] = razborAccess{
+			Video:  row.CanViewVideo,
+			PDFTex: row.CanViewPdfTex,
+		}
+	}
+	return accessBySeries, nil
 }
 
 // requireTeacher gates teacher-only routes. Returns true if the request can
@@ -1360,34 +1380,44 @@ func assembleSeriesView(s store.MathCenterSeries, problems []store.MathCenterPro
 		})
 	}
 	return &seriesView{
-		ID:           s.ID,
-		MathCenterID: s.MathCenterID,
-		TermID:       s.TermID,
-		Number:       int(s.Number),
-		Name:         s.Name,
-		DisplayName:  mc.SeriesDisplayName(int(s.Number), s.Name),
-		DueAt:        s.DueAt,
-		Published:    s.PublishedAt != nil,
-		PublishedAt:  s.PublishedAt,
-		HasPDF:       s.PdfObjectKey != nil,
-		HasTex:       s.TexSource != nil,
-		RazborAccess: true,
-		Problems:     pviews,
+		ID:                 s.ID,
+		MathCenterID:       s.MathCenterID,
+		TermID:             s.TermID,
+		Number:             int(s.Number),
+		Name:               s.Name,
+		DisplayName:        mc.SeriesDisplayName(int(s.Number), s.Name),
+		DueAt:              s.DueAt,
+		Published:          s.PublishedAt != nil,
+		PublishedAt:        s.PublishedAt,
+		HasPDF:             s.PdfObjectKey != nil,
+		HasTex:             s.TexSource != nil,
+		RazborAccess:       true,
+		RazborVideoAccess:  true,
+		RazborPDFTexAccess: true,
+		Problems:           pviews,
 	}
 }
 
-// restrictSeriesRazbors keeps homework/coffin state visible while removing all
-// solution discovery data, especially raw external links. Direct content reads
-// are independently denied by loadSubproblemForRead.
-func restrictSeriesRazbors(view *seriesView) {
-	view.RazborAccess = false
+// restrictSeriesRazbors keeps homework/coffin state visible while removing the
+// denied format class. External links are the video class; TeX and PDF share
+// the document class and are also protected by their direct read handlers.
+func restrictSeriesRazbors(view *seriesView, access razborAccess) {
+	view.RazborAccess = access.Video || access.PDFTex
+	view.RazborVideoAccess = access.Video
+	view.RazborPDFTexAccess = access.PDFTex
 	for problemIndex := range view.Problems {
 		for subproblemIndex := range view.Problems[problemIndex].Subproblems {
 			sub := &view.Problems[problemIndex].Subproblems[subproblemIndex]
-			sub.HasSolutionTex = false
-			sub.HasSolutionPDF = false
-			sub.SolutionLink = nil
-			sub.SolutionGroupID = nil
+			if !access.PDFTex {
+				sub.HasSolutionTex = false
+				sub.HasSolutionPDF = false
+			}
+			if !access.Video {
+				sub.SolutionLink = nil
+			}
+			if !access.Video && !access.PDFTex {
+				sub.SolutionGroupID = nil
+			}
 		}
 	}
 }

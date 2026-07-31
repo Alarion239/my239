@@ -146,6 +146,14 @@ type MathCenterStudentNote struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
+type MathCenterStudentSeriesRazborAccess struct {
+	StudentUserID int64     `json:"student_user_id"`
+	SeriesID      int64     `json:"series_id"`
+	CanViewVideo  bool      `json:"can_view_video"`
+	CanViewPdfTex bool      `json:"can_view_pdf_tex"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
 type MathCenterSubproblem struct {
 	ID        int64     `json:"id"`
 	ProblemID int64     `json:"problem_id"`

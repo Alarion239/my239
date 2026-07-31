@@ -322,6 +322,14 @@ export interface ManageStudent {
   last_name: string
 }
 
+export interface ManageSeriesRazborAccess {
+  series_id: number
+  series_number: number
+  series_name: string
+  can_view_video: boolean
+  can_view_pdf_tex: boolean
+}
+
 // UserSearchResult is a minimal user record for the "add from users" search.
 export interface UserSearchResult {
   id: number
@@ -442,8 +450,10 @@ export interface Series {
   published_at?: string | null
   has_pdf: boolean
   has_tex: boolean
-  // False only when a head teacher has restricted this student's access.
+  // Format-specific razbor access. Missing fields mean the pre-control API.
   razbor_access?: boolean
+  razbor_video_access?: boolean
+  razbor_pdf_tex_access?: boolean
   problems: SeriesProblem[]
 }
 
@@ -651,6 +661,8 @@ export interface Coffin {
   has_solution_pdf: boolean
   solution_link?: string | null
   razbor_access?: boolean
+  razbor_video_access?: boolean
+  razbor_pdf_tex_access?: boolean
   // Teacher-only "solved N of M" stats.
   accepted_count: number
   total_count: number

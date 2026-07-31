@@ -30,7 +30,7 @@ afterEach(() => {
 })
 
 describe('StudentsTab razbor access', () => {
-  it('starts open and sends an explicit restriction for one student', async () => {
+  it('opens the series matrix and restricts only PDF and LaTeX', async () => {
     const patches: unknown[] = []
     vi.stubGlobal(
       'fetch',
@@ -58,7 +58,24 @@ describe('StudentsTab razbor access', () => {
             { id: 3, math_center_id: 7, name: 'А', created_at: '2026-01-01' },
           ])
         }
-        if (url.endsWith('/students/11/razbor-access') && init?.method === 'PATCH') {
+        if (
+          url.endsWith('/students/11/razbor-access') &&
+          (!init?.method || init.method === 'GET')
+        ) {
+          return Response.json([
+            {
+              series_id: 101,
+              series_number: 4,
+              series_name: 'Геометрия',
+              can_view_video: true,
+              can_view_pdf_tex: true,
+            },
+          ])
+        }
+        if (
+          url.endsWith('/students/11/series/101/razbor-access') &&
+          init?.method === 'PATCH'
+        ) {
           patches.push(JSON.parse(String(init.body)))
           return new Response(null, { status: 204 })
         }
@@ -68,15 +85,25 @@ describe('StudentsTab razbor access', () => {
 
     renderTab()
     const user = userEvent.setup()
-    const access = await screen.findByRole('switch', {
-      name: 'Закрыть доступ к разборам для Аня Иванова',
-    })
-    expect(access).toHaveAttribute('aria-checked', 'true')
+    await user.click(
+      await screen.findByRole('button', { name: 'Настроить разборы' }),
+    )
 
-    await user.click(access)
+    const video = await screen.findByRole('switch', {
+      name: 'Закрыть видео серии 4 для Аня Иванова',
+    })
+    const pdfTex = screen.getByRole('switch', {
+      name: 'Закрыть PDF и LaTeX серии 4 для Аня Иванова',
+    })
+    expect(video).toHaveAttribute('aria-checked', 'true')
+    expect(pdfTex).toHaveAttribute('aria-checked', 'true')
+
+    await user.click(pdfTex)
 
     await waitFor(() =>
-      expect(patches).toEqual([{ can_view_razbors: false }]),
+      expect(patches).toEqual([
+        { can_view_video: true, can_view_pdf_tex: false },
+      ]),
     )
   })
 })

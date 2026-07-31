@@ -97,6 +97,7 @@ type Querier interface {
 	GetStudentByUserID(ctx context.Context, userID int64) (GetStudentByUserIDRow, error)
 	GetStudentNote(ctx context.Context, id int64) (MathCenterStudentNote, error)
 	GetStudentNoteAuthored(ctx context.Context, id int64) (GetStudentNoteAuthoredRow, error)
+	GetStudentSeriesRazborAccess(ctx context.Context, arg GetStudentSeriesRazborAccessParams) (GetStudentSeriesRazborAccessRow, error)
 	// One-shot fetch of "what center/series/problem does this subproblem belong
 	// to", used at the start of every event-creating handler so we don't have to
 	// chain three queries.
@@ -166,6 +167,12 @@ type Querier interface {
 	ListSeriesForCenter(ctx context.Context, mathCenterID int64) ([]ListSeriesForCenterRow, error)
 	ListSeriesForTerm(ctx context.Context, arg ListSeriesForTermParams) ([]MathCenterSeries, error)
 	ListStudentNotesAuthored(ctx context.Context, arg ListStudentNotesAuthoredParams) ([]ListStudentNotesAuthoredRow, error)
+	// Use the enrollment belonging to the series' term when it exists; otherwise
+	// fall back to the student's current center enrollment for carried coffins.
+	ListStudentSeriesRazborAccessForCenter(ctx context.Context, arg ListStudentSeriesRazborAccessForCenterParams) ([]ListStudentSeriesRazborAccessForCenterRow, error)
+	// The management panel is term-scoped through the selected student enrollment.
+	// Missing overrides inherit the enrollment-wide default.
+	ListStudentSeriesRazborAccessForManage(ctx context.Context, id int64) ([]ListStudentSeriesRazborAccessForManageRow, error)
 	ListStudentsForCenter(ctx context.Context, mathCenterID int64) ([]ListStudentsForCenterRow, error)
 	ListStudentsForCenters(ctx context.Context, centerIds []int64) ([]ListStudentsForCentersRow, error)
 	ListStudentsForTerm(ctx context.Context, termID int64) ([]ListStudentsForTermRow, error)
@@ -225,6 +232,9 @@ type Querier interface {
 	SetSeriesTex(ctx context.Context, arg SetSeriesTexParams) (SetSeriesTexRow, error)
 	SetStudentGroup(ctx context.Context, arg SetStudentGroupParams) (int64, error)
 	SetStudentRazborAccess(ctx context.Context, arg SetStudentRazborAccessParams) (int64, error)
+	// The INSERT ... SELECT is also the same-center/same-term authorization check:
+	// a series outside this enrollment produces zero affected rows.
+	SetStudentSeriesRazborAccess(ctx context.Context, arg SetStudentSeriesRazborAccessParams) (int64, error)
 	// Assign a (just-minted) group to every subproblem in the set. The solution
 	// rows must already exist (content was set first); only existing rows update.
 	SetSubproblemSolutionGroup(ctx context.Context, arg SetSubproblemSolutionGroupParams) error

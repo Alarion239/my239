@@ -48,7 +48,9 @@ func ManageRouter(database *db.DB, hub *live.Hub, sheetServices ...*googlesheets
 	r.Get("/students", manageListStudents(database))
 	r.Post("/students", manageAddStudent(database, hub))
 	r.Patch("/students/{studentID}/group", manageSetStudentGroup(database, hub))
+	r.Get("/students/{studentID}/razbor-access", manageListStudentSeriesRazborAccess(database))
 	r.Patch("/students/{studentID}/razbor-access", manageSetStudentRazborAccess(database, hub))
+	r.Patch("/students/{studentID}/series/{seriesID}/razbor-access", manageSetStudentSeriesRazborAccess(database, hub))
 	r.Delete("/students/{studentID}", manageRemoveStudent(database, hub))
 
 	r.Get("/user-search", manageUserSearch(database))
@@ -399,6 +401,11 @@ type manageSetRazborAccessRequest struct {
 	CanViewRazbors *bool `json:"can_view_razbors"`
 }
 
+type manageSetSeriesRazborAccessRequest struct {
+	CanViewVideo  *bool `json:"can_view_video"`
+	CanViewPDFTex *bool `json:"can_view_pdf_tex"`
+}
+
 func manageListStudents(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := store.New(database.Pool())
@@ -572,6 +579,79 @@ func manageSetStudentRazborAccess(database *db.DB, hub *live.Hub) http.HandlerFu
 			return
 		}
 		live.Publish(r.Context(), database.Pool(), live.Event{CenterID: centerID, Kind: live.KindMembership})
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func manageListStudentSeriesRazborAccess(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		q := store.New(database.Pool())
+		centerID, _, ok := manageGate(w, r, q)
+		if !ok {
+			return
+		}
+		studentID, err := strconv.ParseInt(chi.URLParam(r, "studentID"), 10, 64)
+		if err != nil {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid student id")
+			return
+		}
+		if !studentInCenter(w, r, q, studentID, centerID) {
+			return
+		}
+		rows, err := q.ListStudentSeriesRazborAccessForManage(r.Context(), studentID)
+		if err != nil {
+			logger.LogErrorContext(r.Context(), "manage: list student series razbor access", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to load razbor access")
+			return
+		}
+		httpx.WriteJSON(w, http.StatusOK, rows)
+	}
+}
+
+func manageSetStudentSeriesRazborAccess(database *db.DB, hub *live.Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		q := store.New(database.Pool())
+		centerID, _, ok := manageGate(w, r, q)
+		if !ok {
+			return
+		}
+		studentID, err := strconv.ParseInt(chi.URLParam(r, "studentID"), 10, 64)
+		if err != nil {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid student id")
+			return
+		}
+		seriesID, err := strconv.ParseInt(chi.URLParam(r, "seriesID"), 10, 64)
+		if err != nil {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid series id")
+			return
+		}
+		var req manageSetSeriesRazborAccessRequest
+		if !httpx.DecodeJSONBody(w, r, &req) {
+			return
+		}
+		if req.CanViewVideo == nil || req.CanViewPDFTex == nil {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "both razbor access fields are required")
+			return
+		}
+		if !studentInCenter(w, r, q, studentID, centerID) {
+			return
+		}
+		affected, err := q.SetStudentSeriesRazborAccess(r.Context(), store.SetStudentSeriesRazborAccessParams{
+			StudentID:     studentID,
+			SeriesID:      seriesID,
+			CanViewVideo:  *req.CanViewVideo,
+			CanViewPdfTex: *req.CanViewPDFTex,
+		})
+		if err != nil {
+			logger.LogErrorContext(r.Context(), "manage: set student series razbor access", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to change razbor access")
+			return
+		}
+		if affected == 0 {
+			httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "series not found for this student")
+			return
+		}
+		live.Publish(r.Context(), database.Pool(), live.Event{CenterID: centerID, Kind: live.KindCoffins})
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

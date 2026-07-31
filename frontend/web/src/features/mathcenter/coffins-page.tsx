@@ -150,14 +150,6 @@ function CoffinGroups({
   }
   return (
     <div className="flex flex-col gap-6">
-      {!isManager && solved && coffins.some((c) => c.razbor_access === false) ? (
-        <Card className="px-5 py-4">
-          <p className="font-medium text-ink">Доступ к разборам закрыт.</p>
-          <p className="mt-1 text-sm text-muted">
-            Список разобранных гробов остаётся видимым, но сами разборы недоступны.
-          </p>
-        </Card>
-      ) : null}
       {groups.map((g) => (
         <section key={g.key} className="flex flex-col gap-3">
           <h2 className="font-display text-lg font-medium text-ink">{g.label}</h2>
@@ -189,6 +181,17 @@ function CoffinCard({
 }) {
   const hasSolution =
     coffin.has_solution_tex || coffin.has_solution_pdf || !!coffin.solution_link
+  const legacyAccess = coffin.razbor_access !== false
+  const videoAccess = coffin.razbor_video_access ?? legacyAccess
+  const pdfTexAccess = coffin.razbor_pdf_tex_access ?? legacyAccess
+  const accessLabel =
+    videoAccess && pdfTexAccess
+      ? null
+      : videoAccess
+        ? 'Доступно только видео'
+        : pdfTexAccess
+          ? 'Доступны только PDF и LaTeX'
+          : 'Разбор недоступен'
   const [showSolution, setShowSolution] = useState(false)
   const texQuery = useSubproblemSolutionTex(
     coffin.subproblem_id,
@@ -216,6 +219,9 @@ function CoffinCard({
               <span className="text-xs text-muted">
                 решили {coffin.accepted_count} из {coffin.total_count}
               </span>
+            ) : null}
+            {!isManager && solved && accessLabel ? (
+              <span className="text-xs text-muted">{accessLabel}</span>
             ) : null}
           </div>
         </div>

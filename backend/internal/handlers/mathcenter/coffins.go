@@ -33,24 +33,26 @@ func subproblemSolutionPDFKey(subproblemID int64) string {
 // center-wide Гробы tab. The trailing thread fields are populated only for
 // student callers (their own status), so they can submit straight from the tab.
 type coffinView struct {
-	SubproblemID    int64      `json:"subproblem_id"`
-	SubproblemLabel string     `json:"subproblem_label"`
-	ProblemID       int64      `json:"problem_id"`
-	ProblemNumber   int        `json:"problem_number"`
-	Display         string     `json:"display"`
-	SeriesID        int64      `json:"series_id"`
-	SeriesNumber    int        `json:"series_number"`
-	SeriesName      string     `json:"series_name"`
-	MathCenterID    int64      `json:"math_center_id"`
-	TermID          int64      `json:"term_id"`
-	TermKind        string     `json:"term_kind,omitempty"`
-	TermGrade       *int32     `json:"term_grade,omitempty"`
-	IsCoffin        bool       `json:"is_coffin"`
-	ReleasedAt      *time.Time `json:"released_at,omitempty"`
-	HasSolutionTex  bool       `json:"has_solution_tex"`
-	HasSolutionPDF  bool       `json:"has_solution_pdf"`
-	SolutionLink    *string    `json:"solution_link,omitempty"`
-	RazborAccess    bool       `json:"razbor_access"`
+	SubproblemID       int64      `json:"subproblem_id"`
+	SubproblemLabel    string     `json:"subproblem_label"`
+	ProblemID          int64      `json:"problem_id"`
+	ProblemNumber      int        `json:"problem_number"`
+	Display            string     `json:"display"`
+	SeriesID           int64      `json:"series_id"`
+	SeriesNumber       int        `json:"series_number"`
+	SeriesName         string     `json:"series_name"`
+	MathCenterID       int64      `json:"math_center_id"`
+	TermID             int64      `json:"term_id"`
+	TermKind           string     `json:"term_kind,omitempty"`
+	TermGrade          *int32     `json:"term_grade,omitempty"`
+	IsCoffin           bool       `json:"is_coffin"`
+	ReleasedAt         *time.Time `json:"released_at,omitempty"`
+	HasSolutionTex     bool       `json:"has_solution_tex"`
+	HasSolutionPDF     bool       `json:"has_solution_pdf"`
+	SolutionLink       *string    `json:"solution_link,omitempty"`
+	RazborAccess       bool       `json:"razbor_access"`
+	RazborVideoAccess  bool       `json:"razbor_video_access"`
+	RazborPDFTexAccess bool       `json:"razbor_pdf_tex_access"`
 	// Teacher-only "solved N of M" stats.
 	AcceptedCount int `json:"accepted_count"`
 	TotalCount    int `json:"total_count"`
@@ -136,9 +138,9 @@ func ListCenterCoffins(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusForbidden, httpx.CodeForbidden, "no access to this center")
 			return
 		}
-		canViewRazbors := true
+		accessBySeries := map[int64]razborAccess{}
 		if isStudent && !isTeacher {
-			canViewRazbors, err = studentCanViewRazbors(ctx, q, userID, centerID)
+			accessBySeries, err = studentRazborAccessForCenter(ctx, q, userID, centerID)
 			if err != nil {
 				logger.LogErrorContext(ctx, "coffins: razbor access", err)
 				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
@@ -224,30 +226,36 @@ func ListCenterCoffins(database *db.DB) http.HandlerFunc {
 
 		out := make([]coffinView, 0, len(records))
 		for _, c := range records {
+			access := razborAccess{Video: true, PDFTex: true}
+			if isStudent && !isTeacher {
+				access = accessBySeries[c.SeriesID]
+			}
 			display := mc.SubproblemDisplayName(int(c.ProblemNumber), c.SubproblemLabel)
 			if hasSelectedTerm && (!selected.IsActive || c.TermID != selected.ID) {
 				display = fmt.Sprintf("%s.%d.%d%s", mc.TermReferencePrefix(c.TermKind, c.TermGrade), c.SeriesNumber, c.ProblemNumber, c.SubproblemLabel)
 			}
 			v := coffinView{
-				SubproblemID:    c.SubproblemID,
-				SubproblemLabel: c.SubproblemLabel,
-				ProblemID:       c.ProblemID,
-				ProblemNumber:   int(c.ProblemNumber),
-				Display:         display,
-				SeriesID:        c.SeriesID,
-				SeriesNumber:    int(c.SeriesNumber),
-				SeriesName:      c.SeriesName,
-				MathCenterID:    c.MathCenterID,
-				TermID:          c.TermID,
-				TermKind:        c.TermKind,
-				TermGrade:       c.TermGrade,
-				IsCoffin:        c.IsCoffin,
-				ReleasedAt:      c.ReleasedAt,
-				HasSolutionTex:  canViewRazbors && c.SolutionTexSource != nil,
-				HasSolutionPDF:  canViewRazbors && c.SolutionPdfObjectKey != nil,
-				RazborAccess:    canViewRazbors,
+				SubproblemID:       c.SubproblemID,
+				SubproblemLabel:    c.SubproblemLabel,
+				ProblemID:          c.ProblemID,
+				ProblemNumber:      int(c.ProblemNumber),
+				Display:            display,
+				SeriesID:           c.SeriesID,
+				SeriesNumber:       int(c.SeriesNumber),
+				SeriesName:         c.SeriesName,
+				MathCenterID:       c.MathCenterID,
+				TermID:             c.TermID,
+				TermKind:           c.TermKind,
+				TermGrade:          c.TermGrade,
+				IsCoffin:           c.IsCoffin,
+				ReleasedAt:         c.ReleasedAt,
+				HasSolutionTex:     access.PDFTex && c.SolutionTexSource != nil,
+				HasSolutionPDF:     access.PDFTex && c.SolutionPdfObjectKey != nil,
+				RazborAccess:       access.Video || access.PDFTex,
+				RazborVideoAccess:  access.Video,
+				RazborPDFTexAccess: access.PDFTex,
 			}
-			if canViewRazbors {
+			if access.Video {
 				v.SolutionLink = c.SolutionLink
 			}
 			if st, ok := statusBySub[c.SubproblemID]; ok {
@@ -353,50 +361,51 @@ func loadSubproblemForWrite(ctx context.Context, w http.ResponseWriter, r *http.
 // loadSubproblemForRead resolves a subproblem + its solution row and authorizes
 // any center member, also reporting whether the caller is a teacher (so reads
 // can gate students on release) and the series deadline. Writes 404/403/500.
-func loadSubproblemForRead(ctx context.Context, w http.ResponseWriter, r *http.Request, q *store.Queries, userID, subproblemID int64) (store.MathCenterSubproblemSolution, time.Time, bool, bool) {
+func loadSubproblemForRead(ctx context.Context, w http.ResponseWriter, r *http.Request, q *store.Queries, userID, subproblemID int64) (store.MathCenterSubproblemSolution, time.Time, bool, razborAccess, bool) {
 	sc, err := q.GetSubproblemSolutionCenter(ctx, subproblemID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "subproblem not found")
-			return store.MathCenterSubproblemSolution{}, time.Time{}, false, false
+			return store.MathCenterSubproblemSolution{}, time.Time{}, false, razborAccess{}, false
 		}
 		logger.LogErrorContext(ctx, "coffins: subproblem center", err)
 		httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
-		return store.MathCenterSubproblemSolution{}, time.Time{}, false, false
+		return store.MathCenterSubproblemSolution{}, time.Time{}, false, razborAccess{}, false
 	}
 	isTeacher, isStudent, err := membership(ctx, r, q, userID, sc.MathCenterID)
 	if err != nil {
 		logger.LogErrorContext(ctx, "coffins: membership", err)
 		httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
-		return store.MathCenterSubproblemSolution{}, time.Time{}, false, false
+		return store.MathCenterSubproblemSolution{}, time.Time{}, false, razborAccess{}, false
 	}
 	if !isTeacher && !isStudent {
 		httpx.WriteAPIError(w, r, http.StatusForbidden, httpx.CodeForbidden, "no access to this subproblem")
-		return store.MathCenterSubproblemSolution{}, time.Time{}, false, false
+		return store.MathCenterSubproblemSolution{}, time.Time{}, false, razborAccess{}, false
 	}
+	access := razborAccess{Video: true, PDFTex: true}
 	if isStudent && !isTeacher {
-		canView, err := studentCanViewRazbors(ctx, q, userID, sc.MathCenterID)
+		accessRow, err := q.GetStudentSeriesRazborAccess(ctx, store.GetStudentSeriesRazborAccessParams{
+			UserID: userID,
+			ID:     sc.SeriesID,
+		})
 		if err != nil {
 			logger.LogErrorContext(ctx, "coffins: razbor access", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
-			return store.MathCenterSubproblemSolution{}, time.Time{}, false, false
+			return store.MathCenterSubproblemSolution{}, time.Time{}, false, razborAccess{}, false
 		}
-		if !canView {
-			httpx.WriteAPIError(w, r, http.StatusForbidden, httpx.CodeForbidden, "razbor access is disabled")
-			return store.MathCenterSubproblemSolution{}, time.Time{}, false, false
-		}
+		access = razborAccess{Video: accessRow.CanViewVideo, PDFTex: accessRow.CanViewPdfTex}
 	}
 	s, err := q.GetSubproblemSolution(ctx, subproblemID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "no разбор uploaded yet")
-			return store.MathCenterSubproblemSolution{}, time.Time{}, false, false
+			return store.MathCenterSubproblemSolution{}, time.Time{}, false, razborAccess{}, false
 		}
 		logger.LogErrorContext(ctx, "coffins: get solution", err)
 		httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
-		return store.MathCenterSubproblemSolution{}, time.Time{}, false, false
+		return store.MathCenterSubproblemSolution{}, time.Time{}, false, razborAccess{}, false
 	}
-	return s, sc.SeriesDueAt, isTeacher, true
+	return s, sc.SeriesDueAt, isTeacher, access, true
 }
 
 // MarkCoffin — teacher-only. Marks a subproblem as a coffin (idempotent),
@@ -540,8 +549,12 @@ func GetSubproblemSolutionTex(database *db.DB) http.HandlerFunc {
 			return
 		}
 		q := store.New(database.Pool())
-		s, dueAt, isTeacher, ok := loadSubproblemForRead(ctx, w, r, q, userID, subproblemID)
+		s, dueAt, isTeacher, access, ok := loadSubproblemForRead(ctx, w, r, q, userID, subproblemID)
 		if !ok {
+			return
+		}
+		if !isTeacher && !access.PDFTex {
+			httpx.WriteAPIError(w, r, http.StatusForbidden, httpx.CodeForbidden, "PDF and LaTeX razbor access is disabled")
 			return
 		}
 		if !isTeacher && !solutionReleasedToStudent(s, dueAt, time.Now()) {
@@ -631,8 +644,12 @@ func DownloadSubproblemSolutionPDF(database *db.DB, blobs objectstore.Store, ttl
 			return
 		}
 		q := store.New(database.Pool())
-		s, dueAt, isTeacher, ok := loadSubproblemForRead(ctx, w, r, q, userID, subproblemID)
+		s, dueAt, isTeacher, access, ok := loadSubproblemForRead(ctx, w, r, q, userID, subproblemID)
 		if !ok {
+			return
+		}
+		if !isTeacher && !access.PDFTex {
+			httpx.WriteAPIError(w, r, http.StatusForbidden, httpx.CodeForbidden, "PDF and LaTeX razbor access is disabled")
 			return
 		}
 		if !isTeacher && !solutionReleasedToStudent(s, dueAt, time.Now()) {

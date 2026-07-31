@@ -293,6 +293,103 @@ func TestManage_SetStudentRazborAccess(t *testing.T) {
 	}
 }
 
+func TestManage_ListStudentSeriesRazborAccess(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	expectHeadCheck(mock, 3, 42, true)
+	mock.ExpectQuery(`FROM math_center_students\s+WHERE id = \$1`).
+		WithArgs(int64(11)).
+		WillReturnRows(mock.NewRows(manageStudentColumns).
+			AddRow(int64(11), int64(55), int64(1), now, true))
+	mock.ExpectQuery(`FROM math_center_groups\s+WHERE id = \$1`).
+		WithArgs(int64(1)).
+		WillReturnRows(mock.NewRows(manageGroupColumns).
+			AddRow(int64(1), int64(42), "А", now))
+	mock.ExpectQuery(`FROM math_center_students student[\s\S]*JOIN math_center_series series`).
+		WithArgs(int64(11)).
+		WillReturnRows(mock.NewRows([]string{
+			"series_id", "series_number", "series_name", "can_view_video", "can_view_pdf_tex",
+		}).AddRow(int64(100), int32(3), "Геометрия", true, false))
+
+	req := authedRequest(t, access, 3, http.MethodGet, "/centers/42/manage/students/11/razbor-access", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &rows); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(rows) != 1 || rows[0]["can_view_video"] != true || rows[0]["can_view_pdf_tex"] != false {
+		t.Fatalf("unexpected access matrix: %v", rows)
+	}
+}
+
+func TestManage_SetStudentSeriesRazborAccess(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	expectHeadCheck(mock, 3, 42, true)
+	mock.ExpectQuery(`FROM math_center_students\s+WHERE id = \$1`).
+		WithArgs(int64(11)).
+		WillReturnRows(mock.NewRows(manageStudentColumns).
+			AddRow(int64(11), int64(55), int64(1), now, true))
+	mock.ExpectQuery(`FROM math_center_groups\s+WHERE id = \$1`).
+		WithArgs(int64(1)).
+		WillReturnRows(mock.NewRows(manageGroupColumns).
+			AddRow(int64(1), int64(42), "А", now))
+	mock.ExpectExec(`INSERT INTO math_center_student_series_razbor_access`).
+		WithArgs(int64(11), int64(100), true, false).
+		WillReturnResult(pgxmock.NewResult("INSERT", 1))
+
+	body := strings.NewReader(`{"can_view_video":true,"can_view_pdf_tex":false}`)
+	req := authedRequest(t, access, 3, http.MethodPatch, "/centers/42/manage/students/11/series/100/razbor-access", body)
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("got %d, want 204; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestManage_SetStudentSeriesRazborAccessRejectsForeignSeries(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	expectHeadCheck(mock, 3, 42, true)
+	mock.ExpectQuery(`FROM math_center_students\s+WHERE id = \$1`).
+		WithArgs(int64(11)).
+		WillReturnRows(mock.NewRows(manageStudentColumns).
+			AddRow(int64(11), int64(55), int64(1), now, true))
+	mock.ExpectQuery(`FROM math_center_groups\s+WHERE id = \$1`).
+		WithArgs(int64(1)).
+		WillReturnRows(mock.NewRows(manageGroupColumns).
+			AddRow(int64(1), int64(42), "А", now))
+	mock.ExpectExec(`INSERT INTO math_center_student_series_razbor_access`).
+		WithArgs(int64(11), int64(999), false, false).
+		WillReturnResult(pgxmock.NewResult("INSERT", 0))
+
+	body := strings.NewReader(`{"can_view_video":false,"can_view_pdf_tex":false}`)
+	req := authedRequest(t, access, 3, http.MethodPatch, "/centers/42/manage/students/11/series/999/razbor-access", body)
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("got %d, want 404; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestManage_UserSearch(t *testing.T) {
 	t.Parallel()
 	mock, _ := pgxmock.NewPool()
