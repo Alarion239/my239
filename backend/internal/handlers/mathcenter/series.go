@@ -73,15 +73,16 @@ type updateSeriesRequest struct {
 // coffin / carry a разбор. Solution metadata is populated only on the single-
 // series GET (the list endpoint leaves it zero to keep its query count flat).
 type subproblemView struct {
-	ID              int64      `json:"id"`
-	Label           string     `json:"label"`
-	Display         string     `json:"display"`
-	IsCoffin        bool       `json:"is_coffin"`
-	ReleasedAt      *time.Time `json:"released_at,omitempty"`
-	HasSolutionTex  bool       `json:"has_solution_tex"`
-	HasSolutionPDF  bool       `json:"has_solution_pdf"`
-	SolutionLink    *string    `json:"solution_link,omitempty"`
-	SolutionGroupID *int64     `json:"solution_group_id,omitempty"`
+	ID                  int64      `json:"id"`
+	Label               string     `json:"label"`
+	Display             string     `json:"display"`
+	IsCoffin            bool       `json:"is_coffin"`
+	ReleasedAt          *time.Time `json:"released_at,omitempty"`
+	SolutionPublishedAt *time.Time `json:"solution_published_at,omitempty"`
+	HasSolutionTex      bool       `json:"has_solution_tex"`
+	HasSolutionPDF      bool       `json:"has_solution_pdf"`
+	SolutionLink        *string    `json:"solution_link,omitempty"`
+	SolutionGroupID     *int64     `json:"solution_group_id,omitempty"`
 }
 
 type problemView struct {
@@ -1273,12 +1274,13 @@ func buildSeriesView(ctx context.Context, q *store.Queries, s store.MathCenterSe
 	solByID := make(map[int64]subSolMeta, len(sols))
 	for _, sol := range sols {
 		solByID[sol.SubproblemID] = subSolMeta{
-			IsCoffin:        sol.IsCoffin,
-			ReleasedAt:      sol.ReleasedAt,
-			HasSolutionTex:  sol.HasSolutionTex,
-			HasSolutionPDF:  sol.HasSolutionPdf,
-			SolutionLink:    sol.SolutionLink,
-			SolutionGroupID: sol.SolutionGroupID,
+			IsCoffin:            sol.IsCoffin,
+			ReleasedAt:          sol.ReleasedAt,
+			SolutionPublishedAt: sol.PublishedAt,
+			HasSolutionTex:      sol.HasSolutionTex,
+			HasSolutionPDF:      sol.HasSolutionPdf,
+			SolutionLink:        sol.SolutionLink,
+			SolutionGroupID:     sol.SolutionGroupID,
 		}
 	}
 	bySub := make(map[int64][]subIdent, len(problems))
@@ -1291,12 +1293,13 @@ func buildSeriesView(ctx context.Context, q *store.Queries, s store.MathCenterSe
 // subSolMeta is the per-subproblem разбор/coffin metadata, unifying the single
 // and batched solution-list row types for assembleSeriesView.
 type subSolMeta struct {
-	IsCoffin        bool
-	ReleasedAt      *time.Time
-	HasSolutionTex  bool
-	HasSolutionPDF  bool
-	SolutionLink    *string
-	SolutionGroupID *int64
+	IsCoffin            bool
+	ReleasedAt          *time.Time
+	SolutionPublishedAt *time.Time
+	HasSolutionTex      bool
+	HasSolutionPDF      bool
+	SolutionLink        *string
+	SolutionGroupID     *int64
 }
 
 // buildSeriesViews builds views for a set of series with a fixed two queries
@@ -1328,12 +1331,13 @@ func buildSeriesViews(ctx context.Context, q *store.Queries, series []store.Math
 	solByID := make(map[int64]subSolMeta, len(sols))
 	for _, sol := range sols {
 		solByID[sol.SubproblemID] = subSolMeta{
-			IsCoffin:        sol.IsCoffin,
-			ReleasedAt:      sol.ReleasedAt,
-			HasSolutionTex:  sol.HasSolutionTex,
-			HasSolutionPDF:  sol.HasSolutionPdf,
-			SolutionLink:    sol.SolutionLink,
-			SolutionGroupID: sol.SolutionGroupID,
+			IsCoffin:            sol.IsCoffin,
+			ReleasedAt:          sol.ReleasedAt,
+			SolutionPublishedAt: sol.PublishedAt,
+			HasSolutionTex:      sol.HasSolutionTex,
+			HasSolutionPDF:      sol.HasSolutionPdf,
+			SolutionLink:        sol.SolutionLink,
+			SolutionGroupID:     sol.SolutionGroupID,
 		}
 	}
 
@@ -1370,6 +1374,7 @@ func assembleSeriesView(s store.MathCenterSeries, problems []store.MathCenterPro
 			if sol, ok := solByID[sub.ID]; ok {
 				sv.IsCoffin = sol.IsCoffin
 				sv.ReleasedAt = sol.ReleasedAt
+				sv.SolutionPublishedAt = sol.SolutionPublishedAt
 				sv.HasSolutionTex = sol.HasSolutionTex
 				sv.HasSolutionPDF = sol.HasSolutionPDF
 				sv.SolutionLink = sol.SolutionLink
@@ -1413,6 +1418,25 @@ func restrictSeriesRazbors(view *seriesView, access razborAccess) {
 	for problemIndex := range view.Problems {
 		for subproblemIndex := range view.Problems[problemIndex].Subproblems {
 			sub := &view.Problems[problemIndex].Subproblems[subproblemIndex]
+			// Ordinary razbors remain hidden until the existing series deadline,
+			// even when a teacher has already published the draft.
+			if !sub.IsCoffin && time.Now().Before(view.DueAt) {
+				sub.HasSolutionTex = false
+				sub.HasSolutionPDF = false
+				sub.SolutionLink = nil
+				sub.SolutionGroupID = nil
+				continue
+			}
+			// Draft material is teacher-only regardless of the student's format
+			// access or the series deadline. Keep the coffin marker itself visible
+			// so students can still understand the submission state.
+			if sub.SolutionPublishedAt == nil {
+				sub.HasSolutionTex = false
+				sub.HasSolutionPDF = false
+				sub.SolutionLink = nil
+				sub.SolutionGroupID = nil
+				continue
+			}
 			if sub.IsCoffin {
 				released := sub.ReleasedAt != nil && !time.Now().Before(*sub.ReleasedAt)
 				if !released {

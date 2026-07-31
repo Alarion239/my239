@@ -32,7 +32,7 @@ var seriesColumns = []string{
 // buildSeriesView issues to merge per-subproblem разбор/coffin metadata.
 var subproblemSolutionMetaColumns = []string{
 	"subproblem_id", "problem_id", "is_coffin", "released_at",
-	"has_solution_tex", "has_solution_pdf", "solution_link", "solution_group_id",
+	"published_at", "has_solution_tex", "has_solution_pdf", "solution_link", "solution_group_id",
 }
 
 var (
@@ -769,7 +769,7 @@ func TestListSeries_StudentCanSeeVideoWithoutPDFOrTex(t *testing.T) {
 	mock.ExpectQuery(`FROM math_center_series s\s+WHERE s.math_center_id = \$1.*s.published_at IS NOT NULL`).
 		WithArgs(int64(42)).
 		WillReturnRows(mock.NewRows(seriesColumns).
-			AddRow(int64(100), int64(42), int32(1), "Опубликованная", now.Add(time.Hour), (*string)(nil), &publishedAt, now, (*string)(nil)))
+			AddRow(int64(100), int64(42), int32(1), "Опубликованная", now.Add(-time.Hour), (*string)(nil), &publishedAt, now, (*string)(nil)))
 	mock.ExpectQuery(`SELECT .* FROM math_center_problems WHERE series_id = ANY`).
 		WithArgs([]int64{100}).
 		WillReturnRows(mock.NewRows(problemColumns).
@@ -781,7 +781,7 @@ func TestListSeries_StudentCanSeeVideoWithoutPDFOrTex(t *testing.T) {
 	mock.ExpectQuery(`FROM math_center_subproblem_solutions ss`).
 		WithArgs([]int64{100}).
 		WillReturnRows(mock.NewRows(subproblemSolutionMetaColumns).
-			AddRow(int64(900), int64(500), false, (*time.Time)(nil), true, true, &link, ptrInt64(8)))
+			AddRow(int64(900), int64(500), false, (*time.Time)(nil), &now, true, true, &link, ptrInt64(8)))
 	mock.ExpectQuery(`SELECT series.id AS series_id`).
 		WithArgs(int64(7), int64(42)).
 		WillReturnRows(mock.NewRows([]string{

@@ -176,6 +176,7 @@ type MathCenterSubproblemSolution struct {
 	CreatedAt            time.Time  `json:"created_at"`
 	UpdatedAt            time.Time  `json:"updated_at"`
 	SolutionGroupID      *int64     `json:"solution_group_id"`
+	PublishedAt          *time.Time `json:"published_at"`
 }
 
 type MathCenterTeacher struct {

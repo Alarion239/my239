@@ -15,7 +15,7 @@ import (
 var subproblemSolutionColumns = []string{
 	"id", "subproblem_id", "is_coffin", "released_at",
 	"solution_tex_source", "solution_pdf_object_key", "solution_link",
-	"created_at", "updated_at", "solution_group_id",
+	"created_at", "updated_at", "solution_group_id", "published_at",
 }
 
 // GetSubproblemSolutionCenter resolution row (subproblem → problem → series → center).
@@ -46,7 +46,7 @@ func TestMarkCoffin_AdminSucceeds(t *testing.T) {
 	mock.ExpectQuery(`INSERT INTO math_center_subproblem_solutions`).
 		WithArgs(int64(900), true).
 		WillReturnRows(mock.NewRows(subproblemSolutionColumns).
-			AddRow(int64(9), int64(900), true, (*time.Time)(nil), (*string)(nil), (*string)(nil), (*string)(nil), now, now, (*int64)(nil)))
+			AddRow(int64(9), int64(900), true, (*time.Time)(nil), (*string)(nil), (*string)(nil), (*string)(nil), now, now, (*int64)(nil), (*time.Time)(nil)))
 
 	req := authedAdminRequest(t, access, 1, http.MethodPost, "/subproblems/900/coffin", nil)
 	rr := httptest.NewRecorder()
@@ -91,11 +91,11 @@ func TestPutSubproblemSolutionTex_AdminClosesCoffin(t *testing.T) {
 	tex := `\documentclass{article}\begin{document}Разбор\end{document}`
 	expectSubproblemCenter(mock, 900, 42, "b", 5, now)
 	mock.ExpectQuery(
-		`DO UPDATE SET solution_tex_source = EXCLUDED.solution_tex_source,[\s\S]*released_at = CASE`,
+		`DO UPDATE SET solution_tex_source = EXCLUDED.solution_tex_source,[\s\S]*updated_at = NOW`,
 	).
 		WithArgs(int64(900), pgxmock.AnyArg()).
 		WillReturnRows(mock.NewRows(subproblemSolutionColumns).
-			AddRow(int64(9), int64(900), true, &now, &tex, (*string)(nil), (*string)(nil), now, now, (*int64)(nil)))
+			AddRow(int64(9), int64(900), true, (*time.Time)(nil), &tex, (*string)(nil), (*string)(nil), now, now, (*int64)(nil), (*time.Time)(nil)))
 
 	body, _ := json.Marshal(map[string]string{"tex": tex})
 	req := authedAdminRequest(t, access, 1, http.MethodPut, "/subproblems/900/solution/tex", bytes.NewReader(body))
@@ -107,8 +107,8 @@ func TestPutSubproblemSolutionTex_AdminClosesCoffin(t *testing.T) {
 	}
 	var resp map[string]any
 	_ = json.Unmarshal(rr.Body.Bytes(), &resp)
-	if resp["released_at"] == nil {
-		t.Errorf("expected posting the разбор to release the coffin, got %v", resp)
+	if resp["released_at"] != nil {
+		t.Errorf("saving a draft must not release the coffin, got %v", resp)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("unfulfilled expectations: %v", err)
@@ -146,7 +146,7 @@ func TestRestrictedStudentCannotReadPDFOrTex(t *testing.T) {
 			mock.ExpectQuery(`FROM math_center_subproblem_solutions`).
 				WithArgs(int64(900)).
 				WillReturnRows(mock.NewRows(subproblemSolutionColumns).
-					AddRow(int64(9), int64(900), false, (*time.Time)(nil), ptrString("private"), ptrString("private.pdf"), ptrString("https://example.com/video"), now, now, (*int64)(nil)))
+					AddRow(int64(9), int64(900), false, (*time.Time)(nil), ptrString("private"), ptrString("private.pdf"), ptrString("https://example.com/video"), now, now, (*int64)(nil), (*time.Time)(nil)))
 
 			req := authedRequest(t, access, 7, http.MethodGet, test.path, nil)
 			rr := httptest.NewRecorder()
@@ -200,6 +200,7 @@ func TestAssignSolutionGroup_AdminSucceeds(t *testing.T) {
 	now := time.Now()
 	// Authorize via the first subproblem's center.
 	expectSubproblemCenter(mock, 900, 42, "a", 5, now)
+	expectSubproblemCenter(mock, 901, 42, "b", 5, now)
 	// Mint a group, then assign it to the whole set.
 	mock.ExpectQuery(`INSERT INTO math_center_solution_groups`).
 		WillReturnRows(mock.NewRows([]string{"id"}).AddRow(int64(7)))
@@ -241,6 +242,58 @@ func TestAssignSolutionGroup_EmptyRejected(t *testing.T) {
 	}
 }
 
+func TestPublishSubproblemSolutions_PublishesAtomicallyAndReleasesCoffins(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`FOR UPDATE OF ss`).
+		WithArgs([]int64{900, 901}).
+		WillReturnRows(mock.NewRows([]string{
+			"subproblem_id", "math_center_id", "series_id", "is_coffin", "has_material", "solution_group_id",
+		}).
+			AddRow(int64(900), int64(42), int64(100), true, true, (*int64)(nil)).
+			AddRow(int64(901), int64(42), int64(100), false, true, (*int64)(nil)))
+	mock.ExpectQuery(`INSERT INTO math_center_solution_groups`).
+		WillReturnRows(mock.NewRows([]string{"id"}).AddRow(int64(77)))
+	mock.ExpectExec(`UPDATE math_center_subproblem_solutions\s+SET solution_group_id`).
+		WithArgs(int64(77), []int64{900, 901}).
+		WillReturnResult(pgxmock.NewResult("UPDATE", 2))
+	mock.ExpectQuery(`UPDATE math_center_subproblem_solutions\s+SET published_at`).
+		WithArgs([]int64{900, 901}, pgxmock.AnyArg()).
+		WillReturnRows(mock.NewRows([]string{"subproblem_id", "is_coffin", "published_at"}).
+			AddRow(int64(900), true, time.Now()).
+			AddRow(int64(901), false, time.Now()))
+	mock.ExpectCommit()
+
+	body, _ := json.Marshal(map[string]any{"subproblem_ids": []int64{901, 900, 900}})
+	req := authedAdminRequest(t, access, 1, http.MethodPost, "/subproblem-solutions/publish", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	var resp struct {
+		SubproblemIDs     []int64 `json:"subproblem_ids"`
+		ReleasedCoffinIDs []int64 `json:"released_coffin_ids"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.SubproblemIDs) != 2 || resp.SubproblemIDs[0] != 900 || resp.SubproblemIDs[1] != 901 {
+		t.Fatalf("unexpected published ids: %#v", resp.SubproblemIDs)
+	}
+	if len(resp.ReleasedCoffinIDs) != 1 || resp.ReleasedCoffinIDs[0] != 900 {
+		t.Fatalf("unexpected released coffin ids: %#v", resp.ReleasedCoffinIDs)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unfulfilled expectations: %v", err)
+	}
+}
+
 func TestListCenterCoffins_AdminReturnsRows(t *testing.T) {
 	t.Parallel()
 	mock, _ := pgxmock.NewPool()
@@ -251,12 +304,12 @@ func TestListCenterCoffins_AdminReturnsRows(t *testing.T) {
 	mock.ExpectQuery(`FROM math_center_subproblem_solutions ss\s+JOIN math_center_subproblems`).
 		WithArgs(int64(42)).
 		WillReturnRows(mock.NewRows([]string{
-			"subproblem_id", "is_coffin", "released_at", "solution_tex_source",
+			"subproblem_id", "is_coffin", "released_at", "published_at", "solution_tex_source",
 			"solution_pdf_object_key", "solution_link", "created_at",
 			"subproblem_label", "problem_id", "problem_number",
 			"series_id", "series_number", "series_name", "series_due_at", "math_center_id",
 		}).
-			AddRow(int64(901), true, (*time.Time)(nil), (*string)(nil), (*string)(nil), (*string)(nil), now,
+			AddRow(int64(901), true, (*time.Time)(nil), (*time.Time)(nil), (*string)(nil), (*string)(nil), (*string)(nil), now,
 				"b", int64(500), int32(4), int64(100), int32(2), "Геометрия", now, int64(42)))
 	// Teachers (admin) also get the per-coffin solved counts.
 	mock.ExpectQuery(`FROM math_center_subproblem_solutions ss\s+JOIN math_center_subproblems sp[\s\S]*GROUP BY`).
@@ -306,12 +359,12 @@ func TestListCenterCoffins_RestrictedStudentDoesNotReceiveSolutionMetadata(t *te
 	mock.ExpectQuery(`FROM math_center_subproblem_solutions ss\s+JOIN math_center_subproblems`).
 		WithArgs(int64(42)).
 		WillReturnRows(mock.NewRows([]string{
-			"subproblem_id", "is_coffin", "released_at", "solution_tex_source",
+			"subproblem_id", "is_coffin", "released_at", "published_at", "solution_tex_source",
 			"solution_pdf_object_key", "solution_link", "created_at",
 			"subproblem_label", "problem_id", "problem_number",
 			"series_id", "series_number", "series_name", "series_due_at", "math_center_id",
 		}).
-			AddRow(int64(901), true, &releasedAt, &tex, &key, &link, now,
+			AddRow(int64(901), true, &releasedAt, &releasedAt, &tex, &key, &link, now,
 				"b", int64(500), int32(4), int64(100), int32(2), "Геометрия", now, int64(42)))
 	mock.ExpectQuery(`FROM math_center_subproblem_solutions ss[\s\S]*LEFT JOIN homework_thread`).
 		WithArgs(int64(42), int64(7)).
@@ -357,13 +410,13 @@ func TestListCenterCoffins_ArchiveUsesOnlySelectedTerm(t *testing.T) {
 	mock.ExpectQuery(`FROM math_center_subproblem_solutions ss\s+JOIN math_center_subproblems`).
 		WithArgs(int64(42), int64(70), false).
 		WillReturnRows(mock.NewRows([]string{
-			"subproblem_id", "is_coffin", "released_at", "solution_tex_source",
+			"subproblem_id", "is_coffin", "released_at", "published_at", "solution_tex_source",
 			"solution_pdf_object_key", "solution_link", "created_at",
 			"subproblem_label", "problem_id", "problem_number",
 			"series_id", "series_number", "series_name", "series_due_at", "math_center_id",
 			"term_id", "term_kind", "term_grade",
 		}).
-			AddRow(int64(901), true, (*time.Time)(nil), (*string)(nil), (*string)(nil), (*string)(nil), now,
+			AddRow(int64(901), true, (*time.Time)(nil), (*time.Time)(nil), (*string)(nil), (*string)(nil), (*string)(nil), now,
 				"b", int64(500), int32(4), int64(100), int32(2), "Геометрия", now, int64(42),
 				int64(70), "academic", (*int32)(nil)))
 	mock.ExpectQuery(`FROM math_center_subproblem_solutions ss\s+JOIN math_center_subproblems sp[\s\S]*GROUP BY`).
@@ -402,13 +455,13 @@ func TestListCenterCoffins_CurrentTermIncludesCarriedOpenCoffins(t *testing.T) {
 	mock.ExpectQuery(`FROM math_center_subproblem_solutions ss\s+JOIN math_center_subproblems`).
 		WithArgs(int64(42), int64(71), true).
 		WillReturnRows(mock.NewRows([]string{
-			"subproblem_id", "is_coffin", "released_at", "solution_tex_source",
+			"subproblem_id", "is_coffin", "released_at", "published_at", "solution_tex_source",
 			"solution_pdf_object_key", "solution_link", "created_at",
 			"subproblem_label", "problem_id", "problem_number",
 			"series_id", "series_number", "series_name", "series_due_at", "math_center_id",
 			"term_id", "term_kind", "term_grade",
 		}).
-			AddRow(int64(901), true, (*time.Time)(nil), (*string)(nil), (*string)(nil), (*string)(nil), now,
+			AddRow(int64(901), true, (*time.Time)(nil), (*time.Time)(nil), (*string)(nil), (*string)(nil), (*string)(nil), now,
 				"b", int64(500), int32(4), int64(100), int32(2), "Архивная серия", now, int64(42),
 				int64(70), "academic", (*int32)(nil)))
 	mock.ExpectQuery(`FROM math_center_subproblem_solutions ss\s+JOIN math_center_subproblems sp[\s\S]*GROUP BY`).

@@ -6,9 +6,9 @@ import { cn } from '../../design/cn'
 import { TexViewer } from './tex-viewer'
 import { PdfViewer } from './pdf-viewer'
 
-type Fmt = 'tex' | 'pdf' | 'link'
+export type Fmt = 'tex' | 'pdf' | 'link'
 
-const FMT_LABEL: Record<Fmt, string> = { tex: 'TeX', pdf: 'PDF', link: 'Видео' }
+const FMT_LABEL: Record<Fmt, string> = { tex: 'LaTeX', pdf: 'PDF', link: 'Видео' }
 
 export interface SolutionContentProps {
   hasTex: boolean
@@ -131,7 +131,7 @@ function FormatToggle({
   onChange: (f: Fmt) => void
 }) {
   return (
-    <div className="inline-flex self-start rounded-full border border-line bg-surface-muted p-0.5" role="group" aria-label="Формат разбора">
+    <div className="inline-flex self-start rounded-lg border border-line bg-surface-muted p-0.5" role="tablist" aria-label="Формат разбора">
       {formats.map((f) => (
         <Pill key={f} active={value === f} onClick={() => onChange(f)}>
           {FMT_LABEL[f]}
@@ -145,6 +145,8 @@ function Pill({ active, onClick, children }: { active: boolean; onClick: () => v
   return (
     <button
       type="button"
+      role="tab"
+      aria-selected={active}
       aria-pressed={active}
       onClick={onClick}
       className={cn(

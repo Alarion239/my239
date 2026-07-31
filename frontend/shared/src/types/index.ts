@@ -459,6 +459,7 @@ export interface Subproblem {
   display: string
   is_coffin: boolean
   released_at?: string | null
+  solution_published_at?: string | null
   has_solution_tex: boolean
   has_solution_pdf: boolean
   solution_link?: string | null
@@ -697,6 +698,7 @@ export interface Coffin {
   term_grade?: number | null
   is_coffin: boolean
   released_at?: string | null
+  solution_published_at?: string | null
   has_solution_tex: boolean
   has_solution_pdf: boolean
   solution_link?: string | null

@@ -1,8 +1,9 @@
-import { useId, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Skull, X } from 'lucide-react'
 import {
   useMarkCoffin,
+  usePublishSubproblemSolutionsBatch,
   usePutSubproblemSolutionTexBatch,
   useSetSubproblemSolutionLinkBatch,
   useSubproblemSolutionTex,
@@ -14,7 +15,6 @@ import {
   type Series,
 } from '@my239/shared'
 import {
-  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -23,12 +23,15 @@ import {
   DropdownMenuTrigger,
 } from '../../design/ui'
 import { cn } from '../../design/cn'
-import { SolutionContent } from './solution-content'
-import { SolutionEditor } from './solution-editor'
+import { SolutionWorkbench, type SolutionWorkbenchMode } from './solution-editor'
 
 // hasRazbor reports whether a subproblem already carries an official разбор.
 function hasRazbor(meta: Subproblem | undefined): boolean {
   return !!(meta && (meta.has_solution_tex || meta.has_solution_pdf || meta.solution_link))
+}
+
+function isPublished(meta: Subproblem | undefined): boolean {
+  return !!meta?.solution_published_at
 }
 
 function sharesRazbor(
@@ -39,6 +42,15 @@ function sharesRazbor(
   return first.solution_group_id != null
     ? first.solution_group_id === second.solution_group_id
     : first.id === second.id
+}
+
+function solutionIds(id: number, metaById: Map<number, Subproblem>): number[] {
+  const selected = metaById.get(id)
+  if (!selected) return [id]
+  if (selected.solution_group_id == null) return [id]
+  return [...metaById.entries()]
+    .filter(([, meta]) => meta.solution_group_id === selected.solution_group_id)
+    .map(([subproblemId]) => subproblemId)
 }
 
 // Each segment maps a stat field to its status colour token + Russian label.
@@ -101,13 +113,24 @@ export function TeacherProblemStats({
   //  - has a разбор  → preview it in the left panel (master-detail).
   //  - no разбор yet → select it for a shared batch разбор.
   const [selected, setSelected] = useState<Set<number>>(new Set())
-  const [previewId, setPreviewId] = useState<number | null>(null)
+  const [panel, setPanel] = useState<{
+    mode: SolutionWorkbenchMode
+    representativeId: number
+    subproblemIds: number[]
+  } | null>(null)
+  const originId = useRef<number | null>(null)
 
   const press = (id: number) => {
+    // An edit target is frozen until the workbench closes. This prevents a
+    // second row click from silently retargeting a dirty/shared draft.
+    if (panel?.mode === 'edit') return
+    originId.current = id
     const pressed = metaById.get(id)
     if (hasRazbor(pressed)) {
-      setPreviewId((cur) =>
-        cur != null && sharesRazbor(metaById.get(cur), pressed) ? null : id,
+      setPanel((cur) =>
+        cur?.mode === 'view' && sharesRazbor(metaById.get(cur.representativeId), pressed)
+          ? null
+          : { mode: 'view', representativeId: id, subproblemIds: solutionIds(id, metaById) },
       )
     } else {
       setSelected((prev) => {
@@ -126,30 +149,19 @@ export function TeacherProblemStats({
   const selectedIds = stats.problems
     .map((p) => p.subproblem_id)
     .filter((id) => selected.has(id))
-  const previewSub =
-    previewId != null && hasRazbor(metaById.get(previewId))
-      ? metaById.get(previewId)
-      : undefined
+  const previewSub = panel != null ? metaById.get(panel.representativeId) : undefined
   // A shared разбор is one selectable unit: pressing any covered problem
   // previews that source and lights up every sibling in the same group.
-  const previewIds = new Set<number>()
-  if (previewSub) {
-    if (previewSub.solution_group_id != null) {
-      for (const [id, meta] of metaById) {
-        if (meta.solution_group_id === previewSub.solution_group_id) {
-          previewIds.add(id)
-        }
-      }
-    } else {
-      previewIds.add(previewSub.id)
-    }
-  }
+  const previewIds = new Set(panel?.subproblemIds ?? [])
   const batchAction =
     selectedIds.length > 0 ? (
       <BatchRazborBar
-        centerId={centerId}
         subproblemIds={selectedIds}
-        onClear={() => setSelected(new Set())}
+        onOpen={() => {
+          originId.current = selectedIds[0]
+          setPanel({ mode: 'edit', representativeId: selectedIds[0], subproblemIds: selectedIds })
+        }}
+        onClear={() => { setSelected(new Set()); setPanel(null) }}
       />
     ) : null
 
@@ -166,12 +178,19 @@ export function TeacherProblemStats({
         )}
       >
         <div className="md:pr-4">
-          {previewSub ? (
+          {previewSub && panel ? (
             <RazborPreview
               centerId={centerId}
               sub={previewSub}
-              subproblemIds={[...previewIds]}
-              onClose={() => setPreviewId(null)}
+              subproblemIds={panel.subproblemIds}
+              mode={panel.mode}
+              onModeChange={(mode) => setPanel({ ...panel, mode })}
+              onClose={() => {
+                setPanel(null)
+                setSelected(new Set())
+                const id = originId.current
+                if (id != null) requestAnimationFrame(() => document.getElementById('subproblem-row-' + id)?.focus())
+              }}
             />
           ) : null}
         </div>
@@ -203,69 +222,48 @@ export function TeacherProblemStats({
   )
 }
 
-// RazborPreview shows the official разбор of a solved problem on the left, with
-// a «Редактировать» action (edit it in place) and a close button.
+// RazborPreview is the left-hand shared view/edit workbench. The same panel is
+// used for a saved razbor and for a fresh multi-problem draft.
 function RazborPreview({
   centerId,
   sub,
   subproblemIds,
+  mode,
+  onModeChange,
   onClose,
 }: {
   centerId: number
   sub: Subproblem
   subproblemIds: number[]
+  mode: SolutionWorkbenchMode
+  onModeChange: (mode: SolutionWorkbenchMode) => void
   onClose: () => void
 }) {
-  const texQuery = useSubproblemSolutionTex(sub.id, sub.has_solution_tex)
+  const texQuery = useSubproblemSolutionTex(sub.id, sub.has_solution_tex || mode === 'edit')
   const putTex = usePutSubproblemSolutionTexBatch(centerId)
   const uploadPdf = useUploadSubproblemSolutionPdfBatch(centerId)
   const setLink = useSetSubproblemSolutionLinkBatch(centerId)
+  const publish = usePublishSubproblemSolutionsBatch(centerId)
   return (
-    <div className="animate-rise rounded-xl border border-accent/40 bg-surface p-4">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="font-display text-lg font-medium text-ink">
-          {sub.display}
-        </h3>
-        <div className="flex items-center gap-2">
-          <SolutionEditor
-            title={'Редактировать разбор · ' + sub.display}
-            hasTex={sub.has_solution_tex}
-            hasPdf={sub.has_solution_pdf}
-            link={sub.solution_link}
-            initialTex={texQuery.data?.tex}
-            onPutTex={(tex) => putTex.mutateAsync({ subproblemIds, tex })}
-            onUploadPdf={(file) =>
-              uploadPdf.mutateAsync({ subproblemIds, file })
-            }
-            onSetLink={(link) =>
-              setLink.mutateAsync({ subproblemIds, link })
-            }
-            closeOnSave
-            trigger={
-              <Button type="button" size="sm" variant="secondary">
-                Редактировать
-              </Button>
-            }
-          />
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            aria-label="Скрыть разбор"
-            onClick={onClose}
-          >
-            <X className="h-4 w-4" aria-hidden />
-          </Button>
-        </div>
-      </div>
-      <SolutionContent
-        hasTex={sub.has_solution_tex}
-        hasPdf={sub.has_solution_pdf}
-        link={sub.solution_link}
-        pdfPath={'/mathcenter/subproblems/' + sub.id + '/solution/pdf'}
-        texQuery={texQuery}
-      />
-    </div>
+    <SolutionWorkbench
+      title={subproblemIds.length > 1 ? 'Общий разбор · ' + sub.display : sub.display}
+      targetDescription={subproblemIds.length > 1 ? 'Задачи: ' + subproblemIds.length : undefined}
+      mode={mode}
+      hasTex={sub.has_solution_tex}
+      hasPdf={sub.has_solution_pdf}
+      link={sub.solution_link}
+      publishedAt={sub.solution_published_at}
+      centerId={centerId}
+      pdfPath={'/mathcenter/subproblems/' + sub.id + '/solution/pdf'}
+      initialTex={texQuery.data?.tex}
+      texQuery={texQuery}
+      onModeChange={onModeChange}
+      onPutTex={(tex) => putTex.mutateAsync({ subproblemIds, tex })}
+      onUploadPdf={(file) => uploadPdf.mutateAsync({ subproblemIds, file })}
+      onSetLink={(link) => setLink.mutateAsync({ subproblemIds, link })}
+      onPublish={() => publish.mutateAsync(subproblemIds)}
+      onClose={onClose}
+    />
   )
 }
 
@@ -277,42 +275,26 @@ function taskGenitive(count: number): 'задачи' | 'задач' {
 }
 
 function BatchRazborBar({
-  centerId,
   subproblemIds,
+  onOpen,
   onClear,
 }: {
-  centerId: number
   subproblemIds: number[]
+  onOpen: () => void
   onClear: () => void
 }) {
-  const putTex = usePutSubproblemSolutionTexBatch(centerId)
-  const uploadPdf = useUploadSubproblemSolutionPdfBatch(centerId)
-  const setLink = useSetSubproblemSolutionLinkBatch(centerId)
-
   if (subproblemIds.length === 0) return null
 
   return (
     <div className="relative ml-1 inline-flex items-center">
-      <SolutionEditor
-        title={'Общий разбор для выбранных (' + subproblemIds.length + ')'}
-        hasTex={false}
-        hasPdf={false}
-        link={null}
-        onPutTex={(tex) => putTex.mutateAsync({ subproblemIds, tex })}
-        onUploadPdf={(file) => uploadPdf.mutateAsync({ subproblemIds, file })}
-        onSetLink={(link) => setLink.mutateAsync({ subproblemIds, link })}
-        closeOnSave
-        onSaved={onClear}
-        trigger={
-          <button
-            type="button"
-            className="whitespace-nowrap rounded-xl border border-line bg-surface px-3 py-2 pr-10 text-sm font-medium text-ink transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-          >
-            Прикрепить разбор {subproblemIds.length}{' '}
-            {taskGenitive(subproblemIds.length)}
-          </button>
-        }
-      />
+      <button
+        type="button"
+        onClick={onOpen}
+        className="whitespace-nowrap rounded-xl border border-line bg-surface px-3 py-2 pr-10 text-sm font-medium text-ink transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      >
+        Прикрепить разбор {subproblemIds.length}{' '}
+        {taskGenitive(subproblemIds.length)}
+      </button>
       <button
         type="button"
         onClick={onClear}
@@ -347,6 +329,7 @@ function ProblemStatRow({
     stat.accepted + stat.submitted + stat.rejected + stat.appealed + stat.unsolved
   const isCoffin = meta?.is_coffin ?? false
   const hasSolution = hasRazbor(meta)
+  const published = isPublished(meta)
   const distributionLabel = SEGMENTS.map(
     (seg) => seg.label + ' — ' + stat[seg.key],
   ).join('; ')
@@ -356,6 +339,7 @@ function ProblemStatRow({
   // also trigger the press.
   return (
     <div
+      id={'subproblem-row-' + stat.subproblem_id}
       role="button"
       tabIndex={0}
       aria-pressed={active}
@@ -367,17 +351,13 @@ function ProblemStatRow({
         }
       }}
       className={cn(
-        'cursor-pointer rounded-xl border bg-surface px-3 py-2.5 transition-colors',
+        'cursor-pointer rounded-xl border border-line px-3 py-2.5 transition-colors',
         'hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-        // A green frame marks a subproblem that already has a разбор, and stays
-        // visible while it's being previewed (the accent ring layers on top).
-        hasSolution
-          ? 'border-status-accepted'
-          : isCoffin
-            ? 'border-status-checking'
-            : active
-              ? 'border-accent'
-              : 'border-line',
+        published
+          ? 'bg-status-accepted-soft'
+          : hasSolution
+            ? 'bg-surface-muted'
+            : 'bg-surface',
         active ? 'ring-2 ring-accent/50' : '',
       )}
     >
@@ -433,20 +413,20 @@ function ProblemStatRow({
           role="presentation"
         >
           {hasSolution ? (
-            <span className="hidden text-xs font-medium text-status-accepted sm:inline">
-              Разбор ✓
+            <span className={cn('hidden text-xs font-medium sm:inline', published ? 'text-status-accepted' : 'text-muted')}>
+              {published ? 'Разбор ✓' : 'Черновик'}
             </span>
           ) : null}
-          {/* Coffin marking is for problems WITHOUT a разбор yet. */}
-          {!hasSolution ? (
-            <CoffinBadge
-              problemDisplay={subStatLabel(stat)}
-              isCoffin={isCoffin}
-              busy={busy}
-              onMark={onMark}
-              onUnmark={onUnmark}
-            />
-          ) : null}
+          {/* Keep the existing coffin status control visible even after the
+              razbor is published; publication changes the razbor background,
+              not the coffin's own status affordance. */}
+          <CoffinBadge
+            problemDisplay={subStatLabel(stat)}
+            isCoffin={isCoffin}
+            busy={busy}
+            onMark={onMark}
+            onUnmark={onUnmark}
+          />
         </div>
       </div>
     </div>
