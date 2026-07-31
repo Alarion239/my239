@@ -292,7 +292,7 @@ function BatchRazborBar({
   if (subproblemIds.length === 0) return null
 
   return (
-    <div className="inline-flex items-center rounded-full border border-line bg-surface-muted p-0.5">
+    <div className="relative ml-1 inline-flex items-center">
       <SolutionEditor
         title={'Общий разбор для выбранных (' + subproblemIds.length + ')'}
         hasTex={false}
@@ -306,7 +306,7 @@ function BatchRazborBar({
         trigger={
           <button
             type="button"
-            className="whitespace-nowrap rounded-full bg-accent-soft px-3 py-1 text-sm font-medium text-accent-ink transition-colors hover:bg-accent/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            className="whitespace-nowrap rounded-xl border border-line bg-surface px-3 py-2 pr-10 text-sm font-medium text-ink transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           >
             Прикрепить разбор {subproblemIds.length}{' '}
             {taskGenitive(subproblemIds.length)}
@@ -318,7 +318,7 @@ function BatchRazborBar({
         onClick={onClear}
         aria-label="Снять выбор задач"
         title="Снять выбор задач"
-        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        className="absolute right-1 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
       >
         <X className="h-4 w-4" aria-hidden />
       </button>

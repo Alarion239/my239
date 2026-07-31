@@ -149,7 +149,7 @@ describe('TeacherProblemStats — разбор frame', () => {
     expect(rowWithout.className).not.toContain('border-status-accepted')
   })
 
-  it('shows the compact batch action after selecting a problem', async () => {
+  it('shows a neutral single-card batch action after selecting a problem', async () => {
     renderStats()
     const user = userEvent.setup()
     const bar = screen.getByRole('img', { name: /по задаче Задача 1 \(б\)/ })
@@ -160,9 +160,10 @@ describe('TeacherProblemStats — разбор frame', () => {
       name: 'Прикрепить разбор 1 задачи',
     })
     const clear = screen.getByRole('button', { name: 'Снять выбор задач' })
-    expect(attach.parentElement).toHaveClass('rounded-full', 'p-0.5')
-    expect(attach).toHaveClass('rounded-full', 'py-1')
-    expect(clear).toHaveClass('h-7', 'w-7', 'rounded-full')
+    expect(attach).toHaveClass('rounded-xl', 'border-line', 'bg-surface', 'text-ink')
+    expect(attach).not.toHaveClass('bg-accent-soft', 'text-accent-ink')
+    expect(attach.parentElement).toHaveClass('ml-1')
+    expect(clear).toHaveClass('h-7', 'w-7', 'rounded-lg')
     expect(screen.queryByText('Выбрано подзадач: 1')).not.toBeInTheDocument()
 
     await user.click(
@@ -173,6 +174,27 @@ describe('TeacherProblemStats — разбор frame', () => {
     expect(
       screen.getByRole('button', { name: 'Прикрепить разбор 2 задач' }),
     ).toBeInTheDocument()
+  })
+
+  it('opens from the card and keeps the close control outside the trigger', async () => {
+    renderStats()
+    const user = userEvent.setup()
+    await user.click(
+      screen
+        .getByRole('img', { name: /по задаче Задача 1 \(б\)/ })
+        .closest('[role="button"]') as HTMLElement,
+    )
+
+    const attach = screen.getByRole('button', {
+      name: 'Прикрепить разбор 1 задачи',
+    })
+    await user.click(attach)
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Закрыть' }))
+    await user.click(screen.getByRole('button', { name: 'Снять выбор задач' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Прикрепить разбор 1 задачи' })).not.toBeInTheDocument()
   })
 
   it('highlights every problem covered by the selected shared разбор', async () => {
