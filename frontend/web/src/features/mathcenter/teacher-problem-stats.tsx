@@ -15,6 +15,7 @@ import {
   type Series,
 } from '@my239/shared'
 import {
+  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -144,21 +145,29 @@ export function TeacherProblemStats({
   } | null>(null)
   const originId = useRef<number | null>(null)
 
+  const addToDraft = (id: number) => {
+    if (panel?.mode !== 'edit' || panel.subproblemIds.includes(id)) return
+    const pressed = metaById.get(id)
+    const nextIds = [...panel.subproblemIds, id]
+    setReplaceWarningId(null)
+    setPanel({ ...panel, subproblemIds: nextIds })
+    // Re-group immediately so the target no longer belongs to its previous
+    // shared group. The content itself is still saved by the workbench.
+    if (hasRazbor(pressed)) group.mutate(nextIds)
+  }
+
   const press = (id: number) => {
     originId.current = id
     const pressed = metaById.get(id)
     if (panel?.mode === 'edit') {
       if (panel.subproblemIds.includes(id)) return
-      if (hasRazbor(pressed) && replaceWarningId !== id) {
-        setReplaceWarningId(id)
+      if (hasRazbor(pressed)) {
+        // The warning row is dismissible. The explicit action inside it is
+        // the only path that moves a problem out of its previous group.
+        setReplaceWarningId((current) => current === id ? null : id)
         return
       }
-      const nextIds = [...panel.subproblemIds, id]
-      setReplaceWarningId(null)
-      setPanel({ ...panel, subproblemIds: nextIds })
-      // Re-group immediately so the target no longer belongs to its previous
-      // shared group. The content itself is still saved by the workbench.
-      if (hasRazbor(pressed)) group.mutate(nextIds)
+      addToDraft(id)
       return
     }
 
@@ -230,6 +239,7 @@ export function TeacherProblemStats({
               previewIds.has(p.subproblem_id)
             }
             replacementWarning={replaceWarningId === p.subproblem_id}
+            onConfirmReplace={() => addToDraft(p.subproblem_id)}
             onPress={() => press(p.subproblem_id)}
             onMark={() => mark.mutate(p.subproblem_id)}
             onUnmark={() => unmark.mutate(p.subproblem_id)}
@@ -297,6 +307,7 @@ function ProblemStatRow({
   onMark,
   onUnmark,
   replacementWarning,
+  onConfirmReplace,
 }: {
   stat: SeriesProblemStat
   meta: Subproblem | undefined
@@ -306,6 +317,7 @@ function ProblemStatRow({
   onMark: () => void
   onUnmark: () => void
   replacementWarning: boolean
+  onConfirmReplace: () => void
 }) {
   const total =
     stat.accepted + stat.submitted + stat.rejected + stat.appealed + stat.unsolved
@@ -412,9 +424,27 @@ function ProblemStatRow({
         </div>
       </div>
       {replacementWarning ? (
-        <p className="mt-2 rounded-lg border border-warning/30 bg-status-checking-soft px-3 py-2 text-xs text-ink" role="alert">
-          У этой задачи уже есть разбор. Нажмите ещё раз, чтобы убрать её из прежней группы и включить в текущий черновик.
-        </p>
+        <div
+          className="mt-2 grid grid-cols-1 gap-2 rounded-lg border border-warning/30 bg-status-checking-soft p-2 text-xs text-ink sm:grid-cols-[3fr_7fr] sm:items-stretch"
+          role="alert"
+        >
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="h-full min-h-10 whitespace-normal text-left leading-snug"
+            onClick={(event) => {
+              event.stopPropagation()
+              onConfirmReplace()
+            }}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            Добавить в текущий разбор
+          </Button>
+          <p className="flex items-center px-1 py-1.5">
+            У этой задачи уже есть разбор. Эта кнопка перенесёт её из прежней группы в текущий черновик.
+          </p>
+        </div>
       ) : null}
     </div>
   )

@@ -170,7 +170,7 @@ describe('TeacherProblemStats — разбор frame', () => {
       .toHaveClass('ring-2', 'ring-accent/50')
   })
 
-  it('requires a second click before replacing an existing razbor target', async () => {
+  it('dismisses the replacement warning on a row click and replaces only from its action', async () => {
     const request = vi.spyOn(ApiClient.prototype, 'request').mockResolvedValue({} as never)
     renderStats()
     const user = userEvent.setup()
@@ -184,10 +184,18 @@ describe('TeacherProblemStats — разбор frame', () => {
       .closest('[role="button"]') as HTMLElement
 
     await user.click(existing)
-    expect(screen.getByRole('alert')).toHaveTextContent('Нажмите ещё раз')
+    expect(screen.getByRole('alert')).toHaveTextContent('прежней группы')
+    expect(screen.getByRole('button', { name: 'Добавить в текущий разбор' })).toBeInTheDocument()
     expect(existing).not.toHaveClass('ring-2', 'ring-accent/50')
 
+    request.mockClear()
     await user.click(existing)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(existing).not.toHaveClass('ring-2', 'ring-accent/50')
+    expect(request).not.toHaveBeenCalled()
+
+    await user.click(existing)
+    await user.click(screen.getByRole('button', { name: 'Добавить в текущий разбор' }))
     expect(existing).toHaveClass('ring-2', 'ring-accent/50')
     await waitFor(() => {
       expect(request).toHaveBeenCalledWith('/mathcenter/subproblem-solutions/group', {
