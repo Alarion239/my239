@@ -330,6 +330,46 @@ export interface ManageSeriesRazborAccess {
   can_view_pdf_tex: boolean
 }
 
+export interface ManageRazborAccessSeries {
+  series_id: number
+  series_number: number
+  series_name: string
+  written_posted: boolean
+  video_posted: boolean
+}
+
+export interface ManageRazborAccessGroup {
+  id: number
+  name: string
+  razbor_default_video: boolean
+  razbor_default_pdf_tex: boolean
+}
+
+export interface ManageRazborAccessStudent {
+  student_id: number
+  user_id: number
+  group_id: number
+  group_name: string
+  name: string
+  razbor_default_video: boolean
+  razbor_default_pdf_tex: boolean
+}
+
+export interface ManageRazborAccessCell {
+  student_id: number
+  group_id: number
+  series_id: number
+  can_view_video: boolean
+  can_view_pdf_tex: boolean
+}
+
+export interface ManageRazborAccessResponse {
+  series: ManageRazborAccessSeries[]
+  groups: ManageRazborAccessGroup[]
+  students: ManageRazborAccessStudent[]
+  cells: ManageRazborAccessCell[]
+}
+
 // UserSearchResult is a minimal user record for the "add from users" search.
 export interface UserSearchResult {
   id: number

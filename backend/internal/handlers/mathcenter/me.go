@@ -150,7 +150,9 @@ func buildTeacherView(ctx context.Context, q *store.Queries, userID int64, now t
 	}
 	groupsByCenter := make(map[int64][]store.MathCenterGroup, len(centers))
 	for _, g := range groups {
-		groupsByCenter[g.MathCenterID] = append(groupsByCenter[g.MathCenterID], g)
+		groupsByCenter[g.MathCenterID] = append(groupsByCenter[g.MathCenterID], store.MathCenterGroup{
+			ID: g.ID, MathCenterID: g.MathCenterID, Name: g.Name, CreatedAt: g.CreatedAt, TermID: g.TermID,
+		})
 	}
 	studentsByGroup := make(map[int64][]StudentInfo, len(groups))
 	for _, s := range students {

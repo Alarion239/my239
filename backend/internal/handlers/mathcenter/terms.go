@@ -165,9 +165,19 @@ func CreateTerm(database *db.DB) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to create term")
 				return
 			}
-			if _, err := tx.Exec(ctx, `INSERT INTO math_center_students (user_id, group_id, term_id)
-                SELECT old_student.user_id, new_group.id, $2
-                FROM math_center_students old_student
+			if _, err := tx.Exec(ctx, `INSERT INTO math_center_students (
+					user_id,
+					group_id,
+					term_id,
+					razbor_default_video,
+					razbor_default_pdf_tex
+				)
+				SELECT old_student.user_id,
+				       new_group.id,
+				       $2,
+				       old_student.razbor_default_video,
+				       old_student.razbor_default_pdf_tex
+				FROM math_center_students old_student
                 JOIN math_center_groups old_group ON old_group.id = old_student.group_id
                 JOIN math_center_groups new_group
                   ON new_group.term_id = $2

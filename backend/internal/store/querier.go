@@ -38,7 +38,7 @@ type Querier interface {
 	// of the target center in the same transaction.
 	CreateMathCenterAccount(ctx context.Context, arg CreateMathCenterAccountParams) (User, error)
 	CreateMathCenterGroup(ctx context.Context, arg CreateMathCenterGroupParams) (CreateMathCenterGroupRow, error)
-	CreateMathCenterGroupForTerm(ctx context.Context, arg CreateMathCenterGroupForTermParams) (MathCenterGroup, error)
+	CreateMathCenterGroupForTerm(ctx context.Context, arg CreateMathCenterGroupForTermParams) (CreateMathCenterGroupForTermRow, error)
 	CreateMathCenterTerm(ctx context.Context, arg CreateMathCenterTermParams) (MathCenterTerm, error)
 	CreateProblem(ctx context.Context, arg CreateProblemParams) (MathCenterProblem, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
@@ -123,6 +123,8 @@ type Querier interface {
 	// {pending, my_claimed, my_appeals} for the grader dashboard.
 	GraderStatsForCenter(ctx context.Context, arg GraderStatsForCenterParams) (GraderStatsForCenterRow, error)
 	HeartbeatClaim(ctx context.Context, arg HeartbeatClaimParams) (int64, error)
+	InitializeSeriesRazborAccess(ctx context.Context, id int64) error
+	InitializeStudentRazborAccess(ctx context.Context, id int64) error
 	InsertEventPhoto(ctx context.Context, arg InsertEventPhotoParams) error
 	IsHeadTeacherInCenter(ctx context.Context, arg IsHeadTeacherInCenterParams) (bool, error)
 	IsStudentInCenter(ctx context.Context, arg IsStudentInCenterParams) (bool, error)
@@ -152,8 +154,8 @@ type Querier interface {
 	// grader (appeal stickiness) — so a grader can find what they've taken on.
 	ListGraderQueueForSeries(ctx context.Context, arg ListGraderQueueForSeriesParams) ([]ListGraderQueueForSeriesRow, error)
 	ListGroupsForCenter(ctx context.Context, mathCenterID int64) ([]ListGroupsForCenterRow, error)
-	ListGroupsForCenters(ctx context.Context, centerIds []int64) ([]MathCenterGroup, error)
-	ListGroupsForTerm(ctx context.Context, termID int64) ([]MathCenterGroup, error)
+	ListGroupsForCenters(ctx context.Context, centerIds []int64) ([]ListGroupsForCentersRow, error)
+	ListGroupsForTerm(ctx context.Context, termID int64) ([]ListGroupsForTermRow, error)
 	ListHeadTeachersForCenter(ctx context.Context, mathCenterID int64) ([]ListHeadTeachersForCenterRow, error)
 	ListInvitationTokens(ctx context.Context) ([]InvitationToken, error)
 	ListInvitationTokensForCenter(ctx context.Context, mathCenterID *int64) ([]InvitationToken, error)
@@ -164,6 +166,10 @@ type Querier interface {
 	ListPublishedLikbezForCenter(ctx context.Context, mathCenterID int64) ([]ListPublishedLikbezForCenterRow, error)
 	ListPublishedSeriesForCenter(ctx context.Context, mathCenterID int64) ([]ListPublishedSeriesForCenterRow, error)
 	ListPublishedSeriesForTerm(ctx context.Context, arg ListPublishedSeriesForTermParams) ([]MathCenterSeries, error)
+	ListRazborAccessCellsForManage(ctx context.Context, mathCenterID int64) ([]ListRazborAccessCellsForManageRow, error)
+	ListRazborAccessGroupsForManage(ctx context.Context, mathCenterID int64) ([]ListRazborAccessGroupsForManageRow, error)
+	ListRazborAccessSeriesForManage(ctx context.Context, mathCenterID int64) ([]ListRazborAccessSeriesForManageRow, error)
+	ListRazborAccessStudentsForManage(ctx context.Context, mathCenterID int64) ([]ListRazborAccessStudentsForManageRow, error)
 	ListSeriesForCenter(ctx context.Context, mathCenterID int64) ([]ListSeriesForCenterRow, error)
 	ListSeriesForTerm(ctx context.Context, arg ListSeriesForTermParams) ([]MathCenterSeries, error)
 	ListStudentNotesAuthored(ctx context.Context, arg ListStudentNotesAuthoredParams) ([]ListStudentNotesAuthoredRow, error)
@@ -220,6 +226,11 @@ type Querier interface {
 	// line (1а, 1б are distinct); placeholder rows register the subproblem with
 	// zero counts. Roster scoping mirrors TeacherSeriesGrid.
 	SeriesProblemStats(ctx context.Context, id int64) ([]SeriesProblemStatsRow, error)
+	SetGroupRazborDefaultPDFTex(ctx context.Context, arg SetGroupRazborDefaultPDFTexParams) (int64, error)
+	SetGroupRazborDefaultVideo(ctx context.Context, arg SetGroupRazborDefaultVideoParams) (int64, error)
+	SetGroupRazborMatrixSeries(ctx context.Context, arg SetGroupRazborMatrixSeriesParams) (int64, error)
+	SetGroupsRazborDefaultPDFTexForCenter(ctx context.Context, arg SetGroupsRazborDefaultPDFTexForCenterParams) error
+	SetGroupsRazborDefaultVideoForCenter(ctx context.Context, arg SetGroupsRazborDefaultVideoForCenterParams) error
 	SetLikbezPDF(ctx context.Context, arg SetLikbezPDFParams) (MathCenterLikbez, error)
 	SetLikbezTex(ctx context.Context, arg SetLikbezTexParams) (MathCenterLikbez, error)
 	SetLikbezVideoURL(ctx context.Context, arg SetLikbezVideoURLParams) (MathCenterLikbez, error)
@@ -232,9 +243,16 @@ type Querier interface {
 	SetSeriesTex(ctx context.Context, arg SetSeriesTexParams) (SetSeriesTexRow, error)
 	SetStudentGroup(ctx context.Context, arg SetStudentGroupParams) (int64, error)
 	SetStudentRazborAccess(ctx context.Context, arg SetStudentRazborAccessParams) (int64, error)
+	SetStudentRazborDefaultPDFTex(ctx context.Context, arg SetStudentRazborDefaultPDFTexParams) (int64, error)
+	SetStudentRazborDefaultVideo(ctx context.Context, arg SetStudentRazborDefaultVideoParams) (int64, error)
+	SetStudentRazborMatrixSeries(ctx context.Context, arg SetStudentRazborMatrixSeriesParams) (int64, error)
 	// The INSERT ... SELECT is also the same-center/same-term authorization check:
 	// a series outside this enrollment produces zero affected rows.
 	SetStudentSeriesRazborAccess(ctx context.Context, arg SetStudentSeriesRazborAccessParams) (int64, error)
+	SetStudentsRazborDefaultPDFTexForCenter(ctx context.Context, arg SetStudentsRazborDefaultPDFTexForCenterParams) error
+	SetStudentsRazborDefaultPDFTexForGroup(ctx context.Context, arg SetStudentsRazborDefaultPDFTexForGroupParams) error
+	SetStudentsRazborDefaultVideoForCenter(ctx context.Context, arg SetStudentsRazborDefaultVideoForCenterParams) error
+	SetStudentsRazborDefaultVideoForGroup(ctx context.Context, arg SetStudentsRazborDefaultVideoForGroupParams) error
 	// Assign a (just-minted) group to every subproblem in the set. The solution
 	// rows must already exist (content was set first); only existing rows update.
 	SetSubproblemSolutionGroup(ctx context.Context, arg SetSubproblemSolutionGroupParams) error
@@ -243,6 +261,7 @@ type Querier interface {
 	// Upsert: authoring разбор on a non-coffin subproblem creates the row.
 	SetSubproblemSolutionTex(ctx context.Context, arg SetSubproblemSolutionTexParams) (MathCenterSubproblemSolution, error)
 	SetTeacherHead(ctx context.Context, arg SetTeacherHeadParams) (int64, error)
+	SetTermRazborMatrixSeries(ctx context.Context, arg SetTermRazborMatrixSeriesParams) (int64, error)
 	SetUserAdmin(ctx context.Context, arg SetUserAdminParams) error
 	// One-row summary: accepted / rejected / pending. Pending lumps 'ungraded',
 	// 'submitted', 'appealed' together (anything the student can't yet call done).

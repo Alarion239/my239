@@ -34,14 +34,24 @@ VALUES ($1, $2, $3, TRUE)
 RETURNING id, math_center_id, kind, grade, is_active, created_at, archived_at;
 
 -- name: CopyGroupsToTerm :exec
-INSERT INTO math_center_groups (math_center_id, term_id, name)
-SELECT g.math_center_id, $2, g.name
+INSERT INTO math_center_groups (
+    math_center_id,
+    term_id,
+    name,
+    razbor_default_video,
+    razbor_default_pdf_tex
+)
+SELECT g.math_center_id,
+       $2,
+       g.name,
+       g.razbor_default_video,
+       g.razbor_default_pdf_tex
 FROM math_center_groups g
 WHERE g.term_id = $1
 ORDER BY g.name ASC;
 
 -- name: ListGroupsForTerm :many
-SELECT *
+SELECT id, math_center_id, name, created_at, term_id
 FROM math_center_groups
 WHERE term_id = $1
 ORDER BY name ASC;
@@ -51,7 +61,7 @@ INSERT INTO math_center_groups (math_center_id, term_id, name)
 SELECT t.math_center_id, t.id, $2
 FROM math_center_terms t
 WHERE t.id = $1
-RETURNING *;
+RETURNING id, math_center_id, name, created_at, term_id;
 
 -- name: ListStudentsForTerm :many
 SELECT s.id          AS id,

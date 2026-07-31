@@ -196,6 +196,8 @@ func TestCreateSeries_TeacherSucceeds(t *testing.T) {
 		WithArgs(int64(42), int32(3), "Алгебра", pgxmock.AnyArg()).
 		WillReturnRows(mock.NewRows(seriesColumns).
 			AddRow(int64(100), int64(42), int32(3), "Алгебра", due, (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
+	mock.ExpectExec(`INSERT INTO math_center_student_series_razbor_access`).
+		WithArgs(int64(100)).WillReturnResult(pgxmock.NewResult("INSERT", 0))
 	// 3. CreateProblem (number=0 "Упражнение", with 2 subproblems a/b)
 	mock.ExpectQuery(`INSERT INTO math_center_problems`).
 		WithArgs(int64(100), int32(0)).
@@ -295,6 +297,8 @@ func TestCreateSeries_NoProblems(t *testing.T) {
 		WithArgs(int64(42), int32(3), "Алгебра", pgxmock.AnyArg()).
 		WillReturnRows(mock.NewRows(seriesColumns).
 			AddRow(int64(100), int64(42), int32(3), "Алгебра", due, (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
+	mock.ExpectExec(`INSERT INTO math_center_student_series_razbor_access`).
+		WithArgs(int64(100)).WillReturnResult(pgxmock.NewResult("INSERT", 0))
 	mock.ExpectCommit()
 	// buildSeriesView still runs its three list queries against an empty series.
 	mock.ExpectQuery(`SELECT .* FROM math_center_problems WHERE series_id`).
@@ -349,6 +353,8 @@ func TestCreateSeries_AdminBypassesEnrollment(t *testing.T) {
 		WithArgs(int64(42), int32(1), "Админ-серия", pgxmock.AnyArg()).
 		WillReturnRows(mock.NewRows(seriesColumns).
 			AddRow(int64(100), int64(42), int32(1), "Админ-серия", due, (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
+	mock.ExpectExec(`INSERT INTO math_center_student_series_razbor_access`).
+		WithArgs(int64(100)).WillReturnResult(pgxmock.NewResult("INSERT", 0))
 	// One problem declared with 0 real subparts -> sentinel subproblem (label='').
 	mock.ExpectQuery(`INSERT INTO math_center_problems`).
 		WithArgs(int64(100), int32(1)).
@@ -751,7 +757,6 @@ func TestListSeries_StudentCanSeeVideoWithoutPDFOrTex(t *testing.T) {
 	r, access, _ := newRouter(t, mock)
 
 	now := time.Now()
-	releasedAt := now.Add(-time.Hour)
 	publishedAt := now.Add(-24 * time.Hour)
 	link := "https://example.com/private-razbor"
 
@@ -776,7 +781,7 @@ func TestListSeries_StudentCanSeeVideoWithoutPDFOrTex(t *testing.T) {
 	mock.ExpectQuery(`FROM math_center_subproblem_solutions ss`).
 		WithArgs([]int64{100}).
 		WillReturnRows(mock.NewRows(subproblemSolutionMetaColumns).
-			AddRow(int64(900), int64(500), true, &releasedAt, true, true, &link, ptrInt64(8)))
+			AddRow(int64(900), int64(500), false, (*time.Time)(nil), true, true, &link, ptrInt64(8)))
 	mock.ExpectQuery(`SELECT series.id AS series_id`).
 		WithArgs(int64(7), int64(42)).
 		WillReturnRows(mock.NewRows([]string{
@@ -810,8 +815,8 @@ func TestListSeries_StudentCanSeeVideoWithoutPDFOrTex(t *testing.T) {
 	if subproblem["solution_group_id"] != float64(8) {
 		t.Fatalf("solution group was removed with an accessible format: %v", subproblem)
 	}
-	if subproblem["is_coffin"] != true {
-		t.Fatalf("coffin state was redacted with solution data: %v", subproblem)
+	if subproblem["is_coffin"] != false {
+		t.Fatalf("ordinary solution state changed unexpectedly: %v", subproblem)
 	}
 }
 

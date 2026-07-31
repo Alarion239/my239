@@ -331,14 +331,14 @@ func TestListCenterCoffins_RestrictedStudentDoesNotReceiveSolutionMetadata(t *te
 		t.Fatalf("decode response: %v", err)
 	}
 	if resp[0]["razbor_access"] != true ||
-		resp[0]["razbor_video_access"] != false ||
+		resp[0]["razbor_video_access"] != true ||
 		resp[0]["razbor_pdf_tex_access"] != true ||
 		resp[0]["has_solution_tex"] != true ||
 		resp[0]["has_solution_pdf"] != true {
 		t.Fatalf("unexpected format redaction: %v", resp[0])
 	}
-	if _, ok := resp[0]["solution_link"]; ok {
-		t.Fatalf("solution link leaked: %v", resp[0])
+	if resp[0]["solution_link"] != "https://example.com/private" {
+		t.Fatalf("solution link missing: %v", resp[0])
 	}
 }
 

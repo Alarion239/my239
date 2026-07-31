@@ -29,17 +29,14 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('StudentsTab razbor access', () => {
-  it('opens the series matrix and restricts only PDF and LaTeX', async () => {
+describe('StudentsTab razbor access matrix', () => {
+  it('toggles the written triangle independently and collapses a group', async () => {
     const patches: unknown[] = []
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
         const url = String(input)
-        if (
-          url.endsWith('/manage/students') &&
-          (!init?.method || init.method === 'GET')
-        ) {
+        if (url.endsWith('/manage/students') && (!init?.method || init.method === 'GET')) {
           return Response.json([
             {
               id: 11,
@@ -58,24 +55,48 @@ describe('StudentsTab razbor access', () => {
             { id: 3, math_center_id: 7, name: 'А', created_at: '2026-01-01' },
           ])
         }
-        if (
-          url.endsWith('/students/11/razbor-access') &&
-          (!init?.method || init.method === 'GET')
-        ) {
-          return Response.json([
-            {
-              series_id: 101,
-              series_number: 4,
-              series_name: 'Геометрия',
-              can_view_video: true,
-              can_view_pdf_tex: true,
-            },
-          ])
+        if (url.endsWith('/manage/razbor-access') && (!init?.method || init.method === 'GET')) {
+          return Response.json({
+            series: [
+              {
+                series_id: 101,
+                series_number: 4,
+                series_name: 'Геометрия',
+                written_posted: true,
+                video_posted: true,
+              },
+            ],
+            groups: [
+              {
+                id: 3,
+                name: 'А',
+                razbor_default_video: true,
+                razbor_default_pdf_tex: true,
+              },
+            ],
+            students: [
+              {
+                student_id: 11,
+                user_id: 55,
+                group_id: 3,
+                group_name: 'А',
+                name: 'Аня Иванова',
+                razbor_default_video: true,
+                razbor_default_pdf_tex: true,
+              },
+            ],
+            cells: [
+              {
+                student_id: 11,
+                group_id: 3,
+                series_id: 101,
+                can_view_video: true,
+                can_view_pdf_tex: true,
+              },
+            ],
+          })
         }
-        if (
-          url.endsWith('/students/11/series/101/razbor-access') &&
-          init?.method === 'PATCH'
-        ) {
+        if (url.endsWith('/manage/razbor-access') && init?.method === 'PATCH') {
           patches.push(JSON.parse(String(init.body)))
           return new Response(null, { status: 204 })
         }
@@ -85,25 +106,29 @@ describe('StudentsTab razbor access', () => {
 
     renderTab()
     const user = userEvent.setup()
-    await user.click(
-      await screen.findByRole('button', { name: 'Настроить разборы' }),
-    )
-
-    const video = await screen.findByRole('switch', {
-      name: 'Закрыть видео серии 4 для Аня Иванова',
+    const written = await screen.findByRole('button', {
+      name: /Аня Иванова · серия 4: Письменный разбор/,
     })
-    const pdfTex = screen.getByRole('switch', {
-      name: 'Закрыть PDF и LaTeX серии 4 для Аня Иванова',
-    })
-    expect(video).toHaveAttribute('aria-checked', 'true')
-    expect(pdfTex).toHaveAttribute('aria-checked', 'true')
-
-    await user.click(pdfTex)
+    expect(written).toHaveAccessibleName(/доступно/)
+    await user.click(written)
 
     await waitFor(() =>
       expect(patches).toEqual([
-        { can_view_video: true, can_view_pdf_tex: false },
+        {
+          target: 'student',
+          mode: 'series',
+          format: 'pdf_tex',
+          series_id: 101,
+          group_id: 0,
+          student_id: 11,
+          allowed: false,
+        },
       ]),
     )
+
+    const collapse = screen.getByRole('button', { name: 'Свернуть группу А' })
+    await user.click(collapse)
+    expect(screen.queryByRole('button', { name: /Аня Иванова · серия 4/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Развернуть группу А' })).toBeInTheDocument()
   })
 })

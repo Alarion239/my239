@@ -11,8 +11,18 @@ import (
 )
 
 const addStudentToGroup = `-- name: AddStudentToGroup :one
-INSERT INTO math_center_students (user_id, group_id, term_id)
-SELECT $1, g.id, g.term_id
+INSERT INTO math_center_students (
+    user_id,
+    group_id,
+    term_id,
+    razbor_default_video,
+    razbor_default_pdf_tex
+)
+SELECT $1,
+       g.id,
+       g.term_id,
+       g.razbor_default_video,
+       g.razbor_default_pdf_tex
 FROM math_center_groups g
 WHERE g.id = $2::bigint
 RETURNING id, user_id, group_id, created_at
@@ -324,11 +334,13 @@ func (q *Queries) GetStudentByUserID(ctx context.Context, userID int64) (GetStud
 
 const getStudentSeriesRazborAccess = `-- name: GetStudentSeriesRazborAccess :one
 SELECT series.id AS series_id,
-       COALESCE(access.can_view_video, enrollment.can_view_razbors, FALSE)::boolean AS can_view_video,
-       COALESCE(access.can_view_pdf_tex, enrollment.can_view_razbors, FALSE)::boolean AS can_view_pdf_tex
+       COALESCE(access.can_view_video, enrollment.razbor_default_video, enrollment.can_view_razbors, FALSE)::boolean AS can_view_video,
+       COALESCE(access.can_view_pdf_tex, enrollment.razbor_default_pdf_tex, enrollment.can_view_razbors, FALSE)::boolean AS can_view_pdf_tex
 FROM math_center_series series
          LEFT JOIN LATERAL (
-             SELECT student.can_view_razbors
+             SELECT student.razbor_default_video,
+                    student.razbor_default_pdf_tex,
+                    student.can_view_razbors
              FROM math_center_students student
                       JOIN math_center_groups student_group ON student_group.id = student.group_id
                       JOIN math_center_terms term ON term.id = student.term_id
@@ -380,6 +392,49 @@ func (q *Queries) GetTeacher(ctx context.Context, id int64) (MathCenterTeacher, 
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const initializeSeriesRazborAccess = `-- name: InitializeSeriesRazborAccess :exec
+INSERT INTO math_center_student_series_razbor_access (
+    student_user_id,
+    series_id,
+    can_view_video,
+    can_view_pdf_tex
+)
+SELECT student.user_id,
+       series.id,
+       student.razbor_default_video,
+       student.razbor_default_pdf_tex
+FROM math_center_students student
+JOIN math_center_series series ON series.id = $1 AND series.term_id = student.term_id
+ON CONFLICT (student_user_id, series_id) DO NOTHING
+`
+
+func (q *Queries) InitializeSeriesRazborAccess(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, initializeSeriesRazborAccess, id)
+	return err
+}
+
+const initializeStudentRazborAccess = `-- name: InitializeStudentRazborAccess :exec
+INSERT INTO math_center_student_series_razbor_access (
+    student_user_id,
+    series_id,
+    can_view_video,
+    can_view_pdf_tex
+)
+SELECT student.user_id,
+       series.id,
+       student.razbor_default_video,
+       student.razbor_default_pdf_tex
+FROM math_center_students student
+JOIN math_center_series series ON series.term_id = student.term_id
+WHERE student.id = $1
+ON CONFLICT (student_user_id, series_id) DO NOTHING
+`
+
+func (q *Queries) InitializeStudentRazborAccess(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, initializeStudentRazborAccess, id)
+	return err
 }
 
 const isHeadTeacherInCenter = `-- name: IsHeadTeacherInCenter :one
@@ -503,15 +558,23 @@ WHERE term_id = COALESCE(
 ORDER BY math_center_id ASC, name ASC
 `
 
-func (q *Queries) ListGroupsForCenters(ctx context.Context, centerIds []int64) ([]MathCenterGroup, error) {
+type ListGroupsForCentersRow struct {
+	ID           int64     `json:"id"`
+	MathCenterID int64     `json:"math_center_id"`
+	Name         string    `json:"name"`
+	CreatedAt    time.Time `json:"created_at"`
+	TermID       int64     `json:"term_id"`
+}
+
+func (q *Queries) ListGroupsForCenters(ctx context.Context, centerIds []int64) ([]ListGroupsForCentersRow, error) {
 	rows, err := q.db.Query(ctx, listGroupsForCenters, centerIds)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []MathCenterGroup{}
+	items := []ListGroupsForCentersRow{}
 	for rows.Next() {
-		var i MathCenterGroup
+		var i ListGroupsForCentersRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.MathCenterID,
@@ -602,13 +665,261 @@ func (q *Queries) ListMathCenters(ctx context.Context) ([]MathCenter, error) {
 	return items, nil
 }
 
+const listRazborAccessCellsForManage = `-- name: ListRazborAccessCellsForManage :many
+WITH selected_term AS (
+    SELECT COALESCE(
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.is_active = TRUE),
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.kind = 'legacy')
+    ) AS id
+)
+SELECT student.id AS student_id,
+       student.group_id,
+       series.id AS series_id,
+       COALESCE(access.can_view_video, student.razbor_default_video)::boolean AS can_view_video,
+       COALESCE(access.can_view_pdf_tex, student.razbor_default_pdf_tex)::boolean AS can_view_pdf_tex
+FROM math_center_students student
+JOIN math_center_series series ON series.term_id = student.term_id
+LEFT JOIN math_center_student_series_razbor_access access
+  ON access.student_user_id = student.user_id
+ AND access.series_id = series.id
+WHERE student.term_id = (SELECT id FROM selected_term)
+  AND EXISTS (
+      SELECT 1 FROM math_center_groups group_row
+      WHERE group_row.id = student.group_id
+        AND group_row.math_center_id = $1
+  )
+ORDER BY student.id, series.number
+`
+
+type ListRazborAccessCellsForManageRow struct {
+	StudentID     int64 `json:"student_id"`
+	GroupID       int64 `json:"group_id"`
+	SeriesID      int64 `json:"series_id"`
+	CanViewVideo  bool  `json:"can_view_video"`
+	CanViewPdfTex bool  `json:"can_view_pdf_tex"`
+}
+
+func (q *Queries) ListRazborAccessCellsForManage(ctx context.Context, mathCenterID int64) ([]ListRazborAccessCellsForManageRow, error) {
+	rows, err := q.db.Query(ctx, listRazborAccessCellsForManage, mathCenterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRazborAccessCellsForManageRow{}
+	for rows.Next() {
+		var i ListRazborAccessCellsForManageRow
+		if err := rows.Scan(
+			&i.StudentID,
+			&i.GroupID,
+			&i.SeriesID,
+			&i.CanViewVideo,
+			&i.CanViewPdfTex,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRazborAccessGroupsForManage = `-- name: ListRazborAccessGroupsForManage :many
+WITH selected_term AS (
+    SELECT COALESCE(
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.is_active = TRUE),
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.kind = 'legacy')
+    ) AS id
+)
+SELECT group_row.id,
+       group_row.math_center_id,
+       group_row.name,
+       group_row.razbor_default_video,
+       group_row.razbor_default_pdf_tex
+FROM math_center_groups group_row
+WHERE group_row.math_center_id = $1
+  AND group_row.term_id = (SELECT id FROM selected_term)
+ORDER BY group_row.name ASC
+`
+
+type ListRazborAccessGroupsForManageRow struct {
+	ID                  int64  `json:"id"`
+	MathCenterID        int64  `json:"math_center_id"`
+	Name                string `json:"name"`
+	RazborDefaultVideo  bool   `json:"razbor_default_video"`
+	RazborDefaultPdfTex bool   `json:"razbor_default_pdf_tex"`
+}
+
+func (q *Queries) ListRazborAccessGroupsForManage(ctx context.Context, mathCenterID int64) ([]ListRazborAccessGroupsForManageRow, error) {
+	rows, err := q.db.Query(ctx, listRazborAccessGroupsForManage, mathCenterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRazborAccessGroupsForManageRow{}
+	for rows.Next() {
+		var i ListRazborAccessGroupsForManageRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.MathCenterID,
+			&i.Name,
+			&i.RazborDefaultVideo,
+			&i.RazborDefaultPdfTex,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRazborAccessSeriesForManage = `-- name: ListRazborAccessSeriesForManage :many
+WITH selected_term AS (
+    SELECT COALESCE(
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.is_active = TRUE),
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.kind = 'legacy')
+    ) AS id
+)
+SELECT series.id AS series_id,
+       series.number AS series_number,
+       series.name AS series_name,
+       EXISTS (
+           SELECT 1
+           FROM math_center_problems problem
+           JOIN math_center_subproblems subproblem ON subproblem.problem_id = problem.id
+           JOIN math_center_subproblem_solutions solution ON solution.subproblem_id = subproblem.id
+           WHERE problem.series_id = series.id
+             AND NOT solution.is_coffin
+             AND (solution.solution_tex_source IS NOT NULL OR solution.solution_pdf_object_key IS NOT NULL)
+       ) AS written_posted,
+       EXISTS (
+           SELECT 1
+           FROM math_center_problems problem
+           JOIN math_center_subproblems subproblem ON subproblem.problem_id = problem.id
+           JOIN math_center_subproblem_solutions solution ON solution.subproblem_id = subproblem.id
+           WHERE problem.series_id = series.id
+             AND NOT solution.is_coffin
+             AND solution.solution_link IS NOT NULL
+       ) AS video_posted
+FROM math_center_series series
+WHERE series.math_center_id = $1
+  AND series.term_id = (SELECT id FROM selected_term)
+ORDER BY series.number ASC
+`
+
+type ListRazborAccessSeriesForManageRow struct {
+	SeriesID      int64  `json:"series_id"`
+	SeriesNumber  int32  `json:"series_number"`
+	SeriesName    string `json:"series_name"`
+	WrittenPosted bool   `json:"written_posted"`
+	VideoPosted   bool   `json:"video_posted"`
+}
+
+func (q *Queries) ListRazborAccessSeriesForManage(ctx context.Context, mathCenterID int64) ([]ListRazborAccessSeriesForManageRow, error) {
+	rows, err := q.db.Query(ctx, listRazborAccessSeriesForManage, mathCenterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRazborAccessSeriesForManageRow{}
+	for rows.Next() {
+		var i ListRazborAccessSeriesForManageRow
+		if err := rows.Scan(
+			&i.SeriesID,
+			&i.SeriesNumber,
+			&i.SeriesName,
+			&i.WrittenPosted,
+			&i.VideoPosted,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRazborAccessStudentsForManage = `-- name: ListRazborAccessStudentsForManage :many
+WITH selected_term AS (
+    SELECT COALESCE(
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.is_active = TRUE),
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.kind = 'legacy')
+    ) AS id
+)
+SELECT student.id AS student_id,
+       student.user_id,
+       student.group_id,
+       student.razbor_default_video,
+       student.razbor_default_pdf_tex,
+       group_row.name AS group_name,
+       user_row.first_name,
+       user_row.middle_name,
+       user_row.last_name
+FROM math_center_students student
+JOIN math_center_groups group_row ON group_row.id = student.group_id
+JOIN users user_row ON user_row.id = student.user_id
+WHERE group_row.math_center_id = $1
+  AND student.term_id = (SELECT id FROM selected_term)
+ORDER BY group_row.name ASC, user_row.last_name ASC, user_row.first_name ASC
+`
+
+type ListRazborAccessStudentsForManageRow struct {
+	StudentID           int64   `json:"student_id"`
+	UserID              int64   `json:"user_id"`
+	GroupID             int64   `json:"group_id"`
+	RazborDefaultVideo  bool    `json:"razbor_default_video"`
+	RazborDefaultPdfTex bool    `json:"razbor_default_pdf_tex"`
+	GroupName           string  `json:"group_name"`
+	FirstName           string  `json:"first_name"`
+	MiddleName          *string `json:"middle_name"`
+	LastName            string  `json:"last_name"`
+}
+
+func (q *Queries) ListRazborAccessStudentsForManage(ctx context.Context, mathCenterID int64) ([]ListRazborAccessStudentsForManageRow, error) {
+	rows, err := q.db.Query(ctx, listRazborAccessStudentsForManage, mathCenterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRazborAccessStudentsForManageRow{}
+	for rows.Next() {
+		var i ListRazborAccessStudentsForManageRow
+		if err := rows.Scan(
+			&i.StudentID,
+			&i.UserID,
+			&i.GroupID,
+			&i.RazborDefaultVideo,
+			&i.RazborDefaultPdfTex,
+			&i.GroupName,
+			&i.FirstName,
+			&i.MiddleName,
+			&i.LastName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStudentSeriesRazborAccessForCenter = `-- name: ListStudentSeriesRazborAccessForCenter :many
 SELECT series.id AS series_id,
-       COALESCE(access.can_view_video, enrollment.can_view_razbors, FALSE)::boolean AS can_view_video,
-       COALESCE(access.can_view_pdf_tex, enrollment.can_view_razbors, FALSE)::boolean AS can_view_pdf_tex
+       COALESCE(access.can_view_video, enrollment.razbor_default_video, enrollment.can_view_razbors, FALSE)::boolean AS can_view_video,
+       COALESCE(access.can_view_pdf_tex, enrollment.razbor_default_pdf_tex, enrollment.can_view_razbors, FALSE)::boolean AS can_view_pdf_tex
 FROM math_center_series series
          LEFT JOIN LATERAL (
-             SELECT student.can_view_razbors
+             SELECT student.razbor_default_video,
+                    student.razbor_default_pdf_tex,
+                    student.can_view_razbors
              FROM math_center_students student
                       JOIN math_center_groups student_group ON student_group.id = student.group_id
                       JOIN math_center_terms term ON term.id = student.term_id
@@ -663,8 +974,8 @@ const listStudentSeriesRazborAccessForManage = `-- name: ListStudentSeriesRazbor
 SELECT series.id AS series_id,
        series.number AS series_number,
        series.name AS series_name,
-       COALESCE(access.can_view_video, student.can_view_razbors)::boolean AS can_view_video,
-       COALESCE(access.can_view_pdf_tex, student.can_view_razbors)::boolean AS can_view_pdf_tex
+       COALESCE(access.can_view_video, student.razbor_default_video, student.can_view_razbors)::boolean AS can_view_video,
+       COALESCE(access.can_view_pdf_tex, student.razbor_default_pdf_tex, student.can_view_razbors)::boolean AS can_view_pdf_tex
 FROM math_center_students student
          JOIN math_center_series series ON series.term_id = student.term_id
          LEFT JOIN math_center_student_series_razbor_access access
@@ -1056,6 +1367,131 @@ func (q *Queries) SearchUsers(ctx context.Context, q_ string) ([]SearchUsersRow,
 	return items, nil
 }
 
+const setGroupRazborDefaultPDFTex = `-- name: SetGroupRazborDefaultPDFTex :execrows
+UPDATE math_center_groups
+SET razbor_default_pdf_tex = $1::boolean
+WHERE id = $2::bigint
+  AND term_id = (SELECT id FROM math_center_terms WHERE is_active = TRUE AND math_center_id = (SELECT math_center_id FROM math_center_groups WHERE id = $2::bigint))
+`
+
+type SetGroupRazborDefaultPDFTexParams struct {
+	Allowed bool  `json:"allowed"`
+	GroupID int64 `json:"group_id"`
+}
+
+func (q *Queries) SetGroupRazborDefaultPDFTex(ctx context.Context, arg SetGroupRazborDefaultPDFTexParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setGroupRazborDefaultPDFTex, arg.Allowed, arg.GroupID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setGroupRazborDefaultVideo = `-- name: SetGroupRazborDefaultVideo :execrows
+UPDATE math_center_groups
+SET razbor_default_video = $1::boolean
+WHERE id = $2::bigint
+  AND term_id = (SELECT id FROM math_center_terms WHERE is_active = TRUE AND math_center_id = (SELECT math_center_id FROM math_center_groups WHERE id = $2::bigint))
+`
+
+type SetGroupRazborDefaultVideoParams struct {
+	Allowed bool  `json:"allowed"`
+	GroupID int64 `json:"group_id"`
+}
+
+func (q *Queries) SetGroupRazborDefaultVideo(ctx context.Context, arg SetGroupRazborDefaultVideoParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setGroupRazborDefaultVideo, arg.Allowed, arg.GroupID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setGroupRazborMatrixSeries = `-- name: SetGroupRazborMatrixSeries :execrows
+INSERT INTO math_center_student_series_razbor_access (
+    student_user_id,
+    series_id,
+    can_view_video,
+    can_view_pdf_tex
+)
+SELECT student.user_id,
+       series.id,
+       CASE WHEN $1::text = 'video'
+            THEN $2::boolean
+            ELSE COALESCE(access.can_view_video, student.razbor_default_video)
+       END,
+       CASE WHEN $1::text = 'pdf_tex'
+            THEN $2::boolean
+            ELSE COALESCE(access.can_view_pdf_tex, student.razbor_default_pdf_tex)
+       END
+FROM math_center_students student
+JOIN math_center_series series ON series.term_id = student.term_id
+JOIN math_center_terms active_term ON active_term.id = student.term_id AND active_term.is_active = TRUE
+LEFT JOIN math_center_student_series_razbor_access access
+  ON access.student_user_id = student.user_id
+ AND access.series_id = series.id
+WHERE student.group_id = $3::bigint
+  AND ($4::bigint = 0 OR series.id = $4::bigint)
+ON CONFLICT (student_user_id, series_id)
+DO UPDATE SET can_view_video = EXCLUDED.can_view_video,
+              can_view_pdf_tex = EXCLUDED.can_view_pdf_tex,
+              updated_at = NOW()
+`
+
+type SetGroupRazborMatrixSeriesParams struct {
+	Format   string `json:"format"`
+	Allowed  bool   `json:"allowed"`
+	GroupID  int64  `json:"group_id"`
+	SeriesID int64  `json:"series_id"`
+}
+
+func (q *Queries) SetGroupRazborMatrixSeries(ctx context.Context, arg SetGroupRazborMatrixSeriesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setGroupRazborMatrixSeries,
+		arg.Format,
+		arg.Allowed,
+		arg.GroupID,
+		arg.SeriesID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setGroupsRazborDefaultPDFTexForCenter = `-- name: SetGroupsRazborDefaultPDFTexForCenter :exec
+UPDATE math_center_groups
+SET razbor_default_pdf_tex = $1::boolean
+WHERE math_center_id = $2::bigint
+  AND term_id = (SELECT id FROM math_center_terms WHERE math_center_id = $2::bigint AND is_active = TRUE)
+`
+
+type SetGroupsRazborDefaultPDFTexForCenterParams struct {
+	Allowed      bool  `json:"allowed"`
+	MathCenterID int64 `json:"math_center_id"`
+}
+
+func (q *Queries) SetGroupsRazborDefaultPDFTexForCenter(ctx context.Context, arg SetGroupsRazborDefaultPDFTexForCenterParams) error {
+	_, err := q.db.Exec(ctx, setGroupsRazborDefaultPDFTexForCenter, arg.Allowed, arg.MathCenterID)
+	return err
+}
+
+const setGroupsRazborDefaultVideoForCenter = `-- name: SetGroupsRazborDefaultVideoForCenter :exec
+UPDATE math_center_groups
+SET razbor_default_video = $1::boolean
+WHERE math_center_id = $2::bigint
+  AND term_id = (SELECT id FROM math_center_terms WHERE math_center_id = $2::bigint AND is_active = TRUE)
+`
+
+type SetGroupsRazborDefaultVideoForCenterParams struct {
+	Allowed      bool  `json:"allowed"`
+	MathCenterID int64 `json:"math_center_id"`
+}
+
+func (q *Queries) SetGroupsRazborDefaultVideoForCenter(ctx context.Context, arg SetGroupsRazborDefaultVideoForCenterParams) error {
+	_, err := q.db.Exec(ctx, setGroupsRazborDefaultVideoForCenter, arg.Allowed, arg.MathCenterID)
+	return err
+}
+
 const setStudentGroup = `-- name: SetStudentGroup :execrows
 UPDATE math_center_students
 SET group_id = $2
@@ -1094,6 +1530,97 @@ func (q *Queries) SetStudentRazborAccess(ctx context.Context, arg SetStudentRazb
 	return result.RowsAffected(), nil
 }
 
+const setStudentRazborDefaultPDFTex = `-- name: SetStudentRazborDefaultPDFTex :execrows
+UPDATE math_center_students
+SET razbor_default_pdf_tex = $1::boolean
+WHERE id = $2::bigint
+  AND term_id = (SELECT id FROM math_center_terms WHERE is_active = TRUE AND math_center_id = (SELECT g.math_center_id FROM math_center_groups g JOIN math_center_students s ON s.group_id = g.id WHERE s.id = $2::bigint))
+`
+
+type SetStudentRazborDefaultPDFTexParams struct {
+	Allowed   bool  `json:"allowed"`
+	StudentID int64 `json:"student_id"`
+}
+
+func (q *Queries) SetStudentRazborDefaultPDFTex(ctx context.Context, arg SetStudentRazborDefaultPDFTexParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setStudentRazborDefaultPDFTex, arg.Allowed, arg.StudentID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setStudentRazborDefaultVideo = `-- name: SetStudentRazborDefaultVideo :execrows
+UPDATE math_center_students
+SET razbor_default_video = $1::boolean
+WHERE id = $2::bigint
+  AND term_id = (SELECT id FROM math_center_terms WHERE is_active = TRUE AND math_center_id = (SELECT g.math_center_id FROM math_center_groups g JOIN math_center_students s ON s.group_id = g.id WHERE s.id = $2::bigint))
+`
+
+type SetStudentRazborDefaultVideoParams struct {
+	Allowed   bool  `json:"allowed"`
+	StudentID int64 `json:"student_id"`
+}
+
+func (q *Queries) SetStudentRazborDefaultVideo(ctx context.Context, arg SetStudentRazborDefaultVideoParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setStudentRazborDefaultVideo, arg.Allowed, arg.StudentID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setStudentRazborMatrixSeries = `-- name: SetStudentRazborMatrixSeries :execrows
+INSERT INTO math_center_student_series_razbor_access (
+    student_user_id,
+    series_id,
+    can_view_video,
+    can_view_pdf_tex
+)
+SELECT student.user_id,
+       series.id,
+       CASE WHEN $1::text = 'video'
+            THEN $2::boolean
+            ELSE COALESCE(access.can_view_video, student.razbor_default_video)
+       END,
+       CASE WHEN $1::text = 'pdf_tex'
+            THEN $2::boolean
+            ELSE COALESCE(access.can_view_pdf_tex, student.razbor_default_pdf_tex)
+       END
+FROM math_center_students student
+JOIN math_center_series series ON series.term_id = student.term_id
+JOIN math_center_terms active_term ON active_term.id = student.term_id AND active_term.is_active = TRUE
+LEFT JOIN math_center_student_series_razbor_access access
+  ON access.student_user_id = student.user_id
+ AND access.series_id = series.id
+WHERE student.id = $3::bigint
+  AND ($4::bigint = 0 OR series.id = $4::bigint)
+ON CONFLICT (student_user_id, series_id)
+DO UPDATE SET can_view_video = EXCLUDED.can_view_video,
+              can_view_pdf_tex = EXCLUDED.can_view_pdf_tex,
+              updated_at = NOW()
+`
+
+type SetStudentRazborMatrixSeriesParams struct {
+	Format    string `json:"format"`
+	Allowed   bool   `json:"allowed"`
+	StudentID int64  `json:"student_id"`
+	SeriesID  int64  `json:"series_id"`
+}
+
+func (q *Queries) SetStudentRazborMatrixSeries(ctx context.Context, arg SetStudentRazborMatrixSeriesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setStudentRazborMatrixSeries,
+		arg.Format,
+		arg.Allowed,
+		arg.StudentID,
+		arg.SeriesID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const setStudentSeriesRazborAccess = `-- name: SetStudentSeriesRazborAccess :execrows
 INSERT INTO math_center_student_series_razbor_access (
     student_user_id,
@@ -1101,7 +1628,10 @@ INSERT INTO math_center_student_series_razbor_access (
     can_view_video,
     can_view_pdf_tex
 )
-SELECT student.user_id, series.id, $3, $4
+SELECT student.user_id,
+       series.id,
+       $3,
+       $4
 FROM math_center_students student
          JOIN math_center_groups student_group ON student_group.id = student.group_id
          JOIN math_center_series series
@@ -1116,8 +1646,8 @@ ON CONFLICT (student_user_id, series_id)
 `
 
 type SetStudentSeriesRazborAccessParams struct {
-	StudentID     int64 `json:"student_id"`
-	SeriesID      int64 `json:"series_id"`
+	ID            int64 `json:"id"`
+	ID_2          int64 `json:"id_2"`
 	CanViewVideo  bool  `json:"can_view_video"`
 	CanViewPdfTex bool  `json:"can_view_pdf_tex"`
 }
@@ -1126,8 +1656,8 @@ type SetStudentSeriesRazborAccessParams struct {
 // a series outside this enrollment produces zero affected rows.
 func (q *Queries) SetStudentSeriesRazborAccess(ctx context.Context, arg SetStudentSeriesRazborAccessParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setStudentSeriesRazborAccess,
-		arg.StudentID,
-		arg.SeriesID,
+		arg.ID,
+		arg.ID_2,
 		arg.CanViewVideo,
 		arg.CanViewPdfTex,
 	)
@@ -1135,6 +1665,72 @@ func (q *Queries) SetStudentSeriesRazborAccess(ctx context.Context, arg SetStude
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const setStudentsRazborDefaultPDFTexForCenter = `-- name: SetStudentsRazborDefaultPDFTexForCenter :exec
+UPDATE math_center_students
+SET razbor_default_pdf_tex = $1::boolean
+WHERE term_id = (SELECT id FROM math_center_terms WHERE math_center_id = $2::bigint AND is_active = TRUE)
+`
+
+type SetStudentsRazborDefaultPDFTexForCenterParams struct {
+	Allowed      bool  `json:"allowed"`
+	MathCenterID int64 `json:"math_center_id"`
+}
+
+func (q *Queries) SetStudentsRazborDefaultPDFTexForCenter(ctx context.Context, arg SetStudentsRazborDefaultPDFTexForCenterParams) error {
+	_, err := q.db.Exec(ctx, setStudentsRazborDefaultPDFTexForCenter, arg.Allowed, arg.MathCenterID)
+	return err
+}
+
+const setStudentsRazborDefaultPDFTexForGroup = `-- name: SetStudentsRazborDefaultPDFTexForGroup :exec
+UPDATE math_center_students
+SET razbor_default_pdf_tex = $1::boolean
+WHERE group_id = $2::bigint
+  AND term_id = (SELECT id FROM math_center_terms WHERE is_active = TRUE AND math_center_id = (SELECT math_center_id FROM math_center_groups WHERE id = $2::bigint))
+`
+
+type SetStudentsRazborDefaultPDFTexForGroupParams struct {
+	Allowed bool  `json:"allowed"`
+	GroupID int64 `json:"group_id"`
+}
+
+func (q *Queries) SetStudentsRazborDefaultPDFTexForGroup(ctx context.Context, arg SetStudentsRazborDefaultPDFTexForGroupParams) error {
+	_, err := q.db.Exec(ctx, setStudentsRazborDefaultPDFTexForGroup, arg.Allowed, arg.GroupID)
+	return err
+}
+
+const setStudentsRazborDefaultVideoForCenter = `-- name: SetStudentsRazborDefaultVideoForCenter :exec
+UPDATE math_center_students
+SET razbor_default_video = $1::boolean
+WHERE term_id = (SELECT id FROM math_center_terms WHERE math_center_id = $2::bigint AND is_active = TRUE)
+`
+
+type SetStudentsRazborDefaultVideoForCenterParams struct {
+	Allowed      bool  `json:"allowed"`
+	MathCenterID int64 `json:"math_center_id"`
+}
+
+func (q *Queries) SetStudentsRazborDefaultVideoForCenter(ctx context.Context, arg SetStudentsRazborDefaultVideoForCenterParams) error {
+	_, err := q.db.Exec(ctx, setStudentsRazborDefaultVideoForCenter, arg.Allowed, arg.MathCenterID)
+	return err
+}
+
+const setStudentsRazborDefaultVideoForGroup = `-- name: SetStudentsRazborDefaultVideoForGroup :exec
+UPDATE math_center_students
+SET razbor_default_video = $1::boolean
+WHERE group_id = $2::bigint
+  AND term_id = (SELECT id FROM math_center_terms WHERE is_active = TRUE AND math_center_id = (SELECT math_center_id FROM math_center_groups WHERE id = $2::bigint))
+`
+
+type SetStudentsRazborDefaultVideoForGroupParams struct {
+	Allowed bool  `json:"allowed"`
+	GroupID int64 `json:"group_id"`
+}
+
+func (q *Queries) SetStudentsRazborDefaultVideoForGroup(ctx context.Context, arg SetStudentsRazborDefaultVideoForGroupParams) error {
+	_, err := q.db.Exec(ctx, setStudentsRazborDefaultVideoForGroup, arg.Allowed, arg.GroupID)
+	return err
 }
 
 const setTeacherHead = `-- name: SetTeacherHead :execrows
@@ -1150,6 +1746,58 @@ type SetTeacherHeadParams struct {
 
 func (q *Queries) SetTeacherHead(ctx context.Context, arg SetTeacherHeadParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setTeacherHead, arg.ID, arg.IsHeadTeacher)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setTermRazborMatrixSeries = `-- name: SetTermRazborMatrixSeries :execrows
+INSERT INTO math_center_student_series_razbor_access (
+    student_user_id,
+    series_id,
+    can_view_video,
+    can_view_pdf_tex
+)
+SELECT student.user_id,
+       series.id,
+       CASE WHEN $1::text = 'video'
+            THEN $2::boolean
+            ELSE COALESCE(access.can_view_video, student.razbor_default_video)
+       END,
+       CASE WHEN $1::text = 'pdf_tex'
+            THEN $2::boolean
+            ELSE COALESCE(access.can_view_pdf_tex, student.razbor_default_pdf_tex)
+       END
+FROM math_center_students student
+JOIN math_center_series series ON series.term_id = student.term_id
+JOIN math_center_terms term ON term.id = student.term_id
+LEFT JOIN math_center_student_series_razbor_access access
+  ON access.student_user_id = student.user_id
+ AND access.series_id = series.id
+WHERE term.math_center_id = $3::bigint
+  AND term.is_active = TRUE
+  AND ($4::bigint = 0 OR series.id = $4::bigint)
+ON CONFLICT (student_user_id, series_id)
+DO UPDATE SET can_view_video = EXCLUDED.can_view_video,
+              can_view_pdf_tex = EXCLUDED.can_view_pdf_tex,
+              updated_at = NOW()
+`
+
+type SetTermRazborMatrixSeriesParams struct {
+	Format       string `json:"format"`
+	Allowed      bool   `json:"allowed"`
+	MathCenterID int64  `json:"math_center_id"`
+	SeriesID     int64  `json:"series_id"`
+}
+
+func (q *Queries) SetTermRazborMatrixSeries(ctx context.Context, arg SetTermRazborMatrixSeriesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setTermRazborMatrixSeries,
+		arg.Format,
+		arg.Allowed,
+		arg.MathCenterID,
+		arg.SeriesID,
+	)
 	if err != nil {
 		return 0, err
 	}

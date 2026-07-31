@@ -17,6 +17,7 @@ import type {
   MathCenterStudent,
   MathCenterTeacher,
   ManageSeriesRazborAccess,
+  ManageRazborAccessResponse,
   ManageStudent,
   ManageTeacher,
   UserSearchResult,
@@ -146,6 +147,48 @@ export function useManageStudents(centerId: number) {
     queryKey: queryKeys.manageStudents(centerId),
     queryFn: () => client.request<ManageStudent[]>(base(centerId) + '/students'),
     enabled: centerId > 0,
+  })
+}
+
+export function useManageRazborAccess(centerId: number) {
+  const client = useApiClient()
+  return useQuery<ManageRazborAccessResponse>({
+    queryKey: queryKeys.manageRazborAccess(centerId),
+    queryFn: () =>
+      client.request<ManageRazborAccessResponse>(base(centerId) + '/razbor-access'),
+    enabled: centerId > 0,
+  })
+}
+
+export interface ManageRazborAccessMutation {
+  target: 'term' | 'group' | 'student'
+  mode: 'series' | 'default'
+  format: 'video' | 'pdf_tex'
+  seriesId?: number
+  groupId?: number
+  studentId?: number
+  allowed: boolean
+}
+
+export function useManageSetRazborAccess(centerId: number) {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (mutation: ManageRazborAccessMutation) =>
+      client.request(base(centerId) + '/razbor-access', {
+        method: 'PATCH',
+        body: {
+          target: mutation.target,
+          mode: mutation.mode,
+          format: mutation.format,
+          series_id: mutation.seriesId ?? 0,
+          group_id: mutation.groupId ?? 0,
+          student_id: mutation.studentId ?? 0,
+          allowed: mutation.allowed,
+        },
+      }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: queryKeys.manageRazborAccess(centerId) }),
   })
 }
 

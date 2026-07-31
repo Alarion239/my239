@@ -228,7 +228,12 @@ func ListCenterCoffins(database *db.DB) http.HandlerFunc {
 		for _, c := range records {
 			access := razborAccess{Video: true, PDFTex: true}
 			if isStudent && !isTeacher {
-				access = accessBySeries[c.SeriesID]
+				if c.IsCoffin {
+					released := c.ReleasedAt != nil && !time.Now().Before(*c.ReleasedAt)
+					access = razborAccess{Video: released, PDFTex: released}
+				} else {
+					access = accessBySeries[c.SeriesID]
+				}
 			}
 			display := mc.SubproblemDisplayName(int(c.ProblemNumber), c.SubproblemLabel)
 			if hasSelectedTerm && (!selected.IsActive || c.TermID != selected.ID) {
@@ -404,6 +409,9 @@ func loadSubproblemForRead(ctx context.Context, w http.ResponseWriter, r *http.R
 		logger.LogErrorContext(ctx, "coffins: get solution", err)
 		httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 		return store.MathCenterSubproblemSolution{}, time.Time{}, false, razborAccess{}, false
+	}
+	if s.IsCoffin {
+		access = razborAccess{Video: true, PDFTex: true}
 	}
 	return s, sc.SeriesDueAt, isTeacher, access, true
 }
