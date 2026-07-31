@@ -747,11 +747,12 @@ func seriesExportRows(series []sheetSeries) ([]string, []string) {
 			} else {
 				seriesRow = append(seriesRow, "")
 			}
-			if !hasProblems {
+			switch {
+			case !hasProblems:
 				problemRow = append(problemRow, "")
-			} else if problem.number == 0 {
+			case problem.number == 0:
 				problemRow = append(problemRow, "У"+problem.label)
-			} else {
+			default:
 				problemRow = append(problemRow, strconv.Itoa(problem.number)+problem.label)
 			}
 		}

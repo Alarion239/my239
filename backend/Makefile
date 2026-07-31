@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 GO ?= go
 
-.PHONY: help build test test-race lint lint-fix fmt vet sqlc vuln tidy
+.PHONY: help build test test-race lint lint-fix check fmt vet sqlc vuln tidy
 
 help: ## List available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -21,6 +21,11 @@ lint: ## Run golangci-lint
 
 lint-fix: ## Run golangci-lint with autofix
 	golangci-lint run --fix
+
+check: ## Run the complete local verification suite
+	$(MAKE) build
+	$(MAKE) lint
+	$(MAKE) test-race
 
 fmt: ## Format the code (gofumpt + import grouping)
 	golangci-lint fmt
