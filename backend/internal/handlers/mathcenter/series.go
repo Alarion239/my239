@@ -251,6 +251,11 @@ func CreateSeries(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to create series")
 			return
 		}
+		if err := qx.InitializeSeriesRazborAccess(ctx, series.ID); err != nil {
+			logger.LogErrorContext(ctx, "series: initialize razbor access", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to initialize razbor access")
+			return
+		}
 
 		if err := writeProblems(ctx, qx, series.ID, req.Problems); err != nil {
 			logger.LogErrorContext(ctx, "series: write problems", err)
@@ -1408,6 +1413,24 @@ func restrictSeriesRazbors(view *seriesView, access razborAccess) {
 	for problemIndex := range view.Problems {
 		for subproblemIndex := range view.Problems[problemIndex].Subproblems {
 			sub := &view.Problems[problemIndex].Subproblems[subproblemIndex]
+			if sub.IsCoffin {
+				released := sub.ReleasedAt != nil && !time.Now().Before(*sub.ReleasedAt)
+				if !released {
+					sub.HasSolutionTex = false
+					sub.HasSolutionPDF = false
+					sub.SolutionLink = nil
+					sub.SolutionGroupID = nil
+					continue
+				}
+				if sub.HasSolutionTex || sub.HasSolutionPDF {
+					view.RazborPDFTexAccess = true
+				}
+				if sub.SolutionLink != nil {
+					view.RazborVideoAccess = true
+				}
+				view.RazborAccess = view.RazborVideoAccess || view.RazborPDFTexAccess
+				continue
+			}
 			if !access.PDFTex {
 				sub.HasSolutionTex = false
 				sub.HasSolutionPDF = false

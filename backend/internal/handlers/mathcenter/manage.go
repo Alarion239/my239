@@ -48,6 +48,8 @@ func ManageRouter(database *db.DB, hub *live.Hub, sheetServices ...*googlesheets
 	r.Get("/students", manageListStudents(database))
 	r.Post("/students", manageAddStudent(database, hub))
 	r.Patch("/students/{studentID}/group", manageSetStudentGroup(database, hub))
+	r.Get("/razbor-access", manageListRazborAccess(database))
+	r.Patch("/razbor-access", manageSetRazborAccessMatrix(database, hub))
 	r.Get("/students/{studentID}/razbor-access", manageListStudentSeriesRazborAccess(database))
 	r.Patch("/students/{studentID}/razbor-access", manageSetStudentRazborAccess(database, hub))
 	r.Patch("/students/{studentID}/series/{seriesID}/razbor-access", manageSetStudentSeriesRazborAccess(database, hub))
@@ -406,6 +408,56 @@ type manageSetSeriesRazborAccessRequest struct {
 	CanViewPDFTex *bool `json:"can_view_pdf_tex"`
 }
 
+type manageRazborAccessResponse struct {
+	Series   []manageRazborSeries  `json:"series"`
+	Groups   []manageRazborGroup   `json:"groups"`
+	Students []manageRazborStudent `json:"students"`
+	Cells    []manageRazborCell    `json:"cells"`
+}
+
+type manageRazborSeries struct {
+	SeriesID      int64  `json:"series_id"`
+	SeriesNumber  int32  `json:"series_number"`
+	SeriesName    string `json:"series_name"`
+	WrittenPosted bool   `json:"written_posted"`
+	VideoPosted   bool   `json:"video_posted"`
+}
+
+type manageRazborGroup struct {
+	ID                  int64  `json:"id"`
+	Name                string `json:"name"`
+	RazborDefaultVideo  bool   `json:"razbor_default_video"`
+	RazborDefaultPdfTex bool   `json:"razbor_default_pdf_tex"`
+}
+
+type manageRazborStudent struct {
+	StudentID           int64  `json:"student_id"`
+	UserID              int64  `json:"user_id"`
+	GroupID             int64  `json:"group_id"`
+	GroupName           string `json:"group_name"`
+	Name                string `json:"name"`
+	RazborDefaultVideo  bool   `json:"razbor_default_video"`
+	RazborDefaultPdfTex bool   `json:"razbor_default_pdf_tex"`
+}
+
+type manageRazborCell struct {
+	StudentID     int64 `json:"student_id"`
+	GroupID       int64 `json:"group_id"`
+	SeriesID      int64 `json:"series_id"`
+	CanViewVideo  bool  `json:"can_view_video"`
+	CanViewPdfTex bool  `json:"can_view_pdf_tex"`
+}
+
+type manageRazborMatrixRequest struct {
+	Target    string `json:"target"`
+	Mode      string `json:"mode"`
+	Format    string `json:"format"`
+	SeriesID  int64  `json:"series_id"`
+	StudentID int64  `json:"student_id"`
+	GroupID   int64  `json:"group_id"`
+	Allowed   *bool  `json:"allowed"`
+}
+
 func manageListStudents(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := store.New(database.Pool())
@@ -420,6 +472,199 @@ func manageListStudents(database *db.DB) http.HandlerFunc {
 			return
 		}
 		httpx.WriteJSON(w, http.StatusOK, students)
+	}
+}
+
+func manageListRazborAccess(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		q := store.New(database.Pool())
+		centerID, _, ok := manageGate(w, r, q)
+		if !ok {
+			return
+		}
+		ctx := r.Context()
+		series, err := q.ListRazborAccessSeriesForManage(ctx, centerID)
+		if err != nil {
+			logger.LogErrorContext(ctx, "manage: list razbor series", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to load razbor access")
+			return
+		}
+		groups, err := q.ListRazborAccessGroupsForManage(ctx, centerID)
+		if err != nil {
+			logger.LogErrorContext(ctx, "manage: list razbor groups", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to load razbor access")
+			return
+		}
+		students, err := q.ListRazborAccessStudentsForManage(ctx, centerID)
+		if err != nil {
+			logger.LogErrorContext(ctx, "manage: list razbor students", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to load razbor access")
+			return
+		}
+		cells, err := q.ListRazborAccessCellsForManage(ctx, centerID)
+		if err != nil {
+			logger.LogErrorContext(ctx, "manage: list razbor cells", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to load razbor access")
+			return
+		}
+		out := manageRazborAccessResponse{
+			Series:   make([]manageRazborSeries, 0, len(series)),
+			Groups:   make([]manageRazborGroup, 0, len(groups)),
+			Students: make([]manageRazborStudent, 0, len(students)),
+			Cells:    make([]manageRazborCell, 0, len(cells)),
+		}
+		for _, item := range series {
+			out.Series = append(out.Series, manageRazborSeries{
+				SeriesID: item.SeriesID, SeriesNumber: item.SeriesNumber, SeriesName: item.SeriesName,
+				WrittenPosted: item.WrittenPosted, VideoPosted: item.VideoPosted,
+			})
+		}
+		for _, item := range groups {
+			out.Groups = append(out.Groups, manageRazborGroup{
+				ID: item.ID, Name: item.Name,
+				RazborDefaultVideo:  item.RazborDefaultVideo,
+				RazborDefaultPdfTex: item.RazborDefaultPdfTex,
+			})
+		}
+		for _, item := range students {
+			name := strings.TrimSpace(strings.Join([]string{item.FirstName, stringValue(item.MiddleName), item.LastName}, " "))
+			out.Students = append(out.Students, manageRazborStudent{
+				StudentID: item.StudentID, UserID: item.UserID, GroupID: item.GroupID,
+				GroupName: item.GroupName, Name: name,
+				RazborDefaultVideo:  item.RazborDefaultVideo,
+				RazborDefaultPdfTex: item.RazborDefaultPdfTex,
+			})
+		}
+		for _, item := range cells {
+			out.Cells = append(out.Cells, manageRazborCell{
+				StudentID: item.StudentID, GroupID: item.GroupID, SeriesID: item.SeriesID,
+				CanViewVideo: item.CanViewVideo, CanViewPdfTex: item.CanViewPdfTex,
+			})
+		}
+		httpx.WriteJSON(w, http.StatusOK, out)
+	}
+}
+
+func manageSetRazborAccessMatrix(database *db.DB, hub *live.Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		q := store.New(database.Pool())
+		centerID, _, ok := manageGate(w, r, q)
+		if !ok {
+			return
+		}
+		var req manageRazborMatrixRequest
+		if !httpx.DecodeJSONBody(w, r, &req) {
+			return
+		}
+		if req.Allowed == nil {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "allowed required")
+			return
+		}
+		if req.Format != "video" && req.Format != "pdf_tex" {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "format must be video or pdf_tex")
+			return
+		}
+		if req.Mode != "series" && req.Mode != "default" {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "mode must be series or default")
+			return
+		}
+		if req.Target != "term" && req.Target != "group" && req.Target != "student" {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "target must be term, group, or student")
+			return
+		}
+		if req.Mode == "default" && req.SeriesID != 0 {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "series_id is only valid for series mode")
+			return
+		}
+		if req.Target == "student" {
+			if req.StudentID == 0 || !studentInCenter(w, r, q, req.StudentID, centerID) {
+				return
+			}
+		}
+		if req.Target == "group" {
+			if req.GroupID == 0 || !groupInCenter(w, r, q, req.GroupID, centerID) {
+				return
+			}
+		}
+
+		tx, err := database.Pool().Begin(ctx)
+		if err != nil {
+			logger.LogErrorContext(ctx, "manage: begin razbor matrix tx", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+		qx := store.New(tx)
+		var affected int64
+		if req.Mode == "series" {
+			switch req.Target {
+			case "student":
+				affected, err = qx.SetStudentRazborMatrixSeries(ctx, store.SetStudentRazborMatrixSeriesParams{
+					Format: req.Format, Allowed: *req.Allowed, StudentID: req.StudentID, SeriesID: req.SeriesID,
+				})
+			case "group":
+				affected, err = qx.SetGroupRazborMatrixSeries(ctx, store.SetGroupRazborMatrixSeriesParams{
+					Format: req.Format, Allowed: *req.Allowed, GroupID: req.GroupID, SeriesID: req.SeriesID,
+				})
+			case "term":
+				affected, err = qx.SetTermRazborMatrixSeries(ctx, store.SetTermRazborMatrixSeriesParams{
+					Format: req.Format, Allowed: *req.Allowed, MathCenterID: centerID, SeriesID: req.SeriesID,
+				})
+			}
+		} else {
+			switch req.Target {
+			case "student":
+				if req.Format == "video" {
+					affected, err = qx.SetStudentRazborDefaultVideo(ctx, store.SetStudentRazborDefaultVideoParams{Allowed: *req.Allowed, StudentID: req.StudentID})
+				} else {
+					affected, err = qx.SetStudentRazborDefaultPDFTex(ctx, store.SetStudentRazborDefaultPDFTexParams{Allowed: *req.Allowed, StudentID: req.StudentID})
+				}
+			case "group":
+				if req.Format == "video" {
+					affected, err = qx.SetGroupRazborDefaultVideo(ctx, store.SetGroupRazborDefaultVideoParams{Allowed: *req.Allowed, GroupID: req.GroupID})
+					if err == nil {
+						err = qx.SetStudentsRazborDefaultVideoForGroup(ctx, store.SetStudentsRazborDefaultVideoForGroupParams{Allowed: *req.Allowed, GroupID: req.GroupID})
+					}
+				} else {
+					affected, err = qx.SetGroupRazborDefaultPDFTex(ctx, store.SetGroupRazborDefaultPDFTexParams{Allowed: *req.Allowed, GroupID: req.GroupID})
+					if err == nil {
+						err = qx.SetStudentsRazborDefaultPDFTexForGroup(ctx, store.SetStudentsRazborDefaultPDFTexForGroupParams{Allowed: *req.Allowed, GroupID: req.GroupID})
+					}
+				}
+			case "term":
+				if req.Format == "video" {
+					err = qx.SetGroupsRazborDefaultVideoForCenter(ctx, store.SetGroupsRazborDefaultVideoForCenterParams{Allowed: *req.Allowed, MathCenterID: centerID})
+					if err == nil {
+						err = qx.SetStudentsRazborDefaultVideoForCenter(ctx, store.SetStudentsRazborDefaultVideoForCenterParams{Allowed: *req.Allowed, MathCenterID: centerID})
+					}
+				} else {
+					err = qx.SetGroupsRazborDefaultPDFTexForCenter(ctx, store.SetGroupsRazborDefaultPDFTexForCenterParams{Allowed: *req.Allowed, MathCenterID: centerID})
+					if err == nil {
+						err = qx.SetStudentsRazborDefaultPDFTexForCenter(ctx, store.SetStudentsRazborDefaultPDFTexForCenterParams{Allowed: *req.Allowed, MathCenterID: centerID})
+					}
+				}
+				if err == nil {
+					affected = 1
+				}
+			}
+		}
+		if err != nil {
+			logger.LogErrorContext(ctx, "manage: set razbor matrix", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to change razbor access")
+			return
+		}
+		if req.Mode == "series" && affected == 0 {
+			httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "target is not in the active term")
+			return
+		}
+		if err := tx.Commit(ctx); err != nil {
+			logger.LogErrorContext(ctx, "manage: commit razbor matrix", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
+		live.Publish(ctx, database.Pool(), live.Event{CenterID: centerID, Kind: live.KindCoffins})
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
@@ -491,6 +736,11 @@ func manageAddStudent(database *db.DB, hub *live.Hub) http.HandlerFunc {
 				return
 			}
 			logger.LogErrorContext(ctx, "manage: add student", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to add student")
+			return
+		}
+		if err := q.InitializeStudentRazborAccess(ctx, s.ID); err != nil {
+			logger.LogErrorContext(ctx, "manage: initialize student razbor access", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to add student")
 			return
 		}
@@ -637,8 +887,8 @@ func manageSetStudentSeriesRazborAccess(database *db.DB, hub *live.Hub) http.Han
 			return
 		}
 		affected, err := q.SetStudentSeriesRazborAccess(r.Context(), store.SetStudentSeriesRazborAccessParams{
-			StudentID:     studentID,
-			SeriesID:      seriesID,
+			ID:            studentID,
+			ID_2:          seriesID,
 			CanViewVideo:  *req.CanViewVideo,
 			CanViewPdfTex: *req.CanViewPDFTex,
 		})
@@ -897,6 +1147,13 @@ func manageRevokeInvite(database *db.DB) http.HandlerFunc {
 }
 
 // helpers --------------------------------------------------------------------
+
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
 
 // groupInCenter loads a group and confirms it belongs to {centerID}. On any
 // mismatch it writes 404 and returns false. Foreign groups are reported as "not

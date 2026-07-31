@@ -55,11 +55,52 @@ FROM math_center_groups
 WHERE id = $1;
 
 -- name: AddStudentToGroup :one
-INSERT INTO math_center_students (user_id, group_id, term_id)
-SELECT $1, g.id, g.term_id
+INSERT INTO math_center_students (
+    user_id,
+    group_id,
+    term_id,
+    razbor_default_video,
+    razbor_default_pdf_tex
+)
+SELECT $1,
+       g.id,
+       g.term_id,
+       g.razbor_default_video,
+       g.razbor_default_pdf_tex
 FROM math_center_groups g
 WHERE g.id = @group_id::bigint
 RETURNING id, user_id, group_id, created_at;
+
+-- name: InitializeStudentRazborAccess :exec
+INSERT INTO math_center_student_series_razbor_access (
+    student_user_id,
+    series_id,
+    can_view_video,
+    can_view_pdf_tex
+)
+SELECT student.user_id,
+       series.id,
+       student.razbor_default_video,
+       student.razbor_default_pdf_tex
+FROM math_center_students student
+JOIN math_center_series series ON series.term_id = student.term_id
+WHERE student.id = $1
+ON CONFLICT (student_user_id, series_id) DO NOTHING;
+
+-- name: InitializeSeriesRazborAccess :exec
+INSERT INTO math_center_student_series_razbor_access (
+    student_user_id,
+    series_id,
+    can_view_video,
+    can_view_pdf_tex
+)
+SELECT student.user_id,
+       series.id,
+       student.razbor_default_video,
+       student.razbor_default_pdf_tex
+FROM math_center_students student
+JOIN math_center_series series ON series.id = $1 AND series.term_id = student.term_id
+ON CONFLICT (student_user_id, series_id) DO NOTHING;
 
 -- name: GetStudentByUserID :one
 SELECT s.id          AS id,
@@ -99,6 +140,253 @@ WHERE g.term_id = COALESCE(
     (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.kind = 'legacy')
 )
 ORDER BY g.name ASC, u.last_name ASC, u.first_name ASC;
+
+-- name: ListRazborAccessSeriesForManage :many
+WITH selected_term AS (
+    SELECT COALESCE(
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.is_active = TRUE),
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.kind = 'legacy')
+    ) AS id
+)
+SELECT series.id AS series_id,
+       series.number AS series_number,
+       series.name AS series_name,
+       EXISTS (
+           SELECT 1
+           FROM math_center_problems problem
+           JOIN math_center_subproblems subproblem ON subproblem.problem_id = problem.id
+           JOIN math_center_subproblem_solutions solution ON solution.subproblem_id = subproblem.id
+           WHERE problem.series_id = series.id
+             AND NOT solution.is_coffin
+             AND (solution.solution_tex_source IS NOT NULL OR solution.solution_pdf_object_key IS NOT NULL)
+       ) AS written_posted,
+       EXISTS (
+           SELECT 1
+           FROM math_center_problems problem
+           JOIN math_center_subproblems subproblem ON subproblem.problem_id = problem.id
+           JOIN math_center_subproblem_solutions solution ON solution.subproblem_id = subproblem.id
+           WHERE problem.series_id = series.id
+             AND NOT solution.is_coffin
+             AND solution.solution_link IS NOT NULL
+       ) AS video_posted
+FROM math_center_series series
+WHERE series.math_center_id = $1
+  AND series.term_id = (SELECT id FROM selected_term)
+ORDER BY series.number ASC;
+
+-- name: ListRazborAccessGroupsForManage :many
+WITH selected_term AS (
+    SELECT COALESCE(
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.is_active = TRUE),
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.kind = 'legacy')
+    ) AS id
+)
+SELECT group_row.id,
+       group_row.math_center_id,
+       group_row.name,
+       group_row.razbor_default_video,
+       group_row.razbor_default_pdf_tex
+FROM math_center_groups group_row
+WHERE group_row.math_center_id = $1
+  AND group_row.term_id = (SELECT id FROM selected_term)
+ORDER BY group_row.name ASC;
+
+-- name: ListRazborAccessStudentsForManage :many
+WITH selected_term AS (
+    SELECT COALESCE(
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.is_active = TRUE),
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.kind = 'legacy')
+    ) AS id
+)
+SELECT student.id AS student_id,
+       student.user_id,
+       student.group_id,
+       student.razbor_default_video,
+       student.razbor_default_pdf_tex,
+       group_row.name AS group_name,
+       user_row.first_name,
+       user_row.middle_name,
+       user_row.last_name
+FROM math_center_students student
+JOIN math_center_groups group_row ON group_row.id = student.group_id
+JOIN users user_row ON user_row.id = student.user_id
+WHERE group_row.math_center_id = $1
+  AND student.term_id = (SELECT id FROM selected_term)
+ORDER BY group_row.name ASC, user_row.last_name ASC, user_row.first_name ASC;
+
+-- name: ListRazborAccessCellsForManage :many
+WITH selected_term AS (
+    SELECT COALESCE(
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.is_active = TRUE),
+        (SELECT t.id FROM math_center_terms t WHERE t.math_center_id = $1 AND t.kind = 'legacy')
+    ) AS id
+)
+SELECT student.id AS student_id,
+       student.group_id,
+       series.id AS series_id,
+       COALESCE(access.can_view_video, student.razbor_default_video)::boolean AS can_view_video,
+       COALESCE(access.can_view_pdf_tex, student.razbor_default_pdf_tex)::boolean AS can_view_pdf_tex
+FROM math_center_students student
+JOIN math_center_series series ON series.term_id = student.term_id
+LEFT JOIN math_center_student_series_razbor_access access
+  ON access.student_user_id = student.user_id
+ AND access.series_id = series.id
+WHERE student.term_id = (SELECT id FROM selected_term)
+  AND EXISTS (
+      SELECT 1 FROM math_center_groups group_row
+      WHERE group_row.id = student.group_id
+        AND group_row.math_center_id = $1
+  )
+ORDER BY student.id, series.number;
+
+-- name: SetStudentRazborMatrixSeries :execrows
+INSERT INTO math_center_student_series_razbor_access (
+    student_user_id,
+    series_id,
+    can_view_video,
+    can_view_pdf_tex
+)
+SELECT student.user_id,
+       series.id,
+       CASE WHEN sqlc.arg(format)::text = 'video'
+            THEN sqlc.arg(allowed)::boolean
+            ELSE COALESCE(access.can_view_video, student.razbor_default_video)
+       END,
+       CASE WHEN sqlc.arg(format)::text = 'pdf_tex'
+            THEN sqlc.arg(allowed)::boolean
+            ELSE COALESCE(access.can_view_pdf_tex, student.razbor_default_pdf_tex)
+       END
+FROM math_center_students student
+JOIN math_center_series series ON series.term_id = student.term_id
+JOIN math_center_terms active_term ON active_term.id = student.term_id AND active_term.is_active = TRUE
+LEFT JOIN math_center_student_series_razbor_access access
+  ON access.student_user_id = student.user_id
+ AND access.series_id = series.id
+WHERE student.id = sqlc.arg(student_id)::bigint
+  AND (sqlc.arg(series_id)::bigint = 0 OR series.id = sqlc.arg(series_id)::bigint)
+ON CONFLICT (student_user_id, series_id)
+DO UPDATE SET can_view_video = EXCLUDED.can_view_video,
+              can_view_pdf_tex = EXCLUDED.can_view_pdf_tex,
+              updated_at = NOW();
+
+-- name: SetGroupRazborMatrixSeries :execrows
+INSERT INTO math_center_student_series_razbor_access (
+    student_user_id,
+    series_id,
+    can_view_video,
+    can_view_pdf_tex
+)
+SELECT student.user_id,
+       series.id,
+       CASE WHEN sqlc.arg(format)::text = 'video'
+            THEN sqlc.arg(allowed)::boolean
+            ELSE COALESCE(access.can_view_video, student.razbor_default_video)
+       END,
+       CASE WHEN sqlc.arg(format)::text = 'pdf_tex'
+            THEN sqlc.arg(allowed)::boolean
+            ELSE COALESCE(access.can_view_pdf_tex, student.razbor_default_pdf_tex)
+       END
+FROM math_center_students student
+JOIN math_center_series series ON series.term_id = student.term_id
+JOIN math_center_terms active_term ON active_term.id = student.term_id AND active_term.is_active = TRUE
+LEFT JOIN math_center_student_series_razbor_access access
+  ON access.student_user_id = student.user_id
+ AND access.series_id = series.id
+WHERE student.group_id = sqlc.arg(group_id)::bigint
+  AND (sqlc.arg(series_id)::bigint = 0 OR series.id = sqlc.arg(series_id)::bigint)
+ON CONFLICT (student_user_id, series_id)
+DO UPDATE SET can_view_video = EXCLUDED.can_view_video,
+              can_view_pdf_tex = EXCLUDED.can_view_pdf_tex,
+              updated_at = NOW();
+
+-- name: SetTermRazborMatrixSeries :execrows
+INSERT INTO math_center_student_series_razbor_access (
+    student_user_id,
+    series_id,
+    can_view_video,
+    can_view_pdf_tex
+)
+SELECT student.user_id,
+       series.id,
+       CASE WHEN sqlc.arg(format)::text = 'video'
+            THEN sqlc.arg(allowed)::boolean
+            ELSE COALESCE(access.can_view_video, student.razbor_default_video)
+       END,
+       CASE WHEN sqlc.arg(format)::text = 'pdf_tex'
+            THEN sqlc.arg(allowed)::boolean
+            ELSE COALESCE(access.can_view_pdf_tex, student.razbor_default_pdf_tex)
+       END
+FROM math_center_students student
+JOIN math_center_series series ON series.term_id = student.term_id
+JOIN math_center_terms term ON term.id = student.term_id
+LEFT JOIN math_center_student_series_razbor_access access
+  ON access.student_user_id = student.user_id
+ AND access.series_id = series.id
+WHERE term.math_center_id = sqlc.arg(math_center_id)::bigint
+  AND term.is_active = TRUE
+  AND (sqlc.arg(series_id)::bigint = 0 OR series.id = sqlc.arg(series_id)::bigint)
+ON CONFLICT (student_user_id, series_id)
+DO UPDATE SET can_view_video = EXCLUDED.can_view_video,
+              can_view_pdf_tex = EXCLUDED.can_view_pdf_tex,
+              updated_at = NOW();
+
+-- name: SetStudentRazborDefaultVideo :execrows
+UPDATE math_center_students
+SET razbor_default_video = sqlc.arg(allowed)::boolean
+WHERE id = sqlc.arg(student_id)::bigint
+  AND term_id = (SELECT id FROM math_center_terms WHERE is_active = TRUE AND math_center_id = (SELECT g.math_center_id FROM math_center_groups g JOIN math_center_students s ON s.group_id = g.id WHERE s.id = sqlc.arg(student_id)::bigint));
+
+-- name: SetStudentRazborDefaultPDFTex :execrows
+UPDATE math_center_students
+SET razbor_default_pdf_tex = sqlc.arg(allowed)::boolean
+WHERE id = sqlc.arg(student_id)::bigint
+  AND term_id = (SELECT id FROM math_center_terms WHERE is_active = TRUE AND math_center_id = (SELECT g.math_center_id FROM math_center_groups g JOIN math_center_students s ON s.group_id = g.id WHERE s.id = sqlc.arg(student_id)::bigint));
+
+-- name: SetGroupRazborDefaultVideo :execrows
+UPDATE math_center_groups
+SET razbor_default_video = sqlc.arg(allowed)::boolean
+WHERE id = sqlc.arg(group_id)::bigint
+  AND term_id = (SELECT id FROM math_center_terms WHERE is_active = TRUE AND math_center_id = (SELECT math_center_id FROM math_center_groups WHERE id = sqlc.arg(group_id)::bigint));
+
+-- name: SetGroupRazborDefaultPDFTex :execrows
+UPDATE math_center_groups
+SET razbor_default_pdf_tex = sqlc.arg(allowed)::boolean
+WHERE id = sqlc.arg(group_id)::bigint
+  AND term_id = (SELECT id FROM math_center_terms WHERE is_active = TRUE AND math_center_id = (SELECT math_center_id FROM math_center_groups WHERE id = sqlc.arg(group_id)::bigint));
+
+-- name: SetStudentsRazborDefaultVideoForGroup :exec
+UPDATE math_center_students
+SET razbor_default_video = sqlc.arg(allowed)::boolean
+WHERE group_id = sqlc.arg(group_id)::bigint
+  AND term_id = (SELECT id FROM math_center_terms WHERE is_active = TRUE AND math_center_id = (SELECT math_center_id FROM math_center_groups WHERE id = sqlc.arg(group_id)::bigint));
+
+-- name: SetStudentsRazborDefaultPDFTexForGroup :exec
+UPDATE math_center_students
+SET razbor_default_pdf_tex = sqlc.arg(allowed)::boolean
+WHERE group_id = sqlc.arg(group_id)::bigint
+  AND term_id = (SELECT id FROM math_center_terms WHERE is_active = TRUE AND math_center_id = (SELECT math_center_id FROM math_center_groups WHERE id = sqlc.arg(group_id)::bigint));
+
+-- name: SetGroupsRazborDefaultVideoForCenter :exec
+UPDATE math_center_groups
+SET razbor_default_video = sqlc.arg(allowed)::boolean
+WHERE math_center_id = sqlc.arg(math_center_id)::bigint
+  AND term_id = (SELECT id FROM math_center_terms WHERE math_center_id = sqlc.arg(math_center_id)::bigint AND is_active = TRUE);
+
+-- name: SetGroupsRazborDefaultPDFTexForCenter :exec
+UPDATE math_center_groups
+SET razbor_default_pdf_tex = sqlc.arg(allowed)::boolean
+WHERE math_center_id = sqlc.arg(math_center_id)::bigint
+  AND term_id = (SELECT id FROM math_center_terms WHERE math_center_id = sqlc.arg(math_center_id)::bigint AND is_active = TRUE);
+
+-- name: SetStudentsRazborDefaultVideoForCenter :exec
+UPDATE math_center_students
+SET razbor_default_video = sqlc.arg(allowed)::boolean
+WHERE term_id = (SELECT id FROM math_center_terms WHERE math_center_id = sqlc.arg(math_center_id)::bigint AND is_active = TRUE);
+
+-- name: SetStudentsRazborDefaultPDFTexForCenter :exec
+UPDATE math_center_students
+SET razbor_default_pdf_tex = sqlc.arg(allowed)::boolean
+WHERE term_id = (SELECT id FROM math_center_terms WHERE math_center_id = sqlc.arg(math_center_id)::bigint AND is_active = TRUE);
 
 -- name: RemoveStudent :execrows
 DELETE
@@ -180,7 +468,7 @@ WHERE t.math_center_id = ANY(@center_ids::bigint[])
 ORDER BY t.math_center_id ASC, t.is_head_teacher DESC, u.last_name ASC, u.first_name ASC;
 
 -- name: ListGroupsForCenters :many
-SELECT *
+SELECT id, math_center_id, name, created_at, term_id
 FROM math_center_groups
 WHERE term_id = COALESCE(
     (SELECT id
@@ -284,8 +572,8 @@ SELECT COALESCE((
 SELECT series.id AS series_id,
        series.number AS series_number,
        series.name AS series_name,
-       COALESCE(access.can_view_video, student.can_view_razbors)::boolean AS can_view_video,
-       COALESCE(access.can_view_pdf_tex, student.can_view_razbors)::boolean AS can_view_pdf_tex
+       COALESCE(access.can_view_video, student.razbor_default_video, student.can_view_razbors)::boolean AS can_view_video,
+       COALESCE(access.can_view_pdf_tex, student.razbor_default_pdf_tex, student.can_view_razbors)::boolean AS can_view_pdf_tex
 FROM math_center_students student
          JOIN math_center_series series ON series.term_id = student.term_id
          LEFT JOIN math_center_student_series_razbor_access access
@@ -305,15 +593,15 @@ INSERT INTO math_center_student_series_razbor_access (
 )
 SELECT student.user_id,
        series.id,
-       sqlc.arg(can_view_video),
-       sqlc.arg(can_view_pdf_tex)
+       $3,
+       $4
 FROM math_center_students student
          JOIN math_center_groups student_group ON student_group.id = student.group_id
          JOIN math_center_series series
-              ON series.id = sqlc.arg(series_id)
+              ON series.id = $2
                   AND series.term_id = student.term_id
                   AND series.math_center_id = student_group.math_center_id
-WHERE student.id = sqlc.arg(student_id)
+WHERE student.id = $1
 ON CONFLICT (student_user_id, series_id)
     DO UPDATE SET can_view_video = EXCLUDED.can_view_video,
                   can_view_pdf_tex = EXCLUDED.can_view_pdf_tex,
@@ -323,11 +611,13 @@ ON CONFLICT (student_user_id, series_id)
 -- Use the enrollment belonging to the series' term when it exists; otherwise
 -- fall back to the student's current center enrollment for carried coffins.
 SELECT series.id AS series_id,
-       COALESCE(access.can_view_video, enrollment.can_view_razbors, FALSE)::boolean AS can_view_video,
-       COALESCE(access.can_view_pdf_tex, enrollment.can_view_razbors, FALSE)::boolean AS can_view_pdf_tex
+       COALESCE(access.can_view_video, enrollment.razbor_default_video, enrollment.can_view_razbors, FALSE)::boolean AS can_view_video,
+       COALESCE(access.can_view_pdf_tex, enrollment.razbor_default_pdf_tex, enrollment.can_view_razbors, FALSE)::boolean AS can_view_pdf_tex
 FROM math_center_series series
          LEFT JOIN LATERAL (
-             SELECT student.can_view_razbors
+             SELECT student.razbor_default_video,
+                    student.razbor_default_pdf_tex,
+                    student.can_view_razbors
              FROM math_center_students student
                       JOIN math_center_groups student_group ON student_group.id = student.group_id
                       JOIN math_center_terms term ON term.id = student.term_id
@@ -346,11 +636,13 @@ ORDER BY series.number ASC;
 
 -- name: GetStudentSeriesRazborAccess :one
 SELECT series.id AS series_id,
-       COALESCE(access.can_view_video, enrollment.can_view_razbors, FALSE)::boolean AS can_view_video,
-       COALESCE(access.can_view_pdf_tex, enrollment.can_view_razbors, FALSE)::boolean AS can_view_pdf_tex
+       COALESCE(access.can_view_video, enrollment.razbor_default_video, enrollment.can_view_razbors, FALSE)::boolean AS can_view_video,
+       COALESCE(access.can_view_pdf_tex, enrollment.razbor_default_pdf_tex, enrollment.can_view_razbors, FALSE)::boolean AS can_view_pdf_tex
 FROM math_center_series series
          LEFT JOIN LATERAL (
-             SELECT student.can_view_razbors
+             SELECT student.razbor_default_video,
+                    student.razbor_default_pdf_tex,
+                    student.can_view_razbors
              FROM math_center_students student
                       JOIN math_center_groups student_group ON student_group.id = student.group_id
                       JOIN math_center_terms term ON term.id = student.term_id

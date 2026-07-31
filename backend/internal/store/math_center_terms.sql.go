@@ -7,6 +7,7 @@ package store
 
 import (
 	"context"
+	"time"
 )
 
 const archiveActiveTermsForCenter = `-- name: ArchiveActiveTermsForCenter :exec
@@ -23,8 +24,18 @@ func (q *Queries) ArchiveActiveTermsForCenter(ctx context.Context, mathCenterID 
 }
 
 const copyGroupsToTerm = `-- name: CopyGroupsToTerm :exec
-INSERT INTO math_center_groups (math_center_id, term_id, name)
-SELECT g.math_center_id, $2, g.name
+INSERT INTO math_center_groups (
+    math_center_id,
+    term_id,
+    name,
+    razbor_default_video,
+    razbor_default_pdf_tex
+)
+SELECT g.math_center_id,
+       $2,
+       g.name,
+       g.razbor_default_video,
+       g.razbor_default_pdf_tex
 FROM math_center_groups g
 WHERE g.term_id = $1
 ORDER BY g.name ASC
@@ -53,9 +64,17 @@ type CreateMathCenterGroupForTermParams struct {
 	Name string `json:"name"`
 }
 
-func (q *Queries) CreateMathCenterGroupForTerm(ctx context.Context, arg CreateMathCenterGroupForTermParams) (MathCenterGroup, error) {
+type CreateMathCenterGroupForTermRow struct {
+	ID           int64     `json:"id"`
+	MathCenterID int64     `json:"math_center_id"`
+	Name         string    `json:"name"`
+	CreatedAt    time.Time `json:"created_at"`
+	TermID       int64     `json:"term_id"`
+}
+
+func (q *Queries) CreateMathCenterGroupForTerm(ctx context.Context, arg CreateMathCenterGroupForTermParams) (CreateMathCenterGroupForTermRow, error) {
 	row := q.db.QueryRow(ctx, createMathCenterGroupForTerm, arg.ID, arg.Name)
-	var i MathCenterGroup
+	var i CreateMathCenterGroupForTermRow
 	err := row.Scan(
 		&i.ID,
 		&i.MathCenterID,
@@ -178,15 +197,23 @@ WHERE term_id = $1
 ORDER BY name ASC
 `
 
-func (q *Queries) ListGroupsForTerm(ctx context.Context, termID int64) ([]MathCenterGroup, error) {
+type ListGroupsForTermRow struct {
+	ID           int64     `json:"id"`
+	MathCenterID int64     `json:"math_center_id"`
+	Name         string    `json:"name"`
+	CreatedAt    time.Time `json:"created_at"`
+	TermID       int64     `json:"term_id"`
+}
+
+func (q *Queries) ListGroupsForTerm(ctx context.Context, termID int64) ([]ListGroupsForTermRow, error) {
 	rows, err := q.db.Query(ctx, listGroupsForTerm, termID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []MathCenterGroup{}
+	items := []ListGroupsForTermRow{}
 	for rows.Next() {
-		var i MathCenterGroup
+		var i ListGroupsForTermRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.MathCenterID,

@@ -79,11 +79,13 @@ type MathCenter struct {
 }
 
 type MathCenterGroup struct {
-	ID           int64     `json:"id"`
-	MathCenterID int64     `json:"math_center_id"`
-	Name         string    `json:"name"`
-	CreatedAt    time.Time `json:"created_at"`
-	TermID       int64     `json:"term_id"`
+	ID                  int64     `json:"id"`
+	MathCenterID        int64     `json:"math_center_id"`
+	Name                string    `json:"name"`
+	CreatedAt           time.Time `json:"created_at"`
+	TermID              int64     `json:"term_id"`
+	RazborDefaultVideo  bool      `json:"razbor_default_video"`
+	RazborDefaultPdfTex bool      `json:"razbor_default_pdf_tex"`
 }
 
 type MathCenterLikbez struct {
@@ -128,12 +130,14 @@ type MathCenterSolutionGroup struct {
 }
 
 type MathCenterStudent struct {
-	ID             int64     `json:"id"`
-	UserID         int64     `json:"user_id"`
-	GroupID        int64     `json:"group_id"`
-	CreatedAt      time.Time `json:"created_at"`
-	TermID         int64     `json:"term_id"`
-	CanViewRazbors bool      `json:"can_view_razbors"`
+	ID                  int64     `json:"id"`
+	UserID              int64     `json:"user_id"`
+	GroupID             int64     `json:"group_id"`
+	CreatedAt           time.Time `json:"created_at"`
+	TermID              int64     `json:"term_id"`
+	CanViewRazbors      bool      `json:"can_view_razbors"`
+	RazborDefaultVideo  bool      `json:"razbor_default_video"`
+	RazborDefaultPdfTex bool      `json:"razbor_default_pdf_tex"`
 }
 
 type MathCenterStudentNote struct {

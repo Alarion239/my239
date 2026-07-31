@@ -36,7 +36,15 @@ export function StudentRazbor({ series }: { series: Series }) {
   const videoAccess = series.razbor_video_access ?? legacyAccess
   const pdfTexAccess = series.razbor_pdf_tex_access ?? legacyAccess
 
-  if (!videoAccess && !pdfTexAccess) {
+  const releasedCoffinAvailable = series.problems.some((problem) =>
+    problem.subproblems.some((sub) =>
+      sub.is_coffin &&
+      (sub.has_solution_tex || sub.has_solution_pdf || !!sub.solution_link) &&
+      razborReleased(sub, series.due_at),
+    ),
+  )
+
+  if (!videoAccess && !pdfTexAccess && !releasedCoffinAvailable) {
     return (
       <div className="rounded-xl border border-line bg-surface-muted px-5 py-6">
         <p className="font-medium text-ink">Доступ к разборам закрыт.</p>
