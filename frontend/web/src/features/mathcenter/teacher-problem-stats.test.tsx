@@ -165,7 +165,7 @@ describe('TeacherProblemStats — разбор frame', () => {
         .getByRole('img', { name: /по задаче Задача 1 \(в\)/ })
         .closest('[role="button"]') as HTMLElement,
     )
-    expect(screen.getByRole('region', { name: /Задача 1 \(б\)/ })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: /Задачи 1/ })).toBeInTheDocument()
     expect(screen.getByRole('img', { name: /по задаче Задача 1 \(в\)/ }).closest('[role="button"]'))
       .toHaveClass('ring-2', 'ring-accent/50')
   })

@@ -80,6 +80,31 @@ function subStatLabel(stat: SeriesProblemStat): string {
     : stat.problem_display
 }
 
+function formatProblemSelection(subproblemIds: number[], stats: SeriesProblemStats): string {
+  const selected = new Set(subproblemIds)
+  const numbers = [...new Set(
+    stats.problems
+      .filter((problem) => selected.has(problem.subproblem_id))
+      .map((problem) => problem.problem_number),
+  )].sort((a, b) => a - b)
+  if (numbers.length === 0) return 'Задачи'
+
+  const parts: string[] = []
+  let start = numbers[0]
+  let previous = numbers[0]
+  for (const number of numbers.slice(1)) {
+    if (number === previous + 1) {
+      previous = number
+      continue
+    }
+    parts.push(start === previous ? String(start) : `${start}-${previous}`)
+    start = number
+    previous = number
+  }
+  parts.push(start === previous ? String(start) : `${start}-${previous}`)
+  return 'Задачи ' + parts.join(', ')
+}
+
 export interface TeacherProblemStatsProps {
   stats: SeriesProblemStats
   series: Series
@@ -179,6 +204,7 @@ export function TeacherProblemStats({
               centerId={centerId}
               sub={previewSub}
               subproblemIds={panel.subproblemIds}
+              targetTitle={formatProblemSelection(panel.subproblemIds, stats)}
               mode={panel.mode}
               onModeChange={(mode) => setPanel({ ...panel, mode })}
               onClose={() => {
@@ -221,6 +247,7 @@ function RazborPreview({
   centerId,
   sub,
   subproblemIds,
+  targetTitle,
   mode,
   onModeChange,
   onClose,
@@ -228,6 +255,7 @@ function RazborPreview({
   centerId: number
   sub: Subproblem
   subproblemIds: number[]
+  targetTitle: string
   mode: SolutionWorkbenchMode
   onModeChange: (mode: SolutionWorkbenchMode) => void
   onClose: () => void
@@ -239,8 +267,8 @@ function RazborPreview({
   const publish = usePublishSubproblemSolutionsBatch(centerId)
   return (
     <SolutionWorkbench
-      title={subproblemIds.length > 1 ? 'Общий разбор · ' + sub.display : sub.display}
-      targetDescription={subproblemIds.length > 1 ? 'Задачи: ' + subproblemIds.length : undefined}
+      title={subproblemIds.length > 1 ? 'Общий разбор · ' + targetTitle : sub.display}
+      targetDescription={subproblemIds.length > 1 ? 'Подзадач в группе: ' + subproblemIds.length : undefined}
       mode={mode}
       hasTex={sub.has_solution_tex}
       hasPdf={sub.has_solution_pdf}
