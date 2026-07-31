@@ -436,11 +436,30 @@ function RazborAccessMatrix({
   )
 }
 
+export function RazborAccessTab({ centerId }: { centerId: number }) {
+  const access = useManageRazborAccess(centerId)
+  const setAccess = useManageSetRazborAccess(centerId)
+
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-4">
+        <SectionHeader
+          title="Доступ к разборам"
+          description="Верхний левый треугольник — письменный разбор, нижний правый — видео. Серые треугольники ещё не опубликованы, но их можно настроить заранее."
+        />
+        {access.isPending ? <Spinner /> : access.isError || !access.data ? (
+          <p className="text-sm text-danger">Не удалось загрузить доступ к разборам.</p>
+        ) : (
+          <RazborAccessMatrix data={access.data} setAccess={setAccess} />
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 export function StudentsTab({ centerId }: { centerId: number }) {
   const { data: students, isPending, isError } = useManageStudents(centerId)
   const { data: groups } = useManageGroups(centerId)
-  const access = useManageRazborAccess(centerId)
-  const setAccess = useManageSetRazborAccess(centerId)
   const addStudent = useManageAddStudent(centerId)
   const setGroup = useManageSetStudentGroup(centerId)
   const remove = useManageRemoveStudent(centerId)
@@ -469,17 +488,7 @@ export function StudentsTab({ centerId }: { centerId: number }) {
   return (
     <Card>
       <CardContent className="flex flex-col gap-4">
-        <SectionHeader
-          title="Доступ к разборам"
-          description="Верхний левый треугольник — письменный разбор, нижний правый — видео. Серые треугольники ещё не опубликованы, но их можно настроить заранее."
-        />
-        {access.isPending ? <Spinner /> : access.isError || !access.data ? (
-          <p className="text-sm text-danger">Не удалось загрузить доступ к разборам.</p>
-        ) : (
-          <RazborAccessMatrix data={access.data} setAccess={setAccess} />
-        )}
-
-        <div className="border-t border-line pt-4">
+        <div>
           <SectionHeader title="Состав учеников" description="Группа и удаление ученика остаются отдельными действиями." />
           {isPending ? <Spinner /> : isError || !students ? (
             <p className="text-sm text-danger">Не удалось загрузить учеников.</p>

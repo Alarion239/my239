@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ApiClient, ApiClientProvider, type TokenStore } from '@my239/shared'
-import { StudentsTab } from './students-tab'
+import { RazborAccessTab } from './students-tab'
 
 const noopStore: TokenStore = {
   getRefreshToken: async () => null,
@@ -19,7 +19,7 @@ function renderTab() {
   render(
     <QueryClientProvider client={queryClient}>
       <ApiClientProvider client={client}>
-        <StudentsTab centerId={7} />
+        <RazborAccessTab centerId={7} />
       </ApiClientProvider>
     </QueryClientProvider>,
   )
@@ -29,7 +29,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('StudentsTab razbor access matrix', () => {
+describe('RazborAccessTab', () => {
   it('toggles the written triangle independently and collapses a group', async () => {
     const patches: unknown[] = []
     vi.stubGlobal(

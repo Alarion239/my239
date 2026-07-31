@@ -5,16 +5,17 @@ import { useAuth } from '../../../auth/auth-context'
 import { useCenterIdContext, useCenterTermContext } from '../center-id-context'
 import { GroupsTab } from './groups-tab'
 import { TeachersTab } from './teachers-tab'
-import { StudentsTab } from './students-tab'
+import { RazborAccessTab, StudentsTab } from './students-tab'
 import { GoogleSheetsTab } from './google-sheets-tab'
 import { LatexPreambleTab } from './latex-preamble-tab'
 import { nextMathCenterTerm, nextTermDisplayName, shouldShowTermRollover } from './term-rollover'
 
-type Tab = 'groups' | 'teachers' | 'students' | 'google-sheets' | 'latex'
+type Tab = 'groups' | 'teachers' | 'razbor-access' | 'students' | 'google-sheets' | 'latex'
 
 const TABS: PillTabOption<Tab>[] = [
   { id: 'groups', label: 'Группы' },
   { id: 'teachers', label: 'Преподаватели' },
+  { id: 'razbor-access', label: 'Доступ к разборам' },
   { id: 'students', label: 'Ученики' },
   { id: 'google-sheets', label: 'Google Sheets' },
   { id: 'latex', label: 'LaTeX' },
@@ -25,7 +26,7 @@ const TAB_IDS = TABS.map((t) => t.id)
 // ManagePage is the head-teacher self-service panel for one center. Access is
 // limited to a head teacher of this center or a global admin; everyone else
 // sees "Нет доступа". The three URL-driven tabs manage groups, teachers, and
-// students.
+// students, and разбор access.
 export function ManagePage() {
   const centerId = useCenterIdContext()
   const { term } = useCenterTermContext()
@@ -79,6 +80,8 @@ export function ManagePage() {
         <GroupsTab centerId={centerId} />
       ) : tab === 'teachers' ? (
         <TeachersTab centerId={centerId} />
+      ) : tab === 'razbor-access' && (term === null || term.is_active) ? (
+        <RazborAccessTab centerId={centerId} />
       ) : tab === 'google-sheets' ? (
         <GoogleSheetsTab centerId={centerId} activeTermId={term?.id ?? 0} />
       ) : term === null || term.is_active ? (
