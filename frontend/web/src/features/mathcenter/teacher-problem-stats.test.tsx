@@ -166,8 +166,20 @@ describe('TeacherProblemStats — разбор frame', () => {
         .closest('[role="button"]') as HTMLElement,
     )
     expect(screen.getByRole('region', { name: /Задачи 1/ })).toBeInTheDocument()
-    expect(screen.getByRole('img', { name: /по задаче Задача 1 \(в\)/ }).closest('[role="button"]'))
-      .toHaveClass('ring-2', 'ring-accent/50')
+    const added = screen.getByRole('img', { name: /по задаче Задача 1 \(в\)/ }).closest('[role="button"]') as HTMLElement
+    expect(added).toHaveClass('ring-2', 'ring-accent/50')
+
+    await user.click(added)
+    expect(added).toHaveAttribute('aria-pressed', 'false')
+    expect(added).not.toHaveClass('ring-2', 'ring-accent/50')
+    expect(screen.getByRole('region', { name: /Задача 1 \(б\)/ })).toBeInTheDocument()
+
+    await user.click(
+      screen
+        .getByRole('img', { name: /по задаче Задача 1 \(б\)/ })
+        .closest('[role="button"]') as HTMLElement,
+    )
+    expect(screen.queryByRole('region', { name: /Задача 1 \(б\)/ })).not.toBeInTheDocument()
   })
 
   it('dismisses the replacement warning on a row click and replaces only from its action', async () => {

@@ -135,8 +135,8 @@ export function TeacherProblemStats({
 
   const group = useGroupSubproblemSolutions(centerId)
   // The first click on an existing razbor is deliberately non-destructive: it
-  // raises an inline replacement warning. The second click joins that target
-  // to the draft and moves it out of its previous shared group.
+  // raises an inline replacement warning. The explicit action in that warning
+  // moves the target out of its previous shared group.
   const [replaceWarningId, setReplaceWarningId] = useState<number | null>(null)
   const [panel, setPanel] = useState<{
     mode: SolutionWorkbenchMode
@@ -160,7 +160,15 @@ export function TeacherProblemStats({
     originId.current = id
     const pressed = metaById.get(id)
     if (panel?.mode === 'edit') {
-      if (panel.subproblemIds.includes(id)) return
+      if (panel.subproblemIds.includes(id)) {
+        const nextIds = panel.subproblemIds.filter((subproblemId) => subproblemId !== id)
+        setReplaceWarningId(null)
+        // A draft without targets cannot be saved, so closing here keeps the
+        // workbench from becoming an unattached editor. With other targets,
+        // preserve the open draft and simply remove this row's selection.
+        setPanel(nextIds.length > 0 ? { ...panel, subproblemIds: nextIds } : null)
+        return
+      }
       if (hasRazbor(pressed)) {
         // The warning row is dismissible. The explicit action inside it is
         // the only path that moves a problem out of its previous group.
