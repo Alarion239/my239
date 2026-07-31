@@ -7,4 +7,5 @@ import { WebTokenStore } from './token-store'
 export const apiClient = new ApiClient({
   baseURL: import.meta.env.VITE_API_BASE ?? '/api/v1',
   tokenStore: new WebTokenStore(),
+  restoreSession: true,
 })

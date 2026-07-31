@@ -21,11 +21,15 @@ import type {
 export interface ApiClientOptions {
   baseURL: string
   tokenStore: TokenStore
+  // When enabled, restore a persisted session before the initial /auth/me
+  // request so a fresh browser load does not emit a handled 401 first.
+  restoreSession?: boolean
 }
 
 export class ApiClient {
   private readonly baseURL: string
   private readonly tokenStore: TokenStore
+  private readonly restoreSession: boolean
   private accessToken: string | null = null
   // Admin impersonation: when set, every domain request carries
   // X-Act-As-User-Id so the backend resolves the acted-as user. Auth endpoints
@@ -39,6 +43,7 @@ export class ApiClient {
   constructor(opts: ApiClientOptions) {
     this.baseURL = opts.baseURL
     this.tokenStore = opts.tokenStore
+    this.restoreSession = opts.restoreSession ?? false
   }
 
   // getBaseURL exposes the configured API base so callers can build absolute
@@ -201,6 +206,15 @@ export class ApiClient {
   // null instead of throwing, so it can back a TanStack Query that models the
   // signed-out state as data rather than an error.
   async meOrNull(): Promise<User | null> {
+    // Restore a persisted session before asking /auth/me. Without this
+    // preflight, every fresh page load sends /auth/me without a bearer token,
+    // producing a handled-but-noisy 401 in the browser console. A signed-out
+    // browser has no refresh token, so it can resolve immediately without a
+    // request at all.
+    if (this.restoreSession && !this.accessToken) {
+      const refreshToken = await this.tokenStore.getRefreshToken()
+      if (!refreshToken || !(await this.refresh())) return null
+    }
     try {
       return await this.me()
     } catch (e) {

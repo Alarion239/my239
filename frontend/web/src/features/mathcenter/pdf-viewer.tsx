@@ -19,14 +19,15 @@ let enginePromise: Promise<PdfEngine> | null = null
 
 function loadPdfEngine(): Promise<PdfEngine> {
   if (!enginePromise) {
-    enginePromise = Promise.all([
-      import('pdfjs-dist'),
-      import('pdfjs-dist/web/pdf_viewer.mjs'),
-    ]).then(([core, viewer]) => {
+    // pdf_viewer.mjs reads globalThis.pdfjsLib while it initializes. The core
+    // PDF.js module creates that global, so these imports must be sequential;
+    // Promise.all can race them in production and leave pdfjsLib undefined.
+    enginePromise = import('pdfjs-dist').then(async (core) => {
       core.GlobalWorkerOptions.workerSrc = new URL(
         'pdfjs-dist/build/pdf.worker.min.mjs',
         import.meta.url,
       ).toString()
+      const viewer = await import('pdfjs-dist/web/pdf_viewer.mjs')
       return { ...core, ...viewer } as PdfEngine
     })
   }

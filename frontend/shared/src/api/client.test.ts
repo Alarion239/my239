@@ -75,19 +75,42 @@ describe('ApiClient 401 -> refresh -> retry', () => {
     expect(await store.getRefreshToken()).toBeNull()
   })
 
-  it('does not attempt a refresh when there is no stored refresh token', async () => {
+  it('does not make an auth request when there is no stored refresh token', async () => {
     const store = memoryStore(null)
-    const client = new ApiClient({ baseURL: BASE, tokenStore: store })
+    const client = new ApiClient({ baseURL: BASE, tokenStore: store, restoreSession: true })
 
-    const fetchMock = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(jsonResponse(401, { code: 'unauthenticated' }))
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
 
     const user = await client.meOrNull()
 
     expect(user).toBeNull()
-    // Only the original /auth/me — no /auth/refresh call.
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('refreshes a persisted session before the initial /auth/me request', async () => {
+    const store = memoryStore('refresh-1')
+    const client = new ApiClient({ baseURL: BASE, tokenStore: store, restoreSession: true })
+
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          access_token: 'access-2',
+          refresh_token: 'refresh-2',
+          token_type: 'Bearer',
+          expires_in: 900,
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse(200, { id: 1, username: 'ivan' }))
+
+    const user = await client.meOrNull()
+
+    expect(user).toMatchObject({ id: 1, username: 'ivan' })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect((fetchMock.mock.calls[0][1] as RequestInit).body).toContain('refresh-1')
+    expect((fetchMock.mock.calls[1][1] as RequestInit).headers).toMatchObject({
+      Authorization: 'Bearer access-2',
+    })
   })
 })
 
