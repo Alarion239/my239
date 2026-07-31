@@ -157,6 +157,18 @@ export function useSetSubproblemSolutionLink(subproblemId: number, centerId: num
   })
 }
 
+// Move a live selection into one shared razbor group as soon as a teacher
+// confirms a replacement. Format saves call the same endpoint again after
+// writing their materials, so this also covers a freshly-created draft row.
+export function useGroupSubproblemSolutions(centerId: number) {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (subproblemIds: number[]) => groupSolutions(client, subproblemIds),
+    onSuccess: () => invalidate(qc, centerId),
+  })
+}
+
 function invalidate(qc: ReturnType<typeof useQueryClient>, centerId: number) {
   qc.invalidateQueries({ queryKey: ['mathcenter', 'centers', centerId] })
   // The series view carries per-subproblem coffin/разбор metadata; refresh it

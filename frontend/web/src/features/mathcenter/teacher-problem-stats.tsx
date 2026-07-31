@@ -1,9 +1,9 @@
 import { useId, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { Skull, X } from 'lucide-react'
+import { Skull } from 'lucide-react'
 import {
   useMarkCoffin,
   usePublishSubproblemSolutionsBatch,
+  useGroupSubproblemSolutions,
   usePutSubproblemSolutionTexBatch,
   useSetSubproblemSolutionLinkBatch,
   useSubproblemSolutionTex,
@@ -84,20 +84,18 @@ export interface TeacherProblemStatsProps {
   stats: SeriesProblemStats
   series: Series
   centerId: number
-  toolbarSlot?: HTMLElement | null
 }
 
 // TeacherProblemStats renders the per-subproblem aggregate across all students.
 // The counts live directly inside one thick status rail; hovering a segment
 // names its status, avoiding a separate legend and duplicated student total.
 // Each subproblem (the atomic unit) also carries its own coffin toggle and
-// «Разбор» authoring, so teachers manage 5а, 5б, 6 independently straight from
-// the stats they just read.
+// «Разбор» authoring, so a teacher can begin a draft directly from the stats
+// and grow its shared target set in place.
 export function TeacherProblemStats({
   stats,
   series,
   centerId,
-  toolbarSlot,
 }: TeacherProblemStatsProps) {
   const mark = useMarkCoffin(centerId)
   const unmark = useUnmarkCoffin(centerId)
@@ -109,10 +107,11 @@ export function TeacherProblemStats({
     for (const sub of p.subproblems) metaById.set(sub.id, sub)
   }
 
-  // Pressing a problem does one of two things, depending on its state:
-  //  - has a разбор  → preview it in the left panel (master-detail).
-  //  - no разбор yet → select it for a shared batch разбор.
-  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const group = useGroupSubproblemSolutions(centerId)
+  // The first click on an existing razbor is deliberately non-destructive: it
+  // raises an inline replacement warning. The second click joins that target
+  // to the draft and moves it out of its previous shared group.
+  const [replaceWarningId, setReplaceWarningId] = useState<number | null>(null)
   const [panel, setPanel] = useState<{
     mode: SolutionWorkbenchMode
     representativeId: number
@@ -121,49 +120,46 @@ export function TeacherProblemStats({
   const originId = useRef<number | null>(null)
 
   const press = (id: number) => {
-    // An edit target is frozen until the workbench closes. This prevents a
-    // second row click from silently retargeting a dirty/shared draft.
-    if (panel?.mode === 'edit') return
     originId.current = id
     const pressed = metaById.get(id)
+    if (panel?.mode === 'edit') {
+      if (panel.subproblemIds.includes(id)) return
+      if (hasRazbor(pressed) && replaceWarningId !== id) {
+        setReplaceWarningId(id)
+        return
+      }
+      const nextIds = [...panel.subproblemIds, id]
+      setReplaceWarningId(null)
+      setPanel({ ...panel, subproblemIds: nextIds })
+      // Re-group immediately so the target no longer belongs to its previous
+      // shared group. The content itself is still saved by the workbench.
+      if (hasRazbor(pressed)) group.mutate(nextIds)
+      return
+    }
+
     if (hasRazbor(pressed)) {
       setPanel((cur) =>
         cur?.mode === 'view' && sharesRazbor(metaById.get(cur.representativeId), pressed)
           ? null
           : { mode: 'view', representativeId: id, subproblemIds: solutionIds(id, metaById) },
       )
-    } else {
-      setSelected((prev) => {
-        const next = new Set(prev)
-        if (next.has(id)) next.delete(id)
-        else next.add(id)
-        return next
-      })
+      return
     }
+
+    // Empty rows are the draft affordance: the first click opens editing
+    // immediately, with no intermediate “Прикрепить…” button.
+    setReplaceWarningId(null)
+    setPanel({ mode: 'edit', representativeId: id, subproblemIds: [id] })
   }
 
   if (stats.problems.length === 0) {
     return <p className="py-6 text-sm text-muted">В этой серии пока нет задач.</p>
   }
 
-  const selectedIds = stats.problems
-    .map((p) => p.subproblem_id)
-    .filter((id) => selected.has(id))
   const previewSub = panel != null ? metaById.get(panel.representativeId) : undefined
   // A shared разбор is one selectable unit: pressing any covered problem
   // previews that source and lights up every sibling in the same group.
   const previewIds = new Set(panel?.subproblemIds ?? [])
-  const batchAction =
-    selectedIds.length > 0 ? (
-      <BatchRazborBar
-        subproblemIds={selectedIds}
-        onOpen={() => {
-          originId.current = selectedIds[0]
-          setPanel({ mode: 'edit', representativeId: selectedIds[0], subproblemIds: selectedIds })
-        }}
-        onClear={() => { setSelected(new Set()); setPanel(null) }}
-      />
-    ) : null
 
   return (
     // Side-by-side master-detail on ≥md; on phones the разбор preview stacks
@@ -187,7 +183,7 @@ export function TeacherProblemStats({
               onModeChange={(mode) => setPanel({ ...panel, mode })}
               onClose={() => {
                 setPanel(null)
-                setSelected(new Set())
+                setReplaceWarningId(null)
                 const id = originId.current
                 if (id != null) requestAnimationFrame(() => document.getElementById('subproblem-row-' + id)?.focus())
               }}
@@ -196,11 +192,8 @@ export function TeacherProblemStats({
         </div>
       </div>
 
-      {/* The statistics list + batch разбор bar. */}
+      {/* The statistics list; selecting an empty row opens the draft editor. */}
       <div className="flex min-w-0 flex-1 flex-col gap-3">
-        {toolbarSlot && batchAction
-          ? createPortal(batchAction, toolbarSlot)
-          : batchAction}
         {stats.problems.map((p) => (
           <ProblemStatRow
             key={p.subproblem_id}
@@ -208,10 +201,9 @@ export function TeacherProblemStats({
             meta={metaById.get(p.subproblem_id)}
             busy={busy}
             active={
-              hasRazbor(metaById.get(p.subproblem_id))
-                ? previewIds.has(p.subproblem_id)
-                : selected.has(p.subproblem_id)
+              previewIds.has(p.subproblem_id)
             }
+            replacementWarning={replaceWarningId === p.subproblem_id}
             onPress={() => press(p.subproblem_id)}
             onMark={() => mark.mutate(p.subproblem_id)}
             onUnmark={() => unmark.mutate(p.subproblem_id)}
@@ -223,7 +215,8 @@ export function TeacherProblemStats({
 }
 
 // RazborPreview is the left-hand shared view/edit workbench. The same panel is
-// used for a saved razbor and for a fresh multi-problem draft.
+// used for a saved razbor and for a fresh multi-problem draft whose target set
+// can grow while it remains open.
 function RazborPreview({
   centerId,
   sub,
@@ -267,47 +260,6 @@ function RazborPreview({
   )
 }
 
-// BatchRazborBar lets a teacher attach ONE разбор (TeX/PDF/link) to all the
-// subproblems they've ticked — so a shared solution covers several problems.
-function taskGenitive(count: number): 'задачи' | 'задач' {
-  const lastTwo = count % 100
-  return count % 10 === 1 && lastTwo !== 11 ? 'задачи' : 'задач'
-}
-
-function BatchRazborBar({
-  subproblemIds,
-  onOpen,
-  onClear,
-}: {
-  subproblemIds: number[]
-  onOpen: () => void
-  onClear: () => void
-}) {
-  if (subproblemIds.length === 0) return null
-
-  return (
-    <div className="relative ml-1 inline-flex items-center">
-      <button
-        type="button"
-        onClick={onOpen}
-        className="whitespace-nowrap rounded-xl border border-line bg-surface px-3 py-2 pr-10 text-sm font-medium text-ink transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-      >
-        Прикрепить разбор {subproblemIds.length}{' '}
-        {taskGenitive(subproblemIds.length)}
-      </button>
-      <button
-        type="button"
-        onClick={onClear}
-        aria-label="Снять выбор задач"
-        title="Снять выбор задач"
-        className="absolute right-1 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-      >
-        <X className="h-4 w-4" aria-hidden />
-      </button>
-    </div>
-  )
-}
-
 function ProblemStatRow({
   stat,
   meta,
@@ -316,6 +268,7 @@ function ProblemStatRow({
   onPress,
   onMark,
   onUnmark,
+  replacementWarning,
 }: {
   stat: SeriesProblemStat
   meta: Subproblem | undefined
@@ -324,6 +277,7 @@ function ProblemStatRow({
   onPress: () => void
   onMark: () => void
   onUnmark: () => void
+  replacementWarning: boolean
 }) {
   const total =
     stat.accepted + stat.submitted + stat.rejected + stat.appealed + stat.unsolved
@@ -358,7 +312,7 @@ function ProblemStatRow({
           : hasSolution
             ? 'bg-surface-muted'
             : 'bg-surface',
-        active ? 'ring-2 ring-accent/50' : '',
+        active ? 'ring-2 ring-accent/50' : replacementWarning ? 'ring-2 ring-warning/50' : '',
       )}
     >
       <div className="flex min-w-0 items-center gap-3">
@@ -429,6 +383,11 @@ function ProblemStatRow({
           />
         </div>
       </div>
+      {replacementWarning ? (
+        <p className="mt-2 rounded-lg border border-warning/30 bg-status-checking-soft px-3 py-2 text-xs text-ink" role="alert">
+          У этой задачи уже есть разбор. Нажмите ещё раз, чтобы убрать её из прежней группы и включить в текущий черновик.
+        </p>
+      ) : null}
     </div>
   )
 }
