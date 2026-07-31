@@ -88,6 +88,32 @@ export function problemStateFromSubproblems(
   return 'ungraded'
 }
 
+// ExerciseStatus is the minimal shape needed to decide whether a student's
+// regular accepted work is credited. Problem number 0 is the persisted
+// sentinel for the special Упражнение problem.
+export interface ExerciseStatus {
+  problem_number: number
+  current_status: HomeworkStatus
+}
+
+// exerciseComplete treats a series without problem 0 as already unlocked.
+// When У has several parts, every part must be accepted before regular work
+// counts toward solved totals.
+export function exerciseComplete(items: readonly ExerciseStatus[]): boolean {
+  const exercise = items.filter((item) => item.problem_number === 0)
+  return exercise.length === 0 || exercise.every((item) => item.current_status === 'accepted')
+}
+
+// solvedForCredit excludes У itself and gates regular accepted work on the
+// series exercise state. Raw statuses remain available to render and grade.
+export function solvedForCredit(
+  problemNumber: number,
+  status: HomeworkStatus,
+  isExerciseComplete: boolean,
+): boolean {
+  return problemNumber !== 0 && status === 'accepted' && isExerciseComplete
+}
+
 // currentSeries picks the "current" series from a list: the published series
 // with the soonest due_at that is still at or after `nowMs`. When nothing is
 // upcoming, there is no current series. Returns undefined when there are no

@@ -13,7 +13,9 @@ import {
   claimIsLive,
   coffinOpen,
   displayStatusMeta,
+  exerciseComplete,
   initialsOf,
+  solvedForCredit,
   useCenterGrid,
   useOfflineAccept,
   useOfflineUndo,
@@ -41,6 +43,8 @@ import {
   coffinCellClasses,
   coffinColumnClasses,
   cornerHeaderCell,
+  exerciseCellClasses,
+  exerciseColumnClasses,
   gridScrollerWithHeight,
   gridTable,
   groupLabel,
@@ -162,6 +166,19 @@ const CONDUIT_COLUMN_WIDTH = 36
 const CONDUIT_COLUMN_OVERSCAN = 8
 const CONDUIT_INITIAL_COLUMNS = 60
 const CONDUIT_STUDENT_COLUMN_WIDTH = 176
+const EMPTY_CREDIT_GATES = new Map<number, boolean>()
+
+function acceptedCell(
+  cells: Record<string, CenterGridCell>,
+  studentID: number,
+  subproblemID: number,
+  marks: Map<number, string>,
+): boolean {
+  return (
+    marks.has(subproblemID) ||
+    cells[studentID + ':' + subproblemID]?.current_status === 'accepted'
+  )
+}
 
 type ConduitCellAction = (
   student: CenterGridStudentEntry,
@@ -192,6 +209,7 @@ interface ConduitStudentRowProps {
   markedSubs: Map<number, string>
   pendingSubproblemId: number | null
   currentGraderInitials: string
+  creditGates: Map<number, boolean>
   solvedTotal: number
   onCellAction: ConduitCellAction
 }
@@ -224,6 +242,7 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
   markedSubs,
   pendingSubproblemId,
   currentGraderInitials,
+  creditGates,
   solvedTotal,
   onCellAction,
 }: ConduitStudentRowProps) {
@@ -279,6 +298,8 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
         const threadId = cell?.thread_id ?? 0
         const hasComment = !!cell?.has_internal_comment && threadId > 0
         const pending = pendingSubproblemId === col.subproblem_id
+        const exercise = col.problem_number === 0
+        const inactive = !exercise && !(creditGates.get(fc.seriesId) ?? true)
         const shownInitials = marked
           ? currentGraderInitials
           : persistedCellInitials(cell, graders)
@@ -310,16 +331,26 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
             className={cn(
               'h-9 min-w-9 cursor-pointer select-none border-b border-line px-1.5 text-center align-middle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40',
               vert(firstInSeries),
-              accepted
-                ? 'bg-status-accepted-soft font-medium text-status-accepted'
-                : pendingStatus
-                  ? cn('font-medium', statusPillClasses(pendingStatus.tone))
-                  : cn(
-                      coffinCellClasses(col.is_coffin, coffinIsOpen),
-                      active
-                        ? 'text-status-accepted hover:bg-status-accepted-soft'
-                        : 'text-faint hover:bg-surface-muted',
-                    ),
+              exercise
+                ? exerciseCellClasses(true)
+                : accepted && !inactive
+                  ? 'bg-status-accepted-soft font-medium text-status-accepted'
+                  : accepted
+                    ? 'bg-surface-muted font-medium text-muted opacity-70'
+                    : pendingStatus
+                      ? cn(
+                          'font-medium',
+                          statusPillClasses(pendingStatus.tone),
+                          inactive && 'opacity-60 grayscale',
+                        )
+                      : cn(
+                          coffinCellClasses(col.is_coffin, coffinIsOpen),
+                          inactive
+                            ? 'bg-surface-muted/70 text-faint hover:bg-surface-muted'
+                            : active
+                              ? 'text-status-accepted hover:bg-status-accepted-soft'
+                              : 'text-faint hover:bg-surface-muted',
+                        ),
             )}
           >
             {pending
@@ -364,6 +395,7 @@ function sameConduitStudentRowProps(
     previous.markedSubs !== next.markedSubs ||
     previous.pendingSubproblemId !== next.pendingSubproblemId ||
     previous.currentGraderInitials !== next.currentGraderInitials ||
+    previous.creditGates !== next.creditGates ||
     previous.solvedTotal !== next.solvedTotal ||
     previous.onCellAction !== next.onCellAction
   ) {
@@ -529,30 +561,56 @@ export function ConduitTable({
     [data.groups],
   )
 
+  const creditGatesByStudent = useMemo(() => {
+    const gates = new Map<number, Map<number, boolean>>()
+    for (const student of students) {
+      const marks = student.user_id === activeStudentId ? markedSubs : EMPTY_MARKED_SUBPROBLEMS
+      const perSeries = new Map<number, boolean>()
+      for (const series of data.series) {
+        const exerciseItems = series.columns
+          .filter((col) => col.problem_number === 0)
+          .map((col) => ({
+            problem_number: 0,
+            current_status: acceptedCell(data.cells, student.user_id, col.subproblem_id, marks)
+              ? ('accepted' as const)
+              : ('ungraded' as const),
+          }))
+        perSeries.set(series.series_id, exerciseComplete(exerciseItems))
+      }
+      gates.set(student.user_id, perSeries)
+    }
+    return gates
+  }, [students, data.series, data.cells, activeStudentId, markedSubs])
+
   const solvedSummary = useMemo(() => {
     const rowTotals = new Map<number, number>()
     const columnTotals = new Map<number, number>()
     let grandTotal = 0
     for (const student of students) {
       let rowTotal = 0
-      for (const { col } of cols) {
-        if (
-          data.cells[student.user_id + ':' + col.subproblem_id]
-            ?.current_status !== 'accepted'
-        ) {
-          continue
+      const marks = student.user_id === activeStudentId ? markedSubs : EMPTY_MARKED_SUBPROBLEMS
+      const gates = creditGatesByStudent.get(student.user_id) ?? EMPTY_CREDIT_GATES
+      for (const { col, seriesId } of cols) {
+        const accepted = acceptedCell(data.cells, student.user_id, col.subproblem_id, marks)
+        const counted =
+          col.problem_number === 0
+            ? accepted
+            : solvedForCredit(
+                col.problem_number,
+                accepted ? 'accepted' : 'ungraded',
+                gates.get(seriesId) ?? true,
+              )
+        if (!counted) continue
+        if (col.problem_number !== 0) {
+          rowTotal++
+          grandTotal++
         }
-        rowTotal++
-        grandTotal++
-        columnTotals.set(
-          col.subproblem_id,
-          (columnTotals.get(col.subproblem_id) ?? 0) + 1,
-        )
+        columnTotals.set(col.subproblem_id, (columnTotals.get(col.subproblem_id) ?? 0) + 1)
       }
       rowTotals.set(student.user_id, rowTotal)
     }
     return { rowTotals, columnTotals, grandTotal }
-  }, [students, cols, data.cells])
+  }, [students, cols, data.cells, activeStudentId, markedSubs, creditGatesByStudent])
   const solvedTotals = solvedSummary.rowTotals
 
   // Search only controls which students are rendered. Sorting is layered on
@@ -1016,7 +1074,9 @@ export function ConduitTable({
                     className={cn(
                       'sticky top-9 z-20 min-w-9 border-b border-line px-1.5 py-1 text-center text-xs font-medium',
                       vert(firstInSeries),
-                      coffinColumnClasses(col.is_coffin, open),
+                      col.problem_number === 0
+                        ? exerciseColumnClasses(true)
+                        : coffinColumnClasses(col.is_coffin, open),
                     )}
                   >
                     <Link
@@ -1029,7 +1089,9 @@ export function ConduitTable({
                         search
                       }
                       aria-label={
-                        'Задача ' + col.column_label + ' — открыть разбор'
+                        (col.problem_number === 0 ? 'Упражнение ' : 'Задача ') +
+                        col.column_label +
+                        ' — открыть разбор'
                       }
                       className="inline-flex min-h-6 min-w-6 items-center justify-center rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                     >
@@ -1090,6 +1152,9 @@ export function ConduitTable({
                   pendingSubproblemId={pendingSubproblemId}
                   currentGraderInitials={
                     isActiveRow ? initialsOf(grader.name) : ''
+                  }
+                  creditGates={
+                    creditGatesByStudent.get(st.user_id) ?? EMPTY_CREDIT_GATES
                   }
                   solvedTotal={solvedTotals.get(st.user_id) ?? 0}
                   onCellAction={onCellAction}

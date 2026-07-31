@@ -417,7 +417,14 @@ func parseConduitMarkers(values [][]string) ([]conduitMarker, error) {
 }
 
 func parseProblemHeader(value string) (int, string, bool) {
-	match := problemHeader.FindStringSubmatch(strings.ReplaceAll(strings.TrimSpace(value), " ", ""))
+	compact := strings.ReplaceAll(strings.TrimSpace(value), " ", "")
+	lower := strings.ToLower(compact)
+	for _, prefix := range []string{"упражнение", "упр", "у"} {
+		if strings.HasPrefix(lower, prefix) {
+			return 0, normalizeLabel(compact[len(prefix):]), true
+		}
+	}
+	match := problemHeader.FindStringSubmatch(compact)
 	if match == nil {
 		return 0, "", false
 	}

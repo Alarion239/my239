@@ -61,7 +61,7 @@ type centerGridColumn struct {
 	ProblemID       int64  `json:"problem_id"`
 	ProblemNumber   int    `json:"problem_number"`
 	// Short label rendered as the column header in the spreadsheet:
-	// "Упр" for problem 0 with no subparts, "Упр а" for problem 0 with
+	// "У" for problem 0 with no subparts, "Уa" for problem 0 with
 	// subparts, "1" / "2a" / "5b" otherwise. Computed server-side so the
 	// frontend doesn't need a duplicate of the label rules.
 	ColumnLabel      string     `json:"column_label"`
@@ -221,25 +221,19 @@ func cellKey(studentUserID, subproblemID int64) string {
 }
 
 // columnLabel renders the short header for a spreadsheet column. The user-
-// facing convention: problem 0 reads "Упр" (exercise / Упражнение); other
+// facing convention: problem 0 reads "У" (exercise / Упражнение); other
 // problems show their number. When a subpart letter exists, it's appended
-// directly ("2a", "Упр а").
+// directly ("2a", "Уa").
 func columnLabel(problemNumber int, subproblemLabel string) string {
 	var base string
 	if problemNumber == 0 {
-		base = "Упр"
+		base = "У"
 	} else {
 		base = strconv.Itoa(problemNumber)
 	}
 	sub := strings.TrimSpace(subproblemLabel)
 	if sub == "" {
 		return base
-	}
-	// Insert a thin space between the exercise word and the letter so
-	// "Упр а" reads better than "Упра". Numbered problems keep the
-	// letter glued on ("2a") because that's the conventional notation.
-	if problemNumber == 0 {
-		return base + " " + sub
 	}
 	return base + sub
 }

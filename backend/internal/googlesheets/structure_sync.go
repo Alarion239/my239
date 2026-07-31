@@ -736,6 +736,7 @@ func seriesExportRows(series []sheetSeries) ([]string, []string) {
 	seriesRow := make([]string, 0)
 	problemRow := make([]string, 0)
 	for _, item := range series {
+		hasProblems := len(item.problems) > 0
 		columns := item.problems
 		if len(columns) == 0 {
 			columns = []sheetProblem{{}}
@@ -746,8 +747,10 @@ func seriesExportRows(series []sheetSeries) ([]string, []string) {
 			} else {
 				seriesRow = append(seriesRow, "")
 			}
-			if problem.number == 0 {
+			if !hasProblems {
 				problemRow = append(problemRow, "")
+			} else if problem.number == 0 {
+				problemRow = append(problemRow, "У"+problem.label)
 			} else {
 				problemRow = append(problemRow, strconv.Itoa(problem.number)+problem.label)
 			}

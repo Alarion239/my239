@@ -38,7 +38,7 @@ func TestGetCenterGrid_HappyPath(t *testing.T) {
 	mock.ExpectQuery(`FROM math_center_students mcs\s+JOIN users u`).
 		WithArgs(int64(42)).
 		WillReturnRows(mock.NewRows(centerGridColumns).
-			// Series 1, problem 0 (Упр), no subparts, student A — ACCEPTED by ПС.
+			// Series 1, problem 0 (У), no subparts, student A — ACCEPTED by ПС.
 			AddRow(int64(100), int32(0), "Алгебра", due,
 				int64(7), "Аня", (*string)(nil), "Иванова",
 				int64(10), "А",
@@ -100,13 +100,13 @@ func TestGetCenterGrid_HappyPath(t *testing.T) {
 	if len(resp.Series) != 2 {
 		t.Fatalf("series count: got %d, want 2", len(resp.Series))
 	}
-	// Series 1 has two columns: the sentinel for problem 0 ("Упр") and
+	// Series 1 has two columns: the sentinel for problem 0 ("У") and
 	// subpart a of problem 1 ("1a").
 	if len(resp.Series[0].Columns) != 2 {
 		t.Fatalf("series 0 columns: %+v", resp.Series[0].Columns)
 	}
-	if resp.Series[0].Columns[0].ColumnLabel != "Упр" {
-		t.Errorf("col 0 label: got %q, want Упр", resp.Series[0].Columns[0].ColumnLabel)
+	if resp.Series[0].Columns[0].ColumnLabel != "У" {
+		t.Errorf("col 0 label: got %q, want У", resp.Series[0].Columns[0].ColumnLabel)
 	}
 	if resp.Series[0].Columns[1].ColumnLabel != "1a" {
 		t.Errorf("col 1 label: got %q, want 1a", resp.Series[0].Columns[1].ColumnLabel)

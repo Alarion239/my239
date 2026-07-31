@@ -1,6 +1,7 @@
 import { Link, useLocation, useParams } from 'react-router-dom'
 import {
   displayStatusMeta,
+  exerciseComplete,
   homeworkStatusMeta,
   problemStateFromSubproblems,
   submissionClosedFor,
@@ -68,6 +69,14 @@ export function StudentProblemList({
     return <p className="py-6 text-sm text-muted">В этой серии пока нет задач.</p>
   }
   const meta = subMetaMap(series)
+  const exerciseUnlocked = exerciseComplete(
+    rollup.problems.flatMap((problem) =>
+      problem.subproblems.map((sub) => ({
+        problem_number: problem.problem_number,
+        current_status: sub.current_status,
+      })),
+    ),
+  )
 
   return (
     <div className="flex flex-col gap-3">
@@ -79,6 +88,7 @@ export function StudentProblemList({
           problem={problem}
           meta={meta}
           dueAt={series.due_at}
+          exerciseUnlocked={exerciseUnlocked}
         />
       ))}
       <StatusLegend className="mt-2" />
@@ -92,12 +102,14 @@ function ProblemRow({
   problem,
   meta,
   dueAt,
+  exerciseUnlocked,
 }: {
   year: string
   seriesId: number
   problem: RollupProblem
   meta: Map<number, Subproblem>
   dueAt: string
+  exerciseUnlocked: boolean
 }) {
   const { search } = useLocation()
   const summary = problemStateFromSubproblems(
@@ -109,7 +121,16 @@ function ProblemRow({
   // an existing thread opens its dialog; an untouched-but-open subproblem opens
   // the submit form. No separate "Сдать" button.
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3">
+    <div
+      className={cn(
+        'flex flex-wrap items-center gap-3 rounded-xl border bg-surface px-4 py-3',
+        problem.problem_number === 0
+          ? 'border-accent/40 bg-accent-soft/50'
+          : !exerciseUnlocked
+            ? 'border-line bg-surface-muted/50 opacity-70'
+            : 'border-line',
+      )}
+    >
       <div className="min-w-0 flex-1">
         <div className="font-medium text-ink">{problem.problem_display}</div>
         <div className="text-xs text-muted">{summaryMeta.label}</div>

@@ -130,6 +130,51 @@ function dataWithColumnCount(count: number): CenterGridResponse {
   }
 }
 
+function exerciseGateData(): CenterGridResponse {
+  return {
+    ...data,
+    series: [
+      {
+        ...data.series[0],
+        columns: [
+          {
+            subproblem_id: 990,
+            subproblem_label: '',
+            problem_id: 590,
+            problem_number: 0,
+            column_label: 'У',
+            is_coffin: false,
+          },
+          {
+            subproblem_id: 991,
+            subproblem_label: 'a',
+            problem_id: 590,
+            problem_number: 0,
+            column_label: 'Уa',
+            is_coffin: false,
+          },
+          {
+            subproblem_id: 1001,
+            subproblem_label: '',
+            problem_id: 501,
+            problem_number: 1,
+            column_label: '1',
+            is_coffin: false,
+          },
+        ],
+      },
+    ],
+    cells: {
+      '10:990': { thread_id: 90, current_status: 'accepted' },
+      '10:991': { thread_id: 91, current_status: 'submitted' },
+      '10:1001': { thread_id: 11, current_status: 'accepted' },
+      '20:990': { thread_id: 92, current_status: 'accepted' },
+      '20:991': { thread_id: 93, current_status: 'accepted' },
+      '20:1001': { thread_id: 12, current_status: 'accepted' },
+    },
+  }
+}
+
 function rankingData(): CenterGridResponse {
   return {
     ...data,
@@ -336,6 +381,30 @@ describe('ConduitTable', () => {
       'bg-status-grading-soft',
       'text-status-grading',
     )
+  })
+
+  it('gates regular credit and totals on the exercise while keeping cells active', () => {
+    const { container } = renderConduit(exerciseGateData())
+    const firstRow = screen.getByRole('link', { name: 'Первый Ученик' }).closest('tr')!
+    const secondRow = screen.getByRole('link', { name: 'Второй Ученик' }).closest('tr')!
+    const firstCells = firstRow.querySelectorAll('td[data-conduit-cell]')
+
+    expect(screen.getByRole('link', { name: 'Упражнение У — открыть разбор' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Упражнение Уa — открыть разбор' })).toBeInTheDocument()
+    expect(firstCells[0]).toHaveClass('bg-accent-soft/70')
+    expect(firstCells[2]).toHaveClass('bg-surface-muted')
+    expect(firstCells[2]).not.toHaveAttribute('aria-disabled')
+    expect(firstRow.lastElementChild).toHaveTextContent('0')
+    expect(secondRow.lastElementChild).toHaveTextContent('1')
+
+    const totals = Array.from(container.querySelectorAll('tbody tr')).find((row) =>
+      row.textContent?.startsWith('Решили'),
+    )!
+    const totalCells = totals.querySelectorAll('td')
+    expect(totalCells[1]).toHaveTextContent('2')
+    expect(totalCells[2]).toHaveTextContent('1')
+    expect(totalCells[3]).toHaveTextContent('1')
+    expect(totalCells[4]).toHaveTextContent('1')
   })
 
   it('mounts only the visible window for a large student list', () => {

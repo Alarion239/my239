@@ -81,4 +81,31 @@ describe('ProblemBuilder', () => {
     render(<Harness initial={seedProblems(1)} onValue={() => {}} />)
     expect(screen.getByRole('button', { name: 'Убрать подзадачу у задачи 1' })).toBeDisabled()
   })
+
+  it('adds an exercise without renumbering regular ids and labels its subparts', async () => {
+    const user = userEvent.setup()
+    const onValue = vi.fn()
+    const initial: ProblemDraft[] = [
+      { id: 11, number: 1, subproblem_count: 0 },
+      { id: 22, number: 2, subproblem_count: 1 },
+    ]
+    render(<Harness initial={initial} onValue={onValue} />)
+
+    await user.click(screen.getByRole('switch', { name: 'Добавить упражнение' }))
+    expect(lastValue(onValue).map((p) => p.number)).toEqual([0, 1, 2])
+    expect(lastValue(onValue).map((p) => p.id)).toEqual([undefined, 11, 22])
+    expect(screen.getAllByText('Упражнение').length).toBeGreaterThanOrEqual(1)
+
+    await user.click(screen.getByRole('button', { name: 'Добавить подзадачу к упражнению' }))
+    expect(screen.getByText('подзадача Уa')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Добавить подзадачу к упражнению' }))
+    expect(screen.getByText('Уa–Уb')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Количество задач'), { target: { value: '1' } })
+    expect(lastValue(onValue).map((p) => p.number)).toEqual([0, 1])
+    expect(lastValue(onValue)[1].id).toBe(11)
+
+    await user.click(screen.getByRole('switch', { name: 'Убрать упражнение' }))
+    expect(lastValue(onValue)).toEqual([{ id: 11, number: 1, subproblem_count: 0 }])
+  })
 })

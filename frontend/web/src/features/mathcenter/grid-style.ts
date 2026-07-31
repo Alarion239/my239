@@ -68,3 +68,13 @@ export function coffinCellClasses(isCoffin: boolean, open: boolean): string {
   if (isCoffin) return 'bg-faint/35'
   return ''
 }
+
+// Exercise columns have a quiet accent wash so the special У problem remains
+// recognizable without adding explanatory copy.
+export function exerciseColumnClasses(isExercise: boolean): string {
+  return isExercise ? 'bg-accent-soft text-accent-ink' : ''
+}
+
+export function exerciseCellClasses(isExercise: boolean): string {
+  return isExercise ? 'bg-accent-soft/70 font-medium text-accent-ink' : ''
+}

@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import {
+  exerciseComplete,
   initialsOf,
+  solvedForCredit,
   useOfflineAccept,
   useTeacherGrid,
   type GridCell,
@@ -14,12 +16,12 @@ import { OfflineCellDialog, type OfflineCellTarget } from './offline-cell-dialog
 
 // columnLabelFor renders a compact chip label from a series GridColumn:
 // "Задача 3" → "3", with the subpart letter appended ("3a"); the exercise
-// (problem 0) reads "Упр".
+// (problem 0) reads "У".
 function columnLabelFor(col: GridColumn): string {
-  const base = col.problem_number === 0 ? 'Упр' : String(col.problem_number)
+  const base = col.problem_number === 0 ? 'У' : String(col.problem_number)
   const sub = col.subproblem_label.trim()
   if (!sub) return base
-  return col.problem_number === 0 ? base + ' ' + sub : base + sub
+  return base + sub
 }
 
 // OfflineGradingTab is the phone flow: a teacher picks/searches a student, then
@@ -98,8 +100,17 @@ function StudentPicker({
       />
       <ul className="overflow-hidden rounded-xl border border-line">
         {filtered.map((s) => {
-          const total = s.cells.length
-          const solved = s.cells.filter((c) => c.current_status === 'accepted').length
+          const exerciseUnlocked = exerciseComplete(
+            s.cells.map((c) => ({
+              problem_number: c.problem_number,
+              current_status: c.current_status,
+            })),
+          )
+          const regularCells = s.cells.filter((c) => c.problem_number !== 0)
+          const total = regularCells.length
+          const solved = regularCells.filter((c) =>
+            solvedForCredit(c.problem_number, c.current_status, exerciseUnlocked),
+          ).length
           return (
             <li key={s.student_user_id} className="border-b border-line last:border-b-0">
               <button
@@ -151,6 +162,15 @@ function StudentOfflineGrader({
     for (const c of student.cells) m.set(c.subproblem_id, c)
     return m
   }, [student.cells])
+
+  const exerciseUnlocked = exerciseComplete(
+    columns
+      .filter((col) => col.problem_number === 0)
+      .map((col) => ({
+        problem_number: 0,
+        current_status: cellBySub.get(col.subproblem_id)?.current_status ?? 'ungraded',
+      })),
+  )
 
   function markSolved(subproblemId: number) {
     setPendingSub(subproblemId)
@@ -209,9 +229,13 @@ function StudentOfflineGrader({
               onClick={() => (accepted ? openDialog(col, cell) : markSolved(col.subproblem_id))}
               className={cn(
                 'flex h-16 flex-col items-center justify-center gap-0.5 rounded-xl border text-sm transition-colors disabled:opacity-50',
-                accepted
-                  ? 'border-status-accepted/30 bg-status-accepted-soft text-status-accepted'
-                  : 'border-line bg-surface text-muted hover:bg-surface-muted',
+                col.problem_number === 0
+                  ? 'border-accent/40 bg-accent-soft text-accent-ink'
+                  : accepted && exerciseUnlocked
+                    ? 'border-status-accepted/30 bg-status-accepted-soft text-status-accepted'
+                    : accepted
+                      ? 'border-line bg-surface-muted text-muted opacity-70'
+                      : 'border-line bg-surface text-muted hover:bg-surface-muted',
               )}
             >
               <span className="font-medium">{columnLabelFor(col)}</span>

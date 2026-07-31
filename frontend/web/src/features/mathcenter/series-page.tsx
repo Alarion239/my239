@@ -4,7 +4,9 @@ import { Pencil, Plus, Trash2 } from 'lucide-react'
 import {
   APIErrorImpl,
   currentSeries,
+  exerciseComplete,
   isClosed,
+  solvedForCredit,
   useDeleteSeries,
   useMathCenterMe,
   useMySeriesRollup,
@@ -396,14 +398,23 @@ function StudentProblemListWithCounts({
   // Count per-subproblem statuses granularly so the summary matches the tiles:
   // the backend's `pending` lumps unsolved with under-review, which reads wrong.
   // "На проверке"/"В очереди" split mirrors the per-tile being_graded flag.
+  const exerciseUnlocked = exerciseComplete(
+    rollup.problems.flatMap((problem) =>
+      problem.subproblems.map((sub) => ({
+        problem_number: problem.problem_number,
+        current_status: sub.current_status,
+      })),
+    ),
+  )
   let accepted = 0
   let queued = 0
   let grading = 0
   let rejected = 0
   let unsolved = 0
   for (const p of rollup.problems) {
+    if (p.problem_number === 0) continue
     for (const s of p.subproblems) {
-      if (s.current_status === 'accepted') accepted++
+      if (solvedForCredit(p.problem_number, s.current_status, exerciseUnlocked)) accepted++
       else if (s.current_status === 'rejected') rejected++
       else if (s.current_status === 'submitted' || s.current_status === 'appealed') {
         if (s.being_graded) grading++

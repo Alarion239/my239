@@ -4,6 +4,7 @@ import {
   coffinOpen,
   currentSeries,
   displayStatusMeta,
+  exerciseComplete,
   eventKindLabel,
   eventTone,
   homeworkStatusMeta,
@@ -11,6 +12,7 @@ import {
   isClosed,
   problemStateFromSubproblems,
   resolveThreadRole,
+  solvedForCredit,
   submissionClosedFor,
   userNameFromThread,
 } from './homework'
@@ -96,6 +98,34 @@ describe('problemStateFromSubproblems', () => {
     expect(problemStateFromSubproblems(['ungraded', 'accepted'])).toBe(
       'ungraded',
     )
+  })
+})
+
+describe('exercise credit gate', () => {
+  it('unlocks series without an exercise', () => {
+    expect(exerciseComplete([{ problem_number: 1, current_status: 'accepted' }])).toBe(true)
+  })
+
+  it('requires every exercise subproblem to be accepted', () => {
+    expect(
+      exerciseComplete([
+        { problem_number: 0, current_status: 'accepted' },
+        { problem_number: 0, current_status: 'submitted' },
+      ]),
+    ).toBe(false)
+    expect(
+      exerciseComplete([
+        { problem_number: 0, current_status: 'accepted' },
+        { problem_number: 0, current_status: 'accepted' },
+      ]),
+    ).toBe(true)
+  })
+
+  it('excludes the exercise itself and gates regular accepted work', () => {
+    expect(solvedForCredit(0, 'accepted', true)).toBe(false)
+    expect(solvedForCredit(1, 'accepted', false)).toBe(false)
+    expect(solvedForCredit(1, 'accepted', true)).toBe(true)
+    expect(solvedForCredit(1, 'rejected', true)).toBe(false)
   })
 })
 

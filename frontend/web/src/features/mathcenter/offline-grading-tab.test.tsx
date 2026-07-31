@@ -46,10 +46,10 @@ const grid = {
   ],
 }
 
-function stubFetch(onAccept: (body: unknown) => void) {
+function stubFetch(onAccept: (body: unknown) => void, response = grid) {
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     if (typeof url === 'string' && url.includes('/series/7/grid')) {
-      return new Response(JSON.stringify(grid), {
+      return new Response(JSON.stringify(response), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -119,5 +119,48 @@ describe('OfflineGradingTab (phone flow)', () => {
     await waitFor(() => expect(accepts).toHaveLength(1))
     // Phone flow credits the session teacher → no grader fields sent.
     expect(accepts[0]).toEqual({ student_user_id: 7, subproblem_id: 901 })
+  })
+
+  it('does not count accepted regular work until the exercise is complete', async () => {
+    const gatedGrid = {
+      columns: [
+        {
+          subproblem_id: 910,
+          subproblem_label: 'a',
+          problem_id: 510,
+          problem_number: 0,
+          problem_display: 'Упражнение',
+          is_coffin: false,
+        },
+        {
+          subproblem_id: 911,
+          subproblem_label: '',
+          problem_id: 511,
+          problem_number: 1,
+          problem_display: 'Задача 1',
+          is_coffin: false,
+        },
+      ],
+      students: [
+        {
+          student_user_id: 7,
+          student_name: 'Аня Иванова',
+          group_id: 10,
+          group_name: 'А',
+          cells: [
+            { subproblem_id: 910, subproblem_label: 'a', problem_id: 510, problem_number: 0, thread_id: 9, current_status: 'submitted' },
+            { subproblem_id: 911, subproblem_label: '', problem_id: 511, problem_number: 1, thread_id: 10, current_status: 'accepted' },
+          ],
+        },
+      ],
+    }
+    stubFetch(() => {}, gatedGrid)
+    renderTab()
+
+    await screen.findByText('Аня Иванова')
+    expect(screen.getByText('0/1')).toBeInTheDocument()
+    await userEvent.click(screen.getByText('Аня Иванова'))
+    expect(await screen.findByText('Уa')).toBeInTheDocument()
+    expect(screen.getByText('1')).toBeInTheDocument()
   })
 })

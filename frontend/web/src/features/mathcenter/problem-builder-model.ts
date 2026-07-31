@@ -1,9 +1,9 @@
 // Model types and helpers for the problem builder, kept separate from the
 // component so the .tsx file only exports components (clean fast-refresh).
 
-// ProblemDraft is one problem in the builder: a positional number (always
-// 1..N), its subproblem count, and — for an existing problem being edited — the
-// backend id so the diff-update keeps its threads/разборы in place.
+// ProblemDraft is one problem in the builder: number 0 is the optional
+// Упражнение, positive numbers are regular positional problems, and the id is
+// preserved for existing problems so diff updates keep their threads/разборы.
 export interface ProblemDraft {
   id?: number
   number: number

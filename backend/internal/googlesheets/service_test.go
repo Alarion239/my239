@@ -159,6 +159,51 @@ func TestParseSheetSeriesSkipsNonSeriesSections(t *testing.T) {
 	}
 }
 
+func TestParseSheetSeriesExerciseColumns(t *testing.T) {
+	values := [][]string{
+		{"", "Серия 9", "", ""},
+		{"Фамилия Имя", "У", "Уa", "0b"},
+	}
+	layout, err := parseSheetSeries(values)
+	if err != nil {
+		t.Fatalf("parseSheetSeries() error = %v", err)
+	}
+	if len(layout.series) != 1 {
+		t.Fatalf("layout = %#v, want one series", layout)
+	}
+	want := []sheetProblem{
+		{number: 0},
+		{number: 0, label: "a"},
+		{number: 0, label: "b"},
+	}
+	if !sameSeriesLayout(layout.series[0], sheetSeries{number: 9, problems: want}) {
+		t.Fatalf("series = %#v, want %#v", layout.series[0], want)
+	}
+}
+
+func TestParseProblemHeaderExerciseLabels(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  sheetProblem
+	}{
+		{name: "compact exercise", value: "У", want: sheetProblem{number: 0}},
+		{name: "compact subpart", value: "Уa", want: sheetProblem{number: 0, label: "a"}},
+		{name: "spaced subpart", value: "У b", want: sheetProblem{number: 0, label: "b"}},
+		{name: "full legacy spelling", value: "Упражнение", want: sheetProblem{number: 0}},
+		{name: "old abbreviation", value: "Упр а", want: sheetProblem{number: 0, label: "a"}},
+		{name: "numeric legacy sentinel", value: "0b", want: sheetProblem{number: 0, label: "b"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			number, label, ok := parseProblemHeader(test.value)
+			if !ok || number != test.want.number || label != test.want.label {
+				t.Fatalf("parseProblemHeader(%q) = (%d, %q, %t), want (%d, %q, true)", test.value, number, label, ok, test.want.number, test.want.label)
+			}
+		})
+	}
+}
+
 func TestMergeSeriesLayoutUnionsDifferentGroupColumns(t *testing.T) {
 	merged := mergeSeriesLayout(
 		sheetSeries{
@@ -190,13 +235,13 @@ func TestMergeSeriesLayoutUnionsDifferentGroupColumns(t *testing.T) {
 
 func TestSeriesExportRows(t *testing.T) {
 	seriesRow, problemRow := seriesExportRows([]sheetSeries{
-		{number: 3, problems: []sheetProblem{{number: 1}, {number: 2, label: "a"}}},
+		{number: 3, problems: []sheetProblem{{number: 0}, {number: 0, label: "a"}, {number: 1}, {number: 2, label: "a"}}},
 		{number: 4},
 	})
-	if got, want := strings.Join(seriesRow, "|"), "Серия 3||Серия 4"; got != want {
+	if got, want := strings.Join(seriesRow, "|"), "Серия 3||||Серия 4"; got != want {
 		t.Fatalf("series row = %q, want %q", got, want)
 	}
-	if got, want := strings.Join(problemRow, "|"), "1|2a|"; got != want {
+	if got, want := strings.Join(problemRow, "|"), "У|Уa|1|2a|"; got != want {
 		t.Fatalf("problem row = %q, want %q", got, want)
 	}
 }

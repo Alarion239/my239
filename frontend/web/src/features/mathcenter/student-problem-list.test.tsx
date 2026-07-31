@@ -134,4 +134,42 @@ describe('StudentProblemList — per-subproblem deadline gating', () => {
       document.querySelector('a[href="/mathcenter/2026/series/7/submit/10"]'),
     ).not.toBeNull()
   })
+
+  it('accents the exercise and mutes regular rows until every exercise part is accepted', () => {
+    const gatedRollup: MyRollup = {
+      counts: { accepted: 2, rejected: 0, pending: 1 },
+      problems: [
+        {
+          problem_id: 0,
+          problem_number: 0,
+          problem_display: 'Упражнение',
+          subproblems: [
+            { subproblem_id: 30, subproblem_label: 'a', thread_id: 30, current_status: 'accepted', being_graded: false },
+            { subproblem_id: 31, subproblem_label: 'b', thread_id: 31, current_status: 'submitted', being_graded: false },
+          ],
+        },
+        {
+          problem_id: 3,
+          problem_number: 1,
+          problem_display: 'Задача 1',
+          subproblems: [
+            { subproblem_id: 32, subproblem_label: '', thread_id: 32, current_status: 'accepted', being_graded: false },
+          ],
+        },
+      ],
+    }
+    const exerciseSubs = [sub({ id: 30, label: 'a' }), sub({ id: 31, label: 'b' })]
+    const regularSubs = [sub({ id: 32, label: '' })]
+    const gatedSeries = makeSeries(FUTURE, [...exerciseSubs, ...regularSubs])
+    gatedSeries.problems = [
+      { id: 0, number: 0, display_name: 'Упражнение', subproblems: exerciseSubs },
+      { id: 3, number: 1, display_name: 'Задача 1', subproblems: regularSubs },
+    ]
+
+    renderList(gatedSeries, gatedRollup)
+    const exerciseRow = screen.getByText('Упражнение').closest('div')?.parentElement?.parentElement
+    const regularRow = screen.getByText('Задача 1').closest('div')?.parentElement?.parentElement
+    expect(exerciseRow).toHaveClass('bg-accent-soft/50')
+    expect(regularRow).toHaveClass('opacity-70')
+  })
 })
