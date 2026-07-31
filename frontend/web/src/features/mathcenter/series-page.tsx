@@ -476,8 +476,6 @@ function TeacherSeriesView({
   termSearch: string
 }) {
   const navigate = useNavigate()
-  const [razborToolbarSlot, setRazborToolbarSlot] =
-    useState<HTMLDivElement | null>(null)
   return (
     <div className="flex flex-col gap-4">
       <div className="flex min-w-0 items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -490,16 +488,11 @@ function TeacherSeriesView({
           ariaLabel="Раздел проверки"
           className="shrink-0"
         />
-        <div ref={setRazborToolbarSlot} className="shrink-0" />
       </div>
       {tab === 'statement' ? (
         <StatementPanel series={series} bare />
       ) : tab === 'razbor' ? (
-        <StatsTab
-          series={series}
-          centerId={centerId}
-          toolbarSlot={razborToolbarSlot}
-        />
+        <StatsTab series={series} centerId={centerId} />
       ) : tab === 'queue' ? (
         <GraderQueue seriesId={series.id} />
       ) : (
@@ -624,11 +617,9 @@ function DeleteSeriesButton({
 function StatsTab({
   series,
   centerId,
-  toolbarSlot,
 }: {
   series: Series
   centerId: number
-  toolbarSlot: HTMLDivElement | null
 }) {
   const { data, isPending, isError } = useSeriesProblemStats(series.id)
   return (
@@ -638,7 +629,6 @@ function StatsTab({
           stats={data}
           series={series}
           centerId={centerId}
-          toolbarSlot={toolbarSlot}
         />
       ) : null}
     </AsyncGate>

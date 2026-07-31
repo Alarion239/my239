@@ -150,31 +150,51 @@ describe('TeacherProblemStats — разбор frame', () => {
     expect(rowWithout.className).not.toContain('bg-status-accepted-soft')
   })
 
-  it('shows a neutral single-card batch action after selecting a problem', async () => {
+  it('opens the editing workbench immediately from an empty problem', async () => {
     renderStats()
     const user = userEvent.setup()
     const bar = screen.getByRole('img', { name: /по задаче Задача 1 \(б\)/ })
 
     await user.click(bar.closest('[role="button"]') as HTMLElement)
 
-    const attach = screen.getByRole('button', {
-      name: 'Прикрепить разбор 1 задачи',
-    })
-    const clear = screen.getByRole('button', { name: 'Снять выбор задач' })
-    expect(attach).toHaveClass('rounded-xl', 'border-line', 'bg-surface', 'text-ink')
-    expect(attach).not.toHaveClass('bg-accent-soft', 'text-accent-ink')
-    expect(attach.parentElement).toHaveClass('ml-1')
-    expect(clear).toHaveClass('h-7', 'w-7', 'rounded-lg')
-    expect(screen.queryByText('Выбрано подзадач: 1')).not.toBeInTheDocument()
+    expect(screen.getByRole('region', { name: /Задача 1 \(б\)/ })).toBeInTheDocument()
+    expect(screen.queryByText(/Прикрепить разбор/)).not.toBeInTheDocument()
 
     await user.click(
       screen
         .getByRole('img', { name: /по задаче Задача 1 \(в\)/ })
         .closest('[role="button"]') as HTMLElement,
     )
-    expect(
-      screen.getByRole('button', { name: 'Прикрепить разбор 2 задач' }),
-    ).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: /Задача 1 \(б\)/ })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /по задаче Задача 1 \(в\)/ }).closest('[role="button"]'))
+      .toHaveClass('ring-2', 'ring-accent/50')
+  })
+
+  it('requires a second click before replacing an existing razbor target', async () => {
+    const request = vi.spyOn(ApiClient.prototype, 'request').mockResolvedValue({} as never)
+    renderStats()
+    const user = userEvent.setup()
+    await user.click(
+      screen
+        .getByRole('img', { name: /по задаче Задача 1 \(б\)/ })
+        .closest('[role="button"]') as HTMLElement,
+    )
+    const existing = screen
+      .getByRole('img', { name: /по задаче Задача 1 \(а\)/ })
+      .closest('[role="button"]') as HTMLElement
+
+    await user.click(existing)
+    expect(screen.getByRole('alert')).toHaveTextContent('Нажмите ещё раз')
+    expect(existing).not.toHaveClass('ring-2', 'ring-accent/50')
+
+    await user.click(existing)
+    expect(existing).toHaveClass('ring-2', 'ring-accent/50')
+    await waitFor(() => {
+      expect(request).toHaveBeenCalledWith('/mathcenter/subproblem-solutions/group', {
+        method: 'POST',
+        body: { subproblem_ids: [1001, 1000] },
+      })
+    })
   })
 
   it('opens the inline workbench and keeps the close control outside the trigger', async () => {
@@ -186,15 +206,11 @@ describe('TeacherProblemStats — разбор frame', () => {
         .closest('[role="button"]') as HTMLElement,
     )
 
-    const attach = screen.getByRole('button', {
-      name: 'Прикрепить разбор 1 задачи',
-    })
-    await user.click(attach)
     expect(screen.getByRole('region', { name: 'Задача 1 (б)' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Закрыть' }))
-    expect(screen.queryByRole('region', { name: 'Задача 1 (б)' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Прикрепить разбор 1 задачи' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: /Задача 1 \(б\)/ })).not.toBeInTheDocument()
+    expect(screen.queryByText(/Прикрепить разбор/)).not.toBeInTheDocument()
   })
 
   it('highlights every problem covered by the selected shared разбор', async () => {

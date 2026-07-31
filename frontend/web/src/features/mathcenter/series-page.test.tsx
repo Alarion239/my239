@@ -277,13 +277,11 @@ describe('SeriesPage — teacher view', () => {
     ).not.toBeInTheDocument()
     expect(screen.queryByText(/Разбор опубликован ·/)).not.toBeInTheDocument()
 
-    // Selecting a task puts the compact batch action in the same toolbar row
-    // as the tabs instead of adding a separate panel above the statistics.
+    // Selecting an empty task opens the editing workbench directly; there is
+    // no intermediate attachment button.
     await user.click(distribution.closest('[role="button"]') as HTMLElement)
-    const attach = screen.getByRole('button', {
-      name: 'Прикрепить разбор 1 задачи',
-    })
-    expect(tabList.parentElement).toContainElement(attach)
+    expect(await screen.findByRole('region', { name: 'Задача 1 (а)' })).toBeInTheDocument()
+    expect(screen.queryByText(/Прикрепить разбор/)).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: /Серия 2/ }))
     expect(screen.getByRole('button', { name: 'Редактировать серию' })).toBeInTheDocument()
