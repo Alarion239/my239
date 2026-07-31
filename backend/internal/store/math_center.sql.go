@@ -201,6 +201,52 @@ func (q *Queries) DeleteMathCenterGroup(ctx context.Context, id int64) (int64, e
 	return result.RowsAffected(), nil
 }
 
+const getActiveStudentByUser = `-- name: GetActiveStudentByUser :one
+SELECT student.id,
+       student.user_id,
+       student.group_id,
+       student.term_id,
+       student.can_view_razbors,
+       student.razbor_default_video,
+       student.razbor_default_pdf_tex
+FROM math_center_students student
+JOIN math_center_groups group_row ON group_row.id = student.group_id
+JOIN math_center_terms term_row ON term_row.id = student.term_id
+WHERE student.user_id = $1
+  AND group_row.math_center_id = $2
+  AND term_row.is_active = TRUE
+`
+
+type GetActiveStudentByUserParams struct {
+	UserID       int64 `json:"user_id"`
+	MathCenterID int64 `json:"math_center_id"`
+}
+
+type GetActiveStudentByUserRow struct {
+	ID                  int64 `json:"id"`
+	UserID              int64 `json:"user_id"`
+	GroupID             int64 `json:"group_id"`
+	TermID              int64 `json:"term_id"`
+	CanViewRazbors      bool  `json:"can_view_razbors"`
+	RazborDefaultVideo  bool  `json:"razbor_default_video"`
+	RazborDefaultPdfTex bool  `json:"razbor_default_pdf_tex"`
+}
+
+func (q *Queries) GetActiveStudentByUser(ctx context.Context, arg GetActiveStudentByUserParams) (GetActiveStudentByUserRow, error) {
+	row := q.db.QueryRow(ctx, getActiveStudentByUser, arg.UserID, arg.MathCenterID)
+	var i GetActiveStudentByUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.GroupID,
+		&i.TermID,
+		&i.CanViewRazbors,
+		&i.RazborDefaultVideo,
+		&i.RazborDefaultPdfTex,
+	)
+	return i, err
+}
+
 const getGroup = `-- name: GetGroup :one
 SELECT id, math_center_id, name, created_at
 FROM math_center_groups
@@ -255,6 +301,60 @@ func (q *Queries) GetMathCenter(ctx context.Context, id int64) (MathCenter, erro
 	row := q.db.QueryRow(ctx, getMathCenter, id)
 	var i MathCenter
 	err := row.Scan(&i.ID, &i.GraduationYear, &i.CreatedAt)
+	return i, err
+}
+
+const getRosterBoardMetadata = `-- name: GetRosterBoardMetadata :one
+WITH active_term AS (
+    SELECT term_row.id, term_row.created_at
+    FROM math_center_terms term_row
+    WHERE term_row.math_center_id = $1
+      AND term_row.is_active = TRUE
+    LIMIT 1
+),
+previous_term AS (
+    SELECT t.id, t.created_at
+    FROM math_center_terms t
+    WHERE t.math_center_id = $1
+      AND t.is_active = FALSE
+      AND t.created_at < (SELECT created_at FROM active_term)
+    ORDER BY t.created_at DESC, t.id DESC
+    LIMIT 1
+),
+published_series AS (
+    SELECT COUNT(*)::bigint AS count
+    FROM math_center_series series
+    WHERE series.term_id = (SELECT id FROM active_term)
+      AND series.published_at IS NOT NULL
+)
+SELECT (SELECT id FROM active_term)::bigint AS active_term_id,
+       (SELECT id FROM previous_term)::bigint AS previous_term_id,
+       published_series.count AS published_series_count,
+       CASE
+         WHEN published_series.count >= 10
+              OR NOT EXISTS (SELECT 1 FROM previous_term)
+           THEN (SELECT id FROM active_term)
+         ELSE (SELECT id FROM previous_term)
+       END::bigint AS rating_term_id
+FROM published_series
+`
+
+type GetRosterBoardMetadataRow struct {
+	ActiveTermID         int64 `json:"active_term_id"`
+	PreviousTermID       int64 `json:"previous_term_id"`
+	PublishedSeriesCount int64 `json:"published_series_count"`
+	RatingTermID         int64 `json:"rating_term_id"`
+}
+
+func (q *Queries) GetRosterBoardMetadata(ctx context.Context, mathCenterID int64) (GetRosterBoardMetadataRow, error) {
+	row := q.db.QueryRow(ctx, getRosterBoardMetadata, mathCenterID)
+	var i GetRosterBoardMetadataRow
+	err := row.Scan(
+		&i.ActiveTermID,
+		&i.PreviousTermID,
+		&i.PublishedSeriesCount,
+		&i.RatingTermID,
+	)
 	return i, err
 }
 
@@ -911,6 +1011,152 @@ func (q *Queries) ListRazborAccessStudentsForManage(ctx context.Context, mathCen
 	return items, nil
 }
 
+const listRosterBoardStudentsForManage = `-- name: ListRosterBoardStudentsForManage :many
+WITH active_term AS (
+    SELECT term_row.id, term_row.created_at
+    FROM math_center_terms term_row
+    WHERE term_row.math_center_id = $1
+      AND term_row.is_active = TRUE
+    LIMIT 1
+),
+previous_term AS (
+    SELECT t.id, t.created_at
+    FROM math_center_terms t
+    WHERE t.math_center_id = $1
+      AND t.is_active = FALSE
+      AND t.created_at < (SELECT created_at FROM active_term)
+    ORDER BY t.created_at DESC, t.id DESC
+    LIMIT 1
+),
+published_series AS (
+    SELECT COUNT(*)::bigint AS count
+    FROM math_center_series series
+    WHERE series.term_id = (SELECT id FROM active_term)
+      AND series.published_at IS NOT NULL
+),
+rating_term AS (
+    SELECT CASE
+             WHEN published_series.count >= 10
+                  OR NOT EXISTS (SELECT 1 FROM previous_term)
+               THEN (SELECT id FROM active_term)
+             ELSE (SELECT id FROM previous_term)
+           END AS id
+    FROM published_series
+),
+candidates AS (
+    SELECT student.user_id
+    FROM math_center_students student
+    WHERE student.term_id = (SELECT id FROM active_term)
+    UNION
+    SELECT student.user_id
+    FROM math_center_students student
+    WHERE student.term_id = (SELECT id FROM previous_term)
+),
+current_enrollment AS (
+    SELECT student.user_id, student.group_id
+    FROM math_center_students student
+    WHERE student.term_id = (SELECT id FROM active_term)
+),
+previous_enrollment AS (
+    SELECT student.user_id,
+           group_row.id AS group_id,
+           group_row.name AS group_name
+    FROM math_center_students student
+    JOIN math_center_groups group_row ON group_row.id = student.group_id
+    WHERE student.term_id = (SELECT id FROM previous_term)
+),
+rating_totals AS (
+    SELECT thread.student_user_id,
+           COUNT(*)::double precision AS rating
+    FROM homework_thread thread
+    JOIN math_center_subproblems subproblem ON subproblem.id = thread.subproblem_id
+    JOIN math_center_problems problem ON problem.id = subproblem.problem_id
+    JOIN math_center_series series ON series.id = problem.series_id
+    WHERE series.term_id = (SELECT id FROM rating_term)
+      AND series.published_at IS NOT NULL
+      AND problem.number <> 0
+      AND thread.current_status = 'accepted'
+      AND NOT EXISTS (
+          SELECT 1
+          FROM math_center_problems exercise
+          JOIN math_center_subproblems exercise_subproblem
+            ON exercise_subproblem.problem_id = exercise.id
+          LEFT JOIN homework_thread exercise_thread
+            ON exercise_thread.student_user_id = thread.student_user_id
+           AND exercise_thread.subproblem_id = exercise_subproblem.id
+          WHERE exercise.series_id = series.id
+            AND exercise.number = 0
+            AND COALESCE(exercise_thread.current_status, 'ungraded') <> 'accepted'
+      )
+    GROUP BY thread.student_user_id
+)
+SELECT candidate.user_id,
+       current_enrollment.group_id AS current_group_id,
+       previous_enrollment.group_id AS previous_group_id,
+       previous_enrollment.group_name AS previous_group_name,
+       user_row.first_name,
+       user_row.middle_name,
+       user_row.last_name,
+       COALESCE(rating_totals.rating, 0)::double precision AS rating,
+       (SELECT count FROM published_series)::bigint AS published_series_count,
+       (SELECT id FROM rating_term)::bigint AS rating_term_id
+FROM candidates candidate
+JOIN users user_row ON user_row.id = candidate.user_id
+LEFT JOIN current_enrollment ON current_enrollment.user_id = candidate.user_id
+LEFT JOIN previous_enrollment ON previous_enrollment.user_id = candidate.user_id
+LEFT JOIN rating_totals ON rating_totals.student_user_id = candidate.user_id
+ORDER BY user_row.last_name ASC, user_row.first_name ASC, user_row.middle_name ASC, candidate.user_id ASC
+`
+
+type ListRosterBoardStudentsForManageRow struct {
+	UserID               int64   `json:"user_id"`
+	CurrentGroupID       *int64  `json:"current_group_id"`
+	PreviousGroupID      *int64  `json:"previous_group_id"`
+	PreviousGroupName    *string `json:"previous_group_name"`
+	FirstName            string  `json:"first_name"`
+	MiddleName           *string `json:"middle_name"`
+	LastName             string  `json:"last_name"`
+	Rating               float64 `json:"rating"`
+	PublishedSeriesCount int64   `json:"published_series_count"`
+	RatingTermID         int64   `json:"rating_term_id"`
+}
+
+// The allocation board compares the active roster with the immediately
+// preceding term. A student may therefore have no active-period enrollment
+// and still appear as an unallocated candidate. Rating is deliberately a
+// derived value: it currently mirrors the credited "Решено" total and can be
+// replaced by a difficulty-weighted calculation without changing the API.
+func (q *Queries) ListRosterBoardStudentsForManage(ctx context.Context, mathCenterID int64) ([]ListRosterBoardStudentsForManageRow, error) {
+	rows, err := q.db.Query(ctx, listRosterBoardStudentsForManage, mathCenterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRosterBoardStudentsForManageRow{}
+	for rows.Next() {
+		var i ListRosterBoardStudentsForManageRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.CurrentGroupID,
+			&i.PreviousGroupID,
+			&i.PreviousGroupName,
+			&i.FirstName,
+			&i.MiddleName,
+			&i.LastName,
+			&i.Rating,
+			&i.PublishedSeriesCount,
+			&i.RatingTermID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStudentSeriesRazborAccessForCenter = `-- name: ListStudentSeriesRazborAccessForCenter :many
 SELECT series.id AS series_id,
        COALESCE(access.can_view_video, enrollment.razbor_default_video, enrollment.can_view_razbors, FALSE)::boolean AS can_view_video,
@@ -1293,6 +1539,29 @@ func (q *Queries) ListTeachersForCenters(ctx context.Context, centerIds []int64)
 		return nil, err
 	}
 	return items, nil
+}
+
+const removeActiveStudentByUser = `-- name: RemoveActiveStudentByUser :execrows
+DELETE FROM math_center_students student
+USING math_center_groups group_row, math_center_terms term_row
+WHERE student.user_id = $1
+  AND group_row.id = student.group_id
+  AND term_row.id = student.term_id
+  AND group_row.math_center_id = $2
+  AND term_row.is_active = TRUE
+`
+
+type RemoveActiveStudentByUserParams struct {
+	UserID       int64 `json:"user_id"`
+	MathCenterID int64 `json:"math_center_id"`
+}
+
+func (q *Queries) RemoveActiveStudentByUser(ctx context.Context, arg RemoveActiveStudentByUserParams) (int64, error) {
+	result, err := q.db.Exec(ctx, removeActiveStudentByUser, arg.UserID, arg.MathCenterID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const removeStudent = `-- name: RemoveStudent :execrows

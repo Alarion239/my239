@@ -46,8 +46,10 @@ func ManageRouter(database *db.DB, hub *live.Hub, sheetServices ...*googlesheets
 	r.Delete("/teachers/{teacherID}", manageRemoveTeacher(database, hub))
 
 	r.Get("/students", manageListStudents(database))
+	r.Get("/roster-board", manageListRosterBoard(database))
 	r.Post("/students", manageAddStudent(database, hub))
 	r.Patch("/students/{studentID}/group", manageSetStudentGroup(database, hub))
+	r.Put("/students/{userID}/group", manageSetStudentGroupByUser(database, hub))
 	r.Get("/razbor-access", manageListRazborAccess(database))
 	r.Patch("/razbor-access", manageSetRazborAccessMatrix(database, hub))
 	r.Get("/students/{studentID}/razbor-access", manageListStudentSeriesRazborAccess(database))
@@ -475,6 +477,128 @@ func manageListStudents(database *db.DB) http.HandlerFunc {
 	}
 }
 
+type manageRosterBoardGroup struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+type manageRosterBoardStudent struct {
+	UserID            int64   `json:"user_id"`
+	CurrentGroupID    *int64  `json:"current_group_id"`
+	PreviousGroupID   *int64  `json:"previous_group_id"`
+	PreviousGroupName *string `json:"previous_group_name"`
+	FirstName         string  `json:"first_name"`
+	MiddleName        *string `json:"middle_name"`
+	LastName          string  `json:"last_name"`
+	Rating            float64 `json:"rating"`
+}
+
+type manageRosterBoardResponse struct {
+	Term                 termView                   `json:"term"`
+	PreviousTerm         *termView                  `json:"previous_term,omitempty"`
+	PublishedSeriesCount int64                      `json:"published_series_count"`
+	RatingTerm           termView                   `json:"rating_term"`
+	Groups               []manageRosterBoardGroup   `json:"groups"`
+	Students             []manageRosterBoardStudent `json:"students"`
+}
+
+func manageListRosterBoard(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		q := store.New(database.Pool())
+		centerID, _, ok := manageGate(w, r, q)
+		if !ok {
+			return
+		}
+
+		ctx := r.Context()
+		active, err := q.GetActiveTermForCenter(ctx, centerID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "center has no active term")
+			return
+		}
+		if err != nil {
+			logger.LogErrorContext(ctx, "manage: get active term for roster board", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to load roster board")
+			return
+		}
+
+		terms, err := q.ListTermsForCenter(ctx, centerID)
+		if err != nil {
+			logger.LogErrorContext(ctx, "manage: list terms for roster board", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to load roster board")
+			return
+		}
+		var previous *store.MathCenterTerm
+		for i := range terms {
+			term := &terms[i]
+			if term.ID != active.ID && !term.IsActive && term.CreatedAt.Before(active.CreatedAt) {
+				if previous == nil || term.CreatedAt.After(previous.CreatedAt) ||
+					(term.CreatedAt.Equal(previous.CreatedAt) && term.ID > previous.ID) {
+					previous = term
+				}
+			}
+		}
+
+		groups, err := q.ListGroupsForTerm(ctx, active.ID)
+		if err != nil {
+			logger.LogErrorContext(ctx, "manage: list roster board groups", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to load roster board")
+			return
+		}
+		metadata, err := q.GetRosterBoardMetadata(ctx, centerID)
+		if err != nil {
+			logger.LogErrorContext(ctx, "manage: get roster board metadata", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to load roster board")
+			return
+		}
+		students, err := q.ListRosterBoardStudentsForManage(ctx, centerID)
+		if err != nil {
+			logger.LogErrorContext(ctx, "manage: list roster board students", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to load roster board")
+			return
+		}
+
+		var ratingTerm *store.MathCenterTerm
+		for i := range terms {
+			if terms[i].ID == metadata.RatingTermID {
+				ratingTerm = &terms[i]
+				break
+			}
+		}
+		if ratingTerm == nil {
+			ratingTerm = &active
+		}
+
+		out := manageRosterBoardResponse{
+			Term:                 toTermView(active),
+			PublishedSeriesCount: metadata.PublishedSeriesCount,
+			RatingTerm:           toTermView(*ratingTerm),
+			Groups:               make([]manageRosterBoardGroup, 0, len(groups)),
+			Students:             make([]manageRosterBoardStudent, 0, len(students)),
+		}
+		if previous != nil {
+			previousView := toTermView(*previous)
+			out.PreviousTerm = &previousView
+		}
+		for _, group := range groups {
+			out.Groups = append(out.Groups, manageRosterBoardGroup{ID: group.ID, Name: group.Name})
+		}
+		for _, student := range students {
+			out.Students = append(out.Students, manageRosterBoardStudent{
+				UserID:            student.UserID,
+				CurrentGroupID:    student.CurrentGroupID,
+				PreviousGroupID:   student.PreviousGroupID,
+				PreviousGroupName: student.PreviousGroupName,
+				FirstName:         student.FirstName,
+				MiddleName:        student.MiddleName,
+				LastName:          student.LastName,
+				Rating:            student.Rating,
+			})
+		}
+		httpx.WriteJSON(w, http.StatusOK, out)
+	}
+}
+
 func manageListRazborAccess(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := store.New(database.Pool())
@@ -791,6 +915,146 @@ func manageSetStudentGroup(database *db.DB, hub *live.Hub) http.HandlerFunc {
 			return
 		}
 		live.Publish(r.Context(), database.Pool(), live.Event{CenterID: centerID, Kind: live.KindMembership})
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// manageSetStudentGroupByUser assigns or unassigns a student's enrollment in
+// the active period. A nil group_id removes only that active-period row;
+// archived enrollments and homework history remain untouched.
+func manageSetStudentGroupByUser(database *db.DB, hub *live.Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		q := store.New(database.Pool())
+		centerID, _, ok := manageGate(w, r, q)
+		if !ok {
+			return
+		}
+		userID, err := strconv.ParseInt(chi.URLParam(r, "userID"), 10, 64)
+		if err != nil || userID <= 0 {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid user id")
+			return
+		}
+
+		var req manageSetGroupRequest
+		if !httpx.DecodeJSONBody(w, r, &req) {
+			return
+		}
+
+		active, err := q.GetActiveTermForCenter(ctx, centerID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "center has no active term")
+			return
+		}
+		if err != nil {
+			logger.LogErrorContext(ctx, "manage: get active term for student assignment", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to change student group")
+			return
+		}
+		if _, err := q.GetUserByID(ctx, userID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "user not found")
+				return
+			}
+			logger.LogErrorContext(ctx, "manage: validate student assignment user", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to change student group")
+			return
+		}
+
+		// A JSON null is the unallocated state. Treat it as an idempotent no-op
+		// when the user has no current enrollment.
+		if req.GroupID == 0 {
+			affected, err := q.RemoveActiveStudentByUser(ctx, store.RemoveActiveStudentByUserParams{
+				UserID: userID, MathCenterID: centerID,
+			})
+			if err != nil {
+				logger.LogErrorContext(ctx, "manage: unallocate student", err)
+				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to unallocate student")
+				return
+			}
+			if affected > 0 {
+				live.Publish(ctx, database.Pool(), live.Event{CenterID: centerID, Kind: live.KindMembership})
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		group, err := q.GetGroupCenter(ctx, req.GroupID)
+		if errors.Is(err, pgx.ErrNoRows) || group.MathCenterID != centerID || group.TermID != active.ID {
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				logger.LogErrorContext(ctx, "manage: validate student assignment group", err)
+				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to change student group")
+				return
+			}
+			httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "group not found")
+			return
+		}
+
+		isTeacher, err := q.IsTeacherInCenter(ctx, store.IsTeacherInCenterParams{UserID: userID, MathCenterID: centerID})
+		if err != nil {
+			logger.LogErrorContext(ctx, "manage: student assignment teacher check", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to change student group")
+			return
+		}
+		if isTeacher {
+			httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "user is a teacher of this center and cannot also be a student there")
+			return
+		}
+
+		current, err := q.GetActiveStudentByUser(ctx, store.GetActiveStudentByUserParams{
+			UserID: userID, MathCenterID: centerID,
+		})
+		if err == nil {
+			if current.GroupID == req.GroupID {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			if _, err := q.SetStudentGroup(ctx, store.SetStudentGroupParams{ID: current.ID, GroupID: req.GroupID}); err != nil {
+				logger.LogErrorContext(ctx, "manage: move student by user", err)
+				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to move student")
+				return
+			}
+			live.Publish(ctx, database.Pool(), live.Event{CenterID: centerID, Kind: live.KindMembership})
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			logger.LogErrorContext(ctx, "manage: find active student enrollment", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to change student group")
+			return
+		}
+
+		// Add and initialize access in one transaction, matching the existing
+		// student-enrollment path.
+		tx, err := database.Pool().Begin(ctx)
+		if err != nil {
+			logger.LogErrorContext(ctx, "manage: begin student assignment", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+		txq := store.New(tx)
+		student, err := txq.AddStudentToGroup(ctx, store.AddStudentToGroupParams{UserID: userID, GroupID: req.GroupID})
+		if err != nil {
+			if isUniqueViolation(err) {
+				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "user is already a student in this period")
+				return
+			}
+			logger.LogErrorContext(ctx, "manage: add student from roster board", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to assign student")
+			return
+		}
+		if err := txq.InitializeStudentRazborAccess(ctx, student.ID); err != nil {
+			logger.LogErrorContext(ctx, "manage: initialize assigned student access", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to assign student")
+			return
+		}
+		if err := tx.Commit(ctx); err != nil {
+			logger.LogErrorContext(ctx, "manage: commit student assignment", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to assign student")
+			return
+		}
+		live.Publish(ctx, database.Pool(), live.Event{CenterID: centerID, Kind: live.KindMembership})
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

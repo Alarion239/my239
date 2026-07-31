@@ -84,8 +84,9 @@ type createTermRequest struct {
 }
 
 // CreateTerm creates and activates the next normal term in one transaction.
-// Groups and their student assignments follow the cohort into the next term;
-// problem work remains attached to the archived term.
+// Group definitions follow the cohort into the next term, while students are
+// intentionally left unallocated for the head teacher to place. Problem work
+// remains attached to the archived term.
 func CreateTerm(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -162,29 +163,6 @@ func CreateTerm(database *db.DB) http.HandlerFunc {
 				TermID_2: term.ID,
 			}); err != nil {
 				logger.LogErrorContext(ctx, "terms: copy groups", err)
-				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to create term")
-				return
-			}
-			if _, err := tx.Exec(ctx, `INSERT INTO math_center_students (
-					user_id,
-					group_id,
-					term_id,
-					razbor_default_video,
-					razbor_default_pdf_tex
-				)
-				SELECT old_student.user_id,
-				       new_group.id,
-				       $2,
-				       old_student.razbor_default_video,
-				       old_student.razbor_default_pdf_tex
-				FROM math_center_students old_student
-                JOIN math_center_groups old_group ON old_group.id = old_student.group_id
-                JOIN math_center_groups new_group
-                  ON new_group.term_id = $2
-                 AND new_group.name = old_group.name
-                WHERE old_student.term_id = $1
-                ON CONFLICT (user_id, term_id) DO NOTHING`, sourceTermID, term.ID); err != nil {
-				logger.LogErrorContext(ctx, "terms: copy student assignments", err)
 				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to create term")
 				return
 			}

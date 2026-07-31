@@ -50,6 +50,7 @@ export function useCreateMathCenterTerm(centerId: number) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.mathCenterTerms(centerId) })
       qc.invalidateQueries({ queryKey: ['mathcenter', 'centers', centerId] })
+      qc.invalidateQueries({ queryKey: queryKeys.manageRosterBoard(centerId) })
     },
   })
 }

@@ -18,6 +18,7 @@ import type {
   MathCenterTeacher,
   ManageSeriesRazborAccess,
   ManageRazborAccessResponse,
+  ManageRosterBoardResponse,
   ManageStudent,
   ManageTeacher,
   UserSearchResult,
@@ -66,7 +67,10 @@ export function useManageCreateGroup(centerId: number) {
         body,
       }),
     onSuccess: () =>
-      qc.invalidateQueries({ queryKey: queryKeys.manageGroups(centerId) }),
+      Promise.all([
+        qc.invalidateQueries({ queryKey: queryKeys.manageGroups(centerId) }),
+        qc.invalidateQueries({ queryKey: queryKeys.manageRosterBoard(centerId) }),
+      ]),
   })
 }
 
@@ -77,7 +81,10 @@ export function useManageDeleteGroup(centerId: number) {
     mutationFn: (groupId: number) =>
       client.request(base(centerId) + '/groups/' + groupId, { method: 'DELETE' }),
     onSuccess: () =>
-      qc.invalidateQueries({ queryKey: queryKeys.manageGroups(centerId) }),
+      Promise.all([
+        qc.invalidateQueries({ queryKey: queryKeys.manageGroups(centerId) }),
+        qc.invalidateQueries({ queryKey: queryKeys.manageRosterBoard(centerId) }),
+      ]),
   })
 }
 
@@ -150,6 +157,15 @@ export function useManageStudents(centerId: number) {
   })
 }
 
+export function useManageRosterBoard(centerId: number) {
+  const client = useApiClient()
+  return useQuery<ManageRosterBoardResponse>({
+    queryKey: queryKeys.manageRosterBoard(centerId),
+    queryFn: () => client.request<ManageRosterBoardResponse>(base(centerId) + '/roster-board'),
+    enabled: centerId > 0,
+  })
+}
+
 export function useManageRazborAccess(centerId: number) {
   const client = useApiClient()
   return useQuery<ManageRazborAccessResponse>({
@@ -202,7 +218,10 @@ export function useManageAddStudent(centerId: number) {
         body,
       }),
     onSuccess: () =>
-      qc.invalidateQueries({ queryKey: queryKeys.manageStudents(centerId) }),
+      Promise.all([
+        qc.invalidateQueries({ queryKey: queryKeys.manageStudents(centerId) }),
+        qc.invalidateQueries({ queryKey: queryKeys.manageRosterBoard(centerId) }),
+      ]),
   })
 }
 
@@ -216,7 +235,47 @@ export function useManageSetStudentGroup(centerId: number) {
         body: { group_id: groupId },
       }),
     onSuccess: () =>
-      qc.invalidateQueries({ queryKey: queryKeys.manageStudents(centerId) }),
+      Promise.all([
+        qc.invalidateQueries({ queryKey: queryKeys.manageStudents(centerId) }),
+        qc.invalidateQueries({ queryKey: queryKeys.manageRosterBoard(centerId) }),
+      ]),
+  })
+}
+
+export function useManageSetRosterStudentGroup(centerId: number) {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  const key = queryKeys.manageRosterBoard(centerId)
+  return useMutation({
+    mutationFn: ({ userId, groupId }: { userId: number; groupId: number | null }) =>
+      client.request(base(centerId) + '/students/' + userId + '/group', {
+        method: 'PUT',
+        body: { group_id: groupId },
+      }),
+    onMutate: async ({ userId, groupId }) => {
+      await qc.cancelQueries({ queryKey: key })
+      const previous = qc.getQueryData<ManageRosterBoardResponse>(key)
+      qc.setQueryData<ManageRosterBoardResponse>(key, (current) => {
+        if (!current) return current
+        return {
+          ...current,
+          students: current.students.map((student) =>
+            student.user_id === userId
+              ? { ...student, current_group_id: groupId }
+              : student,
+          ),
+        }
+      })
+      return { previous }
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) qc.setQueryData(key, context.previous)
+      qc.invalidateQueries({ queryKey: key })
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: key })
+      qc.invalidateQueries({ queryKey: queryKeys.manageStudents(centerId) })
+    },
   })
 }
 
@@ -329,7 +388,10 @@ export function useManageRemoveStudent(centerId: number) {
         method: 'DELETE',
       }),
     onSuccess: () =>
-      qc.invalidateQueries({ queryKey: queryKeys.manageStudents(centerId) }),
+      Promise.all([
+        qc.invalidateQueries({ queryKey: queryKeys.manageStudents(centerId) }),
+        qc.invalidateQueries({ queryKey: queryKeys.manageRosterBoard(centerId) }),
+      ]),
   })
 }
 

@@ -1,24 +1,37 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  TouchSensor,
+  closestCenter,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core'
+import {
   fullName,
   useManageAddStudent,
   useManageGroups,
   useManageRazborAccess,
-  useManageRemoveStudent,
+  useManageRosterBoard,
+  useManageSetRosterStudentGroup,
   useManageSetRazborAccess,
-  useManageSetStudentGroup,
-  useManageStudents,
   type ManageRazborAccessCell,
   type ManageRazborAccessResponse,
   type ManageRazborAccessStudent,
   type ManageRazborAccessMutation,
-  type ManageStudent,
+  type ManageRosterBoardGroup,
+  type ManageRosterBoardStudent,
   type UserSearchResult,
 } from '@my239/shared'
 import { Button, Card, CardContent, Select, Spinner } from '../../../design/ui'
 import { cn } from '../../../design/cn'
-import { ConfirmButton, SectionHeader } from '../../admin/_shared'
+import { SectionHeader } from '../../admin/_shared'
 import { UserSearchSelect } from './user-search-select'
 import { InviteSection } from './invite-section'
 
@@ -458,11 +471,9 @@ export function RazborAccessTab({ centerId }: { centerId: number }) {
 }
 
 export function StudentsTab({ centerId }: { centerId: number }) {
-  const { data: students, isPending, isError } = useManageStudents(centerId)
+  const board = useManageRosterBoard(centerId)
   const { data: groups } = useManageGroups(centerId)
   const addStudent = useManageAddStudent(centerId)
-  const setGroup = useManageSetStudentGroup(centerId)
-  const remove = useManageRemoveStudent(centerId)
   const [picked, setPicked] = useState<UserSearchResult | null>(null)
   const [addGroupId, setAddGroupId] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -488,34 +499,7 @@ export function StudentsTab({ centerId }: { centerId: number }) {
   return (
     <Card>
       <CardContent className="flex flex-col gap-4">
-        <div>
-          <SectionHeader title="Состав учеников" description="Группа и удаление ученика остаются отдельными действиями." />
-          {isPending ? <Spinner /> : isError || !students ? (
-            <p className="text-sm text-danger">Не удалось загрузить учеников.</p>
-          ) : students.length === 0 ? (
-            <p className="text-sm text-muted">Пока нет учеников.</p>
-          ) : (
-            <ul className="mt-3 flex flex-col gap-1.5">
-              {students.map((student: ManageStudent) => (
-                <li key={student.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-surface-muted px-3 py-2">
-                  <span className="min-w-44 flex-1 text-sm text-ink">{fullName(student)}</span>
-                  <Select
-                    value={student.group_id}
-                    aria-label={'Группа ученика ' + fullName(student)}
-                    className="h-9 max-w-36"
-                    disabled={setGroup.isPending}
-                    onChange={(event) => setGroup.mutate({ studentId: student.id, groupId: Number(event.target.value) })}
-                  >
-                    {(groups ?? []).map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-                  </Select>
-                  <ConfirmButton variant="ghost" size="sm" disabled={remove.isPending} onConfirm={() => remove.mutate(student.id)}>
-                    Удалить
-                  </ConfirmButton>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <RosterBoard board={board} centerId={centerId} />
 
         {error ? <p className="text-sm text-danger">{error}</p> : null}
         <div className="flex flex-col gap-2 border-t border-line pt-4">
@@ -536,5 +520,351 @@ export function StudentsTab({ centerId }: { centerId: number }) {
         <InviteSection centerId={centerId} role="student" />
       </CardContent>
     </Card>
+  )
+}
+
+type RosterSort = 'alpha' | 'rating-desc' | 'rating-asc'
+
+const rosterNameCollator = new Intl.Collator('ru', { sensitivity: 'base' })
+const EMPTY_ROSTER_STUDENTS: ManageRosterBoardStudent[] = []
+const EMPTY_ROSTER_GROUPS: ManageRosterBoardGroup[] = []
+
+function rosterStudentName(student: ManageRosterBoardStudent): string {
+  return fullName(student)
+}
+
+function rosterColumnId(groupId: number | null): string {
+  return groupId === null ? 'unallocated' : 'group:' + groupId
+}
+
+function rosterGroupId(columnId: string): number | null {
+  if (columnId === 'unallocated') return null
+  const value = Number(columnId.replace('group:', ''))
+  return Number.isFinite(value) && value > 0 ? value : null
+}
+
+function rosterSortLabel(sort: RosterSort): string {
+  if (sort === 'rating-desc') return 'Рейтинг ↓'
+  if (sort === 'rating-asc') return 'Рейтинг ↑'
+  return 'А–Я'
+}
+
+function RosterBoard({
+  board,
+  centerId,
+}: {
+  board: ReturnType<typeof useManageRosterBoard>
+  centerId: number
+}) {
+  const setGroup = useManageSetRosterStudentGroup(centerId)
+  const [activeUserId, setActiveUserId] = useState<number | null>(null)
+  const [movingUserId, setMovingUserId] = useState<number | null>(null)
+  const [restoreFocusUserId, setRestoreFocusUserId] = useState<number | null>(null)
+  const [sorts, setSorts] = useState<Record<string, RosterSort>>({})
+  const [undo, setUndo] = useState<{
+    userId: number
+    name: string
+    fromGroupId: number | null
+    toGroupId: number | null
+  } | null>(null)
+  const [announcement, setAnnouncement] = useState('')
+  const [moveError, setMoveError] = useState<string | null>(null)
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
+  )
+
+  useEffect(() => {
+    if (!undo) return
+    const timer = window.setTimeout(() => setUndo(null), 8000)
+    return () => window.clearTimeout(timer)
+  }, [undo])
+
+  useEffect(() => {
+    if (movingUserId !== null || restoreFocusUserId === null) return
+    const frame = window.requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>('[data-roster-card="student:' + restoreFocusUserId + '"]')?.focus()
+      setRestoreFocusUserId(null)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [movingUserId, restoreFocusUserId])
+
+  const students = board.data?.students ?? EMPTY_ROSTER_STUDENTS
+  const groups = board.data?.groups ?? EMPTY_ROSTER_GROUPS
+  const columns = useMemo(
+    () => [{ id: 'unallocated', name: 'Не распределены' }, ...groups.map((group) => ({ id: 'group:' + group.id, name: group.name }))],
+    [groups],
+  )
+  const studentsByColumn = useMemo(() => {
+    const result = new Map<string, ManageRosterBoardStudent[]>()
+    for (const column of columns) result.set(column.id, [])
+    for (const student of students) {
+      const id = rosterColumnId(student.current_group_id)
+      const bucket = result.get(id)
+      if (bucket) bucket.push(student)
+    }
+    return result
+  }, [columns, students])
+
+  const activeStudent = activeUserId === null
+    ? null
+    : students.find((student) => student.user_id === activeUserId) ?? null
+
+  function sortStudents(columnId: string, values: ManageRosterBoardStudent[]): ManageRosterBoardStudent[] {
+    const sort = sorts[columnId] ?? 'alpha'
+    return [...values].sort((left, right) => {
+      if (sort === 'rating-desc' || sort === 'rating-asc') {
+        const difference = left.rating - right.rating
+        if (difference !== 0) return sort === 'rating-desc' ? -difference : difference
+      }
+      return rosterNameCollator.compare(rosterStudentName(left), rosterStudentName(right))
+    })
+  }
+
+  function announceMove(student: ManageRosterBoardStudent, targetName: string) {
+    setAnnouncement(rosterStudentName(student) + ' перемещён в «' + targetName + '».')
+  }
+
+  function moveStudent(student: ManageRosterBoardStudent, toGroupId: number | null, targetName: string, isUndo = false) {
+    if (movingUserId !== null || student.current_group_id === toGroupId) return
+    const fromGroupId = student.current_group_id
+    setMoveError(null)
+    setMovingUserId(student.user_id)
+    setRestoreFocusUserId(student.user_id)
+    setActiveUserId(null)
+    setGroup.mutate(
+      { userId: student.user_id, groupId: toGroupId },
+      {
+        onSuccess: () => {
+          announceMove(student, targetName)
+          if (isUndo) {
+            setUndo(null)
+          } else {
+            setUndo({ userId: student.user_id, name: rosterStudentName(student), fromGroupId, toGroupId })
+          }
+        },
+        onError: () => {
+          setMoveError('Не удалось изменить группу. Данные обновятся автоматически.')
+          setAnnouncement('Перемещение не выполнено для ' + rosterStudentName(student) + '.')
+        },
+        onSettled: () => setMovingUserId(null),
+      },
+    )
+  }
+
+  function handleDragStart(event: DragStartEvent) {
+    const userId = Number(String(event.active.id).replace('student:', ''))
+    setActiveUserId(Number.isFinite(userId) ? userId : null)
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const userId = Number(String(event.active.id).replace('student:', ''))
+    const target = event.over ? String(event.over.id) : ''
+    const student = students.find((candidate) => candidate.user_id === userId)
+    const column = columns.find((candidate) => candidate.id === target)
+    setActiveUserId(null)
+    if (!student || !column) return
+    moveStudent(student, rosterGroupId(column.id), column.name)
+  }
+
+  if (board.isPending) return <Spinner />
+  if (board.isError || !board.data) return <p className="text-sm text-danger">Не удалось загрузить распределение учеников.</p>
+
+  const ratingTermName = board.data.rating_term.display_name
+  const ratingBasis = board.data.published_series_count >= 10
+    ? 'текущий период'
+    : board.data.previous_term
+      ? 'предыдущий период'
+      : 'текущий период'
+
+  return (
+    <div className="flex flex-col gap-3">
+      <SectionHeader
+        title="Распределение учеников"
+        description={'Перетаскивайте карточки между группами. Рейтинг сейчас основан на показателе «Решено» за ' + ratingTermName + '.'}
+      />
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragCancel={() => setActiveUserId(null)}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:thin]">
+          {columns.map((column) => {
+            const columnStudents = sortStudents(column.id, studentsByColumn.get(column.id) ?? [])
+            return (
+              <RosterColumn
+                key={column.id}
+                id={column.id}
+                name={column.name}
+                students={columnStudents}
+                groups={groups}
+                sort={sorts[column.id] ?? 'alpha'}
+                isUnallocated={column.id === 'unallocated'}
+                movingUserId={movingUserId}
+                onSortChange={(sort) => setSorts((current) => ({ ...current, [column.id]: sort }))}
+                onMove={(student, groupId, targetName) => moveStudent(student, groupId, targetName)}
+              />
+            )
+          })}
+        </div>
+        <DragOverlay dropAnimation={null}>
+          {activeStudent ? <RosterStudentCard student={activeStudent} groups={groups} isOverlay /> : null}
+        </DragOverlay>
+      </DndContext>
+      <p className="sr-only" aria-live="polite">{announcement}</p>
+      <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
+        <span>Основание рейтинга: {ratingBasis}</span>
+        <span>{board.data.published_series_count} опубликованных серий в текущем периоде</span>
+        <span>Сортировка: {rosterSortLabel(sorts.unallocated ?? 'alpha')} по умолчанию</span>
+      </div>
+      {undo ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-accent/30 bg-accent-soft px-3 py-2 text-sm text-accent-ink" role="status">
+          <span>{undo.name} перемещён.</span>
+          <button
+            type="button"
+            className="font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+            onClick={() => {
+              const student = students.find((candidate) => candidate.user_id === undo.userId)
+              if (student) moveStudent(student, undo.fromGroupId, undo.fromGroupId === null ? 'Не распределены' : (groups.find((group) => group.id === undo.fromGroupId)?.name ?? 'группу'), true)
+            }}
+          >
+            Отменить
+          </button>
+        </div>
+      ) : null}
+      {moveError ? <p className="text-sm text-danger">{moveError}</p> : null}
+    </div>
+  )
+}
+
+function RosterColumn({
+  id,
+  name,
+  students,
+  groups,
+  sort,
+  isUnallocated,
+  movingUserId,
+  onSortChange,
+  onMove,
+}: {
+  id: string
+  name: string
+  students: ManageRosterBoardStudent[]
+  groups: ManageRosterBoardGroup[]
+  sort: RosterSort
+  isUnallocated: boolean
+  movingUserId: number | null
+  onSortChange: (sort: RosterSort) => void
+  onMove: (student: ManageRosterBoardStudent, groupId: number | null, name: string) => void
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id })
+  const nextSort: RosterSort = sort === 'alpha' ? 'rating-desc' : sort === 'rating-desc' ? 'rating-asc' : 'alpha'
+  return (
+    <section
+      ref={setNodeRef}
+      className={cn(
+        'flex w-72 min-w-72 snap-start flex-col rounded-xl border bg-surface p-3 transition-colors sm:w-80 sm:min-w-80',
+        isUnallocated ? 'border-dashed border-line-strong' : 'border-line',
+        isOver && 'border-accent bg-accent-soft/50',
+      )}
+      aria-label={name + ', ' + students.length + ' учеников'}
+    >
+      <div className="mb-3 flex items-start gap-2 border-b border-line pb-2">
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-sm font-semibold text-ink">{name}</h3>
+          <p className="font-mono text-xs text-muted">{students.length} учеников</p>
+        </div>
+        <button
+          type="button"
+          className="shrink-0 rounded-md px-1.5 py-1 text-[0.68rem] font-medium text-muted hover:bg-surface-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+          aria-label={'Сортировка колонки ' + name + ': ' + rosterSortLabel(sort)}
+          onClick={() => onSortChange(nextSort)}
+        >
+          {rosterSortLabel(sort)}
+        </button>
+      </div>
+      <div className="flex min-h-28 flex-col gap-2">
+        {students.length === 0 ? <p className="rounded-lg border border-dashed border-line px-3 py-6 text-center text-xs text-faint">Перетащите сюда ученика</p> : null}
+        {students.map((student) => (
+          <RosterStudentCard
+            key={student.user_id}
+            student={student}
+            groups={groups}
+            isMoving={movingUserId === student.user_id}
+            onMove={(groupId, targetName) => onMove(student, groupId, targetName)}
+          />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function RosterStudentCard({
+  student,
+  groups,
+  isMoving = false,
+  isOverlay = false,
+  onMove,
+}: {
+  student: ManageRosterBoardStudent
+  groups: ManageRosterBoardGroup[]
+  isMoving?: boolean
+  isOverlay?: boolean
+  onMove?: (groupId: number | null, targetName: string) => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: 'student:' + student.user_id,
+    disabled: isOverlay,
+  })
+  const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined
+  return (
+    <article
+      ref={setNodeRef}
+      data-roster-card={'student:' + student.user_id}
+      style={style}
+      {...(!isOverlay ? listeners : {})}
+      {...(!isOverlay ? attributes : {})}
+      className={cn(
+        'rounded-lg border border-line bg-surface-muted px-3 py-2 shadow-sm transition-opacity',
+        !isOverlay && 'cursor-grab active:cursor-grabbing',
+        isDragging && 'opacity-35',
+        isMoving && !isDragging && 'opacity-60',
+        isOverlay && 'w-72 rotate-1 border-accent bg-surface shadow-lg',
+      )}
+    >
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-ink">{rosterStudentName(student)}</p>
+          <p className="truncate text-xs text-muted">
+            Предыдущая группа: {student.previous_group_name ?? 'Новый ученик'}
+          </p>
+        </div>
+        <span className="shrink-0 rounded-md bg-surface px-1.5 py-0.5 font-mono text-xs text-accent-ink" title="Рейтинг">
+          {Number.isInteger(student.rating) ? student.rating : student.rating.toFixed(1)}
+        </span>
+      </div>
+      {!isOverlay && onMove ? (
+        <Select
+          value=""
+          aria-label={'Переместить ' + rosterStudentName(student)}
+          className="mt-2 h-7 w-full text-xs"
+          disabled={isMoving}
+          onChange={(event) => {
+            const value = event.target.value
+            if (!value) return
+            const groupId = value === 'unallocated' ? null : Number(value)
+            const targetName = groupId === null ? 'Не распределены' : (groups.find((group) => group.id === groupId)?.name ?? 'группу')
+            onMove(groupId, targetName)
+          }}
+        >
+          <option value="">Переместить…</option>
+          <option value="unallocated">Не распределены</option>
+          {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+        </Select>
+      ) : null}
+    </article>
   )
 }

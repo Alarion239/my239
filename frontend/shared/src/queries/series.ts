@@ -128,6 +128,7 @@ export function useDeleteSeries(centerId: number) {
       }),
     onSuccess: (_data, seriesId) => {
       qc.invalidateQueries({ queryKey: ['mathcenter', 'centers', centerId] })
+      qc.invalidateQueries({ queryKey: queryKeys.manageRosterBoard(centerId) })
       qc.removeQueries({ queryKey: queryKeys.series(seriesId) })
     },
   })
@@ -149,6 +150,7 @@ export function usePutSeriesTex(seriesId: number) {
       qc.invalidateQueries({
         queryKey: ['mathcenter', 'centers', updated.math_center_id],
       })
+      qc.invalidateQueries({ queryKey: queryKeys.manageRosterBoard(updated.math_center_id) })
     },
   })
 }
@@ -168,6 +170,7 @@ export function useDeleteSeriesTex(seriesId: number) {
       qc.invalidateQueries({
         queryKey: ['mathcenter', 'centers', updated.math_center_id],
       })
+      qc.invalidateQueries({ queryKey: queryKeys.manageRosterBoard(updated.math_center_id) })
     },
   })
 }
@@ -203,6 +206,7 @@ export function useUploadSeriesPdf(seriesId: number) {
       qc.invalidateQueries({
         queryKey: ['mathcenter', 'centers', updated.math_center_id],
       })
+      qc.invalidateQueries({ queryKey: queryKeys.manageRosterBoard(updated.math_center_id) })
     },
   })
 }

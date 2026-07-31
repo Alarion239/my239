@@ -22,6 +22,8 @@ export const queryKeys = {
     ['mathcenter', 'manage', centerId, 'teachers'] as const,
   manageStudents: (centerId: number) =>
     ['mathcenter', 'manage', centerId, 'students'] as const,
+  manageRosterBoard: (centerId: number) =>
+    ['mathcenter', 'manage', centerId, 'roster-board'] as const,
   manageRazborAccess: (centerId: number) =>
     ['mathcenter', 'manage', centerId, 'razbor-access'] as const,
   manageStudentRazborAccess: (centerId: number, studentId: number) =>

@@ -69,6 +69,102 @@ func TestManage_ListGroupsAdmin(t *testing.T) {
 	}
 }
 
+func TestManage_RosterBoardSnapshot(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	activeGrade := int32(6)
+	previousGrade := int32(5)
+	mock.ExpectQuery(`FROM math_center_terms\s+WHERE math_center_id = \$1\s+AND is_active = TRUE`).
+		WithArgs(int64(42)).
+		WillReturnRows(mock.NewRows(manageTermColumns).
+			AddRow(int64(20), int64(42), "academic", &activeGrade, true, now, (*time.Time)(nil)))
+	mock.ExpectQuery(`FROM math_center_terms\s+WHERE math_center_id = \$1\s+ORDER BY`).
+		WithArgs(int64(42)).
+		WillReturnRows(mock.NewRows(manageTermColumns).
+			AddRow(int64(20), int64(42), "academic", &activeGrade, true, now, (*time.Time)(nil)).
+			AddRow(int64(19), int64(42), "academic", &previousGrade, false, now.Add(-24*time.Hour), (*time.Time)(nil)))
+	mock.ExpectQuery(`FROM math_center_groups\s+WHERE term_id = \$1`).
+		WithArgs(int64(20)).
+		WillReturnRows(mock.NewRows([]string{"id", "math_center_id", "name", "created_at", "term_id"}).
+			AddRow(int64(1), int64(42), "А", now, int64(20)))
+	mock.ExpectQuery(`SELECT \(SELECT id FROM active_term\)`).
+		WithArgs(int64(42)).
+		WillReturnRows(mock.NewRows([]string{"active_term_id", "previous_term_id", "published_series_count", "rating_term_id"}).
+			AddRow(int64(20), nil, int64(3), int64(20)))
+	mock.ExpectQuery(`WITH active_term AS`).
+		WithArgs(int64(42)).
+		WillReturnRows(mock.NewRows([]string{
+			"user_id", "current_group_id", "previous_group_id", "previous_group_name",
+			"first_name", "middle_name", "last_name", "rating", "published_series_count", "rating_term_id",
+		}).AddRow(int64(101), nil, nil, nil, "Ира", nil, "Петрова", float64(4), int64(3), int64(19)))
+
+	req := authedAdminRequest(t, access, 9, http.MethodGet, "/centers/42/manage/roster-board", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	var body struct {
+		PublishedSeriesCount int `json:"published_series_count"`
+		Groups               []struct {
+			ID int64 `json:"id"`
+		} `json:"groups"`
+		Students []struct {
+			UserID         int64   `json:"user_id"`
+			CurrentGroupID *int64  `json:"current_group_id"`
+			Rating         float64 `json:"rating"`
+		} `json:"students"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.PublishedSeriesCount != 3 || len(body.Groups) != 1 || len(body.Students) != 1 ||
+		body.Students[0].UserID != 101 || body.Students[0].CurrentGroupID != nil || body.Students[0].Rating != 4 {
+		t.Fatalf("unexpected board snapshot: %#v", body)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+func TestManage_UnallocateStudentByUserIsIdempotent(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	grade := int32(6)
+	mock.ExpectQuery(`FROM math_center_terms\s+WHERE math_center_id = \$1\s+AND is_active = TRUE`).
+		WithArgs(int64(42)).
+		WillReturnRows(mock.NewRows(manageTermColumns).
+			AddRow(int64(20), int64(42), "academic", &grade, true, now, (*time.Time)(nil)))
+	mock.ExpectQuery(`FROM users\s+WHERE id = \$1`).
+		WithArgs(int64(101)).
+		WillReturnRows(mock.NewRows([]string{
+			"id", "username", "password_hash", "first_name", "middle_name", "last_name",
+			"invitation_token_id", "created_at", "updated_at", "is_admin", "is_math_center",
+		}).AddRow(int64(101), "ira", "", "Ира", nil, "Петрова", nil, now, now, false, false))
+	mock.ExpectExec(`DELETE FROM math_center_students student`).
+		WithArgs(int64(101), int64(42)).
+		WillReturnResult(pgxmock.NewResult("DELETE", 0))
+
+	req := authedAdminRequest(t, access, 9, http.MethodPut, "/centers/42/manage/students/101/group", strings.NewReader(`{"group_id":null}`))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("got %d, want 204; body=%s", rr.Code, rr.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
 func TestManage_ListGroupsForArchivedTerm(t *testing.T) {
 	t.Parallel()
 	mock, _ := pgxmock.NewPool()

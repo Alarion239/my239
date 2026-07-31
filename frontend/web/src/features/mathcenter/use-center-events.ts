@@ -73,6 +73,7 @@ export function handleCenterEvent(
       })
     }
     qc.invalidateQueries({ queryKey: queryKeys.centerGrids(centerId) })
+    qc.invalidateQueries({ queryKey: queryKeys.manageRosterBoard(centerId) })
     qc.invalidateQueries({ queryKey: queryKeys.graderStats(centerId) })
     qc.invalidateQueries({ queryKey: queryKeys.coffinQueue(centerId) })
   } else if (kind === 'coffins') {
@@ -89,6 +90,7 @@ export function handleCenterEvent(
     qc.invalidateQueries({
       queryKey: ['mathcenter', 'manage', centerId, 'razbor-access'],
     })
+    qc.invalidateQueries({ queryKey: queryKeys.manageRosterBoard(centerId) })
     // An already-open разбор preview is keyed by subproblem rather than center.
     qc.invalidateQueries({ queryKey: ['mathcenter', 'subproblems'] })
   } else if (kind === 'likbez') {
@@ -104,6 +106,7 @@ export function handleCenterEvent(
     qc.invalidateQueries({ queryKey: queryKeys.manageGroups(centerId) })
     qc.invalidateQueries({ queryKey: queryKeys.manageTeachers(centerId) })
     qc.invalidateQueries({ queryKey: queryKeys.manageStudents(centerId) })
+    qc.invalidateQueries({ queryKey: queryKeys.manageRosterBoard(centerId) })
     qc.invalidateQueries({ queryKey: queryKeys.mathCenterMe })
     qc.invalidateQueries({ queryKey: queryKeys.centerGrids(centerId) })
   }
@@ -120,6 +123,7 @@ export function refreshCenterViews(
   qc.invalidateQueries({ queryKey: queryKeys.centerGrids(centerId) })
   qc.invalidateQueries({ queryKey: queryKeys.graderStats(centerId) })
   qc.invalidateQueries({ queryKey: queryKeys.coffinQueue(centerId) })
+  qc.invalidateQueries({ queryKey: queryKeys.manageRosterBoard(centerId) })
   qc.invalidateQueries({ queryKey: ['mathcenter', 'centers', centerId] })
   qc.invalidateQueries({ queryKey: ['mathcenter', 'subproblems'] })
 }

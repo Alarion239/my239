@@ -322,6 +322,40 @@ export interface ManageStudent {
   last_name: string
 }
 
+export interface ManageRosterBoardTerm {
+  id: number
+  math_center_id: number
+  kind: string
+  grade?: number | null
+  display_name: string
+  is_active: boolean
+}
+
+export interface ManageRosterBoardGroup {
+  id: number
+  name: string
+}
+
+export interface ManageRosterBoardStudent {
+  user_id: number
+  current_group_id: number | null
+  previous_group_id: number | null
+  previous_group_name: string | null
+  first_name: string
+  middle_name?: string | null
+  last_name: string
+  rating: number
+}
+
+export interface ManageRosterBoardResponse {
+  term: ManageRosterBoardTerm
+  previous_term?: ManageRosterBoardTerm | null
+  published_series_count: number
+  rating_term: ManageRosterBoardTerm
+  groups: ManageRosterBoardGroup[]
+  students: ManageRosterBoardStudent[]
+}
+
 export interface ManageSeriesRazborAccess {
   series_id: number
   series_number: number

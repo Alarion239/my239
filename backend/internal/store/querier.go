@@ -73,6 +73,7 @@ type Querier interface {
 	// whether we created it now or matched an existing one. The DO UPDATE bumps
 	// updated_at so we can see activity even on no-op upserts.
 	FindOrCreateThread(ctx context.Context, arg FindOrCreateThreadParams) (HomeworkThread, error)
+	GetActiveStudentByUser(ctx context.Context, arg GetActiveStudentByUserParams) (GetActiveStudentByUserRow, error)
 	GetActiveTermForCenter(ctx context.Context, mathCenterID int64) (MathCenterTerm, error)
 	GetEvent(ctx context.Context, id int64) (HomeworkThreadEvent, error)
 	GetEventKind(ctx context.Context, id int64) (string, error)
@@ -88,6 +89,7 @@ type Querier interface {
 	// Resolve a problem to its series + center, for authorizing coffin actions.
 	GetProblemCenter(ctx context.Context, id int64) (GetProblemCenterRow, error)
 	GetRefreshTokenByHash(ctx context.Context, tokenHash []byte) (RefreshToken, error)
+	GetRosterBoardMetadata(ctx context.Context, mathCenterID int64) (GetRosterBoardMetadataRow, error)
 	// Keep the long-standing row shape for the high-traffic series detail path.
 	// Term-aware list/create endpoints carry term_id; callers that only resolve a
 	// series id do not need it and existing homework mocks retain their contract.
@@ -134,7 +136,7 @@ type Querier interface {
 	// newest series first. Used by the center-wide "Гробы" tab.
 	ListCenterCoffins(ctx context.Context, mathCenterID int64) ([]ListCenterCoffinsRow, error)
 	// The active term includes its own released and open coffins plus open coffins
-	// carried from every archived term. An archive selection shows only that term.
+	// carried from archived terms. An archive selection shows only that term.
 	ListCenterCoffinsForTerm(ctx context.Context, arg ListCenterCoffinsForTermParams) ([]ListCenterCoffinsForTermRow, error)
 	ListCentersForTeacher(ctx context.Context, userID int64) ([]ListCentersForTeacherRow, error)
 	// Center-wide grading queue for coffins: submissions/appeals on coffin
@@ -170,6 +172,12 @@ type Querier interface {
 	ListRazborAccessGroupsForManage(ctx context.Context, mathCenterID int64) ([]ListRazborAccessGroupsForManageRow, error)
 	ListRazborAccessSeriesForManage(ctx context.Context, mathCenterID int64) ([]ListRazborAccessSeriesForManageRow, error)
 	ListRazborAccessStudentsForManage(ctx context.Context, mathCenterID int64) ([]ListRazborAccessStudentsForManageRow, error)
+	// The allocation board compares the active roster with the immediately
+	// preceding term. A student may therefore have no active-period enrollment
+	// and still appear as an unallocated candidate. Rating is deliberately a
+	// derived value: it currently mirrors the credited "Решено" total and can be
+	// replaced by a difficulty-weighted calculation without changing the API.
+	ListRosterBoardStudentsForManage(ctx context.Context, mathCenterID int64) ([]ListRosterBoardStudentsForManageRow, error)
 	ListSeriesForCenter(ctx context.Context, mathCenterID int64) ([]ListSeriesForCenterRow, error)
 	ListSeriesForTerm(ctx context.Context, arg ListSeriesForTermParams) ([]MathCenterSeries, error)
 	ListStudentNotesAuthored(ctx context.Context, arg ListStudentNotesAuthoredParams) ([]ListStudentNotesAuthoredRow, error)
@@ -209,6 +217,7 @@ type Querier interface {
 	// responsible for deleting the prior key first if needed).
 	PublishSeries(ctx context.Context, arg PublishSeriesParams) (PublishSeriesRow, error)
 	ReleaseClaim(ctx context.Context, arg ReleaseClaimParams) (int64, error)
+	RemoveActiveStudentByUser(ctx context.Context, arg RemoveActiveStudentByUserParams) (int64, error)
 	RemoveStudent(ctx context.Context, id int64) (int64, error)
 	RemoveTeacher(ctx context.Context, id int64) (int64, error)
 	RevokeAllRefreshTokensForUser(ctx context.Context, userID int64) error
@@ -258,7 +267,8 @@ type Querier interface {
 	SetSubproblemSolutionGroup(ctx context.Context, arg SetSubproblemSolutionGroupParams) error
 	SetSubproblemSolutionLink(ctx context.Context, arg SetSubproblemSolutionLinkParams) (MathCenterSubproblemSolution, error)
 	SetSubproblemSolutionPdf(ctx context.Context, arg SetSubproblemSolutionPdfParams) (MathCenterSubproblemSolution, error)
-	// Upsert: authoring разбор on a non-coffin subproblem creates the row.
+	// Upsert draft material. Coffins are released only by the explicit publication
+	// endpoint, never as a side effect of saving one format.
 	SetSubproblemSolutionTex(ctx context.Context, arg SetSubproblemSolutionTexParams) (MathCenterSubproblemSolution, error)
 	SetTeacherHead(ctx context.Context, arg SetTeacherHeadParams) (int64, error)
 	SetTermRazborMatrixSeries(ctx context.Context, arg SetTermRazborMatrixSeriesParams) (int64, error)
