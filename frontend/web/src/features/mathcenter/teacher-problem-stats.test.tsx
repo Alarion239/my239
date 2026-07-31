@@ -27,6 +27,7 @@ function sub(overrides: Partial<Subproblem> & Pick<Subproblem, 'id'>): Subproble
     has_solution_pdf: false,
     solution_link: null,
     solution_group_id: null,
+    solution_published_at: null,
     ...overrides,
   }
 }
@@ -50,7 +51,7 @@ function makeSeries(): Series {
         number: 1,
         display_name: 'Задача 1',
         subproblems: [
-          sub({ id: 1000, label: 'а', display: 'Задача 1 (а)', has_solution_tex: true }),
+          sub({ id: 1000, label: 'а', display: 'Задача 1 (а)', has_solution_tex: true, solution_published_at: '2030-01-01T00:00:00Z' }),
           sub({ id: 1001, label: 'б', display: 'Задача 1 (б)' }),
           sub({ id: 1002, label: 'в', display: 'Задача 1 (в)' }),
         ],
@@ -145,8 +146,8 @@ describe('TeacherProblemStats — разбор frame', () => {
     const barWithout = screen.getByRole('img', { name: /по задаче Задача 1 \(б\)/ })
     const rowWith = barWith.closest('[role="button"]') as HTMLElement
     const rowWithout = barWithout.closest('[role="button"]') as HTMLElement
-    expect(rowWith.className).toContain('border-status-accepted')
-    expect(rowWithout.className).not.toContain('border-status-accepted')
+    expect(rowWith.className).toContain('bg-status-accepted-soft')
+    expect(rowWithout.className).not.toContain('bg-status-accepted-soft')
   })
 
   it('shows a neutral single-card batch action after selecting a problem', async () => {
@@ -176,7 +177,7 @@ describe('TeacherProblemStats — разбор frame', () => {
     ).toBeInTheDocument()
   })
 
-  it('opens from the card and keeps the close control outside the trigger', async () => {
+  it('opens the inline workbench and keeps the close control outside the trigger', async () => {
     renderStats()
     const user = userEvent.setup()
     await user.click(
@@ -189,11 +190,10 @@ describe('TeacherProblemStats — разбор frame', () => {
       name: 'Прикрепить разбор 1 задачи',
     })
     await user.click(attach)
-    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Задача 1 (б)' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Закрыть' }))
-    await user.click(screen.getByRole('button', { name: 'Снять выбор задач' }))
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Задача 1 (б)' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Прикрепить разбор 1 задачи' })).not.toBeInTheDocument()
   })
 

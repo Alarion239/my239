@@ -69,6 +69,9 @@ func Router(database *db.DB, hub *live.Hub, tokens *internalAuth.TokenService, b
 	})
 	// Group a set of subproblems under one shared разбор (teacher).
 	r.Post("/subproblem-solutions/group", AssignSolutionGroup(database))
+	// Publish saved разбор drafts atomically; this is also what releases coffin
+	// submissions.
+	r.Post("/subproblem-solutions/publish", PublishSubproblemSolutions(database, hub))
 
 	r.Route("/series/{seriesID}", func(r chi.Router) {
 		r.Get("/", GetSeries(database))

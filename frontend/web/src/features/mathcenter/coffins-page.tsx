@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   claimIsLive,
@@ -6,6 +6,7 @@ import {
   displayStatusMeta,
   formatDateTime,
   usePutSubproblemSolutionTex,
+  usePublishSubproblemSolutionsBatch,
   useSetSubproblemSolutionLink,
   useSubproblemSolutionTex,
   useCenterCoffins,
@@ -18,8 +19,7 @@ import { Button, Card, Spinner, StatusTile } from '../../design/ui'
 import { cn } from '../../design/cn'
 import { useSeriesContext } from './use-series-context'
 import { useCenterIdContext, useCenterTermContext } from './center-id-context'
-import { SolutionContent } from './solution-content'
-import { SolutionEditor } from './solution-editor'
+import { SolutionWorkbench, type SolutionWorkbenchMode } from './solution-editor'
 import { displayPill } from './status-style'
 
 export function CoffinsPage() {
@@ -52,6 +52,8 @@ function CoffinsView({ centerId, termId, isManager }: { centerId: number; termId
   const { search } = useLocation()
   const navigate = useNavigate()
   const { data, isPending, isError } = useCenterCoffins(centerId, termId)
+  const [movedPlaceholder, setMovedPlaceholder] = useState<{ coffin: Coffin; index: number } | null>(null)
+  const [focusCoffinId, setFocusCoffinId] = useState<number | null>(null)
 
   const tabs: { id: Tab; label: string }[] = [
     ...(isManager ? [{ id: 'queue' as Tab, label: 'Очередь' }] : []),
@@ -108,6 +110,16 @@ function CoffinsView({ centerId, termId, isManager }: { centerId: number; termId
           centerId={centerId}
           isManager={isManager}
           solved={tab === 'solved'}
+          movedPlaceholder={tab === 'current' ? movedPlaceholder : null}
+          focusCoffinId={focusCoffinId}
+          onPublished={(coffin, index) => setMovedPlaceholder({ coffin, index })}
+          onFollowPlaceholder={() => {
+            if (!movedPlaceholder) return
+            setFocusCoffinId(movedPlaceholder.coffin.subproblem_id)
+            setMovedPlaceholder(null)
+            navigate('/mathcenter/' + year + '/coffins/solved' + search)
+          }}
+          onFocused={() => setFocusCoffinId(null)}
         />
       )}
     </div>
@@ -119,13 +131,23 @@ function CoffinGroups({
   centerId,
   isManager,
   solved,
+  movedPlaceholder,
+  focusCoffinId,
+  onPublished,
+  onFollowPlaceholder,
+  onFocused,
 }: {
   coffins: Coffin[]
   centerId: number
   isManager: boolean
   solved: boolean
+  movedPlaceholder: { coffin: Coffin; index: number } | null
+  focusCoffinId: number | null
+  onPublished: (coffin: Coffin, index: number) => void
+  onFollowPlaceholder: () => void
+  onFocused: () => void
 }) {
-  if (coffins.length === 0) {
+  if (coffins.length === 0 && !movedPlaceholder) {
     return (
       <Card className="px-6 py-16 text-center">
         <p className="text-muted">
@@ -153,18 +175,43 @@ function CoffinGroups({
       {groups.map((g) => (
         <section key={g.key} className="flex flex-col gap-3">
           <h2 className="font-display text-lg font-medium text-ink">{g.label}</h2>
-          {g.coffins.map((c) => (
-            <CoffinCard
-              key={c.subproblem_id}
-              centerId={centerId}
-              coffin={c}
-              isManager={isManager}
-              solved={solved}
-            />
+          {g.coffins.map((c, index) => (
+            <div key={c.subproblem_id}>
+              {movedPlaceholder && movedPlaceholder.coffin.series_id === g.key && movedPlaceholder.index === index ? (
+                <MovedCoffinPlaceholder onClick={onFollowPlaceholder} />
+              ) : null}
+              <CoffinCard
+                centerId={centerId}
+                coffin={c}
+                isManager={isManager}
+                solved={solved}
+                autoOpen={focusCoffinId === c.subproblem_id}
+                onPublished={() => onPublished(c, index)}
+                onFocused={onFocused}
+              />
+            </div>
           ))}
+          {movedPlaceholder && movedPlaceholder.coffin.series_id === g.key && movedPlaceholder.index >= g.coffins.length ? (
+            <MovedCoffinPlaceholder onClick={onFollowPlaceholder} />
+          ) : null}
         </section>
       ))}
+      {movedPlaceholder && !groups.some((group) => group.key === movedPlaceholder.coffin.series_id) ? (
+        <section className="flex flex-col gap-3">
+          <h2 className="font-display text-lg font-medium text-ink">Серия {movedPlaceholder.coffin.series_number} · {movedPlaceholder.coffin.series_name}</h2>
+          <MovedCoffinPlaceholder onClick={onFollowPlaceholder} />
+        </section>
+      ) : null}
     </div>
+  )
+}
+
+function MovedCoffinPlaceholder({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="flex w-full items-center justify-between rounded-xl border border-accent/30 bg-accent-soft px-4 py-3 text-left text-sm text-accent-ink transition-colors hover:border-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
+      <span>Гроб перемещён в «Разобранные»</span>
+      <span className="font-medium">Перейти →</span>
+    </button>
   )
 }
 
@@ -173,11 +220,17 @@ function CoffinCard({
   coffin,
   isManager,
   solved,
+  autoOpen,
+  onPublished,
+  onFocused,
 }: {
   centerId: number
   coffin: Coffin
   isManager: boolean
   solved: boolean
+  autoOpen?: boolean
+  onPublished?: () => void
+  onFocused?: () => void
 }) {
   const hasSolution =
     coffin.has_solution_tex || coffin.has_solution_pdf || !!coffin.solution_link
@@ -192,16 +245,27 @@ function CoffinCard({
         : pdfTexAccess
           ? 'Доступны только PDF и LaTeX'
           : 'Разбор недоступен'
-  const [showSolution, setShowSolution] = useState(false)
-  const texQuery = useSubproblemSolutionTex(
-    coffin.subproblem_id,
-    coffin.has_solution_tex && showSolution,
-  )
+  const [panelMode, setPanelMode] = useState<SolutionWorkbenchMode | null>(null)
+  const originControl = useRef<'view' | 'edit'>('view')
+  const cardRef = useRef<HTMLDivElement>(null)
+  const texQuery = useSubproblemSolutionTex(coffin.subproblem_id, coffin.has_solution_tex && panelMode !== null)
+  const putTex = usePutSubproblemSolutionTex(coffin.subproblem_id, centerId)
+  const uploadPdf = useUploadSubproblemSolutionPdf(coffin.subproblem_id, centerId)
+  const setLink = useSetSubproblemSolutionLink(coffin.subproblem_id, centerId)
+  const publish = usePublishSubproblemSolutionsBatch(centerId)
   // Students see разбор once the coffin is solved; teachers always (to verify).
   const canSeeSolution = (isManager || solved) && hasSolution
 
+  useEffect(() => {
+    if (!autoOpen || !solved) return
+    setPanelMode('view')
+    cardRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    onFocused?.()
+  }, [autoOpen, onFocused, solved])
+
   return (
-    <Card className={cn('p-4', coffin.is_coffin && !solved && 'border-status-checking')}>
+    <div ref={cardRef}>
+    <Card className={cn('p-4', coffin.is_coffin && !solved && 'border-status-checking', hasSolution && coffin.solution_published_at ? 'bg-status-accepted-soft' : hasSolution ? 'bg-surface-muted' : '')}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="font-medium text-ink">{coffin.display}</div>
@@ -215,6 +279,11 @@ function CoffinCard({
                 Открыт для сдачи
               </span>
             )}
+            {isManager && hasSolution ? (
+              <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium', coffin.solution_published_at ? 'bg-status-accepted-soft text-status-accepted' : 'bg-surface-muted text-muted')}>
+                {coffin.solution_published_at ? 'Разбор опубликован' : 'Черновик'}
+              </span>
+            ) : null}
             {isManager ? (
               <span className="text-xs text-muted">
                 решили {coffin.accepted_count} из {coffin.total_count}
@@ -228,12 +297,29 @@ function CoffinCard({
 
         <div className="flex flex-wrap items-center gap-2">
           {canSeeSolution ? (
-            <Button type="button" size="sm" variant="secondary" onClick={() => setShowSolution((v) => !v)}>
+            <Button
+              id={'coffin-solution-view-' + coffin.subproblem_id}
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                originControl.current = 'view'
+                setPanelMode((v) => v === 'view' ? null : 'view')
+              }}
+            >
               Разбор
             </Button>
           ) : null}
           {isManager ? (
-            <ManagerControls centerId={centerId} coffin={coffin} solved={solved} hasSolution={hasSolution} />
+            <ManagerControls
+              solved={solved}
+              hasSolution={hasSolution}
+              onOpen={() => {
+                originControl.current = 'edit'
+                setPanelMode('edit')
+              }}
+              triggerId={'coffin-solution-edit-' + coffin.subproblem_id}
+            />
           ) : null}
         </div>
       </div>
@@ -245,79 +331,56 @@ function CoffinCard({
         </div>
       ) : null}
 
-      {showSolution && canSeeSolution ? (
+      {panelMode && (panelMode === 'edit' || canSeeSolution) ? (
         <div className="mt-4 border-t border-line pt-4">
-          <SolutionContent
+          <SolutionWorkbench
+            title={coffin.display}
+            mode={panelMode}
             hasTex={coffin.has_solution_tex}
             hasPdf={coffin.has_solution_pdf}
             link={coffin.solution_link}
+            publishedAt={coffin.solution_published_at}
+            centerId={centerId}
             pdfPath={'/mathcenter/subproblems/' + coffin.subproblem_id + '/solution/pdf'}
+            initialTex={texQuery.data?.tex}
             texQuery={texQuery}
+            onModeChange={setPanelMode}
+            onPutTex={(tex) => putTex.mutateAsync(tex)}
+            onUploadPdf={(file) => uploadPdf.mutateAsync(file)}
+            onSetLink={(link) => setLink.mutateAsync(link)}
+            onPublish={() => publish.mutateAsync([coffin.subproblem_id])}
+            closesCoffin={!solved}
+            onPublished={onPublished}
+            onClose={() => {
+              setPanelMode(null)
+              const id = originControl.current === 'edit'
+                ? 'coffin-solution-edit-' + coffin.subproblem_id
+                : 'coffin-solution-view-' + coffin.subproblem_id
+              requestAnimationFrame(() => document.getElementById(id)?.focus())
+            }}
           />
         </div>
       ) : null}
     </Card>
+    </div>
   )
 }
 
 function ManagerControls({
-  centerId,
-  coffin,
   solved,
   hasSolution,
+  onOpen,
+  triggerId,
 }: {
-  centerId: number
-  coffin: Coffin
   solved: boolean
   hasSolution: boolean
+  onOpen: () => void
+  triggerId: string
 }) {
-  const putTex = usePutSubproblemSolutionTex(coffin.subproblem_id, centerId)
-  const uploadPdf = useUploadSubproblemSolutionPdf(coffin.subproblem_id, centerId)
-  const setLink = useSetSubproblemSolutionLink(coffin.subproblem_id, centerId)
-  // Load existing LaTeX whenever present so either editor opens on its code.
-  const texQuery = useSubproblemSolutionTex(
-    coffin.subproblem_id,
-    coffin.has_solution_tex,
-  )
-
-  if (solved) {
-    // Разобранный гроб: edit / attach its разбор.
-    return (
-      <SolutionEditor
-        title={'Разбор · ' + coffin.display}
-        hasTex={coffin.has_solution_tex}
-        hasPdf={coffin.has_solution_pdf}
-        link={coffin.solution_link}
-        initialTex={texQuery.data?.tex}
-        onPutTex={(tex) => putTex.mutateAsync(tex)}
-        onUploadPdf={(file) => uploadPdf.mutateAsync(file)}
-        onSetLink={(link) => setLink.mutateAsync(link)}
-        trigger={
-          <Button type="button" size="sm" variant="secondary">
-            {hasSolution ? 'Редактировать разбор' : 'Загрузить разбор'}
-          </Button>
-        }
-      />
-    )
-  }
-  // Publishing any разбор format closes an open coffin automatically.
   return (
-    <SolutionEditor
-      title={'Прикрепить разбор · ' + coffin.display}
-      hasTex={coffin.has_solution_tex}
-      hasPdf={coffin.has_solution_pdf}
-      link={coffin.solution_link}
-      initialTex={texQuery.data?.tex}
-      onPutTex={(tex) => putTex.mutateAsync(tex)}
-      onUploadPdf={(file) => uploadPdf.mutateAsync(file)}
-      onSetLink={(link) => setLink.mutateAsync(link)}
-      closeOnSave
-      trigger={
-        <Button type="button" size="sm">
-          Прикрепить разбор
-        </Button>
-      }
-    />
+    <Button id={triggerId} type="button" size="sm" variant={solved || hasSolution ? 'secondary' : 'primary'} onClick={onOpen}>
+      {hasSolution ? 'Редактировать разбор' : 'Загрузить разбор'}
+    </Button>
   )
 }
 

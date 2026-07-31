@@ -8,7 +8,7 @@ import (
 )
 
 // A subproblem's разбор becomes visible to students per the per-subproblem rule:
-// a normal subproblem at the series deadline (even if uploaded early); a coffin
+// a published normal subproblem at the series deadline; a published coffin
 // only once it is released (released_at set and past). Teachers are never gated
 // by this helper (callers check isTeacher separately).
 func TestSolutionReleasedToStudent(t *testing.T) {
@@ -18,23 +18,26 @@ func TestSolutionReleasedToStudent(t *testing.T) {
 	past := now.Add(-time.Hour)
 
 	cases := []struct {
-		name       string
-		isCoffin   bool
-		releasedAt *time.Time
-		dueAt      time.Time
-		want       bool
+		name        string
+		isCoffin    bool
+		releasedAt  *time.Time
+		publishedAt *time.Time
+		dueAt       time.Time
+		want        bool
 	}{
-		{"normal, before deadline -> hidden", false, nil, future, false},
-		{"normal, after deadline -> visible", false, nil, past, true},
-		{"normal, exactly at deadline -> visible", false, nil, now, true},
-		{"coffin, not released -> hidden even past due", true, nil, past, false},
-		{"coffin, released in future -> hidden", true, &future, past, false},
-		{"coffin, released in past -> visible", true, &past, future, true},
-		{"coffin, released exactly now -> visible", true, &now, future, true},
+		{"normal, draft after deadline -> hidden", false, nil, nil, past, false},
+		{"normal, before deadline -> hidden", false, nil, &now, future, false},
+		{"normal, after deadline -> visible", false, nil, &now, past, true},
+		{"normal, exactly at deadline -> visible", false, nil, &now, now, true},
+		{"coffin, draft not released -> hidden", true, nil, &now, past, false},
+		{"coffin, not released -> hidden even past due", true, nil, &now, past, false},
+		{"coffin, released in future -> hidden", true, &future, &now, past, false},
+		{"coffin, released in past -> visible", true, &past, &now, future, true},
+		{"coffin, released exactly now -> visible", true, &now, &now, future, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			s := store.MathCenterSubproblemSolution{IsCoffin: tc.isCoffin, ReleasedAt: tc.releasedAt}
+			s := store.MathCenterSubproblemSolution{IsCoffin: tc.isCoffin, ReleasedAt: tc.releasedAt, PublishedAt: tc.publishedAt}
 			if got := solutionReleasedToStudent(s, tc.dueAt, now); got != tc.want {
 				t.Errorf("solutionReleasedToStudent = %v, want %v", got, tc.want)
 			}

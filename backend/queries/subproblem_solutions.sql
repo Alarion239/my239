@@ -23,17 +23,12 @@ FROM math_center_subproblem_solutions
 WHERE subproblem_id = $1;
 
 -- name: SetSubproblemSolutionTex :one
--- Upsert: authoring разбор on a non-coffin subproblem creates the row. Posting
--- content to a coffin releases it in the same atomic write.
+-- Upsert draft material. Coffins are released only by the explicit publication
+-- endpoint, never as a side effect of saving one format.
 INSERT INTO math_center_subproblem_solutions (subproblem_id, solution_tex_source)
 VALUES ($1, $2)
 ON CONFLICT (subproblem_id)
     DO UPDATE SET solution_tex_source = EXCLUDED.solution_tex_source,
-                  released_at = CASE
-                                    WHEN math_center_subproblem_solutions.is_coffin
-                                        THEN COALESCE(math_center_subproblem_solutions.released_at, NOW())
-                                    ELSE math_center_subproblem_solutions.released_at
-                      END,
                   updated_at = NOW()
 RETURNING *;
 
@@ -42,11 +37,6 @@ INSERT INTO math_center_subproblem_solutions (subproblem_id, solution_pdf_object
 VALUES ($1, $2)
 ON CONFLICT (subproblem_id)
     DO UPDATE SET solution_pdf_object_key = EXCLUDED.solution_pdf_object_key,
-                  released_at = CASE
-                                    WHEN math_center_subproblem_solutions.is_coffin
-                                        THEN COALESCE(math_center_subproblem_solutions.released_at, NOW())
-                                    ELSE math_center_subproblem_solutions.released_at
-                      END,
                   updated_at = NOW()
 RETURNING *;
 
@@ -55,12 +45,6 @@ INSERT INTO math_center_subproblem_solutions (subproblem_id, solution_link)
 VALUES ($1, $2)
 ON CONFLICT (subproblem_id)
     DO UPDATE SET solution_link = EXCLUDED.solution_link,
-                  released_at = CASE
-                                    WHEN math_center_subproblem_solutions.is_coffin
-                                         AND EXCLUDED.solution_link IS NOT NULL
-                                        THEN COALESCE(math_center_subproblem_solutions.released_at, NOW())
-                                    ELSE math_center_subproblem_solutions.released_at
-                      END,
                   updated_at = NOW()
 RETURNING *;
 
@@ -86,6 +70,7 @@ WHERE sp.id = $1;
 SELECT ss.subproblem_id           AS subproblem_id,
        ss.is_coffin               AS is_coffin,
        ss.released_at             AS released_at,
+       ss.published_at            AS published_at,
        ss.solution_tex_source     AS solution_tex_source,
        ss.solution_pdf_object_key AS solution_pdf_object_key,
        ss.solution_link           AS solution_link,
@@ -119,6 +104,7 @@ ORDER BY s.number DESC, p.number ASC, sp.label ASC;
 SELECT ss.subproblem_id           AS subproblem_id,
        ss.is_coffin               AS is_coffin,
        ss.released_at             AS released_at,
+       ss.published_at            AS published_at,
        ss.solution_tex_source     AS solution_tex_source,
        ss.solution_pdf_object_key AS solution_pdf_object_key,
        ss.solution_link           AS solution_link,
@@ -177,6 +163,7 @@ SELECT ss.subproblem_id                                   AS subproblem_id,
        sp.problem_id                                      AS problem_id,
        ss.is_coffin                                       AS is_coffin,
        ss.released_at                                     AS released_at,
+       ss.published_at                                    AS published_at,
        (ss.solution_tex_source IS NOT NULL)::boolean      AS has_solution_tex,
        (ss.solution_pdf_object_key IS NOT NULL)::boolean  AS has_solution_pdf,
        ss.solution_link                                   AS solution_link,
@@ -194,6 +181,7 @@ SELECT ss.subproblem_id                                   AS subproblem_id,
        sp.problem_id                                      AS problem_id,
        ss.is_coffin                                       AS is_coffin,
        ss.released_at                                     AS released_at,
+       ss.published_at                                    AS published_at,
        (ss.solution_tex_source IS NOT NULL)::boolean      AS has_solution_tex,
        (ss.solution_pdf_object_key IS NOT NULL)::boolean  AS has_solution_pdf,
        ss.solution_link                                   AS solution_link,

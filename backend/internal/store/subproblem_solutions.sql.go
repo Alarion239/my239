@@ -108,6 +108,7 @@ const listCenterCoffins = `-- name: ListCenterCoffins :many
 SELECT ss.subproblem_id           AS subproblem_id,
        ss.is_coffin               AS is_coffin,
        ss.released_at             AS released_at,
+       ss.published_at            AS published_at,
        ss.solution_tex_source     AS solution_tex_source,
        ss.solution_pdf_object_key AS solution_pdf_object_key,
        ss.solution_link           AS solution_link,
@@ -140,6 +141,7 @@ type ListCenterCoffinsRow struct {
 	SubproblemID         int64      `json:"subproblem_id"`
 	IsCoffin             bool       `json:"is_coffin"`
 	ReleasedAt           *time.Time `json:"released_at"`
+	PublishedAt          *time.Time `json:"published_at"`
 	SolutionTexSource    *string    `json:"solution_tex_source"`
 	SolutionPdfObjectKey *string    `json:"solution_pdf_object_key"`
 	SolutionLink         *string    `json:"solution_link"`
@@ -169,6 +171,7 @@ func (q *Queries) ListCenterCoffins(ctx context.Context, mathCenterID int64) ([]
 			&i.SubproblemID,
 			&i.IsCoffin,
 			&i.ReleasedAt,
+			&i.PublishedAt,
 			&i.SolutionTexSource,
 			&i.SolutionPdfObjectKey,
 			&i.SolutionLink,
@@ -196,6 +199,7 @@ const listCenterCoffinsForTerm = `-- name: ListCenterCoffinsForTerm :many
 SELECT ss.subproblem_id           AS subproblem_id,
        ss.is_coffin               AS is_coffin,
        ss.released_at             AS released_at,
+       ss.published_at            AS published_at,
        ss.solution_tex_source     AS solution_tex_source,
        ss.solution_pdf_object_key AS solution_pdf_object_key,
        ss.solution_link           AS solution_link,
@@ -235,6 +239,7 @@ type ListCenterCoffinsForTermRow struct {
 	SubproblemID         int64      `json:"subproblem_id"`
 	IsCoffin             bool       `json:"is_coffin"`
 	ReleasedAt           *time.Time `json:"released_at"`
+	PublishedAt          *time.Time `json:"published_at"`
 	SolutionTexSource    *string    `json:"solution_tex_source"`
 	SolutionPdfObjectKey *string    `json:"solution_pdf_object_key"`
 	SolutionLink         *string    `json:"solution_link"`
@@ -267,6 +272,7 @@ func (q *Queries) ListCenterCoffinsForTerm(ctx context.Context, arg ListCenterCo
 			&i.SubproblemID,
 			&i.IsCoffin,
 			&i.ReleasedAt,
+			&i.PublishedAt,
 			&i.SolutionTexSource,
 			&i.SolutionPdfObjectKey,
 			&i.SolutionLink,
@@ -498,6 +504,7 @@ SELECT ss.subproblem_id                                   AS subproblem_id,
        sp.problem_id                                      AS problem_id,
        ss.is_coffin                                       AS is_coffin,
        ss.released_at                                     AS released_at,
+       ss.published_at                                    AS published_at,
        (ss.solution_tex_source IS NOT NULL)::boolean      AS has_solution_tex,
        (ss.solution_pdf_object_key IS NOT NULL)::boolean  AS has_solution_pdf,
        ss.solution_link                                   AS solution_link,
@@ -514,6 +521,7 @@ type ListSubproblemSolutionsForSeriesRow struct {
 	ProblemID       int64      `json:"problem_id"`
 	IsCoffin        bool       `json:"is_coffin"`
 	ReleasedAt      *time.Time `json:"released_at"`
+	PublishedAt     *time.Time `json:"published_at"`
 	HasSolutionTex  bool       `json:"has_solution_tex"`
 	HasSolutionPdf  bool       `json:"has_solution_pdf"`
 	SolutionLink    *string    `json:"solution_link"`
@@ -537,6 +545,7 @@ func (q *Queries) ListSubproblemSolutionsForSeries(ctx context.Context, seriesID
 			&i.ProblemID,
 			&i.IsCoffin,
 			&i.ReleasedAt,
+			&i.PublishedAt,
 			&i.HasSolutionTex,
 			&i.HasSolutionPdf,
 			&i.SolutionLink,
@@ -557,6 +566,7 @@ SELECT ss.subproblem_id                                   AS subproblem_id,
        sp.problem_id                                      AS problem_id,
        ss.is_coffin                                       AS is_coffin,
        ss.released_at                                     AS released_at,
+       ss.published_at                                    AS published_at,
        (ss.solution_tex_source IS NOT NULL)::boolean      AS has_solution_tex,
        (ss.solution_pdf_object_key IS NOT NULL)::boolean  AS has_solution_pdf,
        ss.solution_link                                   AS solution_link,
@@ -573,6 +583,7 @@ type ListSubproblemSolutionsForSeriesIDsRow struct {
 	ProblemID       int64      `json:"problem_id"`
 	IsCoffin        bool       `json:"is_coffin"`
 	ReleasedAt      *time.Time `json:"released_at"`
+	PublishedAt     *time.Time `json:"published_at"`
 	HasSolutionTex  bool       `json:"has_solution_tex"`
 	HasSolutionPdf  bool       `json:"has_solution_pdf"`
 	SolutionLink    *string    `json:"solution_link"`
@@ -595,6 +606,7 @@ func (q *Queries) ListSubproblemSolutionsForSeriesIDs(ctx context.Context, serie
 			&i.ProblemID,
 			&i.IsCoffin,
 			&i.ReleasedAt,
+			&i.PublishedAt,
 			&i.HasSolutionTex,
 			&i.HasSolutionPdf,
 			&i.SolutionLink,
@@ -634,12 +646,6 @@ INSERT INTO math_center_subproblem_solutions (subproblem_id, solution_link)
 VALUES ($1, $2)
 ON CONFLICT (subproblem_id)
     DO UPDATE SET solution_link = EXCLUDED.solution_link,
-                  released_at = CASE
-                                    WHEN math_center_subproblem_solutions.is_coffin
-                                         AND EXCLUDED.solution_link IS NOT NULL
-                                        THEN COALESCE(math_center_subproblem_solutions.released_at, NOW())
-                                    ELSE math_center_subproblem_solutions.released_at
-                      END,
                   updated_at = NOW()
 RETURNING id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at, solution_group_id
 `
@@ -672,11 +678,6 @@ INSERT INTO math_center_subproblem_solutions (subproblem_id, solution_pdf_object
 VALUES ($1, $2)
 ON CONFLICT (subproblem_id)
     DO UPDATE SET solution_pdf_object_key = EXCLUDED.solution_pdf_object_key,
-                  released_at = CASE
-                                    WHEN math_center_subproblem_solutions.is_coffin
-                                        THEN COALESCE(math_center_subproblem_solutions.released_at, NOW())
-                                    ELSE math_center_subproblem_solutions.released_at
-                      END,
                   updated_at = NOW()
 RETURNING id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at, solution_group_id
 `
@@ -709,11 +710,6 @@ INSERT INTO math_center_subproblem_solutions (subproblem_id, solution_tex_source
 VALUES ($1, $2)
 ON CONFLICT (subproblem_id)
     DO UPDATE SET solution_tex_source = EXCLUDED.solution_tex_source,
-                  released_at = CASE
-                                    WHEN math_center_subproblem_solutions.is_coffin
-                                        THEN COALESCE(math_center_subproblem_solutions.released_at, NOW())
-                                    ELSE math_center_subproblem_solutions.released_at
-                      END,
                   updated_at = NOW()
 RETURNING id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at, solution_group_id
 `

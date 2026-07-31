@@ -33,26 +33,27 @@ func subproblemSolutionPDFKey(subproblemID int64) string {
 // center-wide Гробы tab. The trailing thread fields are populated only for
 // student callers (their own status), so they can submit straight from the tab.
 type coffinView struct {
-	SubproblemID       int64      `json:"subproblem_id"`
-	SubproblemLabel    string     `json:"subproblem_label"`
-	ProblemID          int64      `json:"problem_id"`
-	ProblemNumber      int        `json:"problem_number"`
-	Display            string     `json:"display"`
-	SeriesID           int64      `json:"series_id"`
-	SeriesNumber       int        `json:"series_number"`
-	SeriesName         string     `json:"series_name"`
-	MathCenterID       int64      `json:"math_center_id"`
-	TermID             int64      `json:"term_id"`
-	TermKind           string     `json:"term_kind,omitempty"`
-	TermGrade          *int32     `json:"term_grade,omitempty"`
-	IsCoffin           bool       `json:"is_coffin"`
-	ReleasedAt         *time.Time `json:"released_at,omitempty"`
-	HasSolutionTex     bool       `json:"has_solution_tex"`
-	HasSolutionPDF     bool       `json:"has_solution_pdf"`
-	SolutionLink       *string    `json:"solution_link,omitempty"`
-	RazborAccess       bool       `json:"razbor_access"`
-	RazborVideoAccess  bool       `json:"razbor_video_access"`
-	RazborPDFTexAccess bool       `json:"razbor_pdf_tex_access"`
+	SubproblemID        int64      `json:"subproblem_id"`
+	SubproblemLabel     string     `json:"subproblem_label"`
+	ProblemID           int64      `json:"problem_id"`
+	ProblemNumber       int        `json:"problem_number"`
+	Display             string     `json:"display"`
+	SeriesID            int64      `json:"series_id"`
+	SeriesNumber        int        `json:"series_number"`
+	SeriesName          string     `json:"series_name"`
+	MathCenterID        int64      `json:"math_center_id"`
+	TermID              int64      `json:"term_id"`
+	TermKind            string     `json:"term_kind,omitempty"`
+	TermGrade           *int32     `json:"term_grade,omitempty"`
+	IsCoffin            bool       `json:"is_coffin"`
+	ReleasedAt          *time.Time `json:"released_at,omitempty"`
+	SolutionPublishedAt *time.Time `json:"solution_published_at,omitempty"`
+	HasSolutionTex      bool       `json:"has_solution_tex"`
+	HasSolutionPDF      bool       `json:"has_solution_pdf"`
+	SolutionLink        *string    `json:"solution_link,omitempty"`
+	RazborAccess        bool       `json:"razbor_access"`
+	RazborVideoAccess   bool       `json:"razbor_video_access"`
+	RazborPDFTexAccess  bool       `json:"razbor_pdf_tex_access"`
 	// Teacher-only "solved N of M" stats.
 	AcceptedCount int `json:"accepted_count"`
 	TotalCount    int `json:"total_count"`
@@ -66,6 +67,7 @@ type coffinRecord struct {
 	SubproblemID         int64
 	IsCoffin             bool
 	ReleasedAt           *time.Time
+	SolutionPublishedAt  *time.Time
 	SolutionTexSource    *string
 	SolutionPdfObjectKey *string
 	SolutionLink         *string
@@ -84,33 +86,36 @@ type coffinRecord struct {
 // coffinActionView is the lean response for mark/solution actions; the
 // client refetches the list/series view for labels.
 type coffinActionView struct {
-	SubproblemID   int64      `json:"subproblem_id"`
-	IsCoffin       bool       `json:"is_coffin"`
-	ReleasedAt     *time.Time `json:"released_at,omitempty"`
-	HasSolutionTex bool       `json:"has_solution_tex"`
-	HasSolutionPDF bool       `json:"has_solution_pdf"`
-	SolutionLink   *string    `json:"solution_link,omitempty"`
+	SubproblemID        int64      `json:"subproblem_id"`
+	IsCoffin            bool       `json:"is_coffin"`
+	ReleasedAt          *time.Time `json:"released_at,omitempty"`
+	SolutionPublishedAt *time.Time `json:"solution_published_at,omitempty"`
+	HasSolutionTex      bool       `json:"has_solution_tex"`
+	HasSolutionPDF      bool       `json:"has_solution_pdf"`
+	SolutionLink        *string    `json:"solution_link,omitempty"`
 }
 
 func toCoffinActionView(s store.MathCenterSubproblemSolution) coffinActionView {
 	return coffinActionView{
-		SubproblemID:   s.SubproblemID,
-		IsCoffin:       s.IsCoffin,
-		ReleasedAt:     s.ReleasedAt,
-		HasSolutionTex: s.SolutionTexSource != nil,
-		HasSolutionPDF: s.SolutionPdfObjectKey != nil,
-		SolutionLink:   s.SolutionLink,
+		SubproblemID:        s.SubproblemID,
+		IsCoffin:            s.IsCoffin,
+		ReleasedAt:          s.ReleasedAt,
+		SolutionPublishedAt: s.PublishedAt,
+		HasSolutionTex:      s.SolutionTexSource != nil,
+		HasSolutionPDF:      s.SolutionPdfObjectKey != nil,
+		SolutionLink:        s.SolutionLink,
 	}
 }
 
 // solutionReleasedToStudent reports whether a non-teacher may see a subproblem's
 // разбор (and, for coffins, whether submission has closed): a coffin is released
-// once released_at is set and past; a normal subproblem at the series deadline.
+// once released_at is set and past; a normal subproblem must be explicitly
+// published and then waits for the series deadline.
 func solutionReleasedToStudent(s store.MathCenterSubproblemSolution, seriesDueAt, now time.Time) bool {
 	if s.IsCoffin {
-		return s.ReleasedAt != nil && !now.Before(*s.ReleasedAt)
+		return s.PublishedAt != nil && s.ReleasedAt != nil && !now.Before(*s.ReleasedAt)
 	}
-	return !now.Before(seriesDueAt)
+	return s.PublishedAt != nil && !now.Before(seriesDueAt)
 }
 
 // ListCenterCoffins — any member of the center. Returns every coffin subproblem
@@ -167,7 +172,7 @@ func ListCenterCoffins(database *db.DB) http.HandlerFunc {
 			}
 			for _, row := range rows {
 				records = append(records, coffinRecord{
-					SubproblemID: row.SubproblemID, IsCoffin: row.IsCoffin, ReleasedAt: row.ReleasedAt,
+					SubproblemID: row.SubproblemID, IsCoffin: row.IsCoffin, ReleasedAt: row.ReleasedAt, SolutionPublishedAt: row.PublishedAt,
 					SolutionTexSource: row.SolutionTexSource, SolutionPdfObjectKey: row.SolutionPdfObjectKey,
 					SolutionLink: row.SolutionLink, SubproblemLabel: row.SubproblemLabel, ProblemID: row.ProblemID,
 					ProblemNumber: row.ProblemNumber, SeriesID: row.SeriesID, SeriesNumber: row.SeriesNumber,
@@ -184,7 +189,7 @@ func ListCenterCoffins(database *db.DB) http.HandlerFunc {
 			}
 			for _, row := range rows {
 				records = append(records, coffinRecord{
-					SubproblemID: row.SubproblemID, IsCoffin: row.IsCoffin, ReleasedAt: row.ReleasedAt,
+					SubproblemID: row.SubproblemID, IsCoffin: row.IsCoffin, ReleasedAt: row.ReleasedAt, SolutionPublishedAt: row.PublishedAt,
 					SolutionTexSource: row.SolutionTexSource, SolutionPdfObjectKey: row.SolutionPdfObjectKey,
 					SolutionLink: row.SolutionLink, SubproblemLabel: row.SubproblemLabel, ProblemID: row.ProblemID,
 					ProblemNumber: row.ProblemNumber, SeriesID: row.SeriesID, SeriesNumber: row.SeriesNumber,
@@ -229,7 +234,7 @@ func ListCenterCoffins(database *db.DB) http.HandlerFunc {
 			access := razborAccess{Video: true, PDFTex: true}
 			if isStudent && !isTeacher {
 				if c.IsCoffin {
-					released := c.ReleasedAt != nil && !time.Now().Before(*c.ReleasedAt)
+					released := c.SolutionPublishedAt != nil && c.ReleasedAt != nil && !time.Now().Before(*c.ReleasedAt)
 					access = razborAccess{Video: released, PDFTex: released}
 				} else {
 					access = accessBySeries[c.SeriesID]
@@ -239,28 +244,30 @@ func ListCenterCoffins(database *db.DB) http.HandlerFunc {
 			if hasSelectedTerm && (!selected.IsActive || c.TermID != selected.ID) {
 				display = fmt.Sprintf("%s.%d.%d%s", mc.TermReferencePrefix(c.TermKind, c.TermGrade), c.SeriesNumber, c.ProblemNumber, c.SubproblemLabel)
 			}
+			teacherVisible := isTeacher || c.SolutionPublishedAt != nil
 			v := coffinView{
-				SubproblemID:       c.SubproblemID,
-				SubproblemLabel:    c.SubproblemLabel,
-				ProblemID:          c.ProblemID,
-				ProblemNumber:      int(c.ProblemNumber),
-				Display:            display,
-				SeriesID:           c.SeriesID,
-				SeriesNumber:       int(c.SeriesNumber),
-				SeriesName:         c.SeriesName,
-				MathCenterID:       c.MathCenterID,
-				TermID:             c.TermID,
-				TermKind:           c.TermKind,
-				TermGrade:          c.TermGrade,
-				IsCoffin:           c.IsCoffin,
-				ReleasedAt:         c.ReleasedAt,
-				HasSolutionTex:     access.PDFTex && c.SolutionTexSource != nil,
-				HasSolutionPDF:     access.PDFTex && c.SolutionPdfObjectKey != nil,
-				RazborAccess:       access.Video || access.PDFTex,
-				RazborVideoAccess:  access.Video,
-				RazborPDFTexAccess: access.PDFTex,
+				SubproblemID:        c.SubproblemID,
+				SubproblemLabel:     c.SubproblemLabel,
+				ProblemID:           c.ProblemID,
+				ProblemNumber:       int(c.ProblemNumber),
+				Display:             display,
+				SeriesID:            c.SeriesID,
+				SeriesNumber:        int(c.SeriesNumber),
+				SeriesName:          c.SeriesName,
+				MathCenterID:        c.MathCenterID,
+				TermID:              c.TermID,
+				TermKind:            c.TermKind,
+				TermGrade:           c.TermGrade,
+				IsCoffin:            c.IsCoffin,
+				ReleasedAt:          c.ReleasedAt,
+				SolutionPublishedAt: c.SolutionPublishedAt,
+				HasSolutionTex:      access.PDFTex && teacherVisible && c.SolutionTexSource != nil,
+				HasSolutionPDF:      access.PDFTex && teacherVisible && c.SolutionPdfObjectKey != nil,
+				RazborAccess:        access.Video || access.PDFTex,
+				RazborVideoAccess:   access.Video,
+				RazborPDFTexAccess:  access.PDFTex,
 			}
-			if access.Video {
+			if access.Video && teacherVisible {
 				v.SolutionLink = c.SolutionLink
 			}
 			if st, ok := statusBySub[c.SubproblemID]; ok {
@@ -400,7 +407,7 @@ func loadSubproblemForRead(ctx context.Context, w http.ResponseWriter, r *http.R
 		}
 		access = razborAccess{Video: accessRow.CanViewVideo, PDFTex: accessRow.CanViewPdfTex}
 	}
-	s, err := q.GetSubproblemSolution(ctx, subproblemID)
+	s, err := q.GetSubproblemSolutionWithPublication(ctx, subproblemID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "no разбор uploaded yet")
@@ -435,7 +442,7 @@ func MarkCoffin(database *db.DB, hub *live.Hub) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		s, err := q.UpsertCoffinFlag(ctx, store.UpsertCoffinFlagParams{SubproblemID: subproblemID, IsCoffin: true})
+		s, err := q.UpsertCoffinFlagWithPublication(ctx, subproblemID, true)
 		if err != nil {
 			logger.LogErrorContext(ctx, "coffins: mark", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to mark coffin")
@@ -533,7 +540,7 @@ func PutSubproblemSolutionTex(database *db.DB, hub *live.Hub) http.HandlerFunc {
 			return
 		}
 		tex := normalizeTexSource(req.Tex)
-		s, err := q.SetSubproblemSolutionTex(ctx, store.SetSubproblemSolutionTexParams{SubproblemID: subproblemID, SolutionTexSource: &tex})
+		s, err := q.SetSubproblemSolutionTexWithPublication(ctx, subproblemID, &tex)
 		if err != nil {
 			logger.LogErrorContext(ctx, "coffins: set solution tex", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to save разбор")
@@ -628,7 +635,7 @@ func FinalizeSubproblemSolutionPDFPublish(database *db.DB, hub *live.Hub, blobs 
 		if !statValidatePDF(ctx, w, r, blobs, key) {
 			return
 		}
-		s, err := q.SetSubproblemSolutionPdf(ctx, store.SetSubproblemSolutionPdfParams{SubproblemID: subproblemID, SolutionPdfObjectKey: &key})
+		s, err := q.SetSubproblemSolutionPdfWithPublication(ctx, subproblemID, &key)
 		if err != nil {
 			logger.LogErrorContext(ctx, "coffins: set solution pdf", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to publish разбор")
@@ -698,9 +705,38 @@ func AssignSolutionGroup(database *db.DB) http.HandlerFunc {
 			return
 		}
 		q := store.New(database.Pool())
-		// Authorize via the first subproblem's center (they come from one
-		// series, so share a center); the content endpoints already checked each.
-		if _, ok := loadSubproblemForWrite(ctx, w, r, q, userID, req.SubproblemIDs[0]); !ok {
+		ids := uniquePositiveIDs(req.SubproblemIDs)
+		if len(ids) == 0 {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "subproblem_ids required")
+			return
+		}
+		first, err := q.GetSubproblemSolutionCenter(ctx, ids[0])
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "subproblem not found")
+			} else {
+				logger.LogErrorContext(ctx, "coffins: group target", err)
+				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			}
+			return
+		}
+		for _, id := range ids[1:] {
+			target, targetErr := q.GetSubproblemSolutionCenter(ctx, id)
+			if targetErr != nil {
+				if errors.Is(targetErr, pgx.ErrNoRows) {
+					httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "subproblem not found")
+				} else {
+					logger.LogErrorContext(ctx, "coffins: group target", targetErr)
+					httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+				}
+				return
+			}
+			if target.MathCenterID != first.MathCenterID || target.SeriesID != first.SeriesID {
+				httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "subproblems must belong to one center and series")
+				return
+			}
+		}
+		if !requireTeacher(ctx, w, r, q, userID, first.MathCenterID) {
 			return
 		}
 		groupID, err := q.CreateSolutionGroup(ctx)
@@ -710,7 +746,7 @@ func AssignSolutionGroup(database *db.DB) http.HandlerFunc {
 			return
 		}
 		if err := q.SetSubproblemSolutionGroup(ctx, store.SetSubproblemSolutionGroupParams{
-			GroupID: groupID, SubproblemIds: req.SubproblemIDs,
+			GroupID: groupID, SubproblemIds: ids,
 		}); err != nil {
 			logger.LogErrorContext(ctx, "coffins: set solution group", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to group разбор")
@@ -748,11 +784,21 @@ func SetSubproblemSolutionLinkHandler(database *db.DB, hub *live.Hub) http.Handl
 		if !ok {
 			return
 		}
+		if link == "" {
+			if existing, getErr := q.GetSubproblemSolutionWithPublication(ctx, subproblemID); getErr == nil && existing.PublishedAt != nil && existing.SolutionTexSource == nil && existing.SolutionPdfObjectKey == nil {
+				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "a published разбор must retain at least one format")
+				return
+			} else if getErr != nil && !errors.Is(getErr, pgx.ErrNoRows) {
+				logger.LogErrorContext(ctx, "coffins: get solution before link clear", getErr)
+				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+				return
+			}
+		}
 		var linkPtr *string
 		if link != "" {
 			linkPtr = &link
 		}
-		s, err := q.SetSubproblemSolutionLink(ctx, store.SetSubproblemSolutionLinkParams{SubproblemID: subproblemID, SolutionLink: linkPtr})
+		s, err := q.SetSubproblemSolutionLinkWithPublication(ctx, subproblemID, linkPtr)
 		if err != nil {
 			logger.LogErrorContext(ctx, "coffins: set solution link", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to save link")

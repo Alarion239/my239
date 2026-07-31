@@ -26,6 +26,7 @@ export interface CoffinAction {
   subproblem_id: number
   is_coffin: boolean
   released_at?: string | null
+  solution_published_at?: string | null
   has_solution_tex: boolean
   has_solution_pdf: boolean
   solution_link?: string | null
@@ -258,5 +259,32 @@ export function useUploadSubproblemSolutionPdfBatch(centerId: number) {
       await groupSolutions(client, subproblemIds)
     },
     onSuccess: () => invalidate(qc, centerId),
+  })
+}
+
+export interface PublishSubproblemSolutionsResponse {
+  subproblem_ids: number[]
+  published_at: string
+  released_coffin_ids: number[]
+}
+
+// Publishing is intentionally separate from saving a format: a teacher may
+// assemble a partial draft without releasing a coffin or exposing anything to
+// students. The API validates the whole target set atomically.
+export function usePublishSubproblemSolutionsBatch(centerId: number) {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (subproblemIds: number[]) =>
+      client.request<PublishSubproblemSolutionsResponse>('/mathcenter/subproblem-solutions/publish', {
+        method: 'POST',
+        body: { subproblem_ids: subproblemIds },
+      }),
+    onSuccess: (_data, subproblemIds) => {
+      for (const id of subproblemIds) {
+        qc.invalidateQueries({ queryKey: queryKeys.subproblemSolutionTex(id) })
+      }
+      invalidate(qc, centerId)
+    },
   })
 }
