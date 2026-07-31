@@ -35,10 +35,7 @@ import { useClaimHeartbeat } from './use-claim-heartbeat'
 import { useThreadRole } from './use-thread-role'
 import { useSeriesContext } from './use-series-context'
 import { useCenterIdContext } from './center-id-context'
-
-function seriesPath(year: string, search = ''): string {
-  return '/mathcenter/' + year + '/series' + search
-}
+import { threadBackPath } from './navigation-paths'
 
 function threadPath(
   year: string,
@@ -62,7 +59,7 @@ function taskTitle(ctx: SubproblemContext | undefined): string {
 // routes: an existing thread (/thread/:threadId) and a first submission
 // (/submit/:subproblemId, no thread yet). Re-keyed by the route so state resets
 // cleanly across navigations (including submit → thread after the first send).
-export function ThreadPage() {
+export function ThreadPage({ origin = 'series' }: { origin?: 'series' | 'coffins' }) {
   const params = useParams<{
     year: string
     seriesId: string
@@ -73,10 +70,10 @@ export function ThreadPage() {
     (params.threadId ? 't:' + params.threadId : 'n:' + params.subproblemId) +
     '@' +
     params.year
-  return <ThreadPageInner key={key} />
+  return <ThreadPageInner key={key + '@' + origin} origin={origin} />
 }
 
-function ThreadPageInner() {
+function ThreadPageInner({ origin }: { origin: 'series' | 'coffins' }) {
   const params = useParams<{
     year: string
     seriesId: string
@@ -94,23 +91,26 @@ function ThreadPageInner() {
   const ctx = useSeriesContext(centerId)
 
   if (!Number.isFinite(centerId) || centerId <= 0) {
-    return <NotFound year={year} centerId={centerId} termSearch={search} />
+    return <NotFound year={year} centerId={centerId} termSearch={search} origin={origin} />
   }
   if (ctx.isLoading) {
     return <CenteredSpinner />
   }
   if (!ctx.hasAccess) {
-    return <NotFound year={year} centerId={centerId} termSearch={search} />
+    return <NotFound year={year} centerId={centerId} termSearch={search} origin={origin} />
   }
+
+  const backPath = threadBackPath(year, origin, search)
+  const backLabel = origin === 'coffins' ? 'Назад к очереди' : 'Назад к серии'
 
   return (
     <div className="animate-rise mx-auto flex w-full max-w-3xl flex-col gap-4">
       <Link
-        to={seriesPath(year, search)}
+        to={backPath}
         className="inline-flex items-center gap-1.5 self-start text-sm font-medium text-accent underline-offset-4 hover:underline"
       >
         <ArrowLeft className="h-4 w-4" aria-hidden />
-        Назад к серии
+        {backLabel}
       </Link>
 
       {isThreadMode ? (
@@ -457,20 +457,22 @@ function NotFound({
   year,
   centerId,
   termSearch,
+  origin = 'series',
 }: {
   year: string
   centerId: number
   termSearch?: string
+  origin?: 'series' | 'coffins'
 }) {
   return (
     <Card className="animate-rise px-6 py-16 text-center">
       <p className="text-muted">Нет доступа к этой задаче.</p>
       {year && Number.isFinite(centerId) && centerId > 0 ? (
         <Link
-          to={seriesPath(year, termSearch)}
+          to={threadBackPath(year, origin, termSearch)}
           className="mt-2 inline-block text-sm font-medium text-accent underline-offset-4 hover:underline"
         >
-          Назад к серии
+          {origin === 'coffins' ? 'Назад к очереди' : 'Назад к серии'}
         </Link>
       ) : null}
     </Card>

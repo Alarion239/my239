@@ -26,6 +26,7 @@
     "katex": "^0.17.0",
     "latex.js": "^0.12.6",
     "lucide-react": "^0.453.0",
+    "pdfjs-dist": "^4.10.38",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-hook-form": "^7.53.1",

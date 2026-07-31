@@ -194,33 +194,6 @@ html, .page {
     hyphens: manual;
 }
 
-.katex {
-    font-size: 1em !important;
-}
-
-.katex,
-.katex .mainrm,
-.katex .mathit,
-.katex .mathbf {
-    font-family: "Computer Modern Serif" !important;  /* for KaTeX_Main */
-}
-
-.katex .mathdefault,
-.katex .boldsymbol {
-    font-family: "Computer Modern Serif" !important;  /* for KaTeX_Math */
-}
-
-.katex .mathsf,
-.katex .textsf,
-.katex .mathboldsf,
-.katex .textboldsf,
-.katex .mathitsf,
-.katex .textitsf {
-    font-family: "Computer Modern Sans" !important;  /* for KaTeX_SansSerif */
-}
-
-
-
 /* family */
 .rm {
     font-family: "Computer Modern Serif", serif;

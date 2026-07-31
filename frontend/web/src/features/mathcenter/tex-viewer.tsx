@@ -99,10 +99,13 @@ function loadTexAssets(): Promise<TexAssets> {
         import('./vendor/latexjs-base.css?raw').then((m) => m.default),
         import('./vendor/latexjs-article.css?raw').then((m) => m.default),
       ])
+      // latex.js supplies the page layout; KaTeX owns all math typography.
+      // Loading KaTeX after the layout CSS prevents broad document styles from
+      // shrinking display operators or replacing KaTeX's bundled glyph fonts.
       const styleText = [
-        rewriteKatexFontUrls(katexCssRaw),
         baseCssRaw,
         articleCssRaw,
+        rewriteKatexFontUrls(katexCssRaw),
         HOST_CSS,
       ].join('\n')
       return { parse: latex.parse, HtmlGenerator: latex.HtmlGenerator, styleText }

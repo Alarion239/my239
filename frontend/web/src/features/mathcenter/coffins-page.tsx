@@ -21,6 +21,7 @@ import { useSeriesContext } from './use-series-context'
 import { useCenterIdContext, useCenterTermContext } from './center-id-context'
 import { SolutionWorkbench, type SolutionWorkbenchMode } from './solution-editor'
 import { displayPill } from './status-style'
+import { coffinQueueThreadPath } from './navigation-paths'
 
 export function CoffinsPage() {
   const centerId = useCenterIdContext()
@@ -441,7 +442,7 @@ function CoffinQueueRow({ item }: { item: CoffinQueueItem }) {
     : item.problem_display
   return (
     <Link
-      to={'/mathcenter/' + year + '/series/' + item.series_id + '/thread/' + item.thread_id + search}
+      to={coffinQueueThreadPath(year ?? '', item.series_id, item.thread_id, search)}
       className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
     >
       <div className="min-w-0 flex-1">

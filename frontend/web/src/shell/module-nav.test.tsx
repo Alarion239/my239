@@ -252,11 +252,11 @@ describe('module navigation', () => {
   it('shows queue notifications on the module tabs', async () => {
     const member = makeUser({ is_admin: false })
     mockFetch(member, mcMe, true)
-    renderShell(<TopBar user={member} />, '/mathcenter/2025/coffins/queue')
+    renderShell(<TopBar user={member} />, '/mathcenter/2025/coffins/queue/7/thread/55?term_id=12')
 
     const tabNav = await screen.findByRole('navigation', { name: 'Разделы модуля' })
-    const seriesTab = tabNav.querySelector('a[href="/mathcenter/2025/series"]')
-    const coffinsTab = tabNav.querySelector('a[href="/mathcenter/2025/coffins"]')
+    const seriesTab = tabNav.querySelector('a[href="/mathcenter/2025/series?term_id=12"]')
+    const coffinsTab = tabNav.querySelector('a[href="/mathcenter/2025/coffins?term_id=12"]')
     expect(seriesTab).toHaveTextContent('Серии3')
     expect(coffinsTab).toHaveTextContent('2')
   })

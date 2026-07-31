@@ -55,6 +55,10 @@ export const router = createBrowserRouter([
                 element: <ThreadPage />,
               },
               { path: 'coffins', element: <Navigate to="queue" replace /> },
+              {
+                path: 'coffins/queue/:seriesId/thread/:threadId',
+                element: <ThreadPage origin="coffins" />,
+              },
               { path: 'coffins/:tab', element: <CoffinsPage /> },
               { path: 'likbez', element: <LikbezPage /> },
               { path: 'likbez/:likbezId', element: <LikbezPage /> },
