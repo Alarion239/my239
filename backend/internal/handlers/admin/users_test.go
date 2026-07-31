@@ -72,7 +72,9 @@ func TestGetUser_Missing(t *testing.T) {
 var teacherEnrollmentColumns = []string{"teacher_id", "center_id", "graduation_year", "is_head_teacher"}
 
 // studentEnrollmentColumns matches GetStudentByUserID's projection.
-var studentEnrollmentColumns = []string{"id", "user_id", "group_id", "group_name", "math_center_id", "graduation_year"}
+var studentEnrollmentColumns = []string{
+	"id", "user_id", "group_id", "can_view_razbors", "group_name", "math_center_id", "graduation_year",
+}
 
 // enrollmentsResponse mirrors the handler's JSON shape for assertions.
 type enrollmentsResponse struct {
@@ -109,7 +111,7 @@ func TestGetUserEnrollments_TeachingAndStudent(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM math_center_students s`).
 		WithArgs(int64(11)).
 		WillReturnRows(mock.NewRows(studentEnrollmentColumns).
-			AddRow(int64(55), int64(11), int64(4), "Group A", int64(7), int32(2032)))
+			AddRow(int64(55), int64(11), int64(4), false, "Group A", int64(7), int32(2032)))
 
 	req := adminRequest(t, access, true, http.MethodGet, "/users/11/enrollments", nil)
 	rr := httptest.NewRecorder()

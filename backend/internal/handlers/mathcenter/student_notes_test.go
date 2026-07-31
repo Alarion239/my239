@@ -27,7 +27,7 @@ var userColumns = []string{
 }
 
 var studentByUserColumns = []string{
-	"id", "user_id", "group_id", "group_name", "math_center_id", "graduation_year",
+	"id", "user_id", "group_id", "can_view_razbors", "group_name", "math_center_id", "graduation_year",
 }
 
 func expectTeacherInCenter(mock pgxmock.PgxPoolIface, userID, centerID int64, ok bool) {
@@ -127,7 +127,7 @@ func TestGetStudentProfile_TeacherSucceeds(t *testing.T) {
 	mock.ExpectQuery(`FROM math_center_students s\s+JOIN math_center_groups`).
 		WithArgs(int64(99)).
 		WillReturnRows(mock.NewRows(studentByUserColumns).
-			AddRow(int64(1), int64(99), int64(5), "Группа А", int64(42), int32(2026)))
+			AddRow(int64(1), int64(99), int64(5), false, "Группа А", int64(42), int32(2026)))
 	mock.ExpectQuery(`SELECT .* FROM users\s+WHERE id`).
 		WithArgs(int64(99)).
 		WillReturnRows(mock.NewRows(userColumns).
