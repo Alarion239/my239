@@ -165,7 +165,6 @@ published_series AS (
       AND series.published_at IS NOT NULL
 )
 SELECT (SELECT id FROM active_term)::bigint AS active_term_id,
-       (SELECT id FROM previous_term)::bigint AS previous_term_id,
        published_series.count AS published_series_count,
        CASE
          WHEN published_series.count >= 10

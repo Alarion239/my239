@@ -93,8 +93,8 @@ func TestManage_RosterBoardSnapshot(t *testing.T) {
 			AddRow(int64(1), int64(42), "А", now, int64(20)))
 	mock.ExpectQuery(`SELECT \(SELECT id FROM active_term\)`).
 		WithArgs(int64(42)).
-		WillReturnRows(mock.NewRows([]string{"active_term_id", "previous_term_id", "published_series_count", "rating_term_id"}).
-			AddRow(int64(20), nil, int64(3), int64(20)))
+		WillReturnRows(mock.NewRows([]string{"active_term_id", "published_series_count", "rating_term_id"}).
+			AddRow(int64(20), int64(3), int64(20)))
 	mock.ExpectQuery(`WITH active_term AS`).
 		WithArgs(int64(42)).
 		WillReturnRows(mock.NewRows([]string{

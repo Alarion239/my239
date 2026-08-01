@@ -328,7 +328,6 @@ published_series AS (
       AND series.published_at IS NOT NULL
 )
 SELECT (SELECT id FROM active_term)::bigint AS active_term_id,
-       (SELECT id FROM previous_term)::bigint AS previous_term_id,
        published_series.count AS published_series_count,
        CASE
          WHEN published_series.count >= 10
@@ -341,7 +340,6 @@ FROM published_series
 
 type GetRosterBoardMetadataRow struct {
 	ActiveTermID         int64 `json:"active_term_id"`
-	PreviousTermID       int64 `json:"previous_term_id"`
 	PublishedSeriesCount int64 `json:"published_series_count"`
 	RatingTermID         int64 `json:"rating_term_id"`
 }
@@ -349,12 +347,7 @@ type GetRosterBoardMetadataRow struct {
 func (q *Queries) GetRosterBoardMetadata(ctx context.Context, mathCenterID int64) (GetRosterBoardMetadataRow, error) {
 	row := q.db.QueryRow(ctx, getRosterBoardMetadata, mathCenterID)
 	var i GetRosterBoardMetadataRow
-	err := row.Scan(
-		&i.ActiveTermID,
-		&i.PreviousTermID,
-		&i.PublishedSeriesCount,
-		&i.RatingTermID,
-	)
+	err := row.Scan(&i.ActiveTermID, &i.PublishedSeriesCount, &i.RatingTermID)
 	return i, err
 }
 
