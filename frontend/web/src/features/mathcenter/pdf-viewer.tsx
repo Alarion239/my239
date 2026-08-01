@@ -4,7 +4,7 @@ import { Spinner } from '../../design/ui'
 import { apiClient } from '../../lib/api'
 import 'pdfjs-dist/web/pdf_viewer.css'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?worker&url'
-import { normalizeWheelDelta, pinchZoomFactor, touchMidpoint, wheelZoomFactor } from './pdf-zoom'
+import { normalizeWheelDelta, pinchZoomFactor, safariGestureZoomFactor, touchMidpoint, wheelZoomFactor } from './pdf-zoom'
 
 export interface PdfViewerProps {
   // The authed blob endpoint to fetch (e.g. /mathcenter/series/7/pdf or a
@@ -70,6 +70,7 @@ export function PdfViewer({
   const wheelFrameRef = useRef<number | null>(null)
   const wheelOriginRef = useRef<[number, number] | null>(null)
   const pinchRef = useRef<{ distance: number } | null>(null)
+  const safariGestureRef = useRef<{ scale: number; origin: [number, number] } | null>(null)
   statusRef.current = status
 
   useEffect(() => {
@@ -145,6 +146,40 @@ export function PdfViewer({
         event.stopPropagation()
       }
 
+      const gestureOrigin = (event: Event): [number, number] => {
+        const gesture = event as Event & { clientX?: number; clientY?: number }
+        if (Number.isFinite(gesture.clientX) && Number.isFinite(gesture.clientY)) {
+          return [gesture.clientX as number, gesture.clientY as number]
+        }
+        const bounds = container.getBoundingClientRect()
+        return [bounds.left + bounds.width / 2, bounds.top + bounds.height / 2]
+      }
+
+      const onSafariGestureStart = (event: Event) => {
+        const gesture = event as Event & { scale?: number }
+        const scale = Number.isFinite(gesture.scale) && (gesture.scale as number) > 0 ? gesture.scale as number : 1
+        safariGestureRef.current = { scale, origin: gestureOrigin(event) }
+        preventSafariGesture(event)
+      }
+
+      const onSafariGestureChange = (event: Event) => {
+        const state = safariGestureRef.current
+        const gesture = event as Event & { scale?: number }
+        const scale = Number.isFinite(gesture.scale) && (gesture.scale as number) > 0 ? gesture.scale as number : 1
+        preventSafariGesture(event)
+        // On browsers that expose both touch and GestureEvent streams, the
+        // touch path is already applying the same pinch increment.
+        if (!state || pinchRef.current) return
+        const factor = safariGestureZoomFactor(scale, state.scale)
+        state.scale = scale
+        applyZoomFactor(factor, state.origin)
+      }
+
+      const onSafariGestureEnd = (event: Event) => {
+        safariGestureRef.current = null
+        preventSafariGesture(event)
+      }
+
       const wheelOptions: AddEventListenerOptions = { passive: false }
       const touchOptions: AddEventListenerOptions = { passive: false }
       container.addEventListener('wheel', onWheel, wheelOptions)
@@ -152,18 +187,18 @@ export function PdfViewer({
       container.addEventListener('touchmove', onTouchMove, touchOptions)
       container.addEventListener('touchend', onTouchEnd, touchOptions)
       container.addEventListener('touchcancel', onTouchEnd, touchOptions)
-      container.addEventListener('gesturestart', preventSafariGesture as EventListener, touchOptions)
-      container.addEventListener('gesturechange', preventSafariGesture as EventListener, touchOptions)
-      container.addEventListener('gestureend', preventSafariGesture as EventListener, touchOptions)
+      container.addEventListener('gesturestart', onSafariGestureStart as EventListener, touchOptions)
+      container.addEventListener('gesturechange', onSafariGestureChange as EventListener, touchOptions)
+      container.addEventListener('gestureend', onSafariGestureEnd as EventListener, touchOptions)
       removeInteractionListeners = () => {
         container.removeEventListener('wheel', onWheel, wheelOptions)
         container.removeEventListener('touchstart', onTouchStart, touchOptions)
         container.removeEventListener('touchmove', onTouchMove, touchOptions)
         container.removeEventListener('touchend', onTouchEnd, touchOptions)
         container.removeEventListener('touchcancel', onTouchEnd, touchOptions)
-        container.removeEventListener('gesturestart', preventSafariGesture as EventListener, touchOptions)
-        container.removeEventListener('gesturechange', preventSafariGesture as EventListener, touchOptions)
-        container.removeEventListener('gestureend', preventSafariGesture as EventListener, touchOptions)
+        container.removeEventListener('gesturestart', onSafariGestureStart as EventListener, touchOptions)
+        container.removeEventListener('gesturechange', onSafariGestureChange as EventListener, touchOptions)
+        container.removeEventListener('gestureend', onSafariGestureEnd as EventListener, touchOptions)
       }
     }
 
@@ -260,6 +295,7 @@ export function PdfViewer({
       wheelDeltaRef.current = 0
       wheelOriginRef.current = null
       pinchRef.current = null
+      safariGestureRef.current = null
       viewerInstanceRef.current?.cleanup()
       viewerInstanceRef.current = null
       eventBus = null

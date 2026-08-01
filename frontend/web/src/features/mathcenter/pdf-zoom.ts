@@ -18,6 +18,13 @@ export function pinchZoomFactor(distance: number, previousDistance: number): num
   return Math.pow(distance / previousDistance, PINCH_ZOOM_RESPONSE)
 }
 
+// Safari exposes trackpad pinch as a cumulative GestureEvent scale rather than
+// two touch points. Treat each update as an incremental pinch step so the
+// response matches the touch implementation and cannot compound too quickly.
+export function safariGestureZoomFactor(scale: number, previousScale: number): number {
+  return pinchZoomFactor(scale, previousScale)
+}
+
 export function touchMidpoint(first: { clientX: number; clientY: number }, second: { clientX: number; clientY: number }): [number, number] {
   return [(first.clientX + second.clientX) / 2, (first.clientY + second.clientY) / 2]
 }

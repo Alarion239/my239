@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apiClient } from '../../lib/api'
 import { PdfViewer } from './pdf-viewer'
-import { normalizeWheelDelta, pinchZoomFactor, touchMidpoint, wheelZoomFactor } from './pdf-zoom'
+import { normalizeWheelDelta, pinchZoomFactor, safariGestureZoomFactor, touchMidpoint, wheelZoomFactor } from './pdf-zoom'
 
 describe('PdfViewer', () => {
   afterEach(() => {
@@ -56,6 +56,7 @@ describe('PdfViewer', () => {
 
   it('uses incremental pinch scaling and the midpoint as its focal origin', () => {
     expect(pinchZoomFactor(200, 100)).toBeCloseTo(Math.pow(2, 0.7))
+    expect(safariGestureZoomFactor(2, 1)).toBeCloseTo(Math.pow(2, 0.7))
     expect(pinchZoomFactor(0, 100)).toBe(1)
     expect(touchMidpoint({ clientX: 100, clientY: 120 }, { clientX: 300, clientY: 220 })).toEqual([200, 170])
   })
