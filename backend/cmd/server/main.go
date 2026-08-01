@@ -133,7 +133,7 @@ func run() error {
 	if sheets.Configured() {
 		logger.LogInfo("google sheets integration: configured")
 	} else {
-		logger.LogInfo("google sheets integration: disabled (GOOGLE_SERVICE_ACCOUNT_JSON not set)")
+		logger.LogInfo("google sheets integration: disabled (credentials not configured)")
 	}
 
 	// Live push: one in-process hub fed by a single LISTEN goroutine on a

@@ -116,6 +116,22 @@ store := objectstore.NewMemory()
 mcRouter := mcHandlers.Router(database, tokens, store, time.Minute)
 ```
 
+## Google Sheets credentials
+
+The backend accepts one of two mutually exclusive credential sources:
+
+- `GOOGLE_SERVICE_ACCOUNT_JSON` — inline service-account JSON, suitable for
+  local development and Railway.
+- `GOOGLE_SERVICE_ACCOUNT_FILE` — a path to a mounted service-account JSON
+  file, suitable for Dockhost. For example:
+  `/run/secrets/google-sheets-service-account.json`.
+
+The credential is read once during startup and retained only in process
+memory. Restart the backend after changing a mounted file. Do not commit the
+JSON or put it in a regular source-controlled `.env` file. Share each Google
+Sheet with the service account's `client_email`; the IAM project role alone
+does not grant access to a spreadsheet.
+
 ## Tests
 
 ```sh

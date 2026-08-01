@@ -131,7 +131,10 @@ func Load() (*Config, error) {
 	s3KeyID := os.Getenv("S3_ACCESS_KEY_ID")
 	s3Secret := os.Getenv("S3_SECRET_ACCESS_KEY")
 	s3PathStyle := os.Getenv("S3_USE_PATH_STYLE") != "false" // default true; safest for arbitrary bucket names
-	googleServiceAccountJSON := os.Getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+	googleServiceAccountJSON, err := loadGoogleServiceAccountJSON()
+	if err != nil {
+		return nil, err
+	}
 	s3TTLMin, err := envInt("S3_DOWNLOAD_TTL_MINUTES", 15)
 	if err != nil {
 		return nil, err
@@ -182,6 +185,29 @@ func Load() (*Config, error) {
 		GoogleSheets:   GoogleSheetsConfig{ServiceAccountJSON: googleServiceAccountJSON},
 		TelegramAlerts: telegramAlerts,
 	}, nil
+}
+
+func loadGoogleServiceAccountJSON() (string, error) {
+	inline := strings.TrimSpace(os.Getenv("GOOGLE_SERVICE_ACCOUNT_JSON"))
+	filename := strings.TrimSpace(os.Getenv("GOOGLE_SERVICE_ACCOUNT_FILE"))
+	if inline != "" && filename != "" {
+		return "", errors.New("GOOGLE_SERVICE_ACCOUNT_JSON and GOOGLE_SERVICE_ACCOUNT_FILE cannot both be set")
+	}
+	if inline != "" {
+		return inline, nil
+	}
+	if filename == "" {
+		return "", nil
+	}
+
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return "", fmt.Errorf("read Google service account file %q: %w", filename, err)
+	}
+	if len(strings.TrimSpace(string(data))) == 0 {
+		return "", errors.New("Google service account file is empty")
+	}
+	return string(data), nil
 }
 
 func loadTelegramAlerts(frontendURL string) (TelegramAlertsConfig, error) {

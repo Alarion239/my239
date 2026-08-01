@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -45,6 +46,30 @@ func TestNewHTTPClientRejectsMissingConfiguration(t *testing.T) {
 	t.Parallel()
 	if _, err := NewHTTPClient(""); !errors.Is(err, ErrNotConfigured) {
 		t.Fatalf("NewHTTPClient(empty) error = %v, want ErrNotConfigured", err)
+	}
+}
+
+func TestNewHTTPClientRejectsMalformedCredentialsWithoutLeakingThem(t *testing.T) {
+	t.Parallel()
+	const secret = "representative-private-key"
+	for _, test := range []struct {
+		name        string
+		credentials string
+	}{
+		{name: "invalid JSON", credentials: "not-json-" + secret},
+		{name: "invalid private key", credentials: fmt.Sprintf(`{"client_email":"sheets@example.com","private_key":%q}`, secret)},
+	} {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := NewHTTPClient(test.credentials)
+			if err == nil {
+				t.Fatal("NewHTTPClient() unexpectedly succeeded")
+			}
+			if strings.Contains(err.Error(), secret) {
+				t.Fatalf("NewHTTPClient() error leaked credential material: %v", err)
+			}
+		})
 	}
 }
 
