@@ -153,8 +153,7 @@ describe('RazborAccessTab', () => {
 })
 
 describe('StudentsTab roster board', () => {
-  it('renders the unallocated column and moves a card through the accessible fallback', async () => {
-    const patches: unknown[] = []
+  it('renders unallocated students, concise new-student labels, and synced sorting', async () => {
     const boardResponse: ManageRosterBoardResponse = {
       term: { id: 20, math_center_id: 7, kind: 'academic', grade: 6, display_name: '6 класс', is_active: true },
       previous_term: { id: 19, math_center_id: 7, kind: 'academic', grade: 5, display_name: '5 класс', is_active: false },
@@ -176,7 +175,7 @@ describe('StudentsTab roster board', () => {
           user_id: 102,
           current_group_id: 1,
           previous_group_id: 2,
-          previous_group_name: 'Б',
+          previous_group_name: null,
           first_name: 'Олег',
           middle_name: null,
           last_name: 'Сидоров',
@@ -186,7 +185,7 @@ describe('StudentsTab roster board', () => {
     }
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      vi.fn(async (input: string | URL | Request) => {
         const url = String(input)
         if (url.endsWith('/manage/roster-board')) {
           return Response.json(boardResponse)
@@ -197,12 +196,6 @@ describe('StudentsTab roster board', () => {
             { id: 2, math_center_id: 7, name: 'Б', created_at: '2026-01-01' },
           ])
         }
-        if (url.endsWith('/manage/students/101/group') && init?.method === 'PUT') {
-          const body = JSON.parse(String(init.body)) as { group_id: number | null }
-          patches.push(body)
-          boardResponse.students[0].current_group_id = body.group_id
-          return new Response(null, { status: 204 })
-        }
         return Response.json([])
       }),
     )
@@ -211,12 +204,11 @@ describe('StudentsTab roster board', () => {
     const user = userEvent.setup()
     expect(await screen.findByRole('region', { name: 'Не распределены, 1 учеников' })).toBeInTheDocument()
     expect(screen.getByText('Предыдущая группа: А')).toBeInTheDocument()
+    expect(screen.getByText('Новый ученик')).toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: 'Переместить Ира Петрова' })).not.toBeInTheDocument()
 
-    await user.selectOptions(
-      screen.getByRole('combobox', { name: 'Переместить Ира Петрова' }),
-      '2',
-    )
-    await waitFor(() => expect(patches).toEqual([{ group_id: 2 }]))
-    expect(screen.getByRole('region', { name: 'Б, 1 учеников' })).toBeInTheDocument()
+    const sortButtons = screen.getAllByRole('button', { name: /Сортировка колонки/ })
+    await user.click(sortButtons[0])
+    expect(screen.getAllByRole('button', { name: /Рейтинг ↓/ })).toHaveLength(3)
   })
 })

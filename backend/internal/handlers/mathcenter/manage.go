@@ -531,7 +531,7 @@ func manageListRosterBoard(database *db.DB) http.HandlerFunc {
 		var previous *store.MathCenterTerm
 		for i := range terms {
 			term := &terms[i]
-			if term.ID != active.ID && !term.IsActive && term.CreatedAt.Before(active.CreatedAt) {
+			if term.ID != active.ID && !term.IsActive {
 				if previous == nil || term.CreatedAt.After(previous.CreatedAt) ||
 					(term.CreatedAt.Equal(previous.CreatedAt) && term.ID > previous.ID) {
 					previous = term

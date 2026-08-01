@@ -154,7 +154,6 @@ previous_term AS (
     FROM math_center_terms t
     WHERE t.math_center_id = $1
       AND t.is_active = FALSE
-      AND t.created_at < (SELECT created_at FROM active_term)
     ORDER BY t.created_at DESC, t.id DESC
     LIMIT 1
 ),
@@ -192,7 +191,6 @@ previous_term AS (
     FROM math_center_terms t
     WHERE t.math_center_id = $1
       AND t.is_active = FALSE
-      AND t.created_at < (SELECT created_at FROM active_term)
     ORDER BY t.created_at DESC, t.id DESC
     LIMIT 1
 ),

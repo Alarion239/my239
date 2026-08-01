@@ -2,16 +2,14 @@ import { Fragment, useEffect, useMemo, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import {
   DndContext,
-  DragOverlay,
   PointerSensor,
   TouchSensor,
-  closestCenter,
+  pointerWithin,
   useDraggable,
   useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
-  type DragStartEvent,
 } from '@dnd-kit/core'
 import {
   fullName,
@@ -557,10 +555,9 @@ function RosterBoard({
   centerId: number
 }) {
   const setGroup = useManageSetRosterStudentGroup(centerId)
-  const [activeUserId, setActiveUserId] = useState<number | null>(null)
   const [movingUserId, setMovingUserId] = useState<number | null>(null)
   const [restoreFocusUserId, setRestoreFocusUserId] = useState<number | null>(null)
-  const [sorts, setSorts] = useState<Record<string, RosterSort>>({})
+  const [sort, setSort] = useState<RosterSort>('alpha')
   const [undo, setUndo] = useState<{
     userId: number
     name: string
@@ -606,12 +603,7 @@ function RosterBoard({
     return result
   }, [columns, students])
 
-  const activeStudent = activeUserId === null
-    ? null
-    : students.find((student) => student.user_id === activeUserId) ?? null
-
-  function sortStudents(columnId: string, values: ManageRosterBoardStudent[]): ManageRosterBoardStudent[] {
-    const sort = sorts[columnId] ?? 'alpha'
+  function sortStudents(values: ManageRosterBoardStudent[]): ManageRosterBoardStudent[] {
     return [...values].sort((left, right) => {
       if (sort === 'rating-desc' || sort === 'rating-asc') {
         const difference = left.rating - right.rating
@@ -631,7 +623,6 @@ function RosterBoard({
     setMoveError(null)
     setMovingUserId(student.user_id)
     setRestoreFocusUserId(student.user_id)
-    setActiveUserId(null)
     setGroup.mutate(
       { userId: student.user_id, groupId: toGroupId },
       {
@@ -652,17 +643,11 @@ function RosterBoard({
     )
   }
 
-  function handleDragStart(event: DragStartEvent) {
-    const userId = Number(String(event.active.id).replace('student:', ''))
-    setActiveUserId(Number.isFinite(userId) ? userId : null)
-  }
-
   function handleDragEnd(event: DragEndEvent) {
     const userId = Number(String(event.active.id).replace('student:', ''))
     const target = event.over ? String(event.over.id) : ''
     const student = students.find((candidate) => candidate.user_id === userId)
     const column = columns.find((candidate) => candidate.id === target)
-    setActiveUserId(null)
     if (!student || !column) return
     moveStudent(student, rosterGroupId(column.id), column.name)
   }
@@ -685,39 +670,32 @@ function RosterBoard({
       />
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragCancel={() => setActiveUserId(null)}
+        collisionDetection={pointerWithin}
         onDragEnd={handleDragEnd}
       >
         <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:thin]">
           {columns.map((column) => {
-            const columnStudents = sortStudents(column.id, studentsByColumn.get(column.id) ?? [])
+            const columnStudents = sortStudents(studentsByColumn.get(column.id) ?? [])
             return (
               <RosterColumn
                 key={column.id}
                 id={column.id}
                 name={column.name}
                 students={columnStudents}
-                groups={groups}
-                sort={sorts[column.id] ?? 'alpha'}
+                sort={sort}
                 isUnallocated={column.id === 'unallocated'}
                 movingUserId={movingUserId}
-                onSortChange={(sort) => setSorts((current) => ({ ...current, [column.id]: sort }))}
-                onMove={(student, groupId, targetName) => moveStudent(student, groupId, targetName)}
+                onSortChange={setSort}
               />
             )
           })}
         </div>
-        <DragOverlay dropAnimation={null}>
-          {activeStudent ? <RosterStudentCard student={activeStudent} groups={groups} isOverlay /> : null}
-        </DragOverlay>
       </DndContext>
       <p className="sr-only" aria-live="polite">{announcement}</p>
       <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
         <span>Основание рейтинга: {ratingBasis}</span>
         <span>{board.data.published_series_count} опубликованных серий в текущем периоде</span>
-        <span>Сортировка: {rosterSortLabel(sorts.unallocated ?? 'alpha')} по умолчанию</span>
+        <span>Сортировка всех колонок: {rosterSortLabel(sort)}</span>
       </div>
       {undo ? (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-accent/30 bg-accent-soft px-3 py-2 text-sm text-accent-ink" role="status">
@@ -743,22 +721,18 @@ function RosterColumn({
   id,
   name,
   students,
-  groups,
   sort,
   isUnallocated,
   movingUserId,
   onSortChange,
-  onMove,
 }: {
   id: string
   name: string
   students: ManageRosterBoardStudent[]
-  groups: ManageRosterBoardGroup[]
   sort: RosterSort
   isUnallocated: boolean
   movingUserId: number | null
   onSortChange: (sort: RosterSort) => void
-  onMove: (student: ManageRosterBoardStudent, groupId: number | null, name: string) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id })
   const nextSort: RosterSort = sort === 'alpha' ? 'rating-desc' : sort === 'rating-desc' ? 'rating-asc' : 'alpha'
@@ -792,9 +766,7 @@ function RosterColumn({
           <RosterStudentCard
             key={student.user_id}
             student={student}
-            groups={groups}
             isMoving={movingUserId === student.user_id}
-            onMove={(groupId, targetName) => onMove(student, groupId, targetName)}
           />
         ))}
       </div>
@@ -804,67 +776,38 @@ function RosterColumn({
 
 function RosterStudentCard({
   student,
-  groups,
   isMoving = false,
-  isOverlay = false,
-  onMove,
 }: {
   student: ManageRosterBoardStudent
-  groups: ManageRosterBoardGroup[]
   isMoving?: boolean
-  isOverlay?: boolean
-  onMove?: (groupId: number | null, targetName: string) => void
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: 'student:' + student.user_id,
-    disabled: isOverlay,
-  })
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: 'student:' + student.user_id })
   const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined
   return (
     <article
       ref={setNodeRef}
       data-roster-card={'student:' + student.user_id}
       style={style}
-      {...(!isOverlay ? listeners : {})}
-      {...(!isOverlay ? attributes : {})}
+      {...listeners}
+      {...attributes}
       className={cn(
         'rounded-lg border border-line bg-surface-muted px-3 py-2 shadow-sm transition-opacity',
-        !isOverlay && 'cursor-grab active:cursor-grabbing',
+        'cursor-grab active:cursor-grabbing',
         isDragging && 'opacity-35',
         isMoving && !isDragging && 'opacity-60',
-        isOverlay && 'w-72 rotate-1 border-accent bg-surface shadow-lg',
       )}
     >
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-ink">{rosterStudentName(student)}</p>
           <p className="truncate text-xs text-muted">
-            Предыдущая группа: {student.previous_group_name ?? 'Новый ученик'}
+            {student.previous_group_name ? 'Предыдущая группа: ' + student.previous_group_name : 'Новый ученик'}
           </p>
         </div>
         <span className="shrink-0 rounded-md bg-surface px-1.5 py-0.5 font-mono text-xs text-accent-ink" title="Рейтинг">
           {Number.isInteger(student.rating) ? student.rating : student.rating.toFixed(1)}
         </span>
       </div>
-      {!isOverlay && onMove ? (
-        <Select
-          value=""
-          aria-label={'Переместить ' + rosterStudentName(student)}
-          className="mt-2 h-7 w-full text-xs"
-          disabled={isMoving}
-          onChange={(event) => {
-            const value = event.target.value
-            if (!value) return
-            const groupId = value === 'unallocated' ? null : Number(value)
-            const targetName = groupId === null ? 'Не распределены' : (groups.find((group) => group.id === groupId)?.name ?? 'группу')
-            onMove(groupId, targetName)
-          }}
-        >
-          <option value="">Переместить…</option>
-          <option value="unallocated">Не распределены</option>
-          {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-        </Select>
-      ) : null}
     </article>
   )
 }
