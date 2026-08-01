@@ -71,6 +71,7 @@ JOIN math_center_students mcs ON mcs.group_id = g.id
 JOIN users u ON u.id = mcs.user_id
 WHERE g.math_center_id = $1
   AND g.term_id = $2
+  AND mcs.term_id = $2
 ORDER BY g.name ASC, u.last_name ASC, u.first_name ASC, mcs.user_id ASC;
 `
 
