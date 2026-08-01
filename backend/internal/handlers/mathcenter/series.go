@@ -170,6 +170,10 @@ func seriesFromPublishRow(row store.PublishSeriesRow) store.MathCenterSeries {
 	return seriesFromColumns(row.ID, row.MathCenterID, row.Number, row.Name, row.DueAt, row.PdfObjectKey, row.PublishedAt, row.CreatedAt, row.TexSource)
 }
 
+func seriesFromSetPDFRow(row store.SetSeriesPDFRow) store.MathCenterSeries {
+	return seriesFromColumns(row.ID, row.MathCenterID, row.Number, row.Name, row.DueAt, row.PdfObjectKey, row.PublishedAt, row.CreatedAt, row.TexSource)
+}
+
 func seriesFromSetTexRow(row store.SetSeriesTexRow) store.MathCenterSeries {
 	return seriesFromColumns(row.ID, row.MathCenterID, row.Number, row.Name, row.DueAt, row.PdfObjectKey, row.PublishedAt, row.CreatedAt, row.TexSource)
 }
@@ -631,11 +635,10 @@ func IssuePDFUploadURL(database *db.DB, blobs objectstore.Store, uploadTTL time.
 	}
 }
 
-// FinalizePDFPublish — teacher-only. Stat-validates the just-uploaded
-// object (existence, content-type=application/pdf, size <= MaxPDFBytes),
-// then marks the series published. Rejecting an oversized or wrong-type
-// object before the row is updated keeps the series cache truthful: if
-// /publish returns 200, the bucket really has a PDF at that key.
+// FinalizePDFPublish — teacher-only. Stat-validates the just-uploaded object
+// (existence, content-type=application/pdf, size <= MaxPDFBytes), then attaches
+// it to the series. This finalizes the object upload only; draft visibility is
+// changed separately by PublishSeries.
 func FinalizePDFPublish(database *db.DB, blobs objectstore.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -695,19 +698,72 @@ func FinalizePDFPublish(database *db.DB, blobs objectstore.Store) http.HandlerFu
 		}
 
 		key := expectedKey
-		updated, err := q.PublishSeries(ctx, store.PublishSeriesParams{
+		updated, err := q.SetSeriesPDF(ctx, store.SetSeriesPDFParams{
 			ID:           series.ID,
 			PdfObjectKey: &key,
 		})
 		if err != nil {
-			logger.LogErrorContext(ctx, "series: mark published", err)
-			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to publish")
+			logger.LogErrorContext(ctx, "series: attach pdf", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to save pdf")
+			return
+		}
+
+		view, err := buildSeriesView(ctx, q, seriesFromSetPDFRow(updated))
+		if err != nil {
+			logger.LogErrorContext(ctx, "series: build view", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
+		httpx.WriteJSON(w, http.StatusOK, view)
+	}
+}
+
+// PublishSeries — teacher-only. A series remains a teacher-visible draft while
+// its metadata, statement and problem cards are assembled. Publication is the
+// single explicit transition that exposes it to students, and the SQL guard
+// requires both a statement (TeX or PDF) and at least one problem.
+func PublishSeries(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		userID, ok := requireUser(w, r)
+		if !ok {
+			return
+		}
+		seriesID, err := pathInt64(r, "seriesID")
+		if err != nil {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid series id")
+			return
+		}
+
+		q := store.New(database.Pool())
+		series, err := q.GetSeries(ctx, seriesID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "series not found")
+				return
+			}
+			logger.LogErrorContext(ctx, "series: get for publication", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
+		if !requireTeacher(ctx, w, r, q, userID, series.MathCenterID) {
+			return
+		}
+
+		updated, err := q.PublishSeries(ctx, series.ID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "add a statement and at least one problem before publishing")
+				return
+			}
+			logger.LogErrorContext(ctx, "series: publish", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to publish series")
 			return
 		}
 
 		view, err := buildSeriesView(ctx, q, seriesFromPublishRow(updated))
 		if err != nil {
-			logger.LogErrorContext(ctx, "series: build view", err)
+			logger.LogErrorContext(ctx, "series: build view after publication", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
@@ -784,9 +840,8 @@ type texPayload struct {
 
 // PutSeriesTex — teacher-only. Stores the raw LaTeX source on the series
 // row. Validates UTF-8, size cap, and the presence of \begin{document}
-// so we reject obviously-malformed input early. Editing the source for
-// an unpublished series flips the series to published (mirrors the PDF
-// publish flow); the column update is idempotent for re-saves.
+// so we reject obviously-malformed input early. Saving source does not publish
+// a draft; visibility changes only through PublishSeries.
 func PutSeriesTex(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -844,10 +899,8 @@ func PutSeriesTex(database *db.DB) http.HandlerFunc {
 	}
 }
 
-// DeleteSeriesTex — teacher-only. Clears the column. The series remains
-// published if it has a PDF; otherwise students will see no rendered
-// content but the row is preserved (the deletion of the whole series is
-// a separate endpoint).
+// DeleteSeriesTex — teacher-only. Clears the column without changing the
+// publication state. Deleting the whole series is a separate endpoint.
 func DeleteSeriesTex(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()

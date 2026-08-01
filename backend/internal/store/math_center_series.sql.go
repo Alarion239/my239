@@ -710,17 +710,17 @@ func (q *Queries) ListSubproblemsForSeriesIDs(ctx context.Context, seriesIds []i
 }
 
 const publishSeries = `-- name: PublishSeries :one
-UPDATE math_center_series
-SET pdf_object_key = $2,
-    published_at   = NOW()
-WHERE id = $1
+UPDATE math_center_series AS series
+SET published_at = COALESCE(series.published_at, NOW())
+WHERE series.id = $1
+  AND (series.tex_source IS NOT NULL OR series.pdf_object_key IS NOT NULL)
+  AND EXISTS (
+      SELECT 1
+      FROM math_center_problems problem
+      WHERE problem.series_id = series.id
+  )
 RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source
 `
-
-type PublishSeriesParams struct {
-	ID           int64   `json:"id"`
-	PdfObjectKey *string `json:"pdf_object_key"`
-}
 
 type PublishSeriesRow struct {
 	ID           int64      `json:"id"`
@@ -734,11 +734,10 @@ type PublishSeriesRow struct {
 	TexSource    *string    `json:"tex_source"`
 }
 
-// Sets the PDF object key and stamps published_at to NOW(). Used both for
-// first-time publishing and re-uploads (we just overwrite; the caller is
-// responsible for deleting the prior key first if needed).
-func (q *Queries) PublishSeries(ctx context.Context, arg PublishSeriesParams) (PublishSeriesRow, error) {
-	row := q.db.QueryRow(ctx, publishSeries, arg.ID, arg.PdfObjectKey)
+// Publication is explicit and only succeeds once the draft has both a
+// statement and at least one problem. COALESCE keeps repeat calls idempotent.
+func (q *Queries) PublishSeries(ctx context.Context, id int64) (PublishSeriesRow, error) {
+	row := q.db.QueryRow(ctx, publishSeries, id)
 	var i PublishSeriesRow
 	err := row.Scan(
 		&i.ID,
@@ -772,10 +771,51 @@ func (q *Queries) SetProblemNumber(ctx context.Context, arg SetProblemNumberPara
 	return err
 }
 
+const setSeriesPDF = `-- name: SetSeriesPDF :one
+UPDATE math_center_series
+SET pdf_object_key = $2
+WHERE id = $1
+RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source
+`
+
+type SetSeriesPDFParams struct {
+	ID           int64   `json:"id"`
+	PdfObjectKey *string `json:"pdf_object_key"`
+}
+
+type SetSeriesPDFRow struct {
+	ID           int64      `json:"id"`
+	MathCenterID int64      `json:"math_center_id"`
+	Number       int32      `json:"number"`
+	Name         string     `json:"name"`
+	DueAt        time.Time  `json:"due_at"`
+	PdfObjectKey *string    `json:"pdf_object_key"`
+	PublishedAt  *time.Time `json:"published_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+	TexSource    *string    `json:"tex_source"`
+}
+
+// Attaches or replaces a validated PDF without changing draft visibility.
+func (q *Queries) SetSeriesPDF(ctx context.Context, arg SetSeriesPDFParams) (SetSeriesPDFRow, error) {
+	row := q.db.QueryRow(ctx, setSeriesPDF, arg.ID, arg.PdfObjectKey)
+	var i SetSeriesPDFRow
+	err := row.Scan(
+		&i.ID,
+		&i.MathCenterID,
+		&i.Number,
+		&i.Name,
+		&i.DueAt,
+		&i.PdfObjectKey,
+		&i.PublishedAt,
+		&i.CreatedAt,
+		&i.TexSource,
+	)
+	return i, err
+}
+
 const setSeriesTex = `-- name: SetSeriesTex :one
 UPDATE math_center_series
-SET tex_source  = $2,
-    published_at = COALESCE(published_at, NOW())
+SET tex_source = $2
 WHERE id = $1
 RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source
 `
@@ -797,9 +837,7 @@ type SetSeriesTexRow struct {
 	TexSource    *string    `json:"tex_source"`
 }
 
-// Stores or replaces the raw LaTeX source. Also stamps published_at if
-// the series wasn't already published, mirroring the PDF publish flow:
-// a series with any rendered content is considered visible to students.
+// Stores or replaces the raw LaTeX source without changing draft visibility.
 func (q *Queries) SetSeriesTex(ctx context.Context, arg SetSeriesTexParams) (SetSeriesTexRow, error) {
 	row := q.db.QueryRow(ctx, setSeriesTex, arg.ID, arg.TexSource)
 	var i SetSeriesTexRow

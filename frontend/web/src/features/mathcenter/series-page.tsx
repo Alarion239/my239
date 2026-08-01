@@ -37,6 +37,7 @@ import { TeacherProblemStats } from './teacher-problem-stats'
 import { GraderQueue } from './grader-queue'
 import { OfflineGradingTab } from './offline-grading-tab'
 import { UploadSeriesDialog } from './upload-series-dialog'
+import { SeriesDraftEditor } from './series-draft-editor'
 import { useSeriesContext } from './use-series-context'
 import { useCenterIdContext, useCenterTermContext } from './center-id-context'
 
@@ -217,7 +218,6 @@ function CenterSeries({
   }
 
   const allowedTabs = isStudentView ? STUDENT_TAB_IDS : TEACHER_TAB_IDS
-  const defaultTab = allowedTabs[0]
   // Pre-fill the next series number: one past the highest existing number.
   const nextNumber =
     list.length > 0 ? Math.max(...list.map((s) => s.number)) + 1 : 1
@@ -251,6 +251,7 @@ function CenterSeries({
   const seriesIdNum = seriesIdParam ? Number(seriesIdParam) : 0
   const selected =
     list.find((s) => s.id === seriesIdNum) ?? current ?? list[0]
+  const defaultTab = !isStudentView && !selected.published ? 'statement' : allowedTabs[0]
   if (!seriesIdParam || !list.some((s) => s.id === seriesIdNum)) {
     return (
       <Navigate
@@ -260,7 +261,8 @@ function CenterSeries({
     )
   }
   // Validate the tab against this view's allowed set; default-redirect on miss.
-  const activeTab = (allowedTabs as readonly string[]).includes(tab ?? '')
+  const activeTab = (allowedTabs as readonly string[]).includes(tab ?? '') &&
+    (isStudentView || selected.published || tab === 'statement')
     ? (tab as string)
     : null
   if (!activeTab) {
@@ -309,6 +311,8 @@ function CenterSeries({
           tab={activeTab as StudentTab}
           termSearch={termSearch}
         />
+      ) : !selected.published ? (
+        <SeriesDraftEditor centerId={centerId} series={selected} />
       ) : (
         // Teachers get Очередь / Условие / Разбор / Очно as full-width tabs;
         // разбор carries the statistics + coffin handling, while the

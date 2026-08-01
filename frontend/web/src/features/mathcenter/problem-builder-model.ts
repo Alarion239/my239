@@ -10,11 +10,8 @@ export interface ProblemDraft {
   subproblem_count: number
 }
 
-// Slider bounds for the number of problems. A session has at most a dozen
-// problems; the default of 8 matches a typical series.
-export const MIN_PROBLEMS = 1
+// A draft series can start empty and grow one neutral card at a time.
 export const MAX_PROBLEMS = 12
-export const DEFAULT_PROBLEMS = 8
 
 // seedProblems builds a fresh list of `n` single-part problems numbered 1..n.
 export function seedProblems(n: number): ProblemDraft[] {

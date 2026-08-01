@@ -102,10 +102,11 @@ export function SeriesStrip({
                   Серия {s.number}
                 </span>
                 <div className="flex items-center gap-1.5">
-                  {showQueueNotifications ? (
+                  {showQueueNotifications && s.published ? (
                     <SeriesQueueBadge seriesId={s.id} />
                   ) : null}
                   {isCurrent ? <Badge variant="accent">Текущая</Badge> : null}
+                  {!s.published ? <Badge>Черновик</Badge> : null}
                 </div>
               </div>
               <span className="line-clamp-2 text-sm text-muted">{s.name}</span>

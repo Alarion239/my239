@@ -77,6 +77,7 @@ func Router(database *db.DB, hub *live.Hub, tokens *internalAuth.TokenService, b
 		r.Get("/", GetSeries(database))
 		r.Put("/", UpdateSeries(database))
 		r.Delete("/", DeleteSeries(database, blobs))
+		r.Post("/publish", PublishSeries(database))
 		r.Post("/pdf/upload-url", IssuePDFUploadURL(database, blobs, uploadTTL))
 		r.Post("/pdf/publish", FinalizePDFPublish(database, blobs))
 		r.Get("/pdf", DownloadSeriesPDF(database, blobs, downloadTTL))

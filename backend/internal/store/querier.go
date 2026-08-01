@@ -212,10 +212,9 @@ type Querier interface {
 	LockMathCenterForLikbezNumbering(ctx context.Context, id int64) (int64, error)
 	NextLikbezNumber(ctx context.Context, mathCenterID int64) (int32, error)
 	PublishLikbez(ctx context.Context, id int64) (MathCenterLikbez, error)
-	// Sets the PDF object key and stamps published_at to NOW(). Used both for
-	// first-time publishing and re-uploads (we just overwrite; the caller is
-	// responsible for deleting the prior key first if needed).
-	PublishSeries(ctx context.Context, arg PublishSeriesParams) (PublishSeriesRow, error)
+	// Publication is explicit and only succeeds once the draft has both a
+	// statement and at least one problem. COALESCE keeps repeat calls idempotent.
+	PublishSeries(ctx context.Context, id int64) (PublishSeriesRow, error)
 	ReleaseClaim(ctx context.Context, arg ReleaseClaimParams) (int64, error)
 	RemoveActiveStudentByUser(ctx context.Context, arg RemoveActiveStudentByUserParams) (int64, error)
 	RemoveStudent(ctx context.Context, id int64) (int64, error)
@@ -246,9 +245,9 @@ type Querier interface {
 	// Renumber a problem in place (used by the diff-based series update so existing
 	// problems keep their id — and thus their subproblems/threads/разборы/coffins).
 	SetProblemNumber(ctx context.Context, arg SetProblemNumberParams) error
-	// Stores or replaces the raw LaTeX source. Also stamps published_at if
-	// the series wasn't already published, mirroring the PDF publish flow:
-	// a series with any rendered content is considered visible to students.
+	// Attaches or replaces a validated PDF without changing draft visibility.
+	SetSeriesPDF(ctx context.Context, arg SetSeriesPDFParams) (SetSeriesPDFRow, error)
+	// Stores or replaces the raw LaTeX source without changing draft visibility.
 	SetSeriesTex(ctx context.Context, arg SetSeriesTexParams) (SetSeriesTexRow, error)
 	SetStudentGroup(ctx context.Context, arg SetStudentGroupParams) (int64, error)
 	SetStudentRazborAccess(ctx context.Context, arg SetStudentRazborAccessParams) (int64, error)

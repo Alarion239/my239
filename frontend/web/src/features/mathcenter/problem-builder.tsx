@@ -1,17 +1,14 @@
-import { Minus, Plus } from 'lucide-react'
+import { useState } from 'react'
+import { Check, Minus, Pencil, Plus, Trash2 } from 'lucide-react'
 import { MAX_SUBPARTS } from '@my239/shared'
 import { cn } from '../../design/cn'
-import { MAX_PROBLEMS, MIN_PROBLEMS, type ProblemDraft } from './problem-builder-model'
+import { Button } from '../../design/ui'
+import { MAX_PROBLEMS, type ProblemDraft } from './problem-builder-model'
 
-// renumber rewrites only regular positional numbers to 1..N. The optional
-// exercise is kept outside this sequence so changing the slider cannot rename
-// or delete it.
 function renumber(problems: ProblemDraft[]): ProblemDraft[] {
-  return problems.map((p, i) => ({ ...p, number: i + 1 }))
+  return problems.map((problem, index) => ({ ...problem, number: index + 1 }))
 }
 
-// subpartHint reads the resulting subpart letters back to the teacher: "a–c"
-// for three parts, or a hint that there are none.
 function subpartHint(count: number, prefix = ''): string {
   if (count <= 0) return 'без подзадач'
   if (count === 1) return 'подзадача ' + prefix + 'a'
@@ -21,196 +18,197 @@ function subpartHint(count: number, prefix = ''): string {
 export interface ProblemBuilderProps {
   value: ProblemDraft[]
   onChange: (next: ProblemDraft[]) => void
+  disabled?: boolean
 }
 
-// ProblemBuilder is the optional exercise toggle plus the regular-problem
-// slider and per-problem steppers. Growth and shrink happen at the regular tail,
-// so the exercise and leading regular problems survive edits with their ids.
-export function ProblemBuilder({ value, onChange }: ProblemBuilderProps) {
-  const exercise = value.find((p) => p.number === 0)
-  const regular = value.filter((p) => p.number !== 0)
-  // Never let the slider's upper bound silently drop existing regular problems.
-  const sliderMax = Math.max(MAX_PROBLEMS, regular.length)
+// Problems are created as individual cards, matching the editing rhythm of the
+// razbor workbench without importing grading colours or coffin affordances.
+export function ProblemBuilder({ value, onChange, disabled = false }: ProblemBuilderProps) {
+  const [editingKey, setEditingKey] = useState<string | null>(null)
+  const exercise = value.find((problem) => problem.number === 0)
+  const regular = value.filter((problem) => problem.number !== 0)
 
-  const setExercise = (enabled: boolean) => {
-    if (enabled) {
-      onChange([
-        { number: 0, subproblem_count: 0 },
-        ...renumber(regular),
-      ])
-    } else {
-      onChange(renumber(regular))
-    }
+  const keyFor = (problem: ProblemDraft) =>
+    problem.id ? 'id-' + problem.id : 'number-' + problem.number
+
+  const updateSubparts = (problem: ProblemDraft, count: number) => {
+    const clamped = Math.max(0, Math.min(MAX_SUBPARTS, count))
+    onChange(value.map((candidate) =>
+      candidate === problem ? { ...candidate, subproblem_count: clamped } : candidate,
+    ))
   }
 
-  const setCount = (n: number) => {
-    const next = Math.max(MIN_PROBLEMS, Math.min(sliderMax, n))
-    if (next === regular.length) return
-    let nextRegular: ProblemDraft[]
-    if (next > regular.length) {
-      const added = Array.from({ length: next - regular.length }, () => ({
-        number: 0,
-        subproblem_count: 0,
-      }))
-      nextRegular = [...regular, ...added]
-    } else {
-      nextRegular = regular.slice(0, next)
-    }
-    onChange([...(exercise ? [exercise] : []), ...renumber(nextRegular)])
+  const remove = (problem: ProblemDraft) => {
+    const remaining = value.filter((candidate) => candidate !== problem)
+    const remainingExercise = remaining.find((candidate) => candidate.number === 0)
+    const remainingRegular = renumber(remaining.filter((candidate) => candidate.number !== 0))
+    onChange([...(remainingExercise ? [remainingExercise] : []), ...remainingRegular])
+    setEditingKey(null)
   }
 
-  const setSubcount = (problem: ProblemDraft, n: number) => {
-    const clamped = Math.max(0, Math.min(MAX_SUBPARTS, n))
-    onChange(value.map((p) => (p === problem ? { ...p, subproblem_count: clamped } : p)))
+  const addProblem = () => {
+    if (regular.length >= MAX_PROBLEMS) return
+    onChange([
+      ...(exercise ? [exercise] : []),
+      ...regular,
+      { number: regular.length + 1, subproblem_count: 0 },
+    ])
+    setEditingKey('number-' + (regular.length + 1))
+  }
+
+  const addExercise = () => {
+    if (exercise) return
+    onChange([{ number: 0, subproblem_count: 0 }, ...renumber(regular)])
+    setEditingKey('number-0')
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="rounded-lg border border-accent/30 bg-accent-soft/50 px-3 py-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-sm font-medium text-accent-ink">Упражнение</div>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={!!exercise}
-            aria-label={exercise ? 'Убрать упражнение' : 'Добавить упражнение'}
-            onClick={() => setExercise(!exercise)}
-            className={cn(
-              'relative inline-flex h-6 w-10 shrink-0 rounded-full border transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-              exercise ? 'border-accent bg-accent' : 'border-line-strong bg-surface-muted',
-            )}
-          >
-            <span
-              aria-hidden="true"
-              className={cn(
-                'absolute top-0.5 h-5 w-5 rounded-full transition-transform',
-                exercise ? 'translate-x-4 bg-white' : 'translate-x-0.5 bg-faint',
-              )}
-            />
-          </button>
+    <div className="flex flex-col gap-3">
+      {value.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-line-strong px-4 py-8 text-center text-sm text-muted">
+          Задач пока нет
         </div>
-        {exercise ? (
-          <ProblemRow
-            problem={exercise}
-            label="Упражнение"
-            subpartPrefix="У"
-            removeTarget="упражнения"
-            addTarget="упражнению"
-            onMinus={() => setSubcount(exercise, exercise.subproblem_count - 1)}
-            onPlus={() => setSubcount(exercise, exercise.subproblem_count + 1)}
-          />
-        ) : null}
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-baseline justify-between">
-          <label htmlFor="problem-count" className="text-sm font-medium text-ink">
-            Сколько задач
-          </label>
-          <span className="text-sm font-semibold text-ink tabular-nums">{regular.length}</span>
-        </div>
-        <input
-          id="problem-count"
-          type="range"
-          min={MIN_PROBLEMS}
-          max={sliderMax}
-          value={regular.length}
-          onChange={(e) => setCount(Number(e.target.value))}
-          aria-label="Количество задач"
-          className="w-full accent-accent"
-        />
-      </div>
+      ) : null}
 
       <ul className="flex flex-col gap-2">
-        {regular.map((p) => (
-          <ProblemRow
-            key={p.id ?? 'new-' + p.number}
-            problem={p}
-            label={'Задача ' + p.number}
-            removeTarget={'задачи ' + p.number}
-            addTarget={'задаче ' + p.number}
-            onMinus={() => setSubcount(p, p.subproblem_count - 1)}
-            onPlus={() => setSubcount(p, p.subproblem_count + 1)}
-          />
-        ))}
+        {[...(exercise ? [exercise] : []), ...regular].map((problem) => {
+          const key = keyFor(problem)
+          const isExercise = problem.number === 0
+          const label = isExercise ? 'Упражнение' : 'Задача ' + problem.number
+          const target = isExercise ? 'упражнение' : 'задачу ' + problem.number
+          const targetGenitive = isExercise ? 'упражнения' : 'задачи ' + problem.number
+          const targetDative = isExercise ? 'упражнению' : 'задаче ' + problem.number
+          const prefix = isExercise ? 'У' : ''
+          const editing = editingKey === key
+          return (
+            <li key={key} className="rounded-xl border border-line bg-surface px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-display text-base font-medium text-ink">{label}</p>
+                  <p className="text-xs text-faint">
+                    {subpartHint(problem.subproblem_count, prefix)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <IconButton
+                    label={editing ? 'Закончить редактирование' : 'Редактировать ' + target}
+                    disabled={disabled}
+                    onClick={() => setEditingKey(editing ? null : key)}
+                  >
+                    {editing ? <Check className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+                  </IconButton>
+                  <IconButton
+                    label={'Удалить ' + target}
+                    disabled={disabled}
+                    danger
+                    onClick={() => remove(problem)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </IconButton>
+                </div>
+              </div>
+              {editing ? (
+                <div className="mt-3 flex items-center justify-between border-t border-line pt-3">
+                  <span className="text-sm text-muted">Подзадачи</span>
+                  <div className="flex items-center gap-1.5">
+                    <Stepper
+                      label={'Убрать подзадачу у ' + targetGenitive}
+                      disabled={disabled || problem.subproblem_count <= 0}
+                      onClick={() => updateSubparts(problem, problem.subproblem_count - 1)}
+                    >
+                      <Minus className="h-4 w-4" />
+                    </Stepper>
+                    <span className="w-7 text-center text-sm font-medium tabular-nums text-ink">
+                      {problem.subproblem_count}
+                    </span>
+                    <Stepper
+                      label={'Добавить подзадачу к ' + targetDative}
+                      disabled={disabled || problem.subproblem_count >= MAX_SUBPARTS}
+                      onClick={() => updateSubparts(problem, problem.subproblem_count + 1)}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Stepper>
+                  </div>
+                </div>
+              ) : null}
+            </li>
+          )
+        })}
       </ul>
+
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          onClick={addProblem}
+          disabled={disabled || regular.length >= MAX_PROBLEMS}
+        >
+          <Plus className="mr-1.5 h-4 w-4" aria-hidden />
+          Добавить задачу
+        </Button>
+        {!exercise ? (
+          <Button type="button" size="sm" variant="ghost" onClick={addExercise} disabled={disabled}>
+            <Plus className="mr-1.5 h-4 w-4" aria-hidden />
+            Добавить упражнение
+          </Button>
+        ) : null}
+      </div>
     </div>
   )
 }
 
-function ProblemRow({
-  problem,
+function IconButton({
   label,
-  subpartPrefix,
-  removeTarget,
-  addTarget,
-  onMinus,
-  onPlus,
-}: {
-  problem: ProblemDraft
-  label: string
-  subpartPrefix?: string
-  removeTarget: string
-  addTarget: string
-  onMinus: () => void
-  onPlus: () => void
-}) {
-  return (
-    <li className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-line bg-surface px-3 py-2">
-      <div className="min-w-0">
-        <span className="text-sm font-medium text-ink">{label}</span>
-        <span className="ml-2 text-xs text-faint">
-          {subpartHint(problem.subproblem_count, subpartPrefix)}
-        </span>
-      </div>
-      <div className="flex items-center gap-1.5">
-        <Stepper
-          ariaLabel={'Убрать подзадачу у ' + removeTarget}
-          onClick={onMinus}
-          disabled={problem.subproblem_count <= 0}
-          icon={<Minus className="h-4 w-4" aria-hidden />}
-        />
-        <span className="w-6 text-center text-sm font-medium text-ink tabular-nums">
-          {problem.subproblem_count}
-        </span>
-        <Stepper
-          ariaLabel={'Добавить подзадачу к ' + addTarget}
-          onClick={onPlus}
-          disabled={problem.subproblem_count >= MAX_SUBPARTS}
-          icon={<Plus className="h-4 w-4" aria-hidden />}
-        />
-      </div>
-    </li>
-  )
-}
-
-function Stepper({
-  ariaLabel,
-  onClick,
   disabled,
-  icon,
+  danger = false,
+  onClick,
+  children,
 }: {
-  ariaLabel: string
-  onClick: () => void
+  label: string
   disabled: boolean
-  icon: React.ReactNode
+  danger?: boolean
+  onClick: () => void
+  children: React.ReactNode
 }) {
   return (
     <button
       type="button"
-      aria-label={ariaLabel}
-      onClick={onClick}
+      aria-label={label}
+      title={label}
       disabled={disabled}
+      onClick={onClick}
       className={cn(
-        'inline-flex h-8 w-8 items-center justify-center rounded-lg border border-line-strong bg-surface text-ink transition-colors',
-        'hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-        'disabled:cursor-not-allowed disabled:opacity-40',
+        'inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-40',
+        danger ? 'hover:bg-danger-soft hover:text-danger' : 'hover:bg-surface-muted hover:text-ink',
       )}
     >
-      {icon}
+      {children}
+    </button>
+  )
+}
+
+function Stepper({
+  label,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string
+  disabled: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-line-strong bg-surface text-ink transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-40"
+    >
+      {children}
     </button>
   )
 }

@@ -69,14 +69,25 @@ SET number = $2,
 WHERE id = $1
 RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source;
 
--- name: PublishSeries :one
--- Sets the PDF object key and stamps published_at to NOW(). Used both for
--- first-time publishing and re-uploads (we just overwrite; the caller is
--- responsible for deleting the prior key first if needed).
+-- name: SetSeriesPDF :one
+-- Attaches or replaces a validated PDF without changing draft visibility.
 UPDATE math_center_series
-SET pdf_object_key = $2,
-    published_at   = NOW()
+SET pdf_object_key = $2
 WHERE id = $1
+RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source;
+
+-- name: PublishSeries :one
+-- Publication is explicit and only succeeds once the draft has both a
+-- statement and at least one problem. COALESCE keeps repeat calls idempotent.
+UPDATE math_center_series AS series
+SET published_at = COALESCE(series.published_at, NOW())
+WHERE series.id = $1
+  AND (series.tex_source IS NOT NULL OR series.pdf_object_key IS NOT NULL)
+  AND EXISTS (
+      SELECT 1
+      FROM math_center_problems problem
+      WHERE problem.series_id = series.id
+  )
 RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source;
 
 -- name: DeleteSeries :execrows
@@ -85,12 +96,9 @@ FROM math_center_series
 WHERE id = $1;
 
 -- name: SetSeriesTex :one
--- Stores or replaces the raw LaTeX source. Also stamps published_at if
--- the series wasn't already published, mirroring the PDF publish flow:
--- a series with any rendered content is considered visible to students.
+-- Stores or replaces the raw LaTeX source without changing draft visibility.
 UPDATE math_center_series
-SET tex_source  = $2,
-    published_at = COALESCE(published_at, NOW())
+SET tex_source = $2
 WHERE id = $1
 RETURNING id, math_center_id, number, name, due_at, pdf_object_key, published_at, created_at, tex_source;
 

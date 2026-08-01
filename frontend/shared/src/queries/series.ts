@@ -134,7 +134,8 @@ export function useDeleteSeries(centerId: number) {
   })
 }
 
-// usePutSeriesTex replaces the series LaTeX source (the backend auto-publishes).
+// usePutSeriesTex replaces the series LaTeX source without changing its draft
+// or published state. Publishing is always an explicit teacher action.
 export function usePutSeriesTex(seriesId: number) {
   const client = useApiClient()
   const qc = useQueryClient()
@@ -177,7 +178,7 @@ export function useDeleteSeriesTex(seriesId: number) {
 
 // useUploadSeriesPdf orchestrates the three-step PDF upload: ask for a presigned
 // URL, PUT the bytes straight to storage (raw — NO auth/act-as headers, that
-// request leaves our API), then publish the object key. Returns the updated
+// request leaves our API), then attach the object key. Returns the updated
 // series. `file` is any BodyInit accepted by fetch (Blob/File/ArrayBuffer).
 export function useUploadSeriesPdf(seriesId: number) {
   const client = useApiClient()
@@ -201,6 +202,26 @@ export function useUploadSeriesPdf(seriesId: number) {
         { method: 'POST', body: { object_key } },
       )
     },
+    onSuccess: (updated) => {
+      qc.invalidateQueries({ queryKey: queryKeys.series(seriesId) })
+      qc.invalidateQueries({
+        queryKey: ['mathcenter', 'centers', updated.math_center_id],
+      })
+      qc.invalidateQueries({ queryKey: queryKeys.manageRosterBoard(updated.math_center_id) })
+    },
+  })
+}
+
+// usePublishSeries makes a complete draft visible to students. The backend
+// atomically requires both a statement and at least one problem.
+export function usePublishSeries(seriesId: number) {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () =>
+      client.request<Series>('/mathcenter/series/' + seriesId + '/publish', {
+        method: 'POST',
+      }),
     onSuccess: (updated) => {
       qc.invalidateQueries({ queryKey: queryKeys.series(seriesId) })
       qc.invalidateQueries({

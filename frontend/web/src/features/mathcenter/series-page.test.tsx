@@ -140,14 +140,14 @@ function json(body: unknown, status = 200) {
   })
 }
 
-function mockFetch(me: MeResponse, user: User) {
+function mockFetch(me: MeResponse, user: User, listedSeries: Series[] = seriesList) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString()
       if (url.includes('/auth/me')) return json(user)
       if (url.includes('/mathcenter/me')) return json(me)
-      if (url.includes('/mathcenter/centers/' + CENTER_ID + '/series')) return json(seriesList)
+      if (url.includes('/mathcenter/centers/' + CENTER_ID + '/series')) return json(listedSeries)
       if (url.includes('/homework/series/' + SERIES_ID + '/my')) return json(studentRollup)
       if (url.includes('/homework/series/' + SERIES_ID + '/problem-stats')) return json(problemStats)
       return json([])
@@ -222,6 +222,42 @@ describe('SeriesPage — student view', () => {
 })
 
 describe('SeriesPage — teacher view', () => {
+  it('opens an unpublished series in the draft editor', async () => {
+    const me: MeResponse = {
+      teacher: {
+        centers: [{
+          id: CENTER_ID,
+          graduation_year: GRAD_YEAR,
+          grade: 9,
+          is_head_teacher: true,
+          teachers: [],
+          groups: [],
+        }],
+      },
+    }
+    const draft: Series = {
+      id: 55,
+      math_center_id: CENTER_ID,
+      term_id: 9,
+      number: 3,
+      name: 'Геометрия',
+      display_name: 'Серия 3. Геометрия',
+      due_at: '2999-02-01T00:00:00Z',
+      published: false,
+      has_pdf: false,
+      has_tex: false,
+      problems: [],
+    }
+    mockFetch(me, makeUser(), [...seriesList, draft])
+    renderPage('/mathcenter/' + GRAD_YEAR + '/series/55/statement?term_id=9')
+
+    expect(await screen.findByText('Черновик · серия 3')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Введите условие и формулы без преамбулы…')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Добавить задачу' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeDisabled()
+    expect(screen.queryByRole('tablist', { name: 'Раздел проверки' })).not.toBeInTheDocument()
+  })
+
   it('renders stat counts and the "Создать серию" card', async () => {
     const me: MeResponse = {
       teacher: {
