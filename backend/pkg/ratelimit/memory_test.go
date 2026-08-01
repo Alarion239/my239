@@ -57,6 +57,22 @@ func TestMemory_PerKeyIsolation(t *testing.T) {
 	}
 }
 
+func TestMemory_AllowKeyIsolatesArbitrarySubjects(t *testing.T) {
+	m := NewMemory()
+	for range 2 {
+		allowed, _, err := m.AllowKey(t.Context(), "telegram", "user-1", 2, 60)
+		if err != nil || !allowed {
+			t.Fatalf("user-1 attempt: allowed=%v err=%v", allowed, err)
+		}
+	}
+	if allowed, _, _ := m.AllowKey(t.Context(), "telegram", "user-1", 2, 60); allowed {
+		t.Fatal("user-1 should be over the limit")
+	}
+	if allowed, _, _ := m.AllowKey(t.Context(), "telegram", "user-2", 2, 60); !allowed {
+		t.Fatal("user-2 should have an independent bucket")
+	}
+}
+
 func TestMemory_WindowResets(t *testing.T) {
 	m := NewMemory()
 	t0 := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)

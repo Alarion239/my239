@@ -18,6 +18,7 @@
 package ratelimit
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"strconv"
@@ -32,6 +33,11 @@ type Limiter interface {
 	// Allow reports whether the request should be served. retryAfter is the
 	// number of seconds the client should back off when allowed=false.
 	Allow(r *http.Request, key string, limit int, windowSeconds int) (allowed bool, retryAfter int, err error)
+	// AllowKey applies the same fixed-window policy to a caller-supplied stable
+	// identity instead of an HTTP client IP. Webhook consumers use this for
+	// Telegram user IDs, where every request originates from Telegram's shared
+	// infrastructure address.
+	AllowKey(ctx context.Context, key, subject string, limit int, windowSeconds int) (allowed bool, retryAfter int, err error)
 
 	// Middleware returns an http middleware that calls Allow and rejects
 	// over-quota requests with 429 + Retry-After header.

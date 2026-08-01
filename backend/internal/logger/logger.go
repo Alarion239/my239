@@ -5,11 +5,13 @@ package logger
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 )
@@ -20,7 +22,28 @@ import (
 var (
 	logger atomic.Pointer[slog.Logger]
 	once   sync.Once
+	sink   atomic.Pointer[alertSinkHolder]
 )
+
+// AlertEvent is the immutable, stringified snapshot of an error-level log
+// record handed to an asynchronous alert sink. Stringifying at the logging
+// boundary prevents later mutation of an arbitrary slog.Any value from
+// changing what the notifier eventually sends.
+type AlertEvent struct {
+	Time    time.Time
+	Level   slog.Level
+	Message string
+	Attrs   map[string]string
+}
+
+// AlertSink receives error-level records asynchronously. Implementations must
+// return quickly and must not log an error through this package, or they could
+// recursively enqueue their own delivery failures.
+type AlertSink interface {
+	Enqueue(AlertEvent)
+}
+
+type alertSinkHolder struct{ sink AlertSink }
 
 // Init initializes the global logger. It's safe to call more than once; only
 // the first call takes effect. If it's never called, LogInfo/LogError/etc.
@@ -36,12 +59,144 @@ func Init() {
 			Level:     level,
 			AddSource: level <= slog.LevelDebug,
 		})
-		l := slog.New(&contextHandler{Handler: handler})
+		l := slog.New(&contextHandler{Handler: &alertHandler{Handler: handler}})
 		logger.Store(l)
 		// Route the stdlib default through the same handler so library code
 		// (and packages that must not import this one) logs consistently.
 		slog.SetDefault(l)
 	})
+}
+
+// SetAlertSink attaches the optional asynchronous error sink. It is safe to
+// call while requests are being served; the active logger reads the pointer
+// atomically for every record.
+func SetAlertSink(s AlertSink) {
+	Init()
+	if s == nil {
+		sink.Store(nil)
+		return
+	}
+	sink.Store(&alertSinkHolder{sink: s})
+}
+
+// FlushAlerts gives an optional sink a bounded opportunity to deliver queued
+// events before a process exits. It is intentionally a no-op when alerts are
+// disabled or the sink does not implement AlertFlusher.
+func FlushAlerts(ctx context.Context) {
+	if holder := sink.Load(); holder != nil {
+		if f, ok := holder.sink.(interface{ Flush(context.Context) }); ok {
+			f.Flush(ctx)
+		}
+	}
+}
+
+// ShutdownAlerts stops an optional sink after FlushAlerts has been given its
+// delivery window.
+func ShutdownAlerts() {
+	if holder := sink.Load(); holder != nil {
+		if s, ok := holder.sink.(interface{ Close() }); ok {
+			s.Close()
+		}
+		sink.Store(nil)
+	}
+}
+
+// alertHandler fans records to the ordinary structured logger and then makes
+// an immutable copy for the optional alert sink. The stdout handler remains the
+// source of truth even when Telegram is disabled or unavailable.
+type alertBoundAttr struct {
+	prefix string
+	attr   slog.Attr
+}
+
+type alertHandler struct {
+	slog.Handler
+	group string
+	attrs []alertBoundAttr
+}
+
+func (h *alertHandler) Handle(ctx context.Context, r slog.Record) error {
+	err := h.Handler.Handle(ctx, r)
+	if r.Level < slog.LevelError {
+		return err
+	}
+	if holder := sink.Load(); holder != nil && holder.sink != nil {
+		if event, ok := safeSnapshot(r); ok {
+			for _, bound := range h.attrs {
+				addAttr(event.Attrs, bound.prefix, bound.attr)
+			}
+			holder.sink.Enqueue(event)
+		}
+	}
+	return err
+}
+
+func (h *alertHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	bound := append([]alertBoundAttr(nil), h.attrs...)
+	for _, attr := range attrs {
+		bound = append(bound, alertBoundAttr{prefix: h.group, attr: attr})
+	}
+	return &alertHandler{Handler: h.Handler.WithAttrs(attrs), group: h.group, attrs: bound}
+}
+
+func (h *alertHandler) WithGroup(name string) slog.Handler {
+	group := h.group
+	if group == "" {
+		group = name
+	} else if name != "" {
+		group += "." + name
+	}
+	return &alertHandler{Handler: h.Handler.WithGroup(name), group: group, attrs: h.attrs}
+}
+
+func safeSnapshot(r slog.Record) (event AlertEvent, ok bool) {
+	defer func() {
+		if recover() != nil {
+			event = AlertEvent{}
+			ok = false
+		}
+	}()
+	return snapshot(r), true
+}
+
+func snapshot(r slog.Record) AlertEvent {
+	attrs := make(map[string]string)
+	r.Attrs(func(a slog.Attr) bool {
+		addAttr(attrs, "", a)
+		return true
+	})
+	return AlertEvent{
+		Time:    r.Time,
+		Level:   r.Level,
+		Message: r.Message,
+		Attrs:   attrs,
+	}
+}
+
+func addAttr(dst map[string]string, prefix string, attr slog.Attr) {
+	key := attr.Key
+	if prefix != "" {
+		if key == "" {
+			key = prefix
+		} else {
+			key = prefix + "." + key
+		}
+	}
+	value := attr.Value.Resolve()
+	if value.Kind() == slog.KindGroup {
+		for _, child := range value.Group() {
+			addAttr(dst, key, child)
+		}
+		return
+	}
+	if key == "" {
+		return
+	}
+	if value.Kind() == slog.KindAny {
+		dst[key] = fmt.Sprint(value.Any())
+		return
+	}
+	dst[key] = value.String()
 }
 
 // contextHandler enriches every record with the chi request ID found in the
@@ -57,6 +212,14 @@ func (h *contextHandler) Handle(ctx context.Context, r slog.Record) error {
 		r.AddAttrs(slog.String("request_id", id))
 	}
 	return h.Handler.Handle(ctx, r)
+}
+
+func (h *contextHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &contextHandler{Handler: h.Handler.WithAttrs(attrs)}
+}
+
+func (h *contextHandler) WithGroup(name string) slog.Handler {
+	return &contextHandler{Handler: h.Handler.WithGroup(name)}
 }
 
 func parseLevel(s string) slog.Level {

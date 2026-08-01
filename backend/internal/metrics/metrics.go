@@ -24,6 +24,36 @@ var (
 		Name: "http_requests_total",
 		Help: "Total number of HTTP requests.",
 	}, []string{"method", "route", "status"})
+
+	TelegramAlertEvents = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "telegram_alert_events_total",
+		Help: "Number of structured error and fatal events captured for Telegram delivery.",
+	}, []string{"kind"})
+
+	TelegramAlertDeliveries = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "telegram_alert_deliveries_total",
+		Help: "Number of Telegram alert delivery outcomes.",
+	}, []string{"result"})
+
+	TelegramAlertQueueDepth = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "telegram_alert_queue_depth",
+		Help: "Current number of queued Telegram alert events.",
+	})
+
+	TelegramAlertRetries = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "telegram_alert_retries_total",
+		Help: "Number of Telegram alert delivery retries.",
+	})
+
+	TelegramAlertDisabledSubscriptions = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "telegram_alert_disabled_subscriptions_total",
+		Help: "Number of Telegram subscriptions disabled after permanent delivery failure.",
+	})
+
+	TelegramAlertDropped = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "telegram_alert_dropped_total",
+		Help: "Number of Telegram alert events dropped after queue or retry exhaustion.",
+	})
 )
 
 // Handler serves the registered collectors in the Prometheus text format.

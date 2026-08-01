@@ -1,6 +1,7 @@
 package ratelimit
 
 import (
+	"context"
 	"net/http"
 	"sync"
 	"time"
@@ -40,9 +41,14 @@ func NewMemory() *Memory {
 }
 
 func (m *Memory) Allow(r *http.Request, key string, limit int, windowSeconds int) (bool, int, error) {
+	return m.AllowKey(r.Context(), key, clientIP(r), limit, windowSeconds)
+}
+
+// AllowKey applies a bucket to an arbitrary stable subject.
+func (m *Memory) AllowKey(_ context.Context, key, subject string, limit int, windowSeconds int) (bool, int, error) {
 	now := m.now()
 	bucketStart := now.Truncate(time.Duration(windowSeconds) * time.Second)
-	bucketKey := key + ":" + clientIP(r) + ":" + bucketStart.UTC().Format(time.RFC3339)
+	bucketKey := key + ":" + subject + ":" + bucketStart.UTC().Format(time.RFC3339)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()

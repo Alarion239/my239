@@ -6,8 +6,10 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -17,9 +19,10 @@ type Config struct {
 	Port        string
 	FrontendURL string
 
-	JWT          JWTConfig
-	S3           S3Config
-	GoogleSheets GoogleSheetsConfig
+	JWT            JWTConfig
+	S3             S3Config
+	GoogleSheets   GoogleSheetsConfig
+	TelegramAlerts TelegramAlertsConfig
 }
 
 // GoogleSheetsConfig is optional so local development and deployments that do
@@ -27,6 +30,22 @@ type Config struct {
 // configuration; it is never persisted or returned by an API.
 type GoogleSheetsConfig struct {
 	ServiceAccountJSON string
+}
+
+// TelegramAlertsConfig contains the optional Telegram error-alert integration.
+// The bot token and enrollment password are kept in process memory only; they
+// are never persisted or returned by an API.
+type TelegramAlertsConfig struct {
+	BotToken          string
+	SubscribePassword string
+	WebhookSecret     string
+	WebhookURL        string
+	Environment       string
+}
+
+// Enabled reports whether Telegram alerts have been configured.
+func (c TelegramAlertsConfig) Enabled() bool {
+	return c.BotToken != ""
 }
 
 // JWTConfig groups all JWT-related settings so handler code can pass it
@@ -133,6 +152,11 @@ func Load() (*Config, error) {
 		return nil, errors.New("S3_BUCKET set but S3_ACCESS_KEY_ID/S3_SECRET_ACCESS_KEY missing")
 	}
 
+	telegramAlerts, err := loadTelegramAlerts(frontendURL)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Config{
 		DatabaseURL: databaseURL,
 		RedisURL:    redisURL,
@@ -155,8 +179,48 @@ func Load() (*Config, error) {
 			DownloadTTL:     time.Duration(s3TTLMin) * time.Minute,
 			UploadTTL:       time.Duration(s3UploadTTLMin) * time.Minute,
 		},
-		GoogleSheets: GoogleSheetsConfig{ServiceAccountJSON: googleServiceAccountJSON},
+		GoogleSheets:   GoogleSheetsConfig{ServiceAccountJSON: googleServiceAccountJSON},
+		TelegramAlerts: telegramAlerts,
 	}, nil
+}
+
+func loadTelegramAlerts(frontendURL string) (TelegramAlertsConfig, error) {
+	cfg := TelegramAlertsConfig{
+		BotToken:          os.Getenv("TELEGRAM_ALERTS_BOT_TOKEN"),
+		SubscribePassword: os.Getenv("TELEGRAM_ALERTS_SUBSCRIBE_PASSWORD"),
+		WebhookSecret:     os.Getenv("TELEGRAM_ALERTS_WEBHOOK_SECRET"),
+		Environment:       envOrDefault("APP_ENVIRONMENT", "development"),
+	}
+	if cfg.BotToken == "" {
+		return cfg, nil
+	}
+	if cfg.SubscribePassword == "" || cfg.WebhookSecret == "" {
+		return TelegramAlertsConfig{}, errors.New("TELEGRAM_ALERTS_BOT_TOKEN requires TELEGRAM_ALERTS_SUBSCRIBE_PASSWORD and TELEGRAM_ALERTS_WEBHOOK_SECRET")
+	}
+	if len(cfg.SubscribePassword) < 16 {
+		return TelegramAlertsConfig{}, errors.New("TELEGRAM_ALERTS_SUBSCRIBE_PASSWORD must be at least 16 characters")
+	}
+	if len(cfg.WebhookSecret) > 256 || !isTelegramWebhookSecret(cfg.WebhookSecret) {
+		return TelegramAlertsConfig{}, errors.New("TELEGRAM_ALERTS_WEBHOOK_SECRET must contain only letters, digits, underscores, or hyphens")
+	}
+	u, err := url.Parse(frontendURL)
+	if err != nil || u.Scheme != "https" || u.Host == "" {
+		return TelegramAlertsConfig{}, errors.New("TELEGRAM alerts require an HTTPS FRONTEND_URL")
+	}
+	cfg.WebhookURL = strings.TrimRight(frontendURL, "/") + "/api/v1/telegram-alerts/webhook"
+	return cfg, nil
+}
+
+func isTelegramWebhookSecret(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_' && r != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 func envOrDefault(key, fallback string) string {

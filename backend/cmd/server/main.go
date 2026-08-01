@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -30,6 +31,7 @@ import (
 	"github.com/Alarion239/my239/backend/internal/metrics"
 	"github.com/Alarion239/my239/backend/internal/middleware"
 	"github.com/Alarion239/my239/backend/internal/store"
+	"github.com/Alarion239/my239/backend/internal/telegramalerts"
 	"github.com/Alarion239/my239/backend/pkg/db"
 	"github.com/Alarion239/my239/backend/pkg/objectstore"
 	"github.com/Alarion239/my239/backend/pkg/ratelimit"
@@ -44,8 +46,23 @@ const (
 )
 
 func main() {
-	if err := run(); err != nil {
-		logger.LogError("server exited with error", err)
+	err := run()
+	if err != nil {
+		if panicErr, ok := err.(*logger.PanicError); ok {
+			logger.LogError("server exited after background panic", err,
+				"fatal", true,
+				"panic", fmt.Sprint(panicErr.Value),
+				"stack", string(panicErr.Stack),
+			)
+		} else {
+			logger.LogError("server exited with error", err, "fatal", true)
+		}
+	}
+	flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	logger.FlushAlerts(flushCtx)
+	cancel()
+	logger.ShutdownAlerts()
+	if err != nil {
 		os.Exit(1)
 	}
 }
@@ -66,6 +83,19 @@ func run() error {
 		return err
 	}
 	defer database.Close()
+
+	limiter, err := buildLimiter(rootCtx, cfg)
+	if err != nil {
+		return err
+	}
+
+	var alerts *telegramalerts.Service
+	if cfg.TelegramAlerts.Enabled() {
+		alerts = telegramalerts.NewService(cfg.TelegramAlerts, telegramalerts.NewRepository(database.Pool()), limiter)
+		logger.SetAlertSink(alerts)
+		alerts.Start(context.Background())
+		logger.LogInfo("telegram alerts: enabled", "environment", cfg.TelegramAlerts.Environment)
+	}
 
 	// On a fresh deployment (zero users) mint a single-use invitation token so
 	// the operator can register the first admin. Non-fatal: the users table may
@@ -90,11 +120,6 @@ func run() error {
 		return err
 	}
 
-	limiter, err := buildLimiter(rootCtx, cfg)
-	if err != nil {
-		return err
-	}
-
 	blobs, err := buildObjectStore(rootCtx, cfg)
 	if err != nil {
 		return err
@@ -113,14 +138,13 @@ func run() error {
 	// Live push: one in-process hub fed by a single LISTEN goroutine on a
 	// dedicated pool connection. The goroutine stops when rootCtx is cancelled.
 	liveHub := live.NewHub()
-	go live.Run(rootCtx, database.Raw(), liveHub)
 
 	r := chi.NewRouter()
 
 	r.Use(chiMiddleware.RequestID)
 	r.Use(middleware.RealIPMiddleware)
-	r.Use(chiMiddleware.Recoverer)
 	r.Use(middleware.LoggerMiddleware)
+	r.Use(middleware.RecoveryMiddleware)
 	r.Use(middleware.SecurityHeadersMiddleware)
 	r.Use(middleware.CORSMiddleware(cfg.FrontendURL))
 
@@ -131,6 +155,12 @@ func run() error {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Mount("/auth", authHandlers.Router(database, tokens, limiter))
 		r.Mount("/admin", adminHandlers.Router(database, tokens))
+		if alerts != nil {
+			// The webhook is authenticated by Telegram's secret header rather
+			// than the application's JWT middleware.
+			webhook := alerts.Webhook()
+			r.Post("/telegram-alerts/webhook", webhook.ServeHTTP)
+		}
 		r.Mount("/mathcenter", mcHandlers.Router(database, liveHub, tokens, blobs, cfg.S3.UploadTTL, cfg.S3.DownloadTTL, sheets))
 		r.Mount("/homework", hwHandlers.Router(database, liveHub, tokens, blobs, cfg.S3.UploadTTL, cfg.S3.DownloadTTL))
 	})
@@ -146,17 +176,30 @@ func run() error {
 
 	serverErr := make(chan error, 1)
 	go func() {
-		logger.LogInfo("server listening", "port", cfg.Port)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			serverErr <- err
-			return
+		serverErr <- logger.Guard("http server", func() error {
+			logger.LogInfo("server listening", "port", cfg.Port)
+			if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				return err
+			}
+			return nil
+		})
+	}()
+	liveErr := make(chan error, 1)
+	go func() {
+		if err := logger.Guard("live listener", func() error {
+			live.Run(rootCtx, database.Raw(), liveHub)
+			return nil
+		}); err != nil {
+			liveErr <- err
 		}
-		serverErr <- nil
 	}()
 
+	var runErr error
 	select {
 	case err := <-serverErr:
-		return err
+		runErr = err
+	case err := <-liveErr:
+		runErr = err
 	case <-rootCtx.Done():
 		logger.LogInfo("shutdown signal received")
 	}
@@ -170,7 +213,7 @@ func run() error {
 		return err
 	}
 	logger.LogInfo("server stopped cleanly")
-	return nil
+	return runErr
 }
 
 // buildLimiter chooses the Redis-backed limiter when REDIS_URL is set and

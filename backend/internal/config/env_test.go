@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -133,5 +134,63 @@ func TestLoad_CustomValues(t *testing.T) {
 	}
 	if cfg.JWT.Secret != "secret" {
 		t.Errorf("jwtSecret: got %q", cfg.JWT.Secret)
+	}
+}
+
+func TestLoad_TelegramAlertsDisabledByDefault(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://localhost/test")
+	t.Setenv("JWT_SECRET", "secret")
+	t.Setenv("TELEGRAM_ALERTS_BOT_TOKEN", "")
+	t.Setenv("TELEGRAM_ALERTS_SUBSCRIBE_PASSWORD", "")
+	t.Setenv("TELEGRAM_ALERTS_WEBHOOK_SECRET", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.TelegramAlerts.Enabled() {
+		t.Fatal("Telegram alerts should be disabled without a bot token")
+	}
+	if cfg.TelegramAlerts.Environment != "development" {
+		t.Fatalf("environment: got %q", cfg.TelegramAlerts.Environment)
+	}
+}
+
+func TestLoad_TelegramAlertsRequiresCompleteSecureConfig(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://localhost/test")
+	t.Setenv("JWT_SECRET", "secret")
+	t.Setenv("FRONTEND_URL", "https://example.com")
+	t.Setenv("TELEGRAM_ALERTS_BOT_TOKEN", "bot-token")
+	t.Setenv("TELEGRAM_ALERTS_SUBSCRIBE_PASSWORD", "short")
+	t.Setenv("TELEGRAM_ALERTS_WEBHOOK_SECRET", "bad secret")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("expected Telegram configuration validation error")
+	} else if strings.Contains(err.Error(), "bot-token") || strings.Contains(err.Error(), "short") {
+		t.Fatalf("Telegram secret leaked in configuration error: %v", err)
+	}
+}
+
+func TestLoad_TelegramAlertsValid(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://localhost/test")
+	t.Setenv("JWT_SECRET", "secret")
+	t.Setenv("FRONTEND_URL", "https://example.com/")
+	t.Setenv("TELEGRAM_ALERTS_BOT_TOKEN", "bot-token")
+	t.Setenv("TELEGRAM_ALERTS_SUBSCRIBE_PASSWORD", "a-very-long-secret-password")
+	t.Setenv("TELEGRAM_ALERTS_WEBHOOK_SECRET", "hook_secret-01")
+	t.Setenv("APP_ENVIRONMENT", "production")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.TelegramAlerts.Enabled() {
+		t.Fatal("Telegram alerts should be enabled")
+	}
+	if cfg.TelegramAlerts.WebhookURL != "https://example.com/api/v1/telegram-alerts/webhook" {
+		t.Fatalf("webhook URL: got %q", cfg.TelegramAlerts.WebhookURL)
+	}
+	if cfg.TelegramAlerts.Environment != "production" {
+		t.Fatalf("environment: got %q", cfg.TelegramAlerts.Environment)
 	}
 }

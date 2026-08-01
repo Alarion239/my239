@@ -9,6 +9,7 @@ import (
 
 	"github.com/Alarion239/my239/backend/internal/auth"
 	"github.com/Alarion239/my239/backend/internal/httpx"
+	"github.com/Alarion239/my239/backend/internal/logger"
 	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/pkg/db"
 )
@@ -55,6 +56,7 @@ func Login(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusUnauthorized, httpx.CodeInvalidCredentials, "invalid username or password")
 				return
 			}
+			logger.LogErrorContext(ctx, "auth: look up user for login", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "login failed")
 			return
 		}
@@ -66,6 +68,7 @@ func Login(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 
 		pair, err := tokens.IssuePair(ctx, user.ID, user.Username, user.IsAdmin)
 		if err != nil {
+			logger.LogErrorContext(ctx, "auth: issue login tokens", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to issue token")
 			return
 		}

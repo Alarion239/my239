@@ -8,6 +8,7 @@ import (
 
 	"github.com/Alarion239/my239/backend/internal/ctxcache"
 	"github.com/Alarion239/my239/backend/internal/httpx"
+	"github.com/Alarion239/my239/backend/internal/logger"
 	"github.com/Alarion239/my239/backend/pkg/db"
 )
 
@@ -20,6 +21,7 @@ func Me(database *db.DB) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusUnauthorized, httpx.CodeUnauthenticated, "unauthenticated")
 				return
 			}
+			logger.LogErrorContext(r.Context(), "auth: fetch current user", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to fetch user")
 			return
 		}

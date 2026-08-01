@@ -49,11 +49,16 @@ func NewRedis(client redis.Cmdable, prefix string) *Redis {
 }
 
 func (rl *Redis) Allow(r *http.Request, key string, limit int, windowSeconds int) (bool, int, error) {
+	return rl.AllowKey(r.Context(), key, clientIP(r), limit, windowSeconds)
+}
+
+// AllowKey applies a bucket to an arbitrary stable subject.
+func (rl *Redis) AllowKey(ctx context.Context, key, subject string, limit int, windowSeconds int) (bool, int, error) {
 	now := rl.now()
 	bucket := now.Truncate(time.Duration(windowSeconds) * time.Second).UTC().Format(time.RFC3339)
-	redisKey := fmt.Sprintf("%s:%s:%s:%s", rl.prefix, key, clientIP(r), bucket)
+	redisKey := fmt.Sprintf("%s:%s:%s:%s", rl.prefix, key, subject, bucket)
 
-	ctx, cancel := context.WithTimeout(r.Context(), 200*time.Millisecond)
+	ctx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
 	defer cancel()
 
 	res, err := allowScript.Run(ctx, rl.client, []string{redisKey}, windowSeconds).Result()
