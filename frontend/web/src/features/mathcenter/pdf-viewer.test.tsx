@@ -16,8 +16,8 @@ describe('PdfViewer', () => {
 
     expect(screen.getByRole('status', { name: 'Загрузка PDF' })).toBeInTheDocument()
     expect(screen.getAllByRole('toolbar', { name: 'Управление PDF' })).toHaveLength(1)
-    expect(screen.queryByRole('button', { name: 'Уменьшить масштаб' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Увеличить масштаб' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Уменьшить масштаб' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Увеличить масштаб' })).toBeDisabled()
     expect(screen.getByLabelText('Масштаб PDF')).toHaveTextContent('Загрузка…')
     expect(screen.getByRole('document')).toHaveClass('absolute')
     expect(container.querySelector('iframe')).toBeNull()
@@ -25,13 +25,13 @@ describe('PdfViewer', () => {
 
   it('installs non-passive gesture listeners and removes them on unmount', () => {
     vi.spyOn(apiClient, 'requestBlob').mockReturnValue(new Promise(() => {}))
-    const addSpy = vi.spyOn(HTMLElement.prototype, 'addEventListener')
-    const removeSpy = vi.spyOn(HTMLElement.prototype, 'removeEventListener')
+    const addSpy = vi.spyOn(EventTarget.prototype, 'addEventListener')
+    const removeSpy = vi.spyOn(EventTarget.prototype, 'removeEventListener')
     const { unmount } = render(<PdfViewer path="/mathcenter/series/7/pdf" />)
 
-    const documentCalls = addSpy.mock.calls.filter(([type, , options]) => ['wheel', 'touchstart', 'touchmove', 'touchend', 'touchcancel', 'gesturestart', 'gesturechange', 'gestureend'].includes(String(type)) && (options as AddEventListenerOptions)?.passive === false)
-    expect(documentCalls).toHaveLength(8)
-    expect(documentCalls.every(([, , options]) => (options as AddEventListenerOptions)?.passive === false)).toBe(true)
+    const gestureCalls = addSpy.mock.calls.filter(([type, , options]) => ['wheel', 'touchstart', 'touchmove', 'touchend', 'touchcancel', 'gesturestart', 'gesturechange', 'gestureend'].includes(String(type)) && (options as AddEventListenerOptions)?.passive === false)
+    expect(gestureCalls).toHaveLength(8)
+    expect(gestureCalls.every(([, , options]) => (options as AddEventListenerOptions)?.passive === false)).toBe(true)
 
     unmount()
     const removedTypes = removeSpy.mock.calls.map(([type]) => String(type))

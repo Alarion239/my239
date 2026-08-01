@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { ChevronLeft, ChevronRight, Download } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ChevronLeft, ChevronRight, Download, Minus, Plus } from 'lucide-react'
 import { Spinner } from '../../design/ui'
 import { apiClient } from '../../lib/api'
 import 'pdfjs-dist/web/pdf_viewer.css'
@@ -56,6 +56,7 @@ export function PdfViewer({
   className,
 }: PdfViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const sectionRef = useRef<HTMLElement>(null)
   const viewerRef = useRef<HTMLDivElement>(null)
   const viewerInstanceRef = useRef<InstanceType<PdfEngine['PDFViewer']> | null>(null)
   const [attempt, setAttempt] = useState(0)
@@ -80,6 +81,7 @@ export function PdfViewer({
     let objectUrl: string | null = null
     let removeEventListeners: (() => void) | null = null
     let removeInteractionListeners: (() => void) | null = null
+    let removeKeyboardListener: (() => void) | null = null
     const container = containerRef.current
     const viewerElement = viewerRef.current
 
@@ -94,11 +96,16 @@ export function PdfViewer({
     viewerElement?.replaceChildren()
 
     if (container) {
+      const section = sectionRef.current
+      const isInsideViewer = (event: Event) => {
+        const target = event.target
+        return (target instanceof Node && section?.contains(target)) || container.matches(':hover')
+      }
+
       const onWheel = (event: WheelEvent) => {
-        if (!(event.ctrlKey || event.metaKey)) return
+        if (!(event.ctrlKey || event.metaKey) || !isInsideViewer(event) || statusRef.current !== 'ready') return
         event.preventDefault()
         event.stopPropagation()
-        if (statusRef.current !== 'ready') return
         wheelDeltaRef.current += normalizeWheelDelta(event.deltaY, event.deltaMode, window.innerHeight)
         wheelOriginRef.current = [event.clientX, event.clientY]
         if (wheelFrameRef.current !== null) return
@@ -156,6 +163,7 @@ export function PdfViewer({
       }
 
       const onSafariGestureStart = (event: Event) => {
+        if (!isInsideViewer(event) || statusRef.current !== 'ready') return
         const gesture = event as Event & { scale?: number }
         const scale = Number.isFinite(gesture.scale) && (gesture.scale as number) > 0 ? gesture.scale as number : 1
         safariGestureRef.current = { scale, origin: gestureOrigin(event) }
@@ -163,6 +171,7 @@ export function PdfViewer({
       }
 
       const onSafariGestureChange = (event: Event) => {
+        if (!isInsideViewer(event) || statusRef.current !== 'ready') return
         const state = safariGestureRef.current
         const gesture = event as Event & { scale?: number }
         const scale = Number.isFinite(gesture.scale) && (gesture.scale as number) > 0 ? gesture.scale as number : 1
@@ -177,29 +186,56 @@ export function PdfViewer({
 
       const onSafariGestureEnd = (event: Event) => {
         safariGestureRef.current = null
+        if (!isInsideViewer(event)) return
         preventSafariGesture(event)
       }
 
-      const wheelOptions: AddEventListenerOptions = { passive: false }
+      const wheelOptions: AddEventListenerOptions = { capture: true, passive: false }
       const touchOptions: AddEventListenerOptions = { passive: false }
-      container.addEventListener('wheel', onWheel, wheelOptions)
+      document.addEventListener('wheel', onWheel, wheelOptions)
       container.addEventListener('touchstart', onTouchStart, touchOptions)
       container.addEventListener('touchmove', onTouchMove, touchOptions)
       container.addEventListener('touchend', onTouchEnd, touchOptions)
       container.addEventListener('touchcancel', onTouchEnd, touchOptions)
-      container.addEventListener('gesturestart', onSafariGestureStart as EventListener, touchOptions)
-      container.addEventListener('gesturechange', onSafariGestureChange as EventListener, touchOptions)
-      container.addEventListener('gestureend', onSafariGestureEnd as EventListener, touchOptions)
+      document.addEventListener('gesturestart', onSafariGestureStart as EventListener, wheelOptions)
+      document.addEventListener('gesturechange', onSafariGestureChange as EventListener, wheelOptions)
+      document.addEventListener('gestureend', onSafariGestureEnd as EventListener, wheelOptions)
       removeInteractionListeners = () => {
-        container.removeEventListener('wheel', onWheel, wheelOptions)
+        document.removeEventListener('wheel', onWheel, wheelOptions)
         container.removeEventListener('touchstart', onTouchStart, touchOptions)
         container.removeEventListener('touchmove', onTouchMove, touchOptions)
         container.removeEventListener('touchend', onTouchEnd, touchOptions)
         container.removeEventListener('touchcancel', onTouchEnd, touchOptions)
-        container.removeEventListener('gesturestart', onSafariGestureStart as EventListener, touchOptions)
-        container.removeEventListener('gesturechange', onSafariGestureChange as EventListener, touchOptions)
-        container.removeEventListener('gestureend', onSafariGestureEnd as EventListener, touchOptions)
+        document.removeEventListener('gesturestart', onSafariGestureStart as EventListener, wheelOptions)
+        document.removeEventListener('gesturechange', onSafariGestureChange as EventListener, wheelOptions)
+        document.removeEventListener('gestureend', onSafariGestureEnd as EventListener, wheelOptions)
       }
+
+      const onKeyDown = (event: KeyboardEvent) => {
+        if (!(event.ctrlKey || event.metaKey) || !isInsideViewer(event) || statusRef.current !== 'ready') return
+        if (event.key === '+' || event.key === '=') {
+          event.preventDefault()
+          event.stopPropagation()
+          applyZoomFactor(KEYBOARD_ZOOM_FACTOR, [
+            window.innerWidth / 2,
+            window.innerHeight / 2,
+          ])
+        } else if (event.key === '-' || event.key === '_') {
+          event.preventDefault()
+          event.stopPropagation()
+          applyZoomFactor(1 / KEYBOARD_ZOOM_FACTOR, [
+            window.innerWidth / 2,
+            window.innerHeight / 2,
+          ])
+        } else if (event.key === '0') {
+          event.preventDefault()
+          event.stopPropagation()
+          const instance = viewerInstanceRef.current
+          if (instance) instance.currentScaleValue = 'page-width'
+        }
+      }
+      document.addEventListener('keydown', onKeyDown, true)
+      removeKeyboardListener = () => document.removeEventListener('keydown', onKeyDown, true)
     }
 
     function applyZoomFactor(factor: number, origin?: [number, number]) {
@@ -288,6 +324,7 @@ export function PdfViewer({
       void loadingTask?.destroy()
       removeEventListeners?.()
       removeInteractionListeners?.()
+      removeKeyboardListener?.()
       if (wheelFrameRef.current !== null) {
         cancelAnimationFrame(wheelFrameRef.current)
         wheelFrameRef.current = null
@@ -327,26 +364,6 @@ export function PdfViewer({
     }
   }
 
-  function resetZoom() {
-    const instance = viewerInstanceRef.current
-    if (!instance) return
-    instance.currentScaleValue = 'page-width'
-  }
-
-  function handleDocumentKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (!(event.ctrlKey || event.metaKey) || status !== 'ready') return
-    if (event.key === '+' || event.key === '=') {
-      event.preventDefault()
-      changeZoom(1)
-    } else if (event.key === '-' || event.key === '_') {
-      event.preventDefault()
-      changeZoom(-1)
-    } else if (event.key === '0') {
-      event.preventDefault()
-      resetZoom()
-    }
-  }
-
   if (status === 'error') {
     return (
       <div className={'flex min-h-32 flex-col items-center justify-center gap-3 rounded-lg border border-danger/30 bg-danger-soft p-5 text-sm text-danger ' + (className ?? '')} role="alert">
@@ -369,7 +386,7 @@ export function PdfViewer({
   }
 
   return (
-    <section className={'flex w-full flex-col overflow-hidden rounded-lg border border-line bg-surface ' + (className ?? '')} aria-label={title}>
+    <section ref={sectionRef} className={'flex w-full flex-col overflow-hidden rounded-lg border border-line bg-surface ' + (className ?? '')} aria-label={title}>
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1 border-b border-line bg-surface-muted px-2 py-1.5" role="toolbar" aria-label="Управление PDF">
         <div className="flex items-center gap-1">
           <button type="button" onClick={() => changePage(-1)} disabled={page <= 1 || status !== 'ready'} aria-label="Предыдущая страница" className="rounded-md p-1.5 text-muted hover:bg-surface hover:text-ink disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
@@ -382,9 +399,17 @@ export function PdfViewer({
             <ChevronRight className="h-4 w-4" aria-hidden />
           </button>
         </div>
-        <span className="text-center text-xs tabular-nums text-muted" aria-label="Масштаб PDF" title="Ctrl/Cmd + или −, Ctrl/Cmd + колесо или щипок двумя пальцами">
-          {status === 'ready' ? `${Math.round(scale * 100)}%` : 'Загрузка…'}
-        </span>
+        <div className="flex items-center justify-center gap-1">
+          <button type="button" onClick={() => changeZoom(-1)} disabled={status !== 'ready' || scale <= MIN_ZOOM} aria-label="Уменьшить масштаб" title="Уменьшить масштаб" className="hidden rounded-md p-1 text-muted hover:bg-surface hover:text-ink disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 md:inline-flex">
+            <Minus className="h-3.5 w-3.5" aria-hidden />
+          </button>
+          <span className="min-w-12 text-center text-xs tabular-nums text-muted" aria-label="Масштаб PDF" title="Ctrl/Cmd + или −, Ctrl/Cmd + колесо, щипок двумя пальцами">
+            {status === 'ready' ? `${Math.round(scale * 100)}%` : 'Загрузка…'}
+          </span>
+          <button type="button" onClick={() => changeZoom(1)} disabled={status !== 'ready' || scale >= MAX_ZOOM} aria-label="Увеличить масштаб" title="Увеличить масштаб" className="hidden rounded-md p-1 text-muted hover:bg-surface hover:text-ink disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 md:inline-flex">
+            <Plus className="h-3.5 w-3.5" aria-hidden />
+          </button>
+        </div>
         <div className="flex min-w-0 items-center justify-end gap-2">
           {downloadUrl ? (
             <a href={downloadUrl} download={downloadName} className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium text-accent-ink hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
@@ -401,7 +426,6 @@ export function PdfViewer({
           style={{ touchAction: 'pan-x pan-y' }}
           role="document"
           tabIndex={0}
-          onKeyDown={handleDocumentKeyDown}
         >
           <div ref={viewerRef} className="pdfViewer" />
         </div>
