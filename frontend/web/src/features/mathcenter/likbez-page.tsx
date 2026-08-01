@@ -88,22 +88,34 @@ function LikbezCatalog({ centerId, isTeacher, selectedTermID }: { centerId: numb
         </Card>
       ) : (
         <div className="grid gap-3">
-          {visible?.map((item) => <LikbezCard key={item.id} likbez={item} centerId={centerId} isTeacher={isTeacher} terms={terms} />)}
+          {visible?.map((item) => <LikbezCard key={item.id} likbez={item} isTeacher={isTeacher} />)}
         </div>
       )}
     </div>
   )
 }
 
-function LikbezCard({ likbez, centerId, isTeacher, terms }: { likbez: Likbez; centerId: number; isTeacher: boolean; terms: MathCenterTerm[] }) {
+function LikbezCard({ likbez, isTeacher }: { likbez: Likbez; isTeacher: boolean }) {
   const { year } = useParams<{ year: string }>()
   const { search } = useLocation()
-  const publish = usePublishLikbez(likbez.id)
   const unpublish = useUnpublishLikbez(likbez.id)
-  const remove = useDeleteLikbez(centerId)
   const navigate = useNavigate()
-  const hasMaterials = likbez.has_pdf || likbez.has_tex || !!likbez.video_url
   const detailPath = '/mathcenter/' + year + '/likbez/' + likbez.id + search
+  const [editError, setEditError] = useState<string | null>(null)
+
+  async function openDraft() {
+    setEditError(null)
+    if (!likbez.published) {
+      navigate(detailPath)
+      return
+    }
+    try {
+      await unpublish.mutateAsync()
+      navigate(detailPath)
+    } catch (error: unknown) {
+      setEditError(error instanceof APIErrorImpl ? error.message : 'Не удалось открыть черновик.')
+    }
+  }
 
   return (
     <Card
@@ -135,14 +147,11 @@ function LikbezCard({ likbez, centerId, isTeacher, terms }: { likbez: Likbez; ce
         </div>
       </div>
       {isTeacher ? (
-        <div className="flex flex-wrap gap-2 sm:w-44 sm:justify-end" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
-          {likbez.published ? <LikbezFormDialog centerId={centerId} terms={terms} likbez={likbez} trigger={<Button size="sm" variant="ghost"><Pencil className="h-4 w-4" />Редактировать название</Button>} /> : null}
-          <Button size="sm" variant="secondary" disabled={(likbez.published ? unpublish : publish).isPending || (!likbez.published && !hasMaterials)} onClick={() => (likbez.published ? unpublish : publish).mutate()}>
-            {likbez.published ? 'Снять' : 'Опубликовать'}
+        <div className="flex flex-col items-stretch gap-2 sm:w-44 sm:items-end" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+          <Button size="sm" variant="secondary" disabled={unpublish.isPending} onClick={() => { void openDraft() }}>
+            <Pencil className="h-4 w-4" />{unpublish.isPending ? 'Открываем…' : 'Редактировать'}
           </Button>
-          <Button size="sm" variant="ghost" aria-label={'Удалить ' + likbez.title} disabled={remove.isPending} onClick={() => {
-            if (window.confirm('Удалить ликбез «' + likbez.title + '»?')) remove.mutate(likbez.id, { onSuccess: () => navigate('/mathcenter/' + year + '/likbez' + search) })
-          }}><Trash2 className="h-4 w-4" /></Button>
+          {editError ? <p className="text-right text-xs text-danger" role="alert">{editError}</p> : null}
         </div>
       ) : null}
     </Card>
@@ -171,7 +180,6 @@ function LikbezDetail({ likbezId, isTeacher }: { likbezId: number; isTeacher: bo
         <p className="mt-2 text-sm text-muted">{likbezDateFromISO(data.held_on)}</p>
         <p className="mt-4 max-w-3xl whitespace-pre-wrap leading-7 text-ink">{data.description}</p>
       </header>
-      {isTeacher ? <LikbezMaterialsDialog likbez={data} /> : null}
       <LikbezMaterials likbez={data} tex={tex} />
     </div>
   )
@@ -180,7 +188,10 @@ function LikbezDetail({ likbezId, isTeacher }: { likbezId: number; isTeacher: bo
 function LikbezDraftEditor({ likbez, terms }: { likbez: Likbez; terms: MathCenterTerm[] }) {
   const { year } = useParams<{ year: string }>()
   const { search } = useLocation()
+  const navigate = useNavigate()
   const update = useUpdateLikbez(likbez.id)
+  const publish = usePublishLikbez(likbez.id)
+  const remove = useDeleteLikbez(likbez.math_center_id)
   const texQuery = useLikbezTex(likbez.id, true)
   const putTex = usePutLikbezTex(likbez.id)
   const preambleQuery = useMathCenterLatexPreamble(likbez.math_center_id)
@@ -189,22 +200,31 @@ function LikbezDraftEditor({ likbez, terms }: { likbez: Likbez; terms: MathCente
   const [tex, setTex] = useState('')
   const [link, setLink] = useState(likbez.video_url ?? '')
   const [materialError, setMaterialError] = useState<string | null>(null)
+  const [publishError, setPublishError] = useState<string | null>(null)
+  const [publishing, setPublishing] = useState(false)
+  const initialTexRef = useRef<string | null>(null)
+  const initialLinkRef = useRef(likbez.video_url ?? '')
   const fileRef = useRef<HTMLInputElement>(null)
   const previewTex = useDeferredValue(tex)
   const preamble = preambleQuery.data?.preamble ?? DEFAULT_LATEX_PREAMBLE
   const renderedPreviewTex = normalizeLatexSource(previewTex, preamble)
-  const { register, handleSubmit, reset, setError, formState: { errors, isSubmitting } } = useForm<LikbezValues>({ resolver: zodResolver(likbezSchema) })
+  const { register, handleSubmit, reset, setError, trigger, getValues, formState: { errors, isSubmitting } } = useForm<LikbezValues>({ resolver: zodResolver(likbezSchema) })
 
   useEffect(() => {
     reset({ term_id: likbez.term_id, number: likbez.number, title: likbez.title, held_on: likbezDateFromISO(likbez.held_on), description: likbez.description })
   }, [likbez, reset])
 
   useEffect(() => {
-    setTex(latexBodySource(texQuery.data?.tex ?? ''))
+    if (texQuery.data?.tex === undefined) return
+    const source = latexBodySource(texQuery.data.tex)
+    initialTexRef.current = source
+    setTex(source)
   }, [texQuery.data?.tex])
 
   useEffect(() => {
-    setLink(likbez.video_url ?? '')
+    const nextLink = likbez.video_url ?? ''
+    initialLinkRef.current = nextLink
+    setLink(nextLink)
   }, [likbez.video_url])
 
   const saveDetails = handleSubmit((values) => new Promise<void>((resolve) => {
@@ -224,13 +244,72 @@ function LikbezDraftEditor({ likbez, terms }: { likbez: Likbez; terms: MathCente
   }))
 
   const runMaterialAction = (work: () => Promise<unknown>) => void work().catch((error: unknown) => setMaterialError(error instanceof APIErrorImpl ? error.message : 'Не удалось сохранить материал.'))
-  const busy = putTex.isPending || uploadPdf.isPending || setVideo.isPending
+  const busy = putTex.isPending || uploadPdf.isPending || setVideo.isPending || update.isPending || publish.isPending || publishing
+  const materialsReady = !texQuery.isPending && !preambleQuery.isPending
+  const hasEffectiveMaterials = likbez.has_pdf || tex.trim() !== '' || link.trim() !== ''
+  const hasStoredMaterials = likbez.has_pdf || likbez.has_tex || !!likbez.video_url
+
+  async function saveAndPublish() {
+    setPublishError(null)
+    setMaterialError(null)
+    if (!materialsReady) {
+      setPublishError('Дождитесь загрузки материалов и попробуйте снова.')
+      return
+    }
+    if (!(await trigger())) {
+      setPublishError('Проверьте сведения о ликбезе.')
+      return
+    }
+    const values = getValues()
+    const heldOn = russianLikbezDateToISO(values.held_on)
+    if (!heldOn) {
+      setError('held_on', { message: 'Укажите дату в формате ДД-ММ-ГГГГ' })
+      setPublishError('Проверьте дату проведения.')
+      return
+    }
+    if (!hasEffectiveMaterials) {
+      setPublishError('Добавьте хотя бы один материал перед публикацией.')
+      return
+    }
+    if (tex.trim() === '' && (initialTexRef.current ?? '').trim() !== '') {
+      setPublishError('LaTeX-конспект не может быть пустым. Восстановите текст или сохраните другой материал.')
+      return
+    }
+
+    setPublishing(true)
+    try {
+      await update.mutateAsync({ ...values, held_on: heldOn })
+      if (tex.trim() !== '' && tex !== (initialTexRef.current ?? '')) {
+        await putTex.mutateAsync(normalizeLatexSource(tex, preamble))
+      }
+      const nextLink = link.trim()
+      if (nextLink !== initialLinkRef.current.trim()) {
+        await setVideo.mutateAsync(nextLink)
+      }
+      await publish.mutateAsync()
+    } catch (error: unknown) {
+      setPublishError(error instanceof APIErrorImpl ? error.message : 'Не удалось опубликовать ликбез. Исправьте ошибку и попробуйте снова.')
+    } finally {
+      setPublishing(false)
+    }
+  }
+
+  function deleteDraft() {
+    if (!window.confirm('Удалить ликбез «' + likbez.title + '»?')) return
+    remove.mutate(likbez.id, { onSuccess: () => navigate('/mathcenter/' + year + '/likbez' + search) })
+  }
 
   return (
     <div className="animate-rise flex flex-col gap-6">
       <Link to={'/mathcenter/' + year + '/likbez' + search} className="self-start text-sm font-medium text-accent hover:underline">← Все ликбезы</Link>
       <form className="flex flex-col gap-4 border-b border-line pb-6" noValidate onSubmit={saveDetails}>
-        <p className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Черновик · ликбез №{likbez.number}</p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <p className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Черновик · ликбез №{likbez.number}</p>
+          <Button type="button" variant="primary" disabled={busy || !materialsReady || (!hasEffectiveMaterials && !hasStoredMaterials)} onClick={() => { void saveAndPublish() }}>
+            {publishing || publish.isPending ? 'Публикуем…' : 'Опубликовать'}
+          </Button>
+        </div>
+        {publishError ? <p className="text-sm text-danger" role="alert">{publishError}</p> : null}
         <div className="grid gap-4 lg:grid-cols-[minmax(11rem,1fr)_7rem_minmax(14rem,2fr)_11rem]">
           <Field label="Период" error={errors.term_id?.message}>{({ id, invalid }) => <Select id={id} invalid={invalid} {...register('term_id', { valueAsNumber: true })}>{terms.map((term) => <option key={term.id} value={term.id}>{term.display_name}</option>)}</Select>}</Field>
           <Field label="Номер" error={errors.number?.message}>{({ id, invalid }) => <Input id={id} type="number" min={1} invalid={invalid} {...register('number', { valueAsNumber: true })} />}</Field>
@@ -266,6 +345,16 @@ function LikbezDraftEditor({ likbez, terms }: { likbez: Likbez; terms: MathCente
         <Input value={link} onChange={(event) => setLink(event.target.value)} placeholder="https://youtube.com/watch?v=…" />
         {likbez.video_url ? <VideoAttachment url={likbez.video_url} title={likbez.title + ' (видео)'} /> : null}
         <div className="flex gap-2"><Button size="sm" variant="secondary" disabled={busy || link.trim() === ''} onClick={() => runMaterialAction(async () => { await setVideo.mutateAsync(link.trim()) })}>{setVideo.isPending ? 'Сохраняем…' : 'Сохранить ссылку'}</Button>{likbez.video_url ? <Button size="sm" variant="ghost" disabled={busy} onClick={() => runMaterialAction(async () => { await setVideo.mutateAsync(''); setLink('') })}>Убрать</Button> : null}</div>
+      </section>
+
+      <section className="flex flex-wrap items-center justify-between gap-3 border-t border-danger/20 pt-5" aria-label="Опасная зона">
+        <div>
+          <h2 className="font-medium text-ink">Удалить ликбез</h2>
+          <p className="mt-1 text-sm text-muted">Черновик и все его материалы будут удалены без возможности восстановления.</p>
+        </div>
+        <Button type="button" variant="ghost" className="text-danger hover:bg-danger-soft" disabled={busy || remove.isPending} onClick={deleteDraft}>
+          <Trash2 className="h-4 w-4" />{remove.isPending ? 'Удаляем…' : 'Удалить ликбез'}
+        </Button>
       </section>
     </div>
   )
@@ -309,15 +398,14 @@ function youtubeEmbed(url: string): string | null {
   return match ? 'https://www.youtube.com/embed/' + match[1] : null
 }
 
-function LikbezFormDialog({ centerId, terms, likbez, trigger }: { centerId: number; terms: MathCenterTerm[]; likbez?: Likbez; trigger?: ReactNode }) {
+function LikbezFormDialog({ centerId, terms, trigger }: { centerId: number; terms: MathCenterTerm[]; trigger?: ReactNode }) {
   const [open, setOpen] = useState(false)
   const create = useCreateLikbez(centerId)
-  const update = useUpdateLikbez(likbez?.id ?? 0)
   const { register, handleSubmit, reset, setError, formState: { errors, isSubmitting } } = useForm<LikbezValues>({ resolver: zodResolver(likbezSchema) })
 
   useEffect(() => {
-    if (open) reset({ term_id: likbez?.term_id ?? terms.find((term) => term.is_active)?.id ?? 0, number: likbez?.number ?? 1, title: likbez?.title ?? '', held_on: likbez ? likbezDateFromISO(likbez.held_on) : todayLikbezDate(), description: likbez?.description ?? '' })
-  }, [likbez, open, reset, terms])
+    if (open) reset({ term_id: terms.find((term) => term.is_active)?.id ?? 0, number: 1, title: '', held_on: todayLikbezDate(), description: '' })
+  }, [open, reset, terms])
 
   const submit = handleSubmit((values) => new Promise<void>((resolve) => {
     const heldOn = russianLikbezDateToISO(values.held_on)
@@ -335,10 +423,6 @@ function LikbezFormDialog({ centerId, terms, likbez, trigger }: { centerId: numb
         resolve()
       },
     }
-    if (likbez) {
-      update.mutate(body, callbacks)
-      return
-    }
     create.mutate({ term_id: body.term_id, title: body.title, held_on: body.held_on, description: body.description }, callbacks)
   }))
 
@@ -346,54 +430,15 @@ function LikbezFormDialog({ centerId, terms, likbez, trigger }: { centerId: numb
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger ?? <Button><Plus className="h-4 w-4" />Новый ликбез</Button>}</DialogTrigger>
       <DialogContent className="max-h-[85vh] overflow-y-auto">
-        <DialogTitle>{likbez ? 'Изменить ликбез' : 'Новый ликбез'}</DialogTitle>
-        <DialogDescription>{likbez ? 'Измените сведения и сквозной номер лекции.' : 'Номер будет присвоен автоматически.'}</DialogDescription>
+        <DialogTitle>Новый ликбез</DialogTitle>
+        <DialogDescription>Номер будет присвоен автоматически.</DialogDescription>
         <form className="mt-4 flex flex-col gap-4" noValidate onSubmit={submit}>
           <Field label="Период" error={errors.term_id?.message}>{({ id, invalid }) => <Select id={id} invalid={invalid} {...register('term_id', { valueAsNumber: true })}><option value={0}>Выберите период</option>{terms.map((term) => <option key={term.id} value={term.id}>{term.display_name}</option>)}</Select>}</Field>
-          {likbez ? <Field label="Номер ликбеза" error={errors.number?.message}>{({ id, invalid }) => <Input id={id} type="number" min={1} invalid={invalid} {...register('number', { valueAsNumber: true })} />}</Field> : null}
           <Field label="Название" error={errors.title?.message}>{({ id, invalid }) => <Input id={id} invalid={invalid} {...register('title')} />}</Field>
           <Field label="Дата" error={errors.held_on?.message}>{({ id, invalid }) => <Input id={id} inputMode="numeric" placeholder="ДД-ММ-ГГГГ" invalid={invalid} {...register('held_on')} />}</Field>
           <Field label="Краткое описание" error={errors.description?.message}>{({ id, invalid }) => <Textarea id={id} invalid={invalid} {...register('description')} />}</Field>
-          <Button type="submit" disabled={isSubmitting || create.isPending || update.isPending}>{isSubmitting || create.isPending || update.isPending ? 'Сохраняем…' : 'Сохранить'}</Button>
+          <Button type="submit" disabled={isSubmitting || create.isPending}>{isSubmitting || create.isPending ? 'Сохраняем…' : 'Сохранить'}</Button>
         </form>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function LikbezMaterialsDialog({ likbez }: { likbez: Likbez }) {
-  const [open, setOpen] = useState(false)
-  const [tex, setTex] = useState('')
-  const [link, setLink] = useState(likbez.video_url ?? '')
-  const [error, setError] = useState<string | null>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
-  const texQuery = useLikbezTex(likbez.id, open && likbez.has_tex)
-  const putTex = usePutLikbezTex(likbez.id)
-  const preambleQuery = useMathCenterLatexPreamble(likbez.math_center_id)
-  const uploadPdf = useUploadLikbezPdf(likbez.id)
-  const setVideo = useSetLikbezVideo(likbez.id)
-
-  useEffect(() => {
-    if (!open) return
-    setTex(latexBodySource(texQuery.data?.tex ?? ''))
-    setLink(likbez.video_url ?? '')
-    setError(null)
-  }, [likbez.video_url, open, texQuery.data?.tex])
-
-  const run = (work: () => Promise<unknown>) => void work().catch((value: unknown) => setError(value instanceof APIErrorImpl ? value.message : 'Не удалось сохранить материал.'))
-  const busy = putTex.isPending || uploadPdf.isPending || setVideo.isPending
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild><Button variant="secondary"><Pencil className="h-4 w-4" />Материалы</Button></DialogTrigger>
-      <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
-        <DialogTitle>Материалы ликбеза</DialogTitle>
-        <DialogDescription>Можно прикрепить несколько форматов; публикация остаётся отдельным действием.</DialogDescription>
-        {error ? <p className="mt-3 text-sm text-danger" role="alert">{error}</p> : null}
-        <div className="mt-4 flex flex-col gap-4">
-          <section className="flex flex-col gap-2"><label className="text-sm font-medium text-ink">LaTeX</label><Textarea value={tex} onChange={(event) => setTex(event.target.value)} className="min-h-32 font-mono text-xs" placeholder={'Введите текст и формулы без преамбулы…'} /><Button size="sm" variant="secondary" className="self-start" disabled={busy || tex.trim() === ''} onClick={() => run(async () => { await putTex.mutateAsync(normalizeLatexSource(tex, preambleQuery.data?.preamble ?? DEFAULT_LATEX_PREAMBLE)) })}>{putTex.isPending ? 'Сохраняем…' : 'Сохранить LaTeX'}</Button></section>
-          <section className="flex flex-col gap-2 border-t border-line pt-4"><span className="text-sm font-medium text-ink">PDF{likbez.has_pdf ? ' · загружен' : ''}</span><input ref={fileRef} type="file" accept="application/pdf" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) run(async () => { await uploadPdf.mutateAsync(file) }) }} /><Button size="sm" variant="secondary" className="self-start" disabled={busy} onClick={() => fileRef.current?.click()}>{uploadPdf.isPending ? 'Загружаем…' : 'Загрузить PDF'}</Button></section>
-          <section className="flex flex-col gap-2 border-t border-line pt-4"><label className="text-sm font-medium text-ink">Ссылка на видео</label><Input value={link} onChange={(event) => setLink(event.target.value)} placeholder="https://youtube.com/watch?v=…" /><div className="flex gap-2"><Button size="sm" variant="secondary" disabled={busy || link.trim() === ''} onClick={() => run(async () => { await setVideo.mutateAsync(link.trim()) })}>{setVideo.isPending ? 'Сохраняем…' : 'Сохранить ссылку'}</Button>{likbez.video_url ? <Button size="sm" variant="ghost" disabled={busy} onClick={() => run(async () => { await setVideo.mutateAsync(''); setLink('') })}>Убрать</Button> : null}</div></section>
-        </div>
       </DialogContent>
     </Dialog>
   )

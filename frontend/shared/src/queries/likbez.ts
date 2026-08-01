@@ -32,6 +32,7 @@ export function useLikbezTex(likbezId: number, enabled: boolean) {
 }
 
 function invalidateLikbez(qc: ReturnType<typeof useQueryClient>, likbezId: number, item: Likbez) {
+  qc.setQueryData(queryKeys.likbez(likbezId), item)
   qc.invalidateQueries({ queryKey: queryKeys.likbez(likbezId) })
   qc.invalidateQueries({ queryKey: queryKeys.likbezTex(likbezId) })
   qc.invalidateQueries({ queryKey: queryKeys.likbezList(item.math_center_id) })

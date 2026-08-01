@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type TouchEvent, type WheelEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { ChevronLeft, ChevronRight, Download } from 'lucide-react'
 import { Spinner } from '../../design/ui'
 import { apiClient } from '../../lib/api'
 import 'pdfjs-dist/web/pdf_viewer.css'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?worker&url'
+import { normalizeWheelDelta, pinchZoomFactor, touchMidpoint, wheelZoomFactor } from './pdf-zoom'
 
 export interface PdfViewerProps {
   // The authed blob endpoint to fetch (e.g. /mathcenter/series/7/pdf or a
@@ -19,8 +20,7 @@ type PdfEngine = typeof import('pdfjs-dist') & typeof import('pdfjs-dist/web/pdf
 const MIN_ZOOM = 0.5
 const MAX_ZOOM = 3
 const KEYBOARD_ZOOM_FACTOR = 1.08
-const WHEEL_ZOOM_SENSITIVITY = 1200
-const PINCH_ZOOM_RESPONSE = 0.8
+const ZOOM_DRAWING_DELAY = 150
 
 let enginePromise: Promise<PdfEngine> | null = null
 
@@ -65,9 +65,12 @@ export function PdfViewer({
   const [page, setPage] = useState(1)
   const [pages, setPages] = useState(0)
   const [scale, setScale] = useState(1)
+  const statusRef = useRef(status)
   const wheelDeltaRef = useRef(0)
   const wheelFrameRef = useRef<number | null>(null)
-  const pinchRef = useRef<{ startDistance: number; startScale: number } | null>(null)
+  const wheelOriginRef = useRef<[number, number] | null>(null)
+  const pinchRef = useRef<{ distance: number } | null>(null)
+  statusRef.current = status
 
   useEffect(() => {
     let cancelled = false
@@ -75,10 +78,12 @@ export function PdfViewer({
     let eventBus: InstanceType<PdfEngine['EventBus']> | null = null
     let objectUrl: string | null = null
     let removeEventListeners: (() => void) | null = null
+    let removeInteractionListeners: (() => void) | null = null
     const container = containerRef.current
     const viewerElement = viewerRef.current
 
     setStatus('loading')
+    statusRef.current = 'loading'
     setError(null)
     setDownloadUrl(null)
     setPage(1)
@@ -86,6 +91,93 @@ export function PdfViewer({
     setScale(1)
     viewerInstanceRef.current = null
     viewerElement?.replaceChildren()
+
+    if (container) {
+      const onWheel = (event: WheelEvent) => {
+        if (!(event.ctrlKey || event.metaKey)) return
+        event.preventDefault()
+        event.stopPropagation()
+        if (statusRef.current !== 'ready') return
+        wheelDeltaRef.current += normalizeWheelDelta(event.deltaY, event.deltaMode, window.innerHeight)
+        wheelOriginRef.current = [event.clientX, event.clientY]
+        if (wheelFrameRef.current !== null) return
+        wheelFrameRef.current = window.requestAnimationFrame(() => {
+          const pending = wheelDeltaRef.current
+          const origin = wheelOriginRef.current
+          wheelDeltaRef.current = 0
+          wheelOriginRef.current = null
+          wheelFrameRef.current = null
+          if (!origin) return
+          applyZoomFactor(wheelZoomFactor(pending), origin)
+        })
+      }
+
+      const onTouchStart = (event: TouchEvent) => {
+        if (event.touches.length !== 2 || statusRef.current !== 'ready') return
+        const first = event.touches.item(0)
+        const second = event.touches.item(1)
+        if (!first || !second) return
+        const distance = Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY)
+        if (distance > 0) pinchRef.current = { distance }
+      }
+
+      const onTouchMove = (event: TouchEvent) => {
+        const pinch = pinchRef.current
+        if (!pinch || statusRef.current !== 'ready' || event.touches.length !== 2) return
+        const first = event.touches.item(0)
+        const second = event.touches.item(1)
+        if (!first || !second) return
+        const distance = Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY)
+        if (distance <= 0) return
+        event.preventDefault()
+        event.stopPropagation()
+        const factor = pinchZoomFactor(distance, pinch.distance)
+        pinch.distance = distance
+        applyZoomFactor(factor, touchMidpoint(first, second))
+      }
+
+      const onTouchEnd = (event: TouchEvent) => {
+        if (event.touches.length < 2) pinchRef.current = null
+      }
+
+      const preventSafariGesture = (event: Event) => {
+        event.preventDefault()
+        event.stopPropagation()
+      }
+
+      const wheelOptions: AddEventListenerOptions = { passive: false }
+      const touchOptions: AddEventListenerOptions = { passive: false }
+      container.addEventListener('wheel', onWheel, wheelOptions)
+      container.addEventListener('touchstart', onTouchStart, touchOptions)
+      container.addEventListener('touchmove', onTouchMove, touchOptions)
+      container.addEventListener('touchend', onTouchEnd, touchOptions)
+      container.addEventListener('touchcancel', onTouchEnd, touchOptions)
+      container.addEventListener('gesturestart', preventSafariGesture as EventListener, touchOptions)
+      container.addEventListener('gesturechange', preventSafariGesture as EventListener, touchOptions)
+      container.addEventListener('gestureend', preventSafariGesture as EventListener, touchOptions)
+      removeInteractionListeners = () => {
+        container.removeEventListener('wheel', onWheel, wheelOptions)
+        container.removeEventListener('touchstart', onTouchStart, touchOptions)
+        container.removeEventListener('touchmove', onTouchMove, touchOptions)
+        container.removeEventListener('touchend', onTouchEnd, touchOptions)
+        container.removeEventListener('touchcancel', onTouchEnd, touchOptions)
+        container.removeEventListener('gesturestart', preventSafariGesture as EventListener, touchOptions)
+        container.removeEventListener('gesturechange', preventSafariGesture as EventListener, touchOptions)
+        container.removeEventListener('gestureend', preventSafariGesture as EventListener, touchOptions)
+      }
+    }
+
+    function applyZoomFactor(factor: number, origin?: [number, number]) {
+      const instance = viewerInstanceRef.current
+      if (!instance || !Number.isFinite(factor) || factor <= 0) return
+      const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, instance.currentScale * factor))
+      if (next === instance.currentScale) return
+      instance.updateScale({
+        scaleFactor: next / instance.currentScale,
+        drawingDelay: ZOOM_DRAWING_DELAY,
+        origin,
+      })
+    }
 
     async function load() {
       try {
@@ -122,13 +214,17 @@ export function PdfViewer({
         }
         const onPageChanging = (event: { pageNumber: number }) => {
           setPage(event.pageNumber)
-          setScale(pdfViewer.currentScale)
+        }
+        const onScaleChanging = (event: { scale: number }) => {
+          setScale(event.scale)
         }
         eventBus.on('pagesinit', onPagesInit)
         eventBus.on('pagechanging', onPageChanging)
+        eventBus.on('scalechanging', onScaleChanging)
         removeEventListeners = () => {
           eventBus?.off('pagesinit', onPagesInit)
           eventBus?.off('pagechanging', onPageChanging)
+          eventBus?.off('scalechanging', onScaleChanging)
         }
 
         loadingTask = engine.getDocument({ data: bytes })
@@ -156,11 +252,13 @@ export function PdfViewer({
       cancelled = true
       void loadingTask?.destroy()
       removeEventListeners?.()
+      removeInteractionListeners?.()
       if (wheelFrameRef.current !== null) {
         cancelAnimationFrame(wheelFrameRef.current)
         wheelFrameRef.current = null
       }
       wheelDeltaRef.current = 0
+      wheelOriginRef.current = null
       pinchRef.current = null
       viewerInstanceRef.current?.cleanup()
       viewerInstanceRef.current = null
@@ -178,25 +276,25 @@ export function PdfViewer({
     instance.currentPageNumber = Math.min(pages, Math.max(1, instance.currentPageNumber + delta))
   }
 
-  function setZoom(next: number) {
-    const instance = viewerInstanceRef.current
-    if (!instance) return
-    const clamped = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, next))
-    instance.currentScale = clamped
-    setScale(clamped)
-  }
-
   function changeZoom(delta: number) {
     const instance = viewerInstanceRef.current
     if (!instance) return
-    setZoom(instance.currentScale * (delta > 0 ? KEYBOARD_ZOOM_FACTOR : 1 / KEYBOARD_ZOOM_FACTOR))
+    const container = containerRef.current
+    const bounds = container?.getBoundingClientRect()
+    const origin: [number, number] | undefined = bounds
+      ? [bounds.left + bounds.width / 2, bounds.top + bounds.height / 2]
+      : undefined
+    const factor = delta > 0 ? KEYBOARD_ZOOM_FACTOR : 1 / KEYBOARD_ZOOM_FACTOR
+    const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, instance.currentScale * factor))
+    if (next !== instance.currentScale) {
+      instance.updateScale({ scaleFactor: next / instance.currentScale, origin })
+    }
   }
 
   function resetZoom() {
     const instance = viewerInstanceRef.current
     if (!instance) return
     instance.currentScaleValue = 'page-width'
-    setScale(instance.currentScale)
   }
 
   function handleDocumentKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -211,53 +309,6 @@ export function PdfViewer({
       event.preventDefault()
       resetZoom()
     }
-  }
-
-  function handleDocumentWheel(event: WheelEvent<HTMLDivElement>) {
-    if (!(event.ctrlKey || event.metaKey) || status !== 'ready') return
-    event.preventDefault()
-    const pixelsPerLine = 16
-    const pixelsPerPage = window.innerHeight || 800
-    const delta = event.deltaY * (event.deltaMode === 1 ? pixelsPerLine : event.deltaMode === 2 ? pixelsPerPage : 1)
-    wheelDeltaRef.current += delta
-    if (wheelFrameRef.current !== null) return
-    wheelFrameRef.current = window.requestAnimationFrame(() => {
-      const pending = Math.max(-240, Math.min(240, wheelDeltaRef.current))
-      wheelDeltaRef.current = 0
-      wheelFrameRef.current = null
-      const instance = viewerInstanceRef.current
-      if (!instance) return
-      setZoom(instance.currentScale * Math.exp(-pending / WHEEL_ZOOM_SENSITIVITY))
-    })
-  }
-
-  function handleDocumentTouchStart(event: TouchEvent<HTMLDivElement>) {
-    if (status !== 'ready' || event.touches.length !== 2) return
-    const first = event.touches.item(0)
-    const second = event.touches.item(1)
-    if (!first || !second) return
-    const startDistance = Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY)
-    if (startDistance <= 0) return
-    const instance = viewerInstanceRef.current
-    if (!instance) return
-    pinchRef.current = { startDistance, startScale: instance.currentScale }
-  }
-
-  function handleDocumentTouchMove(event: TouchEvent<HTMLDivElement>) {
-    const pinch = pinchRef.current
-    if (!pinch || status !== 'ready' || event.touches.length !== 2) return
-    const first = event.touches.item(0)
-    const second = event.touches.item(1)
-    if (!first || !second) return
-    const distance = Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY)
-    if (distance <= 0) return
-    event.preventDefault()
-    const ratio = distance / pinch.startDistance
-    setZoom(pinch.startScale * Math.pow(ratio, PINCH_ZOOM_RESPONSE))
-  }
-
-  function handleDocumentTouchEnd(event: TouchEvent<HTMLDivElement>) {
-    if (event.touches.length < 2) pinchRef.current = null
   }
 
   if (status === 'error') {
@@ -315,11 +366,6 @@ export function PdfViewer({
           role="document"
           tabIndex={0}
           onKeyDown={handleDocumentKeyDown}
-          onWheel={handleDocumentWheel}
-          onTouchStart={handleDocumentTouchStart}
-          onTouchMove={handleDocumentTouchMove}
-          onTouchEnd={handleDocumentTouchEnd}
-          onTouchCancel={handleDocumentTouchEnd}
         >
           <div ref={viewerRef} className="pdfViewer" />
         </div>

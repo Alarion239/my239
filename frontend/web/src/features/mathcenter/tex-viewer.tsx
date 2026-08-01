@@ -65,6 +65,9 @@ const HOST_CSS = `
   line-height: 1.5;
 }
 .katex { color: inherit; }
+/* Keep display mathematics visibly distinct from inline text. Scaling the
+   complete expression preserves KaTeX's limits, fractions, and baselines. */
+.katex-display > .katex { font-size: 1.5em; }
 `
 
 interface TexAssets {
@@ -74,6 +77,22 @@ interface TexAssets {
 }
 
 const DOCUMENT_BODY = /\\begin\s*\{\s*document\s*\}([\s\S]*?)\\end\s*\{\s*document\s*\}/
+const SINGLE_DISPLAY_ENVIRONMENT = /\\begin\s*\{\s*(equation\*?|displaymath)\s*\}([\s\S]*?)\\end\s*\{\s*\1\s*\}/gi
+const ALIGN_DISPLAY_ENVIRONMENT = /\\begin\s*\{\s*align\*?\s*\}([\s\S]*?)\\end\s*\{\s*align\*?\s*\}/gi
+
+// latex.js intentionally implements a small browser-oriented LaTeX subset
+// and does not load amsmath environments. Convert the common display
+// environments to equivalent display blocks before parsing so an integral in
+// equation/align markup keeps display sizing instead of becoming an error.
+function normalizeDisplayEnvironments(body: string): string {
+  const withSingleDisplays = body.replace(SINGLE_DISPLAY_ENVIRONMENT, (_match, _name: string, content: string) => `\n$$${content.trim()}$$\n`)
+  return withSingleDisplays.replace(ALIGN_DISPLAY_ENVIRONMENT, (_match, content: string) => content
+    .split(/\\\\(?:\s*\[[^\]]*\])?/)
+    .map((line: string) => line.replace(/&/g, '').trim())
+    .filter((line: string) => line !== '')
+    .map((line: string) => `\n$$${line}$$\n`)
+    .join('\n'))
+}
 
 // latex.js runs in the browser without the filesystem-backed package loader
 // used by its CLI. Keep the stored source untouched, but give the browser
@@ -82,7 +101,7 @@ const DOCUMENT_BODY = /\\begin\s*\{\s*document\s*\}([\s\S]*?)\\end\s*\{\s*docume
 // parse error.
 function browserPreviewSource(tex: string): string {
   const body = tex.match(DOCUMENT_BODY)?.[1] ?? tex
-  return '\\documentclass{article}\n\\begin{document}\n' + body.trim() + '\n\\end{document}'
+  return '\\documentclass{article}\n\\begin{document}\n' + normalizeDisplayEnvironments(body).trim() + '\n\\end{document}'
 }
 
 // Lazy-load latex.js + assemble the shadow-root stylesheet exactly once; cache
