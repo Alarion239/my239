@@ -1,15 +1,22 @@
 import { useEffect } from 'react'
 import { useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { queryKeys, useApiClient } from '@my239/shared'
+import {
+  applyCenterGridSeriesCells,
+  fetchCenterGridSeriesCells,
+  queryKeys,
+  useApiClient,
+  type ApiClient,
+  type CenterGridResponse,
+} from '@my239/shared'
 
 // CenterLayout mounts this hook once per center so every open page under the
 // layout shares one SSE stream. Do not mount it from individual pages.
 
 // useCenterEvents opens ONE SSE stream for a center and translates each pushed
-// `kind` into the matching React Query invalidations, so every open page under
-// the center layout refetches the affected GET endpoints. Pauses while the tab
-// is hidden (visibilitychange) and reconnects when visible. Cleans up on
-// unmount / center change.
+// `kind` into the matching React Query refreshes, so every open page under the
+// center layout stays current. Mutable series state is fetched sparsely;
+// structural changes still invalidate their observed views. Pauses while the
+// tab is hidden and reconnects when visible.
 export function useCenterEvents(centerId: number): void {
   const client = useApiClient()
   const qc = useQueryClient()
@@ -17,6 +24,8 @@ export function useCenterEvents(centerId: number): void {
   useEffect(() => {
     if (!Number.isFinite(centerId) || centerId <= 0) return
     let controller: AbortController | null = null
+    let connected = false
+    const seriesRefresh = new SeriesRefreshQueue(qc, client, centerId)
 
     const start = () => {
       if (controller) return
@@ -24,12 +33,18 @@ export function useCenterEvents(centerId: number): void {
       client
         .streamEvents(
           '/mathcenter/centers/' + centerId + '/events',
-          (kind, data) => handleCenterEvent(qc, centerId, kind, data),
+          (kind, data) =>
+            handleCenterEvent(qc, centerId, kind, data, (seriesId) =>
+              seriesRefresh.schedule(seriesId),
+            ),
           controller.signal,
-          // The server does not replay events. Refresh on the initial
-          // connection and every reconnect so a transient network gap cannot
-          // leave either the conduit or phone queue stale.
-          () => refreshCenterViews(qc, centerId),
+          // The server does not replay events. The first connection races the
+          // page snapshot intentionally; later reconnects catch up views that
+          // may have missed events while the stream was down or hidden.
+          () => {
+            if (connected) refreshCenterViews(qc, centerId)
+            connected = true
+          },
         )
         .catch(() => undefined)
     }
@@ -47,8 +62,69 @@ export function useCenterEvents(centerId: number): void {
     return () => {
       document.removeEventListener('visibilitychange', onVisibility)
       stop()
+      seriesRefresh.dispose()
     }
   }, [centerId, client, qc])
+}
+
+interface SeriesRefreshState {
+  running: boolean
+  dirty: boolean
+}
+
+// SeriesRefreshQueue serializes refreshes per series. A burst of grading or
+// comment events produces at most one in-flight request and one trailing
+// request, while results are applied in completion order.
+export class SeriesRefreshQueue {
+  private readonly states = new Map<number, SeriesRefreshState>()
+  private disposed = false
+
+  constructor(
+    private readonly qc: QueryClient,
+    private readonly client: ApiClient,
+    private readonly centerId: number,
+  ) {}
+
+  schedule(seriesId: number): void {
+    if (this.disposed || seriesId <= 0) return
+    const existing = this.states.get(seriesId)
+    if (existing?.running) {
+      existing.dirty = true
+      return
+    }
+    const state: SeriesRefreshState = { running: true, dirty: false }
+    this.states.set(seriesId, state)
+    void this.run(seriesId, state)
+  }
+
+  dispose(): void {
+    this.disposed = true
+    this.states.clear()
+  }
+
+  private async run(seriesId: number, state: SeriesRefreshState): Promise<void> {
+    do {
+      state.dirty = false
+      try {
+        const snapshot = await this.qc.fetchQuery({
+          queryKey: queryKeys.centerGridSeriesCells(this.centerId, seriesId),
+          queryFn: () => fetchCenterGridSeriesCells(this.client, this.centerId, seriesId),
+          staleTime: 0,
+          retry: false,
+        })
+        if (!this.disposed) {
+          this.qc.setQueriesData<CenterGridResponse>(
+            { queryKey: queryKeys.centerGrids(this.centerId) },
+            (grid) => applyCenterGridSeriesCells(grid, snapshot),
+          )
+        }
+      } catch {
+        // Keep the visible grid. A later event or reconnect will retry.
+      }
+    } while (!this.disposed && state.dirty)
+
+    if (!this.disposed) this.states.delete(seriesId)
+  }
 }
 
 export function handleCenterEvent(
@@ -56,6 +132,7 @@ export function handleCenterEvent(
   centerId: number,
   kind: string,
   data: string,
+  refreshSeries?: (seriesId: number) => void,
 ): void {
   let seriesId = 0
   try {
@@ -71,8 +148,11 @@ export function handleCenterEvent(
       qc.invalidateQueries({
         queryKey: ['homework', 'series', seriesId, 'queue'],
       })
+      if (refreshSeries) refreshSeries(seriesId)
+      else qc.invalidateQueries({ queryKey: queryKeys.centerGrids(centerId) })
+    } else {
+      qc.invalidateQueries({ queryKey: queryKeys.centerGrids(centerId) })
     }
-    qc.invalidateQueries({ queryKey: queryKeys.centerGrids(centerId) })
     qc.invalidateQueries({ queryKey: queryKeys.manageRosterBoard(centerId) })
     qc.invalidateQueries({ queryKey: queryKeys.graderStats(centerId) })
     qc.invalidateQueries({ queryKey: queryKeys.coffinQueue(centerId) })
@@ -100,8 +180,13 @@ export function handleCenterEvent(
     // An internal note was added/edited/removed: refresh the grid marks.
     if (seriesId > 0) {
       qc.invalidateQueries({ queryKey: queryKeys.teacherGrid(seriesId) })
+      if (refreshSeries) refreshSeries(seriesId)
+      else qc.invalidateQueries({ queryKey: queryKeys.centerGrids(centerId) })
+    } else {
+      // Student-level notes are represented on roster rows, so the complete
+      // center snapshot is still required when no series is attached.
+      qc.invalidateQueries({ queryKey: queryKeys.centerGrids(centerId) })
     }
-    qc.invalidateQueries({ queryKey: queryKeys.centerGrids(centerId) })
   } else if (kind === 'membership') {
     qc.invalidateQueries({ queryKey: queryKeys.manageGroups(centerId) })
     qc.invalidateQueries({ queryKey: queryKeys.manageTeachers(centerId) })

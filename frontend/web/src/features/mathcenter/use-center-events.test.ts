@@ -1,7 +1,11 @@
 import { QueryClient } from '@tanstack/react-query'
-import { describe, expect, it } from 'vitest'
-import { queryKeys } from '@my239/shared'
-import { handleCenterEvent, refreshCenterViews } from './use-center-events'
+import { describe, expect, it, vi } from 'vitest'
+import { queryKeys, type ApiClient, type CenterGridResponse } from '@my239/shared'
+import {
+  handleCenterEvent,
+  refreshCenterViews,
+  SeriesRefreshQueue,
+} from './use-center-events'
 
 function queryClient(): QueryClient {
   return new QueryClient({
@@ -14,7 +18,7 @@ function seed(client: QueryClient, key: readonly unknown[]): void {
 }
 
 describe('center live events', () => {
-  it('refreshes both the center conduit and shared phone queue after grading', () => {
+  it('refreshes only the affected series and the shared phone queue after grading', () => {
     const client = queryClient()
     const conduitKey = queryKeys.centerGrid(2, 1)
     const sharedQueueKey = queryKeys.graderQueue(7, false)
@@ -23,16 +27,88 @@ describe('center live events', () => {
     seed(client, sharedQueueKey)
     seed(client, personalQueueKey)
 
-    handleCenterEvent(
-      client,
-      2,
-      'grading',
-      JSON.stringify({ series_id: 7 }),
-    )
+    const refreshSeries = vi.fn()
+    handleCenterEvent(client, 2, 'grading', JSON.stringify({ series_id: 7 }), refreshSeries)
 
-    expect(client.getQueryState(conduitKey)?.isInvalidated).toBe(true)
+    expect(refreshSeries).toHaveBeenCalledWith(7)
+    expect(client.getQueryState(conduitKey)?.isInvalidated).not.toBe(true)
     expect(client.getQueryState(sharedQueueKey)?.isInvalidated).toBe(true)
     expect(client.getQueryState(personalQueueKey)?.isInvalidated).toBe(true)
+  })
+
+  it('keeps student-level comment events on the full-grid path', () => {
+    const client = queryClient()
+    const conduitKey = queryKeys.centerGrid(2, 1)
+    seed(client, conduitKey)
+
+    handleCenterEvent(client, 2, 'comments', JSON.stringify({ student_id: 9 }))
+
+    expect(client.getQueryState(conduitKey)?.isInvalidated).toBe(true)
+  })
+
+  it('coalesces rapid refreshes and runs one trailing request', async () => {
+    const client = queryClient()
+    const gridKey = queryKeys.centerGrid(2, 1)
+    const grid: CenterGridResponse = {
+      groups: [],
+      series: [
+        {
+          series_id: 7,
+          number: 1,
+          name: 'S',
+          display_name: 'S',
+          due_at: '2026-08-01T00:00:00Z',
+          columns: [
+            {
+              subproblem_id: 70,
+              subproblem_label: '',
+              problem_id: 1,
+              problem_number: 1,
+              column_label: '1',
+              is_coffin: false,
+            },
+          ],
+        },
+      ],
+      cells: {
+        '9:70': { thread_id: 1, current_status: 'ungraded' },
+      },
+      graders: {},
+    }
+    client.setQueryData(gridKey, grid)
+    const responses: Array<(value: unknown) => void> = []
+    const request = vi.fn(
+      () => new Promise((resolve) => responses.push(resolve)),
+    )
+    const queue = new SeriesRefreshQueue(
+      client,
+      { request } as unknown as ApiClient,
+      2,
+    )
+
+    queue.schedule(7)
+    queue.schedule(7)
+    await Promise.resolve()
+    expect(request).toHaveBeenCalledTimes(1)
+
+    responses[0]({
+      series_id: 7,
+      cells: { '9:70': { thread_id: 2, current_status: 'accepted' } },
+      graders: {},
+    })
+    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(2))
+
+    responses[1]({
+      series_id: 7,
+      cells: { '9:70': { thread_id: 3, current_status: 'accepted' } },
+      graders: {},
+    })
+    await vi.waitFor(() =>
+      expect(client.getQueryData<CenterGridResponse>(gridKey)?.cells['9:70']?.thread_id).toBe(3),
+    )
+
+    expect(client.getQueryData<CenterGridResponse>(gridKey)?.cells['9:70']?.thread_id).toBe(3)
+    queue.dispose()
   })
 
   it('catches up active center views after a hidden-tab pause', () => {

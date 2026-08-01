@@ -11,6 +11,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/Alarion239/my239/backend/internal/logger"
 )
 
 // Pool tuning defaults. They are applied unless the connection string already
@@ -68,6 +70,13 @@ func New(ctx context.Context, connectionString string) (*DB, error) {
 	if err := applyPoolDefaults(connectionString, cfg); err != nil {
 		return nil, err
 	}
+	logger.LogInfo("database pool configured",
+		"max_conns", cfg.MaxConns,
+		"min_conns", cfg.MinConns,
+		"max_conn_lifetime", cfg.MaxConnLifetime.String(),
+		"max_conn_idle_time", cfg.MaxConnIdleTime.String(),
+		"health_check_period", cfg.HealthCheckPeriod.String(),
+	)
 
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {

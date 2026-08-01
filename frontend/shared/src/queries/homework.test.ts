@@ -1,7 +1,11 @@
 import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
-import type { CenterGridResponse, ThreadView } from '../types'
-import { applyThreadToCenterGrid } from './homework'
+import type {
+  CenterGridResponse,
+  CenterGridSeriesCellsResponse,
+  ThreadView,
+} from '../types'
+import { applyCenterGridSeriesCells, applyThreadToCenterGrid } from './homework'
 import { queryKeys } from './keys'
 
 const grid: CenterGridResponse = {
@@ -84,5 +88,42 @@ describe('applyThreadToCenterGrid', () => {
         queryKeys.centerGrid(2099, 5),
       )?.cells['10:20']?.current_status,
     ).toBe('accepted')
+  })
+})
+
+describe('applyCenterGridSeriesCells', () => {
+  it('replaces only the affected series cells and keeps unrelated cells', () => {
+    const oldCell = {
+      thread_id: 1,
+      current_status: 'ungraded' as const,
+    }
+    const freshCell = {
+      thread_id: 2,
+      current_status: 'accepted' as const,
+    }
+    const snapshot: CenterGridSeriesCellsResponse = {
+      series_id: 2,
+      cells: { '10:20': freshCell },
+      graders: { '8': 'АК' },
+    }
+    const result = applyCenterGridSeriesCells(
+      {
+        ...grid,
+        cells: { '10:20': oldCell, '10:99': oldCell },
+      },
+      snapshot,
+    )
+
+    expect(result?.cells).toEqual({ '10:20': freshCell, '10:99': oldCell })
+    expect(result?.graders).toEqual({ '8': 'АК' })
+  })
+
+  it('does not change a grid that does not contain the series', () => {
+    const snapshot: CenterGridSeriesCellsResponse = {
+      series_id: 999,
+      cells: {},
+      graders: {},
+    }
+    expect(applyCenterGridSeriesCells(grid, snapshot)).toBe(grid)
   })
 })

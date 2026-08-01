@@ -26,7 +26,7 @@ import {
   type CenterGridSeries,
   type CenterGridStudentEntry,
 } from '@my239/shared'
-import { Card, Input, Spinner } from '../../design/ui'
+import { Button, Card, Input, Spinner } from '../../design/ui'
 import { cn } from '../../design/cn'
 import { usePhoneViewport } from '../../use-phone-viewport'
 import { ThreadCommentCell } from './cell-comment'
@@ -84,10 +84,17 @@ export function ConduitPage() {
 }
 
 function Conduit({ centerId, termId }: { centerId: number; termId: number }) {
-  const { data, isPending, isError } = useCenterGrid(centerId, termId)
-  if (isPending) return <CenteredSpinner />
-  if (isError || !data) {
-    return <p className="py-10 text-sm text-danger">Не удалось загрузить кондуит.</p>
+  const { data, isPending, isError, refetch } = useCenterGrid(centerId, termId)
+  if (isPending && !data) return <CenteredSpinner />
+  if (!data) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-10 text-sm text-danger">
+        <p>Не удалось загрузить кондуит.</p>
+        <Button type="button" variant="secondary" onClick={() => void refetch()}>
+          Повторить
+        </Button>
+      </div>
+    )
   }
   const hasRows = data.groups.some((g) => g.students.length > 0)
   const hasCols = data.series.some((s) => s.columns.length > 0)
@@ -98,7 +105,19 @@ function Conduit({ centerId, termId }: { centerId: number; termId: number }) {
       </Card>
     )
   }
-  return <ConduitTable centerId={centerId} termId={termId} data={data} />
+  return (
+    <>
+      {isError && (
+        <div className="flex items-center justify-center gap-3 py-2 text-sm text-danger">
+          <span>Не удалось обновить кондуит.</span>
+          <Button type="button" variant="secondary" onClick={() => void refetch()}>
+            Повторить
+          </Button>
+        </div>
+      )}
+      <ConduitTable centerId={centerId} termId={termId} data={data} />
+    </>
+  )
 }
 
 // flatCol is a column with the bookkeeping the table needs: which series it

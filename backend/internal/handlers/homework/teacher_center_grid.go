@@ -146,6 +146,7 @@ func GetCenterGrid(database *db.DB) http.HandlerFunc {
 			"cells_ms", timings.cells.Milliseconds(),
 			"assembly_ms", timings.assembly.Milliseconds(),
 			"total_ms", time.Since(started).Milliseconds(),
+			"status", http.StatusOK,
 		)
 		httpx.WriteJSON(w, http.StatusOK, response)
 	}

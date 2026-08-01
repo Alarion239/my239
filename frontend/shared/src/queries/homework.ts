@@ -167,6 +167,36 @@ export function applyThreadToCenterGrid(
   }
 }
 
+// applyCenterGridSeriesCells replaces only one series in every cached center
+// grid that contains it. The full roster and column metadata remain untouched,
+// while stale cells for the series are removed before the fresh sparse snapshot
+// is merged.
+export function applyCenterGridSeriesCells(
+  grid: CenterGridResponse | undefined,
+  snapshot: CenterGridSeriesCellsResponse,
+): CenterGridResponse | undefined {
+  if (!grid) return grid
+  const series = grid.series.find((item) => item.series_id === snapshot.series_id)
+  if (!series) return grid
+
+  const subproblemIds = new Set(
+    series.columns.map((column) => column.subproblem_id),
+  )
+  const cells = { ...grid.cells }
+  for (const key of Object.keys(cells)) {
+    // The student id is the part before the colon; the subproblem id is the
+    // part after it. Keep malformed keys rather than dropping unrelated data.
+    const subproblemID = Number(key.slice(key.indexOf(':') + 1))
+    if (key.includes(':') && subproblemIds.has(subproblemID)) delete cells[key]
+  }
+
+  return {
+    ...grid,
+    cells: { ...cells, ...snapshot.cells },
+    graders: { ...grid.graders, ...snapshot.graders },
+  }
+}
+
 // applyThread writes a fresh ThreadView into the thread cache and invalidates
 // every list view that reflects its state (the student rollup, teacher stats,
 // the queue in both `mine` variants, the grid, and the center grader stats).

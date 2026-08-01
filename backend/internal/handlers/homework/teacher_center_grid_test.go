@@ -3,6 +3,7 @@ package homework_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -154,5 +155,114 @@ func TestGetCenterGrid_NonTeacherForbidden(t *testing.T) {
 	r.ServeHTTP(rr, req)
 	if rr.Code != http.StatusForbidden {
 		t.Errorf("got %d, want 403", rr.Code)
+	}
+}
+
+func TestGetCenterGrid_RollsBackAfterSnapshotStageFailure(t *testing.T) {
+	t.Parallel()
+	stages := []struct {
+		name  string
+		query string
+	}{
+		{name: "roster", query: `FROM math_center_groups g`},
+		{name: "columns", query: `FROM math_center_series s`},
+		{name: "cells", query: `FROM homework_thread t`},
+	}
+
+	for _, stage := range stages {
+		t.Run(stage.name, func(t *testing.T) {
+			mock, _ := pgxmock.NewPool()
+			defer mock.Close()
+			r, access, _ := newRouter(t, mock)
+			expectTeacherCheck(mock, 3, 42, true)
+			mock.ExpectBeginTx(pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+			if stage.name == "columns" {
+				mock.ExpectQuery(`FROM math_center_groups g`).
+					WithArgs(int64(42), int64(5)).
+					WillReturnRows(mock.NewRows(centerGridRosterColumns))
+			}
+			if stage.name == "cells" {
+				mock.ExpectQuery(`FROM math_center_groups g`).
+					WithArgs(int64(42), int64(5)).
+					WillReturnRows(mock.NewRows(centerGridRosterColumns))
+				mock.ExpectQuery(`FROM math_center_series s`).
+					WithArgs(int64(42), int64(5)).
+					WillReturnRows(mock.NewRows(centerGridColumnColumns))
+			}
+			mock.ExpectQuery(stage.query).
+				WithArgs(int64(42), int64(5)).
+				WillReturnError(errors.New("snapshot stage failed"))
+			mock.ExpectRollback()
+
+			req := authedRequest(t, access, 3, false, http.MethodGet, "/centers/42/grid?term_id=5", nil)
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req)
+			if rr.Code != http.StatusInternalServerError {
+				t.Fatalf("got %d, want 500; body=%s", rr.Code, rr.Body.String())
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatalf("mock expectations: %v", err)
+			}
+		})
+	}
+}
+
+func TestGetCenterGridSeriesCells_Empty(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+	expectTeacherCheck(mock, 3, 42, true)
+	now := time.Now()
+	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(seriesColumns).
+			AddRow(int64(100), int64(42), int32(1), "S", now, (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
+	mock.ExpectQuery(`FROM homework_thread t`).
+		WithArgs(int64(42), int64(100)).
+		WillReturnRows(mock.NewRows(centerGridCellColumns))
+
+	req := authedRequest(t, access, 3, false, http.MethodGet, "/centers/42/grid/series/100/cells", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	var response struct {
+		SeriesID int64                      `json:"series_id"`
+		Cells    map[string]json.RawMessage `json:"cells"`
+		Graders  map[string]string          `json:"graders"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.SeriesID != 100 || len(response.Cells) != 0 || len(response.Graders) != 0 {
+		t.Fatalf("response: %+v", response)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("mock expectations: %v", err)
+	}
+}
+
+func TestGetCenterGridSeriesCells_WrongCenterNotFound(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+	expectTeacherCheck(mock, 3, 42, true)
+	now := time.Now()
+	mock.ExpectQuery(`SELECT .* FROM math_center_series WHERE id`).
+		WithArgs(int64(100)).
+		WillReturnRows(mock.NewRows(seriesColumns).
+			AddRow(int64(100), int64(99), int32(1), "S", now, (*string)(nil), (*time.Time)(nil), now, (*string)(nil)))
+
+	req := authedRequest(t, access, 3, false, http.MethodGet, "/centers/42/grid/series/100/cells", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("got %d, want 404; body=%s", rr.Code, rr.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("mock expectations: %v", err)
 	}
 }
