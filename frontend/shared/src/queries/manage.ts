@@ -212,7 +212,7 @@ export function useManageAddStudent(centerId: number) {
   const client = useApiClient()
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { user_id: number; group_id: number }) =>
+    mutationFn: (body: { user_id: number; group_id?: number }) =>
       client.request<MathCenterStudent>(base(centerId) + '/students', {
         method: 'POST',
         body,

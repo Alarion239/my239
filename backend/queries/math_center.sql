@@ -52,7 +52,8 @@ WHERE id = $1;
 -- name: DeleteMathCenterGroup :execrows
 DELETE
 FROM math_center_groups
-WHERE id = $1;
+WHERE id = $1
+  AND name <> 'Не распределены';
 
 -- name: AddStudentToGroup :one
 INSERT INTO math_center_students (
@@ -175,8 +176,8 @@ FROM published_series;
 
 -- name: ListRosterBoardStudentsForManage :many
 -- The allocation board compares the active roster with the immediately
--- preceding term. A student may therefore have no active-period enrollment
--- and still appear as an unallocated candidate. Rating is deliberately a
+-- preceding term. The protected "Не распределены" group is represented as a
+-- null current/previous group in this management view. Rating is deliberately a
 -- derived value: it currently mirrors the credited "Решено" total and can be
 -- replaced by a difficulty-weighted calculation without changing the API.
 WITH active_term AS (
@@ -219,14 +220,16 @@ candidates AS (
     WHERE student.term_id = (SELECT id FROM previous_term)
 ),
 current_enrollment AS (
-    SELECT student.user_id, student.group_id
+    SELECT student.user_id,
+           CASE WHEN group_row.name = 'Не распределены' THEN NULL::bigint ELSE student.group_id END AS group_id
     FROM math_center_students student
+    JOIN math_center_groups group_row ON group_row.id = student.group_id
     WHERE student.term_id = (SELECT id FROM active_term)
 ),
 previous_enrollment AS (
     SELECT student.user_id,
-           group_row.id AS group_id,
-           group_row.name AS group_name
+           CASE WHEN group_row.name = 'Не распределены' THEN NULL::bigint ELSE group_row.id END AS group_id,
+           CASE WHEN group_row.name = 'Не распределены' THEN NULL::text ELSE group_row.name END AS group_name
     FROM math_center_students student
     JOIN math_center_groups group_row ON group_row.id = student.group_id
     WHERE student.term_id = (SELECT id FROM previous_term)
@@ -260,6 +263,7 @@ SELECT candidate.user_id,
        current_enrollment.group_id AS current_group_id,
        previous_enrollment.group_id AS previous_group_id,
        previous_enrollment.group_name AS previous_group_name,
+       (previous_enrollment.user_id IS NOT NULL)::boolean AS previous_term_enrolled,
        user_row.first_name,
        user_row.middle_name,
        user_row.last_name,

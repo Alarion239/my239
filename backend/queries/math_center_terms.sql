@@ -50,6 +50,32 @@ FROM math_center_groups g
 WHERE g.term_id = $1
 ORDER BY g.name ASC;
 
+-- name: GetUnassignedGroupForTerm :one
+SELECT id, math_center_id, name, created_at, term_id
+FROM math_center_groups
+WHERE term_id = $1
+  AND name = 'Не распределены';
+
+-- name: CopyStudentsToUnassignedGroup :exec
+INSERT INTO math_center_students (
+    user_id,
+    group_id,
+    term_id,
+    razbor_default_video,
+    razbor_default_pdf_tex
+)
+SELECT student.user_id,
+       target_group.id,
+       target_group.term_id,
+       student.razbor_default_video,
+       student.razbor_default_pdf_tex
+FROM math_center_students student
+JOIN math_center_groups target_group
+  ON target_group.term_id = $2
+ AND target_group.name = 'Не распределены'
+WHERE student.term_id = $1
+ON CONFLICT (user_id, term_id) DO NOTHING;
+
 -- name: ListGroupsForTerm :many
 SELECT id, math_center_id, name, created_at, term_id
 FROM math_center_groups

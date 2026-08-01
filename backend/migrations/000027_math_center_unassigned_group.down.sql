@@ -1,0 +1,2 @@
+-- The system group and its enrollments are intentionally retained on rollback
+-- so a rollback cannot remove students from a center or their work history.

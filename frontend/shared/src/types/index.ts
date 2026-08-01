@@ -104,6 +104,7 @@ export interface TeacherView {
 export interface StudentView {
   center: CenterInfo
   group: GroupInfo
+  is_unassigned?: boolean
   head_teachers: TeacherInfo[]
 }
 
@@ -341,6 +342,7 @@ export interface ManageRosterBoardStudent {
   current_group_id: number | null
   previous_group_id: number | null
   previous_group_name: string | null
+  previous_term_enrolled?: boolean
   first_name: string
   middle_name?: string | null
   last_name: string

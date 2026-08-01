@@ -15,6 +15,7 @@ import (
 
 	internalAuth "github.com/Alarion239/my239/backend/internal/auth"
 	"github.com/Alarion239/my239/backend/internal/handlers/admin"
+	mc "github.com/Alarion239/my239/backend/internal/mathcenter"
 	"github.com/Alarion239/my239/backend/internal/store"
 	"github.com/Alarion239/my239/backend/pkg/db"
 )
@@ -117,6 +118,10 @@ func TestCreateMathCenter_CreatesInitialTerm(t *testing.T) {
 		WithArgs(int64(12), "academic", pgxmock.AnyArg()).
 		WillReturnRows(mock.NewRows(termColumns).
 			AddRow(int64(21), int64(12), "academic", &grade, true, now, (*time.Time)(nil)))
+	mock.ExpectQuery(`INSERT INTO math_center_groups`).
+		WithArgs(int64(21), mc.UnassignedGroupName).
+		WillReturnRows(mock.NewRows(termGroupColumns).
+			AddRow(int64(31), int64(12), mc.UnassignedGroupName, now, int64(21)))
 	mock.ExpectCommit()
 
 	body := accountBody(t, map[string]any{
@@ -164,6 +169,10 @@ func TestCreateGroup_RepairsCenterWithoutTerm(t *testing.T) {
 		WithArgs(int64(12), "academic", pgxmock.AnyArg()).
 		WillReturnRows(mock.NewRows(termColumns).
 			AddRow(int64(21), int64(12), "academic", &grade, true, now, (*time.Time)(nil)))
+	mock.ExpectQuery(`INSERT INTO math_center_groups`).
+		WithArgs(int64(21), mc.UnassignedGroupName).
+		WillReturnRows(mock.NewRows(termGroupColumns).
+			AddRow(int64(30), int64(12), mc.UnassignedGroupName, now, int64(21)))
 	mock.ExpectQuery(`INSERT INTO math_center_groups`).
 		WithArgs(int64(21), "А").
 		WillReturnRows(mock.NewRows(termGroupColumns).

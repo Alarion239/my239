@@ -99,8 +99,8 @@ func TestManage_RosterBoardSnapshot(t *testing.T) {
 		WithArgs(int64(42)).
 		WillReturnRows(mock.NewRows([]string{
 			"user_id", "current_group_id", "previous_group_id", "previous_group_name",
-			"first_name", "middle_name", "last_name", "rating", "published_series_count", "rating_term_id",
-		}).AddRow(int64(101), nil, nil, nil, "Ира", nil, "Петрова", float64(4), int64(3), int64(19)))
+			"previous_term_enrolled", "first_name", "middle_name", "last_name", "rating", "published_series_count", "rating_term_id",
+		}).AddRow(int64(101), nil, nil, nil, false, "Ира", nil, "Петрова", float64(4), int64(3), int64(19)))
 
 	req := authedAdminRequest(t, access, 9, http.MethodGet, "/centers/42/manage/roster-board", nil)
 	rr := httptest.NewRecorder()
@@ -149,9 +149,21 @@ func TestManage_UnallocateStudentByUserIsIdempotent(t *testing.T) {
 			"id", "username", "password_hash", "first_name", "middle_name", "last_name",
 			"invitation_token_id", "created_at", "updated_at", "is_admin", "is_math_center",
 		}).AddRow(int64(101), "ira", "", "Ира", nil, "Петрова", nil, now, now, false, false))
-	mock.ExpectExec(`DELETE FROM math_center_students student`).
+	mock.ExpectQuery(`FROM math_center_groups\s+WHERE term_id = \$1`).
+		WithArgs(int64(20)).
+		WillReturnRows(mock.NewRows([]string{"id", "math_center_id", "name", "created_at", "term_id"}).
+			AddRow(int64(30), int64(42), "Не распределены", now, int64(20)))
+	mock.ExpectQuery(`FROM math_center_groups\s+WHERE id = \$1`).
+		WithArgs(int64(30)).
+		WillReturnRows(mock.NewRows([]string{"id", "math_center_id", "term_id"}).
+			AddRow(int64(30), int64(42), int64(20)))
+	mock.ExpectQuery(`FROM math_center_teachers`).
 		WithArgs(int64(101), int64(42)).
-		WillReturnResult(pgxmock.NewResult("DELETE", 0))
+		WillReturnRows(mock.NewRows([]string{"exists"}).AddRow(false))
+	mock.ExpectQuery(`FROM math_center_students student\s+JOIN math_center_groups group_row`).
+		WithArgs(int64(101), int64(42)).
+		WillReturnRows(mock.NewRows([]string{"id", "user_id", "group_id", "term_id", "can_view_razbors", "razbor_default_video", "razbor_default_pdf_tex"}).
+			AddRow(int64(55), int64(101), int64(30), int64(20), true, false, false))
 
 	req := authedAdminRequest(t, access, 9, http.MethodPut, "/centers/42/manage/students/101/group", strings.NewReader(`{"group_id":null}`))
 	req.Header.Set("Content-Type", "application/json")

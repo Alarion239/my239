@@ -51,6 +51,37 @@ func (q *Queries) CopyGroupsToTerm(ctx context.Context, arg CopyGroupsToTermPara
 	return err
 }
 
+const copyStudentsToUnassignedGroup = `-- name: CopyStudentsToUnassignedGroup :exec
+INSERT INTO math_center_students (
+    user_id,
+    group_id,
+    term_id,
+    razbor_default_video,
+    razbor_default_pdf_tex
+)
+SELECT student.user_id,
+       target_group.id,
+       target_group.term_id,
+       student.razbor_default_video,
+       student.razbor_default_pdf_tex
+FROM math_center_students student
+JOIN math_center_groups target_group
+  ON target_group.term_id = $2
+ AND target_group.name = 'Не распределены'
+WHERE student.term_id = $1
+ON CONFLICT (user_id, term_id) DO NOTHING
+`
+
+type CopyStudentsToUnassignedGroupParams struct {
+	TermID   int64 `json:"term_id"`
+	TermID_2 int64 `json:"term_id_2"`
+}
+
+func (q *Queries) CopyStudentsToUnassignedGroup(ctx context.Context, arg CopyStudentsToUnassignedGroupParams) error {
+	_, err := q.db.Exec(ctx, copyStudentsToUnassignedGroup, arg.TermID, arg.TermID_2)
+	return err
+}
+
 const createMathCenterGroupForTerm = `-- name: CreateMathCenterGroupForTerm :one
 INSERT INTO math_center_groups (math_center_id, term_id, name)
 SELECT t.math_center_id, t.id, $2
@@ -173,6 +204,34 @@ func (q *Queries) GetTerm(ctx context.Context, id int64) (MathCenterTerm, error)
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.ArchivedAt,
+	)
+	return i, err
+}
+
+const getUnassignedGroupForTerm = `-- name: GetUnassignedGroupForTerm :one
+SELECT id, math_center_id, name, created_at, term_id
+FROM math_center_groups
+WHERE term_id = $1
+  AND name = 'Не распределены'
+`
+
+type GetUnassignedGroupForTermRow struct {
+	ID           int64     `json:"id"`
+	MathCenterID int64     `json:"math_center_id"`
+	Name         string    `json:"name"`
+	CreatedAt    time.Time `json:"created_at"`
+	TermID       int64     `json:"term_id"`
+}
+
+func (q *Queries) GetUnassignedGroupForTerm(ctx context.Context, termID int64) (GetUnassignedGroupForTermRow, error) {
+	row := q.db.QueryRow(ctx, getUnassignedGroupForTerm, termID)
+	var i GetUnassignedGroupForTermRow
+	err := row.Scan(
+		&i.ID,
+		&i.MathCenterID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.TermID,
 	)
 	return i, err
 }

@@ -136,6 +136,10 @@ func CreateGroup(database *db.DB) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "this center has no term and its cohort is not currently in grades 5–11")
 				return
 			}
+			if errors.Is(err, mc.ErrReservedGroupName) {
+				httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "this group name is reserved")
+				return
+			}
 			if errors.Is(err, pgx.ErrNoRows) {
 				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "center not found")
 				return
@@ -159,7 +163,22 @@ func DeleteGroup(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid id")
 			return
 		}
-		n, err := store.New(database.Pool()).DeleteMathCenterGroup(r.Context(), id)
+		q := store.New(database.Pool())
+		group, err := q.GetGroup(r.Context(), id)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "group not found")
+				return
+			}
+			logger.LogErrorContext(r.Context(), "admin/mc: get group for deletion", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to delete group")
+			return
+		}
+		if mc.IsUnassignedGroupName(group.Name) {
+			httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "the unassigned group cannot be deleted")
+			return
+		}
+		n, err := q.DeleteMathCenterGroup(r.Context(), id)
 		if err != nil {
 			logger.LogErrorContext(r.Context(), "admin/mc: delete group", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to delete group")

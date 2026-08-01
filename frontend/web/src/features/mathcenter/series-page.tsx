@@ -50,6 +50,7 @@ export function SeriesPage() {
   const centerId = useCenterIdContext()
   const { termId, term } = useCenterTermContext()
   const ctx = useSeriesContext(centerId)
+  const me = useMathCenterMe()
 
   if (!Number.isFinite(centerId) || centerId <= 0) {
     return <NotFoundState />
@@ -67,6 +68,9 @@ export function SeriesPage() {
   if (!ctx.hasAccess) {
     return <NotFoundState />
   }
+	if (ctx.isStudentView && (term === null || term.is_active) && me.data?.student?.is_unassigned) {
+		return <UnassignedStudentState headTeachers={me.data.student.head_teachers} />
+	}
 
   return (
     <div className="animate-rise flex flex-col gap-6">
@@ -79,6 +83,25 @@ export function SeriesPage() {
         isStudentView={ctx.isStudentView}
       />
     </div>
+  )
+}
+
+function UnassignedStudentState({ headTeachers }: { headTeachers: { display_name: string }[] }) {
+  return (
+    <Card className="animate-rise px-6 py-12 text-center">
+      <p className="text-lg font-medium text-ink">Вы ещё не распределены в группу.</p>
+      <p className="mx-auto mt-2 max-w-xl text-sm text-muted">
+        Попросите одного из руководителей матцентра назначить вас в учебную группу.
+      </p>
+      {headTeachers.length > 0 ? (
+        <div className="mx-auto mt-5 max-w-sm text-left">
+          <p className="text-xs font-medium uppercase tracking-wide text-faint">Руководители</p>
+          <ul className="mt-2 flex flex-col gap-1 text-sm text-ink">
+            {headTeachers.map((teacher) => <li key={teacher.display_name}>{teacher.display_name}</li>)}
+          </ul>
+        </div>
+      ) : null}
+    </Card>
   )
 }
 

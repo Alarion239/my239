@@ -191,6 +191,10 @@ func manageCreateGroup(database *db.DB, hub *live.Hub) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "this center has no term and its cohort is not currently in grades 5–11")
 				return
 			}
+			if errors.Is(err, mcdomain.ErrReservedGroupName) {
+				httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "this group name is reserved")
+				return
+			}
 			if isUniqueViolation(err) {
 				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "group with that name already exists")
 				return
@@ -217,6 +221,16 @@ func manageDeleteGroup(database *db.DB, hub *live.Hub) http.HandlerFunc {
 			return
 		}
 		if !groupInCenter(w, r, q, groupID, centerID) {
+			return
+		}
+		group, err := q.GetGroup(r.Context(), groupID)
+		if err != nil {
+			logger.LogErrorContext(r.Context(), "manage: get group for deletion", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to delete group")
+			return
+		}
+		if mcdomain.IsUnassignedGroupName(group.Name) {
+			httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "the unassigned group cannot be deleted")
 			return
 		}
 		if _, err := q.DeleteMathCenterGroup(r.Context(), groupID); err != nil {
@@ -394,7 +408,7 @@ func manageRemoveTeacher(database *db.DB, hub *live.Hub) http.HandlerFunc {
 
 type manageAddStudentRequest struct {
 	UserID  int64 `json:"user_id"`
-	GroupID int64 `json:"group_id"`
+	GroupID int64 `json:"group_id"` // zero selects the active unassigned group
 }
 
 type manageSetGroupRequest struct {
@@ -483,14 +497,15 @@ type manageRosterBoardGroup struct {
 }
 
 type manageRosterBoardStudent struct {
-	UserID            int64   `json:"user_id"`
-	CurrentGroupID    *int64  `json:"current_group_id"`
-	PreviousGroupID   *int64  `json:"previous_group_id"`
-	PreviousGroupName *string `json:"previous_group_name"`
-	FirstName         string  `json:"first_name"`
-	MiddleName        *string `json:"middle_name"`
-	LastName          string  `json:"last_name"`
-	Rating            float64 `json:"rating"`
+	UserID               int64   `json:"user_id"`
+	CurrentGroupID       *int64  `json:"current_group_id"`
+	PreviousGroupID      *int64  `json:"previous_group_id"`
+	PreviousGroupName    *string `json:"previous_group_name"`
+	PreviousTermEnrolled bool    `json:"previous_term_enrolled"`
+	FirstName            string  `json:"first_name"`
+	MiddleName           *string `json:"middle_name"`
+	LastName             string  `json:"last_name"`
+	Rating               float64 `json:"rating"`
 }
 
 type manageRosterBoardResponse struct {
@@ -581,18 +596,22 @@ func manageListRosterBoard(database *db.DB) http.HandlerFunc {
 			out.PreviousTerm = &previousView
 		}
 		for _, group := range groups {
+			if mcdomain.IsUnassignedGroupName(group.Name) {
+				continue
+			}
 			out.Groups = append(out.Groups, manageRosterBoardGroup{ID: group.ID, Name: group.Name})
 		}
 		for _, student := range students {
 			out.Students = append(out.Students, manageRosterBoardStudent{
-				UserID:            student.UserID,
-				CurrentGroupID:    student.CurrentGroupID,
-				PreviousGroupID:   student.PreviousGroupID,
-				PreviousGroupName: student.PreviousGroupName,
-				FirstName:         student.FirstName,
-				MiddleName:        student.MiddleName,
-				LastName:          student.LastName,
-				Rating:            student.Rating,
+				UserID:               student.UserID,
+				CurrentGroupID:       student.CurrentGroupID,
+				PreviousGroupID:      student.PreviousGroupID,
+				PreviousGroupName:    student.PreviousGroupName,
+				PreviousTermEnrolled: student.PreviousTermEnrolled,
+				FirstName:            student.FirstName,
+				MiddleName:           student.MiddleName,
+				LastName:             student.LastName,
+				Rating:               student.Rating,
 			})
 		}
 		httpx.WriteJSON(w, http.StatusOK, out)
@@ -792,8 +811,9 @@ func manageSetRazborAccessMatrix(database *db.DB, hub *live.Hub) http.HandlerFun
 	}
 }
 
-// manageAddStudent enrolls an existing user into a group of {centerID}. Mirrors
-// admin.AddStudent, plus a guard that the target group belongs to this center.
+// manageAddStudent enrolls an existing user into a group of {centerID}. A
+// missing group selects the active unassigned bucket. Mirrors admin.AddStudent,
+// plus a guard that the target group belongs to this center.
 func manageAddStudent(database *db.DB, hub *live.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -805,8 +825,8 @@ func manageAddStudent(database *db.DB, hub *live.Hub) http.HandlerFunc {
 		if !httpx.DecodeJSONBody(w, r, &req) {
 			return
 		}
-		if req.UserID == 0 || req.GroupID == 0 {
-			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "user_id and group_id required")
+		if req.UserID == 0 {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "user_id required")
 			return
 		}
 
@@ -819,7 +839,27 @@ func manageAddStudent(database *db.DB, hub *live.Hub) http.HandlerFunc {
 		defer func() { _ = tx.Rollback(ctx) }()
 		q := store.New(tx)
 
-		group, err := q.GetGroup(ctx, req.GroupID)
+		groupID := req.GroupID
+		if groupID == 0 {
+			term, termErr := q.GetActiveTermForCenter(ctx, centerID)
+			if errors.Is(termErr, pgx.ErrNoRows) {
+				term, termErr = q.GetLegacyTermForCenter(ctx, centerID)
+			}
+			if termErr != nil {
+				logger.LogErrorContext(ctx, "manage: resolve default student term", termErr)
+				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to add student")
+				return
+			}
+			unassigned, groupErr := q.GetUnassignedGroupForTerm(ctx, term.ID)
+			if groupErr != nil {
+				logger.LogErrorContext(ctx, "manage: resolve unassigned group", groupErr)
+				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to add student")
+				return
+			}
+			groupID = unassigned.ID
+		}
+
+		group, err := q.GetGroup(ctx, groupID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "group not found")
@@ -848,7 +888,7 @@ func manageAddStudent(database *db.DB, hub *live.Hub) http.HandlerFunc {
 		}
 
 		s, err := q.AddStudentToGroup(ctx, store.AddStudentToGroupParams{
-			UserID: req.UserID, GroupID: req.GroupID,
+			UserID: req.UserID, GroupID: groupID,
 		})
 		if err != nil {
 			if isUniqueViolation(err) {
@@ -919,9 +959,9 @@ func manageSetStudentGroup(database *db.DB, hub *live.Hub) http.HandlerFunc {
 	}
 }
 
-// manageSetStudentGroupByUser assigns or unassigns a student's enrollment in
-// the active period. A nil group_id removes only that active-period row;
-// archived enrollments and homework history remain untouched.
+// manageSetStudentGroupByUser assigns a student's enrollment in the active
+// period. A nil group_id selects the protected unassigned group; the student
+// remains enrolled in the center and archived work is untouched.
 func manageSetStudentGroupByUser(database *db.DB, hub *live.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -961,25 +1001,18 @@ func manageSetStudentGroupByUser(database *db.DB, hub *live.Hub) http.HandlerFun
 			return
 		}
 
-		// A JSON null is the unallocated state. Treat it as an idempotent no-op
-		// when the user has no current enrollment.
-		if req.GroupID == 0 {
-			affected, err := q.RemoveActiveStudentByUser(ctx, store.RemoveActiveStudentByUserParams{
-				UserID: userID, MathCenterID: centerID,
-			})
-			if err != nil {
-				logger.LogErrorContext(ctx, "manage: unallocate student", err)
-				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to unallocate student")
+		targetGroupID := req.GroupID
+		if targetGroupID == 0 {
+			unassigned, unassignedErr := q.GetUnassignedGroupForTerm(ctx, active.ID)
+			if unassignedErr != nil {
+				logger.LogErrorContext(ctx, "manage: resolve unassigned group", unassignedErr)
+				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to change student group")
 				return
 			}
-			if affected > 0 {
-				live.Publish(ctx, database.Pool(), live.Event{CenterID: centerID, Kind: live.KindMembership})
-			}
-			w.WriteHeader(http.StatusNoContent)
-			return
+			targetGroupID = unassigned.ID
 		}
 
-		group, err := q.GetGroupCenter(ctx, req.GroupID)
+		group, err := q.GetGroupCenter(ctx, targetGroupID)
 		if errors.Is(err, pgx.ErrNoRows) || group.MathCenterID != centerID || group.TermID != active.ID {
 			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 				logger.LogErrorContext(ctx, "manage: validate student assignment group", err)
@@ -1005,11 +1038,11 @@ func manageSetStudentGroupByUser(database *db.DB, hub *live.Hub) http.HandlerFun
 			UserID: userID, MathCenterID: centerID,
 		})
 		if err == nil {
-			if current.GroupID == req.GroupID {
+			if current.GroupID == targetGroupID {
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}
-			if _, err := q.SetStudentGroup(ctx, store.SetStudentGroupParams{ID: current.ID, GroupID: req.GroupID}); err != nil {
+			if _, err := q.SetStudentGroup(ctx, store.SetStudentGroupParams{ID: current.ID, GroupID: targetGroupID}); err != nil {
 				logger.LogErrorContext(ctx, "manage: move student by user", err)
 				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to move student")
 				return
@@ -1034,7 +1067,7 @@ func manageSetStudentGroupByUser(database *db.DB, hub *live.Hub) http.HandlerFun
 		}
 		defer func() { _ = tx.Rollback(ctx) }()
 		txq := store.New(tx)
-		student, err := txq.AddStudentToGroup(ctx, store.AddStudentToGroupParams{UserID: userID, GroupID: req.GroupID})
+		student, err := txq.AddStudentToGroup(ctx, store.AddStudentToGroupParams{UserID: userID, GroupID: targetGroupID})
 		if err != nil {
 			if isUniqueViolation(err) {
 				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "user is already a student in this period")
@@ -1317,7 +1350,24 @@ func manageCreateInvite(database *db.DB) http.HandlerFunc {
 				CenterID: centerID, IsHeadTeacher: req.IsHeadTeacher,
 			}
 		case "student":
-			if !groupInCenter(w, r, q, req.GroupID, centerID) {
+			if req.GroupID == 0 {
+				term, termErr := q.GetActiveTermForCenter(r.Context(), centerID)
+				if errors.Is(termErr, pgx.ErrNoRows) {
+					term, termErr = q.GetLegacyTermForCenter(r.Context(), centerID)
+				}
+				if termErr != nil {
+					logger.LogErrorContext(r.Context(), "manage: resolve invite term", termErr)
+					httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to create invite")
+					return
+				}
+				unassigned, groupErr := q.GetUnassignedGroupForTerm(r.Context(), term.ID)
+				if groupErr != nil {
+					logger.LogErrorContext(r.Context(), "manage: resolve invite unassigned group", groupErr)
+					httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to create invite")
+					return
+				}
+				req.GroupID = unassigned.ID
+			} else if !groupInCenter(w, r, q, req.GroupID, centerID) {
 				return
 			}
 			preset.MathCenterStudent = &tokenpreset.MathCenterStudent{GroupID: req.GroupID}

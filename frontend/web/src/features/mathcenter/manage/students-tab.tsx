@@ -477,13 +477,13 @@ export function StudentsTab({ centerId }: { centerId: number }) {
   const [error, setError] = useState<string | null>(null)
 
   const onAdd = () => {
-    if (!picked || !addGroupId) {
-      setError('Выберите пользователя и группу')
+    if (!picked) {
+      setError('Выберите пользователя')
       return
     }
     setError(null)
     addStudent.mutate(
-      { user_id: picked.id, group_id: Number(addGroupId) },
+      { user_id: picked.id, ...(addGroupId ? { group_id: Number(addGroupId) } : {}) },
       {
         onSuccess: () => {
           setPicked(null)
@@ -507,7 +507,7 @@ export function StudentsTab({ centerId }: { centerId: number }) {
             <div className="flex flex-wrap items-center gap-3 rounded-lg bg-surface-muted px-3 py-2">
               <span className="text-sm text-ink">{fullName(picked)}</span>
               <Select value={addGroupId} onChange={(event) => setAddGroupId(event.target.value)} aria-label="Группа" className="h-9 max-w-40">
-                <option value="">Группа…</option>
+                <option value="">Не распределены (по умолчанию)</option>
                 {(groups ?? []).map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
               </Select>
               <Button type="button" variant="secondary" size="sm" onClick={onAdd}>Добавить учеником</Button>
@@ -801,7 +801,11 @@ function RosterStudentCard({
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-ink">{rosterStudentName(student)}</p>
           <p className="truncate text-xs text-muted">
-            {student.previous_group_name ? 'Предыдущая группа: ' + student.previous_group_name : 'Новый ученик'}
+            {student.previous_group_name
+              ? 'Предыдущая группа: ' + student.previous_group_name
+              : student.previous_term_enrolled
+                ? 'Не распределён в прошлом периоде'
+                : 'Новый ученик'}
           </p>
         </div>
         <span className="shrink-0 rounded-md bg-surface px-1.5 py-0.5 font-mono text-xs text-accent-ink" title="Рейтинг">

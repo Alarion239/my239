@@ -73,6 +73,7 @@ type TeacherView struct {
 type StudentView struct {
 	Center       CenterInfo    `json:"center"`
 	Group        GroupInfo     `json:"group"`
+	IsUnassigned bool          `json:"is_unassigned"`
 	HeadTeachers []TeacherInfo `json:"head_teachers"`
 }
 
@@ -217,6 +218,7 @@ func buildStudentView(ctx context.Context, q *store.Queries, userID int64, now t
 			ID:   row.GroupID,
 			Name: row.GroupName,
 		},
+		IsUnassigned: mc.IsUnassignedGroupName(row.GroupName),
 		HeadTeachers: headInfos,
 	}, nil
 }

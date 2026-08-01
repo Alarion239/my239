@@ -15,6 +15,7 @@ import (
 var (
 	ErrCohortOutsideMathCenterGrades = errors.New("cohort is not currently in grades 5–11")
 	ErrInvalidInitialTerm            = errors.New("invalid initial math center term")
+	ErrReservedGroupName             = errors.New("reserved math center group name")
 )
 
 // CreateCenterWithInitialTerm creates a usable center in one transaction. A
@@ -40,12 +41,18 @@ func CreateCenterWithInitialTerm(
 	if err != nil {
 		return store.MathCenter{}, fmt.Errorf("creating math center: %w", err)
 	}
-	if _, err := q.CreateMathCenterTerm(ctx, store.CreateMathCenterTermParams{
+	term, err := q.CreateMathCenterTerm(ctx, store.CreateMathCenterTermParams{
 		MathCenterID: center.ID,
 		Kind:         termKind,
 		Grade:        &termGrade,
-	}); err != nil {
+	})
+	if err != nil {
 		return store.MathCenter{}, fmt.Errorf("creating initial math center term: %w", err)
+	}
+	if _, err := q.CreateMathCenterGroupForTerm(ctx, store.CreateMathCenterGroupForTermParams{
+		ID: term.ID, Name: UnassignedGroupName,
+	}); err != nil {
+		return store.MathCenter{}, fmt.Errorf("creating initial unassigned group: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return store.MathCenter{}, fmt.Errorf("committing math center creation: %w", err)
@@ -63,6 +70,9 @@ func CreateGroupForCurrentTerm(
 	name string,
 	now time.Time,
 ) (store.CreateMathCenterGroupRow, error) {
+	if IsUnassignedGroupName(name) {
+		return store.CreateMathCenterGroupRow{}, ErrReservedGroupName
+	}
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		return store.CreateMathCenterGroupRow{}, fmt.Errorf("beginning group creation: %w", err)
@@ -78,6 +88,7 @@ func CreateGroupForCurrentTerm(
 	}
 
 	q := store.New(tx)
+	createdTerm := false
 	term, err := q.GetActiveTermForCenter(ctx, centerID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		term, err = q.GetLegacyTermForCenter(ctx, centerID)
@@ -92,9 +103,17 @@ func CreateGroupForCurrentTerm(
 			Kind:         TermKindAcademic,
 			Grade:        &grade,
 		})
+		createdTerm = err == nil
 	}
 	if err != nil {
 		return store.CreateMathCenterGroupRow{}, fmt.Errorf("resolving group term: %w", err)
+	}
+	if createdTerm {
+		if _, err := q.CreateMathCenterGroupForTerm(ctx, store.CreateMathCenterGroupForTermParams{
+			ID: term.ID, Name: UnassignedGroupName,
+		}); err != nil {
+			return store.CreateMathCenterGroupRow{}, fmt.Errorf("creating unassigned group: %w", err)
+		}
 	}
 	group, err := q.CreateMathCenterGroupForTerm(ctx, store.CreateMathCenterGroupForTermParams{
 		ID: term.ID, Name: name,

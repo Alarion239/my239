@@ -30,7 +30,7 @@ export function InviteSection({
         description={
           role === 'teacher'
             ? 'Ссылка-приглашение для нового преподавателя.'
-            : 'Ссылка-приглашение для нового ученика выбранной группы.'
+            : 'Ссылка-приглашение для нового ученика. Без выбора группы он попадёт в «Не распределены».'
         }
       />
 
@@ -156,7 +156,7 @@ function CreateInviteForm({
             aria-label="Группа"
             className="max-w-40"
           >
-            <option value="">Группа…</option>
+            <option value="">Не распределены (по умолчанию)</option>
             {(groups ?? []).map((g) => (
               <option key={g.id} value={g.id}>
                 {g.name}

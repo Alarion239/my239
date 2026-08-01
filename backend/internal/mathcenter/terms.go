@@ -6,7 +6,18 @@ const (
 	TermKindAcademic = "academic"
 	TermKindCamp     = "camp"
 	TermKindLegacy   = "legacy"
+
+	// UnassignedGroupName is a protected system group. Every term has one so
+	// students remain members of the center before a head teacher places them
+	// into a named teaching group.
+	UnassignedGroupName = "Не распределены"
 )
+
+// IsUnassignedGroupName reports whether a group is the protected system
+// enrollment bucket for students who have not been placed yet.
+func IsUnassignedGroupName(name string) bool {
+	return name == UnassignedGroupName
+}
 
 // TermDisplayName is the stable Russian label used by the archive picker and
 // problem references. A camp belongs to the grade just completed.

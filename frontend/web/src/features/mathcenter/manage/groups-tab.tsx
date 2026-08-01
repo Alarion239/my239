@@ -11,6 +11,7 @@ import { Button, Card, CardContent, Input, Spinner } from '../../../design/ui'
 import { ConfirmButton, SectionHeader } from '../../admin/_shared'
 
 // GroupsTab lists a center's groups and lets a head teacher add or remove them.
+// The protected "Не распределены" bucket is displayed but cannot be deleted.
 export function GroupsTab({ centerId }: { centerId: number }) {
   const { data: groups, isPending, isError } = useManageGroups(centerId)
   const createGroup = useManageCreateGroup(centerId)
@@ -62,14 +63,18 @@ export function GroupsTab({ centerId }: { centerId: number }) {
                 className="flex items-center justify-between gap-2 rounded-lg bg-surface-muted px-3 py-2"
               >
                 <span className="text-sm text-ink">{g.name}</span>
-                <ConfirmButton
-                  variant="ghost"
-                  size="sm"
-                  disabled={deleteGroup.isPending}
-                  onConfirm={() => deleteGroup.mutate(g.id)}
-                >
-                  Удалить
-                </ConfirmButton>
+                {g.name === 'Не распределены' ? (
+                  <span className="text-xs text-faint">Системная</span>
+                ) : (
+                  <ConfirmButton
+                    variant="ghost"
+                    size="sm"
+                    disabled={deleteGroup.isPending}
+                    onConfirm={() => deleteGroup.mutate(g.id)}
+                  >
+                    Удалить
+                  </ConfirmButton>
+                )}
               </li>
             ))}
           </ul>

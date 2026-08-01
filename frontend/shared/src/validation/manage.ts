@@ -3,8 +3,8 @@
 
 import { z } from 'zod'
 
-// createInviteSchema validates the invite-creation form. A student invite must
-// name a group; a teacher invite must not (the group field is ignored).
+// createInviteSchema validates the invite-creation form. A student invite may
+// omit a group and will enroll into the protected unassigned group.
 export const createInviteSchema = z
   .object({
     role: z.enum(['teacher', 'student']),
@@ -19,9 +19,5 @@ export const createInviteSchema = z
       .number({ message: 'Введите число' })
       .int('Целое число')
       .min(1, 'Минимум 1'),
-  })
-  .refine((v) => v.role !== 'student' || (v.group_id ?? 0) > 0, {
-    message: 'Выберите группу',
-    path: ['group_id'],
   })
 export type CreateInviteValues = z.infer<typeof createInviteSchema>

@@ -36,6 +36,10 @@ func TestCreateCenterWithInitialTerm(t *testing.T) {
 		WithArgs(int64(12), TermKindAcademic, pgxmock.AnyArg()).
 		WillReturnRows(mock.NewRows(bootstrapTermColumns).
 			AddRow(int64(21), int64(12), TermKindAcademic, &grade, true, now, (*time.Time)(nil)))
+	mock.ExpectQuery(`INSERT INTO math_center_groups`).
+		WithArgs(int64(21), UnassignedGroupName).
+		WillReturnRows(mock.NewRows(bootstrapGroupColumns).
+			AddRow(int64(31), int64(12), UnassignedGroupName, now, int64(21)))
 	mock.ExpectCommit()
 
 	center, err := CreateCenterWithInitialTerm(
@@ -71,6 +75,10 @@ func TestCreateCenterWithInitialTermAcceptsPastTerm(t *testing.T) {
 		WithArgs(int64(12), TermKindAcademic, pgxmock.AnyArg()).
 		WillReturnRows(mock.NewRows(bootstrapTermColumns).
 			AddRow(int64(21), int64(12), TermKindAcademic, &grade, true, now, (*time.Time)(nil)))
+	mock.ExpectQuery(`INSERT INTO math_center_groups`).
+		WithArgs(int64(21), UnassignedGroupName).
+		WillReturnRows(mock.NewRows(bootstrapGroupColumns).
+			AddRow(int64(31), int64(12), UnassignedGroupName, now, int64(21)))
 	mock.ExpectCommit()
 
 	if _, err := CreateCenterWithInitialTerm(
@@ -107,6 +115,10 @@ func TestCreateGroupForCurrentTermRepairsCenterWithoutTerms(t *testing.T) {
 		WithArgs(int64(12), TermKindAcademic, pgxmock.AnyArg()).
 		WillReturnRows(mock.NewRows(bootstrapTermColumns).
 			AddRow(int64(21), int64(12), TermKindAcademic, &grade, true, now, (*time.Time)(nil)))
+	mock.ExpectQuery(`INSERT INTO math_center_groups`).
+		WithArgs(int64(21), UnassignedGroupName).
+		WillReturnRows(mock.NewRows(bootstrapGroupColumns).
+			AddRow(int64(30), int64(12), UnassignedGroupName, now, int64(21)))
 	mock.ExpectQuery(`INSERT INTO math_center_groups`).
 		WithArgs(int64(21), "А").
 		WillReturnRows(mock.NewRows(bootstrapGroupColumns).

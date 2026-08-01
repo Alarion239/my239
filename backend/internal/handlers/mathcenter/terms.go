@@ -84,9 +84,9 @@ type createTermRequest struct {
 }
 
 // CreateTerm creates and activates the next normal term in one transaction.
-// Group definitions follow the cohort into the next term, while students are
-// intentionally left unallocated for the head teacher to place. Problem work
-// remains attached to the archived term.
+// Group definitions follow the cohort into the next term, while every prior
+// student is enrolled in the new term's protected unassigned group. Problem
+// work remains attached to the archived term.
 func CreateTerm(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -163,6 +163,26 @@ func CreateTerm(database *db.DB) http.HandlerFunc {
 				TermID_2: term.ID,
 			}); err != nil {
 				logger.LogErrorContext(ctx, "terms: copy groups", err)
+				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to create term")
+				return
+			}
+		}
+		_, err = txq.GetUnassignedGroupForTerm(ctx, term.ID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			_, err = txq.CreateMathCenterGroupForTerm(ctx, store.CreateMathCenterGroupForTermParams{
+				ID: term.ID, Name: mc.UnassignedGroupName,
+			})
+		}
+		if err != nil {
+			logger.LogErrorContext(ctx, "terms: ensure unassigned group", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to create term")
+			return
+		}
+		if sourceTermID != 0 {
+			if err := txq.CopyStudentsToUnassignedGroup(ctx, store.CopyStudentsToUnassignedGroupParams{
+				TermID: sourceTermID, TermID_2: term.ID,
+			}); err != nil {
+				logger.LogErrorContext(ctx, "terms: copy students to unassigned", err)
 				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to create term")
 				return
 			}
