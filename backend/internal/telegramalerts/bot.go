@@ -1,3 +1,5 @@
+// Package telegramalerts delivers structured server alerts through a
+// Telegram bot and manages authenticated chat subscriptions.
 package telegramalerts
 
 import (
@@ -89,7 +91,11 @@ func (b *BotClient) call(ctx context.Context, method string, payload any, result
 		// request URL. Keep only the stable transport error text.
 		return &APIError{Method: method, Description: "transport failure"}
 	}
-	defer resp.Body.Close()
+	defer func() {
+		// The response has already been bounded and consumed; a close error is
+		// not actionable at this point and must not mask the Bot API result.
+		_ = resp.Body.Close()
+	}()
 
 	limited := io.LimitReader(resp.Body, 1<<20)
 	var envelope apiResponse[json.RawMessage]

@@ -1,6 +1,7 @@
 package telegramalerts
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -44,8 +45,8 @@ func TestBotClientParsesRetryAfter(t *testing.T) {
 		}, nil
 	})})
 	err := client.SendMessage(t.Context(), 1, "test", nil)
-	apiErr, ok := err.(*APIError)
-	if !ok {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
 		t.Fatalf("error type: %T", err)
 	}
 	if apiErr.RetryAfter != 7 {

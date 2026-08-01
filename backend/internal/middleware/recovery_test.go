@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -39,7 +40,8 @@ func TestRecoveryMiddlewarePreservesAbortHandler(t *testing.T) {
 	}))
 
 	defer func() {
-		if recovered := recover(); recovered != http.ErrAbortHandler {
+		recovered, ok := recover().(error)
+		if !ok || !errors.Is(recovered, http.ErrAbortHandler) {
 			t.Fatalf("panic: got %v, want http.ErrAbortHandler", recovered)
 		}
 	}()

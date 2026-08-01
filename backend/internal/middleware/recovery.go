@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"runtime/debug"
@@ -29,7 +30,7 @@ func RecoveryMiddleware(next http.Handler) http.Handler {
 			if value == nil {
 				return
 			}
-			if value == http.ErrAbortHandler {
+			if panicErr, ok := value.(error); ok && errors.Is(panicErr, http.ErrAbortHandler) {
 				panic(value)
 			}
 

@@ -48,7 +48,8 @@ const (
 func main() {
 	err := run()
 	if err != nil {
-		if panicErr, ok := err.(*logger.PanicError); ok {
+		var panicErr *logger.PanicError
+		if errors.As(err, &panicErr) {
 			logger.LogError("server exited after background panic", err,
 				"fatal", true,
 				"panic", fmt.Sprint(panicErr.Value),
