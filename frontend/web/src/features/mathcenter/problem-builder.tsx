@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { Check, Minus, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { MAX_SUBPARTS } from '@my239/shared'
 import { cn } from '../../design/cn'
 import { Button } from '../../design/ui'
@@ -7,12 +6,6 @@ import { MAX_PROBLEMS, type ProblemDraft } from './problem-builder-model'
 
 function renumber(problems: ProblemDraft[]): ProblemDraft[] {
   return problems.map((problem, index) => ({ ...problem, number: index + 1 }))
-}
-
-function subpartHint(count: number, prefix = ''): string {
-  if (count <= 0) return 'без подзадач'
-  if (count === 1) return 'подзадача ' + prefix + 'a'
-  return prefix + 'a–' + prefix + String.fromCharCode(96 + Math.min(count, MAX_SUBPARTS))
 }
 
 export interface ProblemBuilderProps {
@@ -24,7 +17,6 @@ export interface ProblemBuilderProps {
 // Problems are created as individual cards, matching the editing rhythm of the
 // razbor workbench without importing grading colours or coffin affordances.
 export function ProblemBuilder({ value, onChange, disabled = false }: ProblemBuilderProps) {
-  const [editingKey, setEditingKey] = useState<string | null>(null)
   const exercise = value.find((problem) => problem.number === 0)
   const regular = value.filter((problem) => problem.number !== 0)
 
@@ -43,7 +35,6 @@ export function ProblemBuilder({ value, onChange, disabled = false }: ProblemBui
     const remainingExercise = remaining.find((candidate) => candidate.number === 0)
     const remainingRegular = renumber(remaining.filter((candidate) => candidate.number !== 0))
     onChange([...(remainingExercise ? [remainingExercise] : []), ...remainingRegular])
-    setEditingKey(null)
   }
 
   const addProblem = () => {
@@ -53,13 +44,11 @@ export function ProblemBuilder({ value, onChange, disabled = false }: ProblemBui
       ...regular,
       { number: regular.length + 1, subproblem_count: 0 },
     ])
-    setEditingKey('number-' + (regular.length + 1))
   }
 
   const addExercise = () => {
     if (exercise) return
     onChange([{ number: 0, subproblem_count: 0 }, ...renumber(regular)])
-    setEditingKey('number-0')
   }
 
   return (
@@ -76,61 +65,23 @@ export function ProblemBuilder({ value, onChange, disabled = false }: ProblemBui
           const isExercise = problem.number === 0
           const label = isExercise ? 'Упражнение' : 'Задача ' + problem.number
           const target = isExercise ? 'упражнение' : 'задачу ' + problem.number
-          const targetGenitive = isExercise ? 'упражнения' : 'задачи ' + problem.number
-          const targetDative = isExercise ? 'упражнению' : 'задаче ' + problem.number
-          const prefix = isExercise ? 'У' : ''
-          const editing = editingKey === key
           return (
-            <li key={key} className="rounded-xl border border-line bg-surface px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-display text-base font-medium text-ink">{label}</p>
-                  <p className="text-xs text-faint">
-                    {subpartHint(problem.subproblem_count, prefix)}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <IconButton
-                    label={editing ? 'Закончить редактирование' : 'Редактировать ' + target}
-                    disabled={disabled}
-                    onClick={() => setEditingKey(editing ? null : key)}
-                  >
-                    {editing ? <Check className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
-                  </IconButton>
-                  <IconButton
-                    label={'Удалить ' + target}
-                    disabled={disabled}
-                    danger
-                    onClick={() => remove(problem)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </IconButton>
-                </div>
-              </div>
-              {editing ? (
-                <div className="mt-3 flex items-center justify-between border-t border-line pt-3">
-                  <span className="text-sm text-muted">Подзадачи</span>
-                  <div className="flex items-center gap-1.5">
-                    <Stepper
-                      label={'Убрать подзадачу у ' + targetGenitive}
-                      disabled={disabled || problem.subproblem_count <= 0}
-                      onClick={() => updateSubparts(problem, problem.subproblem_count - 1)}
-                    >
-                      <Minus className="h-4 w-4" />
-                    </Stepper>
-                    <span className="w-7 text-center text-sm font-medium tabular-nums text-ink">
-                      {problem.subproblem_count}
-                    </span>
-                    <Stepper
-                      label={'Добавить подзадачу к ' + targetDative}
-                      disabled={disabled || problem.subproblem_count >= MAX_SUBPARTS}
-                      onClick={() => updateSubparts(problem, problem.subproblem_count + 1)}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Stepper>
-                  </div>
-                </div>
-              ) : null}
+            <li key={key} className="flex items-center gap-2 rounded-xl border border-line bg-surface px-2.5 py-2.5">
+              <p className="w-24 shrink-0 font-display text-base font-medium text-ink">{label}</p>
+              <SubpartSquares
+                label={label}
+                count={problem.subproblem_count}
+                disabled={disabled}
+                onChange={(count) => updateSubparts(problem, count)}
+              />
+              <IconButton
+                label={'Удалить ' + target}
+                disabled={disabled}
+                danger
+                onClick={() => remove(problem)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </IconButton>
             </li>
           )
         })}
@@ -154,6 +105,55 @@ export function ProblemBuilder({ value, onChange, disabled = false }: ProblemBui
           </Button>
         ) : null}
       </div>
+    </div>
+  )
+}
+
+// Six letters stay visible as the compact default. Selecting the current last
+// letter reveals the next one, so unusually long problems can still grow up to
+// the backend's alphabet limit without filling every ordinary row with a–z.
+function SubpartSquares({
+  label,
+  count,
+  disabled,
+  onChange,
+}: {
+  label: string
+  count: number
+  disabled: boolean
+  onChange: (count: number) => void
+}) {
+  const visibleCount = Math.min(MAX_SUBPARTS, Math.max(6, count >= 6 ? count + 1 : 6))
+  return (
+    <div
+      className="flex min-w-0 flex-1 gap-0.5 overflow-x-auto py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      role="group"
+      aria-label={'Подзадачи · ' + label}
+    >
+      {Array.from({ length: visibleCount }, (_, index) => {
+        const nextCount = index + 1
+        const letter = String.fromCharCode(97 + index)
+        const selected = nextCount <= count
+        return (
+          <button
+            key={letter}
+            type="button"
+            aria-label={label + ', подзадача ' + letter}
+            aria-pressed={selected}
+            disabled={disabled}
+            onClick={() => onChange(nextCount === count ? 0 : nextCount)}
+            className={cn(
+              'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border font-mono text-xs font-medium transition-colors',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-40',
+              selected
+                ? 'border-ink bg-ink text-paper'
+                : 'border-line-strong bg-surface text-muted hover:border-ink hover:text-ink',
+            )}
+          >
+            {letter}
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -183,30 +183,6 @@ function IconButton({
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-40',
         danger ? 'hover:bg-danger-soft hover:text-danger' : 'hover:bg-surface-muted hover:text-ink',
       )}
-    >
-      {children}
-    </button>
-  )
-}
-
-function Stepper({
-  label,
-  disabled,
-  onClick,
-  children,
-}: {
-  label: string
-  disabled: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      disabled={disabled}
-      onClick={onClick}
-      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-line-strong bg-surface text-ink transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-40"
     >
       {children}
     </button>

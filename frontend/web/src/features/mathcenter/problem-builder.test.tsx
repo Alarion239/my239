@@ -30,15 +30,37 @@ describe('ProblemBuilder', () => {
     expect(lastValue(onValue)).toEqual([{ number: 1, subproblem_count: 0 }])
   })
 
-  it('opens card editing and changes subproblem count', async () => {
+  it('selects a letter and every previous square, clearing every next square', async () => {
     const user = userEvent.setup()
     const onValue = vi.fn()
     render(<Harness initial={seedProblems(1)} onValue={onValue} />)
 
-    await user.click(screen.getByRole('button', { name: 'Редактировать задачу 1' }))
-    await user.click(screen.getByRole('button', { name: 'Добавить подзадачу к задаче 1' }))
-    expect(lastValue(onValue)[0].subproblem_count).toBe(1)
-    expect(screen.getByText('подзадача a')).toBeInTheDocument()
+    const group = screen.getByRole('group', { name: 'Подзадачи · Задача 1' })
+    expect(group).toHaveTextContent('abcdef')
+    await user.click(screen.getByRole('button', { name: 'Задача 1, подзадача d' }))
+    expect(lastValue(onValue)[0].subproblem_count).toBe(4)
+    for (const letter of ['a', 'b', 'c', 'd']) {
+      expect(screen.getByRole('button', { name: 'Задача 1, подзадача ' + letter })).toHaveAttribute('aria-pressed', 'true')
+    }
+    for (const letter of ['e', 'f']) {
+      expect(screen.getByRole('button', { name: 'Задача 1, подзадача ' + letter })).toHaveAttribute('aria-pressed', 'false')
+    }
+
+    await user.click(screen.getByRole('button', { name: 'Задача 1, подзадача b' }))
+    expect(lastValue(onValue)[0].subproblem_count).toBe(2)
+    expect(screen.getByRole('button', { name: 'Задача 1, подзадача c' })).toHaveAttribute('aria-pressed', 'false')
+
+    await user.click(screen.getByRole('button', { name: 'Задача 1, подзадача b' }))
+    expect(lastValue(onValue)[0].subproblem_count).toBe(0)
+  })
+
+  it('reveals more letters progressively after f', async () => {
+    const user = userEvent.setup()
+    render(<Harness initial={seedProblems(1)} onValue={() => {}} />)
+
+    expect(screen.queryByRole('button', { name: 'Задача 1, подзадача g' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Задача 1, подзадача f' }))
+    expect(screen.getByRole('button', { name: 'Задача 1, подзадача g' })).toBeInTheDocument()
   })
 
   it('deletes a card, renumbers the rest, and preserves ids', async () => {
@@ -57,7 +79,7 @@ describe('ProblemBuilder', () => {
     ])
   })
 
-  it('adds and edits an exercise without changing regular problem ids', async () => {
+  it('adds an exercise with the same square control without changing regular problem ids', async () => {
     const user = userEvent.setup()
     const onValue = vi.fn()
     render(<Harness initial={[
@@ -68,8 +90,9 @@ describe('ProblemBuilder', () => {
     await user.click(screen.getByRole('button', { name: 'Добавить упражнение' }))
     expect(lastValue(onValue).map((problem) => problem.number)).toEqual([0, 1, 2])
     expect(lastValue(onValue).map((problem) => problem.id)).toEqual([undefined, 11, 22])
-    await user.click(screen.getByRole('button', { name: 'Добавить подзадачу к упражнению' }))
-    expect(screen.getByText('подзадача Уa')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Упражнение, подзадача c' }))
+    expect(lastValue(onValue)[0].subproblem_count).toBe(3)
+    expect(screen.getByRole('button', { name: 'Упражнение, подзадача c' })).toHaveAttribute('aria-pressed', 'true')
     await user.click(screen.getByRole('button', { name: 'Удалить упражнение' }))
     expect(lastValue(onValue).map((problem) => problem.id)).toEqual([11, 22])
   })
