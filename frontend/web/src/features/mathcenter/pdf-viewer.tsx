@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Download } from 'lucide-react'
 import { Spinner } from '../../design/ui'
 import { apiClient } from '../../lib/api'
 import 'pdfjs-dist/web/pdf_viewer.css'
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?worker&url'
 
 export interface PdfViewerProps {
   // The authed blob endpoint to fetch (e.g. /mathcenter/series/7/pdf or a
@@ -23,10 +24,10 @@ function loadPdfEngine(): Promise<PdfEngine> {
     // PDF.js module creates that global, so these imports must be sequential;
     // Promise.all can race them in production and leave pdfjsLib undefined.
     enginePromise = import('pdfjs-dist').then(async (core) => {
-      core.GlobalWorkerOptions.workerSrc = new URL(
-        'pdfjs-dist/build/pdf.worker.min.mjs',
-        import.meta.url,
-      ).toString()
+      // Let Vite bundle the worker as a JavaScript worker entry. A plain asset
+      // URL preserves PDF.js's `.mjs` extension, which some static hosts serve
+      // as application/octet-stream and browsers then refuse to import.
+      core.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
       const viewer = await import('pdfjs-dist/web/pdf_viewer.mjs')
       return { ...core, ...viewer } as PdfEngine
     })
