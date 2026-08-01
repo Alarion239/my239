@@ -14,14 +14,15 @@ import { useEffect, useRef, useState } from 'react'
 // every KaTeX font file to a Vite-bundled (absolute, hashed) URL, and rewriting
 // the references before injecting the CSS into the shadow root.
 
-// Vite bundles every KaTeX font file and hands back its final hashed URL. The
-// keys are the source paths under node_modules; we index them by basename.
+// Vite bundles every KaTeX font file shipped with latex.js and hands back its
+// final hashed URL. The keys are the source paths under node_modules; we index
+// them by basename.
 //
 // The pattern is RELATIVE to this file (../../../../node_modules) rather than
-// project-root-absolute (/node_modules/…): in this npm workspace `katex` is
+// project-root-absolute (/node_modules/…): in this npm workspace `latex.js` is
 // hoisted to frontend/node_modules, not frontend/web/node_modules, so a
 // root-anchored glob would silently match nothing and ship blurry math.
-const fontUrls = import.meta.glob('../../../../node_modules/katex/dist/fonts/*', {
+const fontUrls = import.meta.glob('../../../../node_modules/latex.js/dist/fonts/*', {
   eager: true,
   query: '?url',
   import: 'default',
@@ -43,11 +44,12 @@ if (import.meta.env.DEV && fontUrlByName.size === 0) {
   )
 }
 
-// rewriteKatexFontUrls swaps every `url(fonts/<file>)` reference in the KaTeX
-// stylesheet for its bundled absolute URL so the @font-face families resolve
-// inside the shadow root.
+// rewriteKatexFontUrls swaps every `url(../fonts/<file>)` reference in
+// latex.js's matching KaTeX stylesheet for its bundled absolute URL so the
+// @font-face families resolve inside the shadow root.
 function rewriteKatexFontUrls(css: string): string {
-  return css.replace(/url\((['"]?)fonts\/([^)'"]+)\1\)/g, (whole, _q, file: string) => {
+  const normalized = css.replace(/\.\.\/fonts\//g, 'fonts/')
+  return normalized.replace(/url\((['"]?)fonts\/([^)'"]+)\1\)/g, (whole: string, _q: string, file: string) => {
     const url = fontUrlByName.get(file)
     return url ? `url("${url}")` : whole
   })
@@ -90,12 +92,13 @@ let assetsPromise: Promise<TexAssets> | null = null
 function loadTexAssets(): Promise<TexAssets> {
   if (!assetsPromise) {
     assetsPromise = (async () => {
-      // latex.js's package "exports" map blocks deep subpath imports of its
-      // dist CSS, so the base/article stylesheets are vendored locally (see
+      // latex.js's package "exports" map blocks bare deep subpath imports of
+      // its dist CSS, so the matching stylesheet is loaded by a relative raw
+      // path while the base/article stylesheets are vendored locally (see
       // ./vendor) with their broken relative @import lines already removed.
       const [latex, katexCssRaw, baseCssRaw, articleCssRaw] = await Promise.all([
         import('latex.js'),
-        import('katex/dist/katex.min.css?raw').then((m) => m.default),
+        import('../../../../node_modules/latex.js/dist/css/katex.css?raw').then((m) => m.default),
         import('./vendor/latexjs-base.css?raw').then((m) => m.default),
         import('./vendor/latexjs-article.css?raw').then((m) => m.default),
       ])

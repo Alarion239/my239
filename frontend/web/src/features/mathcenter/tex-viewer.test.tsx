@@ -20,8 +20,8 @@ describe('TexViewer', () => {
     await waitFor(() => {
       expect(host.shadowRoot?.querySelector('.katex-display')).toBeTruthy()
     })
-    expect(host.shadowRoot?.querySelector('.small-op')).toBeTruthy()
-    expect(host.shadowRoot?.querySelector('.large-op')).toBeTruthy()
+    expect(host.shadowRoot?.querySelector('.katex:not(.katex-display) .op-symbol.small-op')).toBeTruthy()
+    expect(host.shadowRoot?.querySelector('.katex-display .op-symbol.large-op')).toBeTruthy()
     expect(host.shadowRoot?.querySelector('style')?.textContent).not.toContain('font-size: 1em !important')
   })
 })
