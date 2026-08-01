@@ -48,6 +48,9 @@ func Events(hub *live.Hub, database *db.DB) http.HandlerFunc {
 			return
 		}
 
+		sub := hub.Subscribe(centerID)
+		defer hub.Unsubscribe(sub)
+
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
@@ -55,9 +58,6 @@ func Events(hub *live.Hub, database *db.DB) http.HandlerFunc {
 		w.WriteHeader(http.StatusOK)
 		_, _ = fmt.Fprint(w, ": connected\n\n")
 		flusher.Flush()
-
-		sub := hub.Subscribe(centerID)
-		defer hub.Unsubscribe(sub)
 
 		ping := time.NewTicker(sseHeartbeat)
 		defer ping.Stop()

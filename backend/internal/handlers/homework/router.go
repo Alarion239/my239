@@ -76,6 +76,7 @@ func Router(database *db.DB, hub *live.Hub, tokens *internalAuth.TokenService, b
 	// Center-scoped dashboards.
 	r.Get("/centers/{centerID}/grader-stats", GraderStats(database))
 	r.Get("/centers/{centerID}/grid", GetCenterGrid(database))
+	r.Get("/centers/{centerID}/grid/series/{seriesID}/cells", GetCenterGridSeriesCells(database))
 	r.Get("/centers/{centerID}/teachers", CenterTeachers(database))
 
 	return r

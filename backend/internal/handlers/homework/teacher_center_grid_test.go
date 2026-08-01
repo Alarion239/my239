@@ -8,19 +8,22 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/pashagolub/pgxmock/v4"
 )
 
-var centerGridColumns = []string{
+var centerGridRosterColumns = []string{
+	"group_id", "group_name", "student_user_id", "student_first_name", "student_last_name", "has_student_comment",
+}
+
+var centerGridColumnColumns = []string{
 	"series_id", "series_number", "series_name", "series_due_at",
-	"student_user_id", "student_first_name", "student_middle_name", "student_last_name",
-	"group_id", "group_name",
-	"subproblem_id", "subproblem_label", "problem_id", "problem_number", "is_coffin",
-	"coffin_released_at",
-	"thread_id", "current_status", "last_grader_user_id", "last_grader_name",
-	"grader_first_name", "grader_last_name",
-	"claim_holder_user_id", "claim_expires_at",
-	"has_internal_comment", "has_student_comment",
+	"subproblem_id", "subproblem_label", "problem_id", "problem_number", "is_coffin", "coffin_released_at",
+}
+
+var centerGridCellColumns = []string{
+	"student_user_id", "subproblem_id", "thread_id", "current_status", "last_grader_user_id", "last_grader_name",
+	"grader_first_name", "grader_last_name", "claim_holder_user_id", "claim_expires_at", "has_internal_comment",
 }
 
 func TestGetCenterGrid_HappyPath(t *testing.T) {
@@ -35,30 +38,35 @@ func TestGetCenterGrid_HappyPath(t *testing.T) {
 	due := now.Add(time.Hour)
 	graderID := int64(3)
 	grFirst, grLast := "Пётр", "Сидоров"
-	mock.ExpectQuery(`FROM math_center_students mcs\s+JOIN users u`).
-		WithArgs(int64(42)).
-		WillReturnRows(mock.NewRows(centerGridColumns).
-			// Series 1, problem 0 (У), no subparts, student A — ACCEPTED by ПС.
+	mock.ExpectBeginTx(pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	mock.ExpectQuery(`FROM math_center_groups g`).
+		WithArgs(int64(42), int64(5)).
+		WillReturnRows(mock.NewRows(centerGridRosterColumns).
+			AddRow(int64(10), "А", int64(7), "Аня", "Иванова", true))
+	mock.ExpectQuery(`FROM math_center_series s`).
+		WithArgs(int64(42), int64(5)).
+		WillReturnRows(mock.NewRows(centerGridColumnColumns).
+			// Series 1, problem 0 (У), no subparts.
 			AddRow(int64(100), int32(0), "Алгебра", due,
-				int64(7), "Аня", (*string)(nil), "Иванова",
-				int64(10), "А",
-				int64(900), "", int64(500), int32(0), true, (*time.Time)(nil),
-				int64(1), "accepted", &graderID, "", &grFirst, &grLast, (*int64)(nil), (*time.Time)(nil), true, true).
-			// Series 1, problem 1, subpart a, student A
+				int64(900), "", int64(500), int32(0), true, (*time.Time)(nil)).
+			// Series 1, problem 1, subpart a.
 			AddRow(int64(100), int32(0), "Алгебра", due,
-				int64(7), "Аня", (*string)(nil), "Иванова",
-				int64(10), "А",
-				int64(901), "a", int64(501), int32(1), false, (*time.Time)(nil),
-				int64(0), "ungraded", (*int64)(nil), "", (*string)(nil), (*string)(nil), (*int64)(nil), (*time.Time)(nil), false, true).
-			// Series 2, problem 1, no subparts, student A — accepted with no
-			// internal comment, so the false flag can be omitted from JSON.
+				int64(901), "a", int64(501), int32(1), false, (*time.Time)(nil)).
+			// Series 2, problem 1, no subparts.
 			AddRow(int64(200), int32(2), "Геометрия", due,
-				int64(7), "Аня", (*string)(nil), "Иванова",
-				int64(10), "А",
-				int64(910), "", int64(600), int32(1), false, (*time.Time)(nil),
-				int64(2), "accepted", (*int64)(nil), "Анна А", (*string)(nil), (*string)(nil), (*int64)(nil), (*time.Time)(nil), false, true))
+				int64(910), "", int64(600), int32(1), false, (*time.Time)(nil)))
+	mock.ExpectQuery(`FROM homework_thread t`).
+		WithArgs(int64(42), int64(5)).
+		WillReturnRows(mock.NewRows(centerGridCellColumns).
+			// Accepted by ПС, with an internal comment.
+			AddRow(int64(7), int64(900), int64(1), "accepted", &graderID, "", &grFirst, &grLast, (*int64)(nil), (*time.Time)(nil), true).
+			// Existing ungraded thread remains present in the sparse cache.
+			AddRow(int64(7), int64(901), int64(3), "ungraded", (*int64)(nil), "", (*string)(nil), (*string)(nil), (*int64)(nil), (*time.Time)(nil), false).
+			// Offline accepted with a free-text grader and no comment.
+			AddRow(int64(7), int64(910), int64(2), "accepted", (*int64)(nil), "Анна А", (*string)(nil), (*string)(nil), (*int64)(nil), (*time.Time)(nil), false))
+	mock.ExpectCommit()
 
-	req := authedRequest(t, access, 3, false, http.MethodGet, "/centers/42/grid", nil)
+	req := authedRequest(t, access, 3, false, http.MethodGet, "/centers/42/grid?term_id=5", nil)
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
@@ -114,12 +122,12 @@ func TestGetCenterGrid_HappyPath(t *testing.T) {
 	if resp.Series[1].Columns[0].ColumnLabel != "1" {
 		t.Errorf("series 1 col 0 label: got %q, want 1", resp.Series[1].Columns[0].ColumnLabel)
 	}
-	// Cells: both accepted threads are present; untouched cells stay absent.
+	// Existing threads, including ungraded ones, are present.
 	if c, ok := resp.Cells["7:900"]; !ok || c.ThreadID != 1 || c.CurrentStatus != "accepted" {
 		t.Errorf("cell 7:900: %+v ok=%v", c, ok)
 	}
-	if _, ok := resp.Cells["7:901"]; ok {
-		t.Error("cell 7:901 should be absent (ungraded)")
+	if c, ok := resp.Cells["7:901"]; !ok || c.ThreadID != 3 || c.CurrentStatus != "ungraded" {
+		t.Errorf("cell 7:901: %+v ok=%v", c, ok)
 	}
 	if c, ok := resp.Cells["7:910"]; !ok || c.ThreadID != 2 || c.HasInternalComment {
 		t.Errorf("cell 7:910: %+v ok=%v", c, ok)

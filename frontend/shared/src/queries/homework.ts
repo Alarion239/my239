@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
 import type {
   CenterGridResponse,
+  CenterGridSeriesCellsResponse,
   CenterTeacher,
   GradePayload,
   GraderStats,
@@ -86,7 +87,19 @@ export function useCenterGrid(centerId: number, termId = 0) {
     queryFn: () =>
       client.request<CenterGridResponse>('/homework/centers/' + centerId + '/grid' + (termId > 0 ? '?term_id=' + termId : '')),
     enabled: centerId > 0,
+    staleTime: Infinity,
+    retry: false,
   })
+}
+
+export function fetchCenterGridSeriesCells(
+  client: ApiClient,
+  centerId: number,
+  seriesId: number,
+): Promise<CenterGridSeriesCellsResponse> {
+  return client.request<CenterGridSeriesCellsResponse>(
+    '/homework/centers/' + centerId + '/grid/series/' + seriesId + '/cells',
+  )
 }
 
 // useGraderStats fetches the at-a-glance grading workload for a center.
@@ -121,8 +134,8 @@ export function useCenterTeachers(centerId: number) {
 // --- Cache plumbing ----------------------------------------------------------
 
 // applyThreadToCenterGrid makes a successful mutation authoritative in every
-// matching term cache before the active-session overlay is cleared. The
-// subsequent invalidation still refetches the complete server representation.
+// matching term cache before the active-session overlay is cleared. SSE refreshes
+// only the affected series in the background; the full grid is not invalidated.
 export function applyThreadToCenterGrid(
   grid: CenterGridResponse | undefined,
   thread: ThreadView,
@@ -166,7 +179,6 @@ function applyThread(qc: QueryClient, thread: ThreadView): void {
   qc.invalidateQueries({ queryKey: queryKeys.myRollup(thread.series_id) })
   qc.invalidateQueries({ queryKey: queryKeys.problemStats(thread.series_id) })
   qc.invalidateQueries({ queryKey: queryKeys.teacherGrid(thread.series_id) })
-  qc.invalidateQueries({ queryKey: queryKeys.centerGrids(thread.math_center_id) })
   qc.invalidateQueries({ queryKey: queryKeys.graderStats(thread.math_center_id) })
   qc.invalidateQueries({ queryKey: queryKeys.coffinQueue(thread.math_center_id) })
   // Both `mine=true|false` queue variants share this prefix.

@@ -896,6 +896,12 @@ export interface CenterGridResponse {
   graders: Record<string, string>
 }
 
+export interface CenterGridSeriesCellsResponse {
+  series_id: number
+  cells: Record<string, CenterGridCell>
+  graders: Record<string, string>
+}
+
 // --- Offline grading («кондуит» in-person accept) ----------------------------
 
 // CenterTeacher is one option for the offline-grading initials autocomplete

@@ -1,7 +1,9 @@
 package homework
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -106,78 +108,242 @@ func GetCenterGrid(database *db.DB) http.HandlerFunc {
 			return
 		}
 
-		var rows []store.TeacherCenterGridRow
-		termParam := r.URL.Query().Get("term_id")
-		if termParam == "" {
-			rows, err = q.TeacherCenterGrid(ctx, centerID)
-		} else {
-			termID, parseErr := strconv.ParseInt(termParam, 10, 64)
-			if parseErr != nil || termID <= 0 {
+		termID, err := resolveCenterGridTerm(ctx, q, centerID, r.URL.Query().Get("term_id"))
+		if err != nil {
+			if errors.Is(err, errInvalidCenterGridTerm) {
 				httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid term id")
 				return
 			}
-			termRows, queryErr := q.TeacherCenterGridForTerm(ctx, store.TeacherCenterGridForTermParams{
-				MathCenterID: centerID,
-				TermID:       termID,
-			})
-			err = queryErr
-			rows = teacherCenterRowsFromTerm(termRows)
-		}
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				// Empty center is a valid state — no students or no
-				// series yet. Return an empty shape so the frontend can
-				// render its "ничего нет" placeholder.
-				httpx.WriteJSON(w, http.StatusOK, centerGridResponse{
-					Cells:   map[string]centerGridCell{},
-					Graders: map[int64]string{},
-				})
-				return
-			}
-			logger.LogErrorContext(ctx, "homework: center grid", err)
+			logger.LogErrorContext(ctx, "homework: center grid term", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
 
-		httpx.WriteJSON(w, http.StatusOK, buildCenterGridResponse(rows))
+		if termID == 0 {
+			httpx.WriteJSON(w, http.StatusOK, emptyCenterGridResponse())
+			return
+		}
+
+		started := time.Now()
+		response, timings, err := loadCenterGridSnapshot(ctx, database.Pool(), centerID, termID)
+		if err != nil {
+			logger.LogErrorContext(ctx, "homework: center grid", err,
+				"center_id", centerID,
+				"term_id", termID,
+			)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
+
+		logger.LogInfoContext(ctx, "homework: center grid snapshot",
+			"center_id", centerID,
+			"term_id", termID,
+			"roster_rows", timings.rosterRows,
+			"column_rows", timings.columnRows,
+			"cell_rows", timings.cellRows,
+			"roster_ms", timings.roster.Milliseconds(),
+			"columns_ms", timings.columns.Milliseconds(),
+			"cells_ms", timings.cells.Milliseconds(),
+			"assembly_ms", timings.assembly.Milliseconds(),
+			"total_ms", time.Since(started).Milliseconds(),
+		)
+		httpx.WriteJSON(w, http.StatusOK, response)
 	}
 }
 
-func teacherCenterRowsFromTerm(rows []store.TeacherCenterGridForTermRow) []store.TeacherCenterGridRow {
-	out := make([]store.TeacherCenterGridRow, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, store.TeacherCenterGridRow(row))
+// GetCenterGridSeriesCells returns only the mutable cell state for one series.
+// It is used by the SSE refresh path so a grading event never refetches the
+// entire center-wide grid.
+func GetCenterGridSeriesCells(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		userID, ok := requireUser(w, r)
+		if !ok {
+			return
+		}
+		centerID, err := pathInt64(r, "centerID")
+		if err != nil {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid center id")
+			return
+		}
+		seriesID, err := pathInt64(r, "seriesID")
+		if err != nil {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid series id")
+			return
+		}
+
+		q := store.New(database.Pool())
+		if !requireTeacher(ctx, w, r, q, userID, centerID) {
+			return
+		}
+		series, err := q.GetSeries(ctx, seriesID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "series not found")
+				return
+			}
+			logger.LogErrorContext(ctx, "homework: center grid series lookup", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
+		if series.MathCenterID != centerID {
+			httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "series not found")
+			return
+		}
+
+		rows, err := q.TeacherCenterGridCellsForSeries(ctx, store.TeacherCenterGridSeriesCellsParams{
+			MathCenterID: centerID,
+			SeriesID:     seriesID,
+		})
+		if err != nil {
+			logger.LogErrorContext(ctx, "homework: center grid series cells", err,
+				"center_id", centerID,
+				"series_id", seriesID,
+			)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
+
+		cells, graders := buildCenterGridCells(rows)
+		httpx.WriteJSON(w, http.StatusOK, centerGridSeriesCellsResponse{
+			SeriesID: seriesID,
+			Cells:    cells,
+			Graders:  graders,
+		})
 	}
-	return out
 }
 
-// buildCenterGridResponse pivots the flat SQL rows into the three-axis
-// (groups, series, cells) shape the frontend expects. Insertion order is
-// preserved via the slices in groupBuilder / seriesBuilder; the SQL
-// already orders rows the right way.
-func buildCenterGridResponse(rows []store.TeacherCenterGridRow) centerGridResponse {
+type centerGridSeriesCellsResponse struct {
+	SeriesID int64                     `json:"series_id"`
+	Cells    map[string]centerGridCell `json:"cells"`
+	Graders  map[int64]string          `json:"graders"`
+}
+
+var errInvalidCenterGridTerm = errors.New("invalid term id")
+
+type centerGridSnapshotTimings struct {
+	rosterRows int
+	columnRows int
+	cellRows   int
+	roster     time.Duration
+	columns    time.Duration
+	cells      time.Duration
+	assembly   time.Duration
+}
+
+func resolveCenterGridTerm(ctx context.Context, q *store.Queries, centerID int64, termParam string) (int64, error) {
+	if termParam != "" {
+		termID, err := strconv.ParseInt(termParam, 10, 64)
+		if err != nil || termID <= 0 {
+			return 0, errInvalidCenterGridTerm
+		}
+		return termID, nil
+	}
+
+	active, err := q.GetActiveTermForCenter(ctx, centerID)
+	if err == nil {
+		return active.ID, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return 0, fmt.Errorf("resolve active term: %w", err)
+	}
+	legacy, err := q.GetLegacyTermForCenter(ctx, centerID)
+	if err == nil {
+		return legacy.ID, nil
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, nil
+	}
+	return 0, fmt.Errorf("resolve legacy term: %w", err)
+}
+
+func loadCenterGridSnapshot(ctx context.Context, pool db.Pool, centerID, termID int64) (centerGridResponse, centerGridSnapshotTimings, error) {
+	var timings centerGridSnapshotTimings
+	tx, err := pool.BeginTx(ctx, pgx.TxOptions{
+		IsoLevel:   pgx.RepeatableRead,
+		AccessMode: pgx.ReadOnly,
+	})
+	if err != nil {
+		return centerGridResponse{}, timings, fmt.Errorf("begin center grid snapshot: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	q := store.New(tx)
+	args := store.CenterGridTermParams{MathCenterID: centerID, TermID: termID}
+
+	started := time.Now()
+	roster, err := q.TeacherCenterGridRosterForTerm(ctx, args)
+	timings.roster = time.Since(started)
+	if err != nil {
+		return centerGridResponse{}, timings, fmt.Errorf("query center grid roster: %w", err)
+	}
+	timings.rosterRows = len(roster)
+
+	started = time.Now()
+	columns, err := q.TeacherCenterGridColumnsForTerm(ctx, args)
+	timings.columns = time.Since(started)
+	if err != nil {
+		return centerGridResponse{}, timings, fmt.Errorf("query center grid columns: %w", err)
+	}
+	timings.columnRows = len(columns)
+
+	started = time.Now()
+	cells, err := q.TeacherCenterGridCellsForTerm(ctx, args)
+	timings.cells = time.Since(started)
+	if err != nil {
+		return centerGridResponse{}, timings, fmt.Errorf("query center grid cells: %w", err)
+	}
+	timings.cellRows = len(cells)
+
+	started = time.Now()
+	response := buildCenterGridResponse(roster, columns, cells)
+	timings.assembly = time.Since(started)
+
+	if err := tx.Commit(ctx); err != nil {
+		return centerGridResponse{}, timings, fmt.Errorf("commit center grid snapshot: %w", err)
+	}
+	return response, timings, nil
+}
+
+func emptyCenterGridResponse() centerGridResponse {
+	return centerGridResponse{
+		Groups:  []centerGridGroup{},
+		Series:  []centerGridSeries{},
+		Cells:   map[string]centerGridCell{},
+		Graders: map[int64]string{},
+	}
+}
+
+// buildCenterGridResponse assembles independent roster, column and cell rows
+// into the existing three-axis response. Empty cells are intentionally absent.
+func buildCenterGridResponse(roster []store.TeacherCenterGridRosterRow, columns []store.TeacherCenterGridColumnRow, cellRows []store.TeacherCenterGridCellRow) centerGridResponse {
 	groups := newGroupBuilder()
 	series := newSeriesBuilder()
+	for _, row := range roster {
+		groups.add(row)
+	}
+	for _, row := range columns {
+		series.add(row)
+	}
+	cells, graders := buildCenterGridCells(cellRows)
+	return centerGridResponse{
+		Groups:  groups.build(),
+		Series:  series.build(),
+		Cells:   cells,
+		Graders: graders,
+	}
+}
+
+func buildCenterGridCells(rows []store.TeacherCenterGridCellRow) (map[string]centerGridCell, map[int64]string) {
 	cells := make(map[string]centerGridCell, len(rows))
 	graders := make(map[int64]string)
-
 	for _, row := range rows {
-		groups.add(row)
-		series.add(row)
-		// Only emit a cell entry when the (student, subproblem) actually
-		// has a thread — absent keys default to "ungraded with no
-		// thread" on the frontend, saving us one entry per cell in the
-		// payload.
-		if row.ThreadID == 0 {
-			continue
-		}
 		if row.LastGraderUserID != nil {
 			if _, ok := graders[*row.LastGraderUserID]; !ok {
 				graders[*row.LastGraderUserID] = initials(row.GraderFirstName, row.GraderLastName)
 			}
 		}
-		key := cellKey(row.StudentUserID, row.SubproblemID)
-		cells[key] = centerGridCell{
+		cells[cellKey(row.StudentUserID, row.SubproblemID)] = centerGridCell{
 			ThreadID:           row.ThreadID,
 			CurrentStatus:      row.CurrentStatus,
 			LastGraderUserID:   row.LastGraderUserID,
@@ -187,12 +353,7 @@ func buildCenterGridResponse(rows []store.TeacherCenterGridRow) centerGridRespon
 			HasInternalComment: row.HasInternalComment,
 		}
 	}
-	return centerGridResponse{
-		Groups:  groups.build(),
-		Series:  series.build(),
-		Cells:   cells,
-		Graders: graders,
-	}
+	return cells, graders
 }
 
 // initials builds a grader's initials: the first letter of the first name plus
@@ -252,7 +413,7 @@ func newGroupBuilder() *groupBuilder {
 	}
 }
 
-func (b *groupBuilder) add(r store.TeacherCenterGridRow) {
+func (b *groupBuilder) add(r store.TeacherCenterGridRosterRow) {
 	gIdx, ok := b.byID[r.GroupID]
 	if !ok {
 		b.out = append(b.out, centerGridGroup{GroupID: r.GroupID, Name: r.GroupName})
@@ -291,7 +452,7 @@ func newSeriesBuilder() *seriesBuilder {
 	}
 }
 
-func (b *seriesBuilder) add(r store.TeacherCenterGridRow) {
+func (b *seriesBuilder) add(r store.TeacherCenterGridColumnRow) {
 	sIdx, ok := b.byID[r.SeriesID]
 	if !ok {
 		b.out = append(b.out, centerGridSeries{
