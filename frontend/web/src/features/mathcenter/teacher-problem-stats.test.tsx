@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
@@ -247,6 +247,18 @@ describe('TeacherProblemStats — разбор frame', () => {
       .closest('[role="button"]') as HTMLElement
 
     await user.click(firstRow)
+
+    const workbench = screen.getByRole('region', { name: 'Задачи 1' })
+    const title = within(workbench).getByRole('heading', { name: 'Задачи 1' })
+    const header = title.closest('header') as HTMLElement
+    const formatTabs = within(workbench).getByRole('tablist', { name: 'Формат разбора' })
+    const edit = within(workbench).getByRole('button', { name: 'Редактировать' })
+
+    expect(header).toContainElement(formatTabs)
+    expect(header).toContainElement(edit)
+    expect(edit).toHaveTextContent('')
+    expect(edit.querySelector('svg')).not.toBeNull()
+    expect(within(workbench).queryByText(/Общий разбор|Подзадач в группе|^Просмотр$/)).not.toBeInTheDocument()
 
     expect(firstRow).toHaveAttribute('aria-pressed', 'true')
     expect(secondRow).toHaveAttribute('aria-pressed', 'true')

@@ -194,7 +194,7 @@ export function PdfViewer({
 
   return (
     <section className={'flex w-full flex-col overflow-hidden rounded-lg border border-line bg-surface ' + (className ?? '')} aria-label={title}>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-surface-muted px-2 py-1.5">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1 border-b border-line bg-surface-muted px-2 py-1.5" role="toolbar" aria-label="Управление PDF">
         <div className="flex items-center gap-1">
           <button type="button" onClick={() => changePage(-1)} disabled={page <= 1 || status !== 'ready'} aria-label="Предыдущая страница" className="rounded-md p-1.5 text-muted hover:bg-surface hover:text-ink disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
             <ChevronLeft className="h-4 w-4" aria-hidden />
@@ -206,7 +206,12 @@ export function PdfViewer({
             <ChevronRight className="h-4 w-4" aria-hidden />
           </button>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-center gap-0.5 text-xs text-muted">
+          <button type="button" onClick={() => changeZoom(-1)} disabled={status !== 'ready'} aria-label="Уменьшить масштаб" className="rounded-full px-2 py-0.5 hover:bg-surface disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">−</button>
+          <span>Масштаб</span>
+          <button type="button" onClick={() => changeZoom(1)} disabled={status !== 'ready'} aria-label="Увеличить масштаб" className="rounded-full px-2 py-0.5 hover:bg-surface disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">+</button>
+        </div>
+        <div className="flex min-w-0 items-center justify-end gap-2">
           <span className="text-xs tabular-nums text-muted">{status === 'ready' ? `${Math.round(scale * 100)}%` : 'Загрузка…'}</span>
           {downloadUrl ? (
             <a href={downloadUrl} download={downloadName} className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium text-accent-ink hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
@@ -215,11 +220,6 @@ export function PdfViewer({
             </a>
           ) : null}
         </div>
-      </div>
-      <div className="flex items-center justify-center gap-2 border-b border-line px-2 py-1 text-xs text-muted">
-        <button type="button" onClick={() => changeZoom(-1)} disabled={status !== 'ready'} className="rounded-full px-2 py-0.5 hover:bg-surface-muted disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">−</button>
-        <span>Масштаб</span>
-        <button type="button" onClick={() => changeZoom(1)} disabled={status !== 'ready'} className="rounded-full px-2 py-0.5 hover:bg-surface-muted disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">+</button>
       </div>
       <div className="relative h-[min(70vh,640px)] w-full bg-surface-muted">
         <div ref={containerRef} className="absolute inset-0 overflow-auto" role="document">

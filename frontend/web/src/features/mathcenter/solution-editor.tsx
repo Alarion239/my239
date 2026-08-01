@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useDeferredValue, type KeyboardEvent, type ReactNode } from 'react'
 import { APIErrorImpl, DEFAULT_LATEX_PREAMBLE, latexBodySource, normalizeLatexSource, useMathCenterLatexPreamble } from '@my239/shared'
-import { ExternalLink, FileText, Link2, Save, X } from 'lucide-react'
+import { Eye, ExternalLink, FileText, Link2, Pencil, Save, X } from 'lucide-react'
 import { Button, Input, Spinner, Textarea } from '../../design/ui'
 import { cn } from '../../design/cn'
 import { TexViewer } from './tex-viewer'
@@ -33,7 +33,6 @@ export interface SolutionWorkbenchProps {
   onPublish?: () => Promise<unknown>
   onClose: () => void
   onPublished?: () => void
-  targetDescription?: string
   closesCoffin?: boolean
   children?: ReactNode
 }
@@ -65,7 +64,6 @@ export function SolutionWorkbench({
   onPublish,
   onClose,
   onPublished,
-  targetDescription,
   closesCoffin,
 }: SolutionWorkbenchProps) {
   const editor = mode === 'edit'
@@ -164,37 +162,42 @@ export function SolutionWorkbench({
         }
       }}
     >
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-[0.14em] text-faint">
-            {editor ? (publishedAt ? 'Опубликован' : 'Черновик') : 'Просмотр'}
-          </p>
-          <h2 className="mt-1 break-words font-display text-xl font-medium text-ink">{title}</h2>
-          {targetDescription ? <p className="mt-1 text-sm text-muted">{targetDescription}</p> : null}
-        </div>
-        <div className="flex items-center gap-2">
-          {editor && onPublish && !publishedAt ? (
-            confirmPublish ? (
-              <div className="flex flex-wrap items-center justify-end gap-2 text-right text-xs text-muted">
-                <span>
-                  Публикация необратима{closesCoffin ? ' и закроет сдачу гроба' : ''}.
-                </span>
-                <Button size="sm" disabled={busy !== null || !hasSavedMaterial} onClick={() => void run('publish', onPublish)}>
-                  Опубликовать
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setConfirmPublish(false)}>Отмена</Button>
-              </div>
-            ) : (
-              <Button size="sm" disabled={busy !== null || !hasSavedMaterial} onClick={() => setConfirmPublish(true)}>
-                {busy === 'publish' ? 'Публикуем…' : 'Опубликовать'}
-              </Button>
-            )
-          ) : null}
+      <header className="flex min-w-0 items-center gap-2 border-b border-line pb-2">
+        <h2 className="min-w-[3.5rem] flex-1 truncate font-display text-lg font-medium text-ink" title={title}>{title}</h2>
+
+        {formats.length > 0 ? (
+          <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-surface-muted p-0.5" role="tablist" aria-label="Формат разбора">
+            {formats.map((item) => (
+              <button
+                key={item}
+                id={'solution-format-' + item}
+                type="button"
+                role="tab"
+                aria-selected={active === item}
+                tabIndex={active === item ? 0 : -1}
+                onClick={() => setFormat(item)}
+                onKeyDown={onFormatKeyDown}
+                className={cn(
+                  'rounded-md px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                  active === item ? 'bg-accent-soft text-accent-ink' : 'text-muted hover:bg-surface hover:text-ink',
+                )}
+              >
+                {FORMAT_LABEL[item]}{editor && savedFormats.includes(item) ? ' ✓' : ''}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="ml-auto flex shrink-0 items-center gap-0.5">
           {editor && onModeChange && publishedAt ? (
-            <Button type="button" size="sm" variant="secondary" onClick={() => switchMode('view')}>Просмотр</Button>
+            <Button type="button" size="icon" variant="ghost" aria-label="Закончить редактирование" onClick={() => switchMode('view')}>
+              <Eye className="h-4 w-4" aria-hidden />
+            </Button>
           ) : null}
           {!editor && onModeChange ? (
-            <Button type="button" size="sm" variant="secondary" onClick={() => switchMode('edit')}>Редактировать</Button>
+            <Button type="button" size="icon" variant="ghost" aria-label="Редактировать" onClick={() => switchMode('edit')}>
+              <Pencil className="h-4 w-4" aria-hidden />
+            </Button>
           ) : null}
           <Button type="button" size="icon" variant="ghost" aria-label="Закрыть" onClick={close}>
             <X className="h-4 w-4" aria-hidden />
@@ -202,26 +205,23 @@ export function SolutionWorkbench({
         </div>
       </header>
 
-      {formats.length > 0 ? (
-        <div className="mt-4 flex flex-wrap gap-1 border-b border-line pb-2" role="tablist" aria-label="Формат разбора">
-          {formats.map((item) => (
-            <button
-              key={item}
-              id={'solution-format-' + item}
-              type="button"
-              role="tab"
-              aria-selected={active === item}
-              tabIndex={active === item ? 0 : -1}
-              onClick={() => setFormat(item)}
-              onKeyDown={onFormatKeyDown}
-              className={cn(
-                'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-                active === item ? 'bg-accent-soft text-accent-ink' : 'text-muted hover:bg-surface-muted hover:text-ink',
-              )}
-            >
-              {FORMAT_LABEL[item]}{editor && savedFormats.includes(item) ? ' ✓' : ''}
-            </button>
-          ))}
+      {editor && onPublish && !publishedAt ? (
+        <div className="mt-3 flex flex-wrap items-center justify-end gap-2 text-right text-xs text-muted">
+          {confirmPublish ? (
+            <>
+              <span>
+                Публикация необратима{closesCoffin ? ' и закроет сдачу гроба' : ''}.
+              </span>
+              <Button size="sm" disabled={busy !== null || !hasSavedMaterial} onClick={() => void run('publish', onPublish)}>
+                Опубликовать
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setConfirmPublish(false)}>Отмена</Button>
+            </>
+          ) : (
+            <Button size="sm" disabled={busy !== null || !hasSavedMaterial} onClick={() => setConfirmPublish(true)}>
+              {busy === 'publish' ? 'Публикуем…' : 'Опубликовать'}
+            </Button>
+          )}
         </div>
       ) : null}
 

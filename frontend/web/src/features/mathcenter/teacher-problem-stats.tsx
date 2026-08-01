@@ -285,8 +285,7 @@ function RazborPreview({
   const publish = usePublishSubproblemSolutionsBatch(centerId)
   return (
     <SolutionWorkbench
-      title={subproblemIds.length > 1 ? 'Общий разбор · ' + targetTitle : sub.display}
-      targetDescription={subproblemIds.length > 1 ? 'Подзадач в группе: ' + subproblemIds.length : undefined}
+      title={subproblemIds.length > 1 ? targetTitle : sub.display}
       mode={mode}
       hasTex={sub.has_solution_tex}
       hasPdf={sub.has_solution_pdf}
