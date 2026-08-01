@@ -30,6 +30,7 @@ var eventColumns = []string{
 	"id", "thread_id", "event_uuid", "kind", "actor_user_id", "body", "verdict",
 	"refers_to_event_id", "created_at",
 	"is_offline", "credited_grader_user_id", "credited_grader_name",
+	"google_sheet_link_id", "google_sheet_cell", "google_sheet_version",
 }
 
 var subproblemCtxColumns = []string{

@@ -14,7 +14,7 @@ const appendEvent = `-- name: AppendEvent :one
 INSERT INTO homework_thread_event
     (thread_id, event_uuid, kind, actor_user_id, body, verdict, refers_to_event_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, thread_id, event_uuid, kind, actor_user_id, body, verdict, refers_to_event_id, created_at, is_offline, credited_grader_user_id, credited_grader_name
+RETURNING id, thread_id, event_uuid, kind, actor_user_id, body, verdict, refers_to_event_id, created_at, is_offline, credited_grader_user_id, credited_grader_name, google_sheet_link_id, google_sheet_cell, google_sheet_version
 `
 
 type AppendEventParams struct {
@@ -51,6 +51,9 @@ func (q *Queries) AppendEvent(ctx context.Context, arg AppendEventParams) (Homew
 		&i.IsOffline,
 		&i.CreditedGraderUserID,
 		&i.CreditedGraderName,
+		&i.GoogleSheetLinkID,
+		&i.GoogleSheetCell,
+		&i.GoogleSheetVersion,
 	)
 	return i, err
 }
@@ -60,7 +63,7 @@ INSERT INTO homework_thread_event
     (thread_id, event_uuid, kind, actor_user_id, body, verdict, refers_to_event_id,
      is_offline, credited_grader_user_id, credited_grader_name)
 VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9::text)
-RETURNING id, thread_id, event_uuid, kind, actor_user_id, body, verdict, refers_to_event_id, created_at, is_offline, credited_grader_user_id, credited_grader_name
+RETURNING id, thread_id, event_uuid, kind, actor_user_id, body, verdict, refers_to_event_id, created_at, is_offline, credited_grader_user_id, credited_grader_name, google_sheet_link_id, google_sheet_cell, google_sheet_version
 `
 
 type AppendOfflineEventParams struct {
@@ -105,6 +108,9 @@ func (q *Queries) AppendOfflineEvent(ctx context.Context, arg AppendOfflineEvent
 		&i.IsOffline,
 		&i.CreditedGraderUserID,
 		&i.CreditedGraderName,
+		&i.GoogleSheetLinkID,
+		&i.GoogleSheetCell,
+		&i.GoogleSheetVersion,
 	)
 	return i, err
 }
@@ -155,7 +161,7 @@ func (q *Queries) FindOrCreateThread(ctx context.Context, arg FindOrCreateThread
 }
 
 const getEvent = `-- name: GetEvent :one
-SELECT id, thread_id, event_uuid, kind, actor_user_id, body, verdict, refers_to_event_id, created_at, is_offline, credited_grader_user_id, credited_grader_name
+SELECT id, thread_id, event_uuid, kind, actor_user_id, body, verdict, refers_to_event_id, created_at, is_offline, credited_grader_user_id, credited_grader_name, google_sheet_link_id, google_sheet_cell, google_sheet_version
 FROM homework_thread_event
 WHERE id = $1
 `
@@ -176,6 +182,9 @@ func (q *Queries) GetEvent(ctx context.Context, id int64) (HomeworkThreadEvent, 
 		&i.IsOffline,
 		&i.CreditedGraderUserID,
 		&i.CreditedGraderName,
+		&i.GoogleSheetLinkID,
+		&i.GoogleSheetCell,
+		&i.GoogleSheetVersion,
 	)
 	return i, err
 }
@@ -194,7 +203,7 @@ func (q *Queries) GetEventKind(ctx context.Context, id int64) (string, error) {
 }
 
 const getMostRecentGradedEvent = `-- name: GetMostRecentGradedEvent :one
-SELECT id, thread_id, event_uuid, kind, actor_user_id, body, verdict, refers_to_event_id, created_at, is_offline, credited_grader_user_id, credited_grader_name
+SELECT id, thread_id, event_uuid, kind, actor_user_id, body, verdict, refers_to_event_id, created_at, is_offline, credited_grader_user_id, credited_grader_name, google_sheet_link_id, google_sheet_cell, google_sheet_version
 FROM homework_thread_event
 WHERE thread_id = $1
   AND kind      = 'graded'
@@ -218,6 +227,9 @@ func (q *Queries) GetMostRecentGradedEvent(ctx context.Context, threadID int64) 
 		&i.IsOffline,
 		&i.CreditedGraderUserID,
 		&i.CreditedGraderName,
+		&i.GoogleSheetLinkID,
+		&i.GoogleSheetCell,
+		&i.GoogleSheetVersion,
 	)
 	return i, err
 }
@@ -554,7 +566,7 @@ func (q *Queries) ListGraderQueueForSeries(ctx context.Context, arg ListGraderQu
 }
 
 const listThreadEvents = `-- name: ListThreadEvents :many
-SELECT id, thread_id, event_uuid, kind, actor_user_id, body, verdict, refers_to_event_id, created_at, is_offline, credited_grader_user_id, credited_grader_name
+SELECT id, thread_id, event_uuid, kind, actor_user_id, body, verdict, refers_to_event_id, created_at, is_offline, credited_grader_user_id, credited_grader_name, google_sheet_link_id, google_sheet_cell, google_sheet_version
 FROM homework_thread_event
 WHERE thread_id = $1
 ORDER BY id ASC
@@ -582,6 +594,9 @@ func (q *Queries) ListThreadEvents(ctx context.Context, threadID int64) ([]Homew
 			&i.IsOffline,
 			&i.CreditedGraderUserID,
 			&i.CreditedGraderName,
+			&i.GoogleSheetLinkID,
+			&i.GoogleSheetCell,
+			&i.GoogleSheetVersion,
 		); err != nil {
 			return nil, err
 		}

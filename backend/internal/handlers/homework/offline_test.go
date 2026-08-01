@@ -45,7 +45,7 @@ func expectOfflineAcceptTx(mock pgxmock.PgxPoolIface, threadID, studentID, subID
 	mock.ExpectQuery(`INSERT INTO homework_thread_event`).
 		WithArgs(threadID, pgxmock.AnyArg(), "accepted_offline", actorID, "", &verdict, (*int64)(nil), creditedID, creditedName).
 		WillReturnRows(mock.NewRows(eventColumns).AddRow(
-			int64(80), threadID, "uuid", "accepted_offline", actorID, "", &verdict, (*int64)(nil), now, true, creditedID, creditedName))
+			int64(80), threadID, "uuid", "accepted_offline", actorID, "", &verdict, (*int64)(nil), now, true, creditedID, creditedName, (*int64)(nil), "", ""))
 	mock.ExpectExec(`UPDATE homework_thread\s+SET current_status\s+= 'accepted'`).
 		WithArgs(int64(80), creditedID, creditedName, threadID).
 		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
@@ -178,7 +178,7 @@ func TestOfflineAccept_AlreadyAccepted(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM homework_thread_event\s+WHERE id`).
 		WithArgs(gradeID).
 		WillReturnRows(mock.NewRows(eventColumns).AddRow(
-			gradeID, int64(1), "uuid", "graded", int64(3), "ok", &verdict, (*int64)(nil), now, false, (*int64)(nil), ""))
+			gradeID, int64(1), "uuid", "graded", int64(3), "ok", &verdict, (*int64)(nil), now, false, (*int64)(nil), "", (*int64)(nil), "", ""))
 
 	body, _ := json.Marshal(map[string]any{"student_user_id": 7, "subproblem_id": 900})
 	req := authedRequest(t, access, 3, false, http.MethodPost, "/offline/accept", bytes.NewReader(body))
@@ -212,14 +212,14 @@ func TestOfflineAccept_RecreditsOfflineAccept(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM homework_thread_event\s+WHERE id`).
 		WithArgs(gradeID).
 		WillReturnRows(mock.NewRows(eventColumns).AddRow(
-			gradeID, int64(1), "uuid", "accepted_offline", int64(3), "", &verdict, (*int64)(nil), now, true, (*int64)(nil), "АБ"))
+			gradeID, int64(1), "uuid", "accepted_offline", int64(3), "", &verdict, (*int64)(nil), now, true, (*int64)(nil), "АБ", (*int64)(nil), "", ""))
 
 	// Re-credit tx: new accepted_offline event + cache repoint to "МК".
 	mock.ExpectBegin()
 	mock.ExpectQuery(`INSERT INTO homework_thread_event`).
 		WithArgs(int64(1), pgxmock.AnyArg(), "accepted_offline", int64(3), "", &verdict, (*int64)(nil), (*int64)(nil), "МК").
 		WillReturnRows(mock.NewRows(eventColumns).AddRow(
-			int64(81), int64(1), "uuid2", "accepted_offline", int64(3), "", &verdict, (*int64)(nil), now, true, (*int64)(nil), "МК"))
+			int64(81), int64(1), "uuid2", "accepted_offline", int64(3), "", &verdict, (*int64)(nil), now, true, (*int64)(nil), "МК", (*int64)(nil), "", ""))
 	mock.ExpectExec(`UPDATE homework_thread\s+SET current_status\s+= 'accepted'`).
 		WithArgs(int64(81), (*int64)(nil), "МК", int64(1)).
 		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
@@ -289,13 +289,13 @@ func TestOfflineUndo_RevertsToUngraded(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM homework_thread_event\s+WHERE id`).
 		WithArgs(gradeID).
 		WillReturnRows(mock.NewRows(eventColumns).AddRow(
-			gradeID, int64(1), "uuid", "accepted_offline", int64(3), "", &verdict, (*int64)(nil), now, true, (*int64)(nil), "Иванов"))
+			gradeID, int64(1), "uuid", "accepted_offline", int64(3), "", &verdict, (*int64)(nil), now, true, (*int64)(nil), "Иванов", (*int64)(nil), "", ""))
 
 	mock.ExpectBegin()
 	mock.ExpectQuery(`INSERT INTO homework_thread_event`).
 		WithArgs(int64(1), pgxmock.AnyArg(), "offline_retracted", int64(3), "", (*string)(nil), &gradeID, (*int64)(nil), "").
 		WillReturnRows(mock.NewRows(eventColumns).AddRow(
-			int64(81), int64(1), "uuid2", "offline_retracted", int64(3), "", (*string)(nil), &gradeID, now, true, (*int64)(nil), ""))
+			int64(81), int64(1), "uuid2", "offline_retracted", int64(3), "", (*string)(nil), &gradeID, now, true, (*int64)(nil), "", (*int64)(nil), "", ""))
 	mock.ExpectExec(`UPDATE homework_thread\s+SET current_status\s+= \$1`).
 		WithArgs("ungraded", int64(1)).
 		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
@@ -340,7 +340,7 @@ func TestOfflineUndo_RejectsOnlineGrade(t *testing.T) {
 	mock.ExpectQuery(`SELECT .* FROM homework_thread_event\s+WHERE id`).
 		WithArgs(gradeID).
 		WillReturnRows(mock.NewRows(eventColumns).AddRow(
-			gradeID, int64(1), "uuid", "graded", int64(3), "ok", &verdict, (*int64)(nil), now, false, (*int64)(nil), ""))
+			gradeID, int64(1), "uuid", "graded", int64(3), "ok", &verdict, (*int64)(nil), now, false, (*int64)(nil), "", (*int64)(nil), "", ""))
 
 	body, _ := json.Marshal(map[string]any{"student_user_id": 7, "subproblem_id": 900})
 	req := authedRequest(t, access, 3, false, http.MethodPost, "/offline/undo", bytes.NewReader(body))

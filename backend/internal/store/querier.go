@@ -22,7 +22,9 @@ type Querier interface {
 	// fallback keeps pre-term centers working until they open an active term.
 	CanStudentViewRazbors(ctx context.Context, arg CanStudentViewRazborsParams) (bool, error)
 	ClearSeriesTex(ctx context.Context, id int64) (ClearSeriesTexRow, error)
+	ConsumeTelegramAlertEnrollmentSession(ctx context.Context, arg ConsumeTelegramAlertEnrollmentSessionParams) (int64, error)
 	CopyGroupsToTerm(ctx context.Context, arg CopyGroupsToTermParams) error
+	CopyStudentsToUnassignedGroup(ctx context.Context, arg CopyStudentsToUnassignedGroupParams) error
 	CountHeadTeachersForCenter(ctx context.Context, mathCenterID int64) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
 	// The cast keeps the parameter a plain int64: invitation_token_id is nullable
@@ -48,6 +50,7 @@ type Querier interface {
 	CreateSolutionGroup(ctx context.Context) (int64, error)
 	CreateStudentNote(ctx context.Context, arg CreateStudentNoteParams) (MathCenterStudentNote, error)
 	CreateSubproblem(ctx context.Context, arg CreateSubproblemParams) (MathCenterSubproblem, error)
+	CreateTelegramAlertEnrollmentSession(ctx context.Context, arg CreateTelegramAlertEnrollmentSessionParams) error
 	// Internal teacher-only comments. Two analogous resources: thread notes
 	// (anchored to a homework_thread) and student notes (anchored to a student in a
 	// center). The *Authored variants join users so the handler can return the
@@ -68,7 +71,9 @@ type Querier interface {
 	DeleteSubproblem(ctx context.Context, id int64) error
 	// Used when unmarking a coffin that carries no разбор content (clean up the row).
 	DeleteSubproblemSolution(ctx context.Context, subproblemID int64) (int64, error)
+	DeleteTelegramAlertSubscription(ctx context.Context, chatID int64) error
 	DeleteThreadNote(ctx context.Context, id int64) (int64, error)
+	DisableTelegramAlertSubscription(ctx context.Context, chatID int64) error
 	// INSERT ... ON CONFLICT DO UPDATE always returns a row, regardless of
 	// whether we created it now or matched an existing one. The DO UPDATE bumps
 	// updated_at so we can see activity even on no-op upserts.
@@ -110,11 +115,13 @@ type Querier interface {
 	// the row even when no solution row exists yet.
 	GetSubproblemSolutionCenter(ctx context.Context, id int64) (GetSubproblemSolutionCenterRow, error)
 	GetTeacher(ctx context.Context, id int64) (MathCenterTeacher, error)
+	GetTelegramAlertSubscription(ctx context.Context, chatID int64) (TelegramAlertSubscription, error)
 	GetTerm(ctx context.Context, id int64) (MathCenterTerm, error)
 	GetThread(ctx context.Context, id int64) (HomeworkThread, error)
 	GetThreadByStudentAndSubproblem(ctx context.Context, arg GetThreadByStudentAndSubproblemParams) (HomeworkThread, error)
 	GetThreadNote(ctx context.Context, id int64) (HomeworkThreadNote, error)
 	GetThreadNoteAuthored(ctx context.Context, id int64) (GetThreadNoteAuthoredRow, error)
+	GetUnassignedGroupForTerm(ctx context.Context, termID int64) (GetUnassignedGroupForTermRow, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	// Bulk lookup used by the homework thread view: it needs to translate
@@ -132,6 +139,8 @@ type Querier interface {
 	IsStudentInCenter(ctx context.Context, arg IsStudentInCenterParams) (bool, error)
 	IsTeacherInCenter(ctx context.Context, arg IsTeacherInCenterParams) (bool, error)
 	IsTermActive(ctx context.Context, id int64) (bool, error)
+	// Persistent Telegram alert destinations and one-use group enrollment state.
+	ListActiveTelegramAlertSubscriptions(ctx context.Context) ([]TelegramAlertSubscription, error)
 	// Every coffin subproblem in a center with the labels the Гробы tab needs,
 	// newest series first. Used by the center-wide "Гробы" tab.
 	ListCenterCoffins(ctx context.Context, mathCenterID int64) ([]ListCenterCoffinsRow, error)
@@ -215,6 +224,7 @@ type Querier interface {
 	// Publication is explicit and only succeeds once the draft has both a
 	// statement and at least one problem. COALESCE keeps repeat calls idempotent.
 	PublishSeries(ctx context.Context, id int64) (PublishSeriesRow, error)
+	PurgeExpiredTelegramAlertEnrollmentSessions(ctx context.Context) error
 	ReleaseClaim(ctx context.Context, arg ReleaseClaimParams) (int64, error)
 	RemoveActiveStudentByUser(ctx context.Context, arg RemoveActiveStudentByUserParams) (int64, error)
 	RemoveStudent(ctx context.Context, id int64) (int64, error)
@@ -327,6 +337,7 @@ type Querier interface {
 	// deadline until its разбор is released (released_at).
 	// Mark/unmark a subproblem as a coffin without disturbing разбор fields.
 	UpsertCoffinFlag(ctx context.Context, arg UpsertCoffinFlagParams) (MathCenterSubproblemSolution, error)
+	UpsertTelegramAlertSubscription(ctx context.Context, arg UpsertTelegramAlertSubscriptionParams) error
 }
 
 var _ Querier = (*Queries)(nil)

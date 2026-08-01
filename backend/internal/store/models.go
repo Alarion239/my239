@@ -41,6 +41,9 @@ type HomeworkThreadEvent struct {
 	IsOffline            bool      `json:"is_offline"`
 	CreditedGraderUserID *int64    `json:"credited_grader_user_id"`
 	CreditedGraderName   string    `json:"credited_grader_name"`
+	GoogleSheetLinkID    *int64    `json:"google_sheet_link_id"`
+	GoogleSheetCell      string    `json:"google_sheet_cell"`
+	GoogleSheetVersion   string    `json:"google_sheet_version"`
 }
 
 type HomeworkThreadEventPhoto struct {
@@ -78,6 +81,48 @@ type MathCenter struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
+type MathCenterGoogleSheetLink struct {
+	ID                   int64           `json:"id"`
+	TermID               int64           `json:"term_id"`
+	SpreadsheetID        string          `json:"spreadsheet_id"`
+	SheetID              int64           `json:"sheet_id"`
+	SheetTitle           string          `json:"sheet_title"`
+	Enabled              bool            `json:"enabled"`
+	LastGoogleVersion    string          `json:"last_google_version"`
+	LastGoogleModifiedAt *time.Time      `json:"last_google_modified_at"`
+	LastSnapshot         json.RawMessage `json:"last_snapshot"`
+	CreatedByUserID      int64           `json:"created_by_user_id"`
+	CreatedAt            time.Time       `json:"created_at"`
+	UpdatedAt            time.Time       `json:"updated_at"`
+	GroupID              *int64          `json:"group_id"`
+	LinkKind             string          `json:"link_kind"`
+	SyncDirection        string          `json:"sync_direction"`
+}
+
+type MathCenterGoogleSheetOutbox struct {
+	ID          int64      `json:"id"`
+	ThreadID    int64      `json:"thread_id"`
+	Attempts    int32      `json:"attempts"`
+	AvailableAt time.Time  `json:"available_at"`
+	LockedAt    *time.Time `json:"locked_at"`
+	LastError   string     `json:"last_error"`
+	CompletedAt *time.Time `json:"completed_at"`
+	CreatedAt   time.Time  `json:"created_at"`
+}
+
+type MathCenterGoogleSheetSyncRun struct {
+	ID                int64           `json:"id"`
+	LinkID            int64           `json:"link_id"`
+	RequestedByUserID int64           `json:"requested_by_user_id"`
+	Status            string          `json:"status"`
+	GoogleVersion     string          `json:"google_version"`
+	GoogleModifiedAt  *time.Time      `json:"google_modified_at"`
+	Summary           json.RawMessage `json:"summary"`
+	ErrorMessage      string          `json:"error_message"`
+	StartedAt         time.Time       `json:"started_at"`
+	FinishedAt        *time.Time      `json:"finished_at"`
+}
+
 type MathCenterGroup struct {
 	ID                  int64     `json:"id"`
 	MathCenterID        int64     `json:"math_center_id"`
@@ -86,6 +131,12 @@ type MathCenterGroup struct {
 	TermID              int64     `json:"term_id"`
 	RazborDefaultVideo  bool      `json:"razbor_default_video"`
 	RazborDefaultPdfTex bool      `json:"razbor_default_pdf_tex"`
+}
+
+type MathCenterLatexSetting struct {
+	MathCenterID int64     `json:"math_center_id"`
+	Preamble     string    `json:"preamble"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 type MathCenterLikbez struct {

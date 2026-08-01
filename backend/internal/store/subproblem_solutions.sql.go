@@ -39,7 +39,7 @@ func (q *Queries) DeleteSubproblemSolution(ctx context.Context, subproblemID int
 }
 
 const getSubproblemSolution = `-- name: GetSubproblemSolution :one
-SELECT id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at, solution_group_id
+SELECT id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at, solution_group_id, published_at
 FROM math_center_subproblem_solutions
 WHERE subproblem_id = $1
 `
@@ -58,6 +58,7 @@ func (q *Queries) GetSubproblemSolution(ctx context.Context, subproblemID int64)
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.SolutionGroupID,
+		&i.PublishedAt,
 	)
 	return i, err
 }
@@ -258,7 +259,7 @@ type ListCenterCoffinsForTermRow struct {
 }
 
 // The active term includes its own released and open coffins plus open coffins
-// carried from every archived term. An archive selection shows only that term.
+// carried from archived terms. An archive selection shows only that term.
 func (q *Queries) ListCenterCoffinsForTerm(ctx context.Context, arg ListCenterCoffinsForTermParams) ([]ListCenterCoffinsForTermRow, error) {
 	rows, err := q.db.Query(ctx, listCenterCoffinsForTerm, arg.MathCenterID, arg.TermID, arg.IncludeCarried)
 	if err != nil {
@@ -647,7 +648,7 @@ VALUES ($1, $2)
 ON CONFLICT (subproblem_id)
     DO UPDATE SET solution_link = EXCLUDED.solution_link,
                   updated_at = NOW()
-RETURNING id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at, solution_group_id
+RETURNING id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at, solution_group_id, published_at
 `
 
 type SetSubproblemSolutionLinkParams struct {
@@ -669,6 +670,7 @@ func (q *Queries) SetSubproblemSolutionLink(ctx context.Context, arg SetSubprobl
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.SolutionGroupID,
+		&i.PublishedAt,
 	)
 	return i, err
 }
@@ -679,7 +681,7 @@ VALUES ($1, $2)
 ON CONFLICT (subproblem_id)
     DO UPDATE SET solution_pdf_object_key = EXCLUDED.solution_pdf_object_key,
                   updated_at = NOW()
-RETURNING id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at, solution_group_id
+RETURNING id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at, solution_group_id, published_at
 `
 
 type SetSubproblemSolutionPdfParams struct {
@@ -701,6 +703,7 @@ func (q *Queries) SetSubproblemSolutionPdf(ctx context.Context, arg SetSubproble
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.SolutionGroupID,
+		&i.PublishedAt,
 	)
 	return i, err
 }
@@ -711,7 +714,7 @@ VALUES ($1, $2)
 ON CONFLICT (subproblem_id)
     DO UPDATE SET solution_tex_source = EXCLUDED.solution_tex_source,
                   updated_at = NOW()
-RETURNING id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at, solution_group_id
+RETURNING id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at, solution_group_id, published_at
 `
 
 type SetSubproblemSolutionTexParams struct {
@@ -719,8 +722,8 @@ type SetSubproblemSolutionTexParams struct {
 	SolutionTexSource *string `json:"solution_tex_source"`
 }
 
-// Upsert: authoring разбор on a non-coffin subproblem creates the row. Posting
-// content to a coffin releases it in the same atomic write.
+// Upsert draft material. Coffins are released only by the explicit publication
+// endpoint, never as a side effect of saving one format.
 func (q *Queries) SetSubproblemSolutionTex(ctx context.Context, arg SetSubproblemSolutionTexParams) (MathCenterSubproblemSolution, error) {
 	row := q.db.QueryRow(ctx, setSubproblemSolutionTex, arg.SubproblemID, arg.SolutionTexSource)
 	var i MathCenterSubproblemSolution
@@ -735,6 +738,7 @@ func (q *Queries) SetSubproblemSolutionTex(ctx context.Context, arg SetSubproble
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.SolutionGroupID,
+		&i.PublishedAt,
 	)
 	return i, err
 }
@@ -745,7 +749,7 @@ INSERT INTO math_center_subproblem_solutions (subproblem_id, is_coffin)
 VALUES ($1, $2)
 ON CONFLICT (subproblem_id)
     DO UPDATE SET is_coffin = EXCLUDED.is_coffin, updated_at = NOW()
-RETURNING id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at, solution_group_id
+RETURNING id, subproblem_id, is_coffin, released_at, solution_tex_source, solution_pdf_object_key, solution_link, created_at, updated_at, solution_group_id, published_at
 `
 
 type UpsertCoffinFlagParams struct {
@@ -772,6 +776,7 @@ func (q *Queries) UpsertCoffinFlag(ctx context.Context, arg UpsertCoffinFlagPara
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.SolutionGroupID,
+		&i.PublishedAt,
 	)
 	return i, err
 }
