@@ -780,11 +780,6 @@ export function ConduitTable({
   const bottomSpacerHeight =
     Math.max(0, virtualRows.length - rowWindow.end) * CONDUIT_ROW_HEIGHT
 
-  const activeStudent = useMemo(
-    () => students.find((s) => s.user_id === activeStudentId) ?? null,
-    [students, activeStudentId],
-  )
-
   // markCell fast-paths an offline accept using the initials bar's grader and
   // remembers which grader credited it (for later re-crediting on a correction).
   function markCell(
@@ -909,30 +904,6 @@ export function ConduitTable({
           showCreditHint={false}
         />
       </div>
-      <div
-        className={cn(
-          'min-w-0 overflow-hidden whitespace-nowrap transition-[max-width,opacity,transform] duration-300 ease-out motion-reduce:transition-none',
-          activeStudent
-            ? 'max-w-48 translate-x-0 opacity-100'
-            : 'pointer-events-none max-w-0 translate-x-2 opacity-0',
-        )}
-        aria-hidden={!activeStudent}
-      >
-        <span className="block max-w-48 truncate text-xs text-muted">{activeStudent?.name}</span>
-      </div>
-      <button
-        type="button"
-        onClick={() => selectStudent(null)}
-        disabled={!activeStudent}
-        className={cn(
-          'h-8 shrink-0 overflow-hidden rounded-lg border border-line px-2.5 text-xs text-muted transition-[max-width,opacity,transform] duration-300 ease-out motion-reduce:transition-none hover:bg-surface-muted hover:text-ink disabled:pointer-events-none',
-          activeStudent
-            ? 'max-w-24 translate-x-0 opacity-100'
-            : 'pointer-events-none max-w-0 border-0 px-0 opacity-0',
-        )}
-      >
-        Готово
-      </button>
     </div>
   )
 
