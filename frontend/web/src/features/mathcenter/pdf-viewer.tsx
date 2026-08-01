@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type WheelEvent } from 'react'
 import { ChevronLeft, ChevronRight, Download } from 'lucide-react'
 import { Spinner } from '../../design/ui'
 import { apiClient } from '../../lib/api'
@@ -171,6 +171,33 @@ export function PdfViewer({
     setScale(next)
   }
 
+  function resetZoom() {
+    const instance = viewerInstanceRef.current
+    if (!instance) return
+    instance.currentScaleValue = 'page-width'
+    setScale(instance.currentScale)
+  }
+
+  function handleDocumentKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (!(event.ctrlKey || event.metaKey) || status !== 'ready') return
+    if (event.key === '+' || event.key === '=') {
+      event.preventDefault()
+      changeZoom(1)
+    } else if (event.key === '-' || event.key === '_') {
+      event.preventDefault()
+      changeZoom(-1)
+    } else if (event.key === '0') {
+      event.preventDefault()
+      resetZoom()
+    }
+  }
+
+  function handleDocumentWheel(event: WheelEvent<HTMLDivElement>) {
+    if (!(event.ctrlKey || event.metaKey) || status !== 'ready') return
+    event.preventDefault()
+    changeZoom(event.deltaY < 0 ? 1 : -1)
+  }
+
   if (status === 'error') {
     return (
       <div className={'flex min-h-32 flex-col items-center justify-center gap-3 rounded-lg border border-danger/30 bg-danger-soft p-5 text-sm text-danger ' + (className ?? '')} role="alert">
@@ -206,13 +233,10 @@ export function PdfViewer({
             <ChevronRight className="h-4 w-4" aria-hidden />
           </button>
         </div>
-        <div className="flex items-center justify-center gap-0.5 text-xs text-muted">
-          <button type="button" onClick={() => changeZoom(-1)} disabled={status !== 'ready'} aria-label="Уменьшить масштаб" className="rounded-full px-2 py-0.5 hover:bg-surface disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">−</button>
-          <span>Масштаб</span>
-          <button type="button" onClick={() => changeZoom(1)} disabled={status !== 'ready'} aria-label="Увеличить масштаб" className="rounded-full px-2 py-0.5 hover:bg-surface disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">+</button>
-        </div>
+        <span className="text-center text-xs tabular-nums text-muted" aria-label="Масштаб PDF" title="Ctrl/Cmd + или −, либо Ctrl/Cmd + колесо">
+          {status === 'ready' ? `${Math.round(scale * 100)}%` : 'Загрузка…'}
+        </span>
         <div className="flex min-w-0 items-center justify-end gap-2">
-          <span className="text-xs tabular-nums text-muted">{status === 'ready' ? `${Math.round(scale * 100)}%` : 'Загрузка…'}</span>
           {downloadUrl ? (
             <a href={downloadUrl} download={downloadName} className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium text-accent-ink hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
               <Download className="h-3.5 w-3.5" aria-hidden />
@@ -222,7 +246,14 @@ export function PdfViewer({
         </div>
       </div>
       <div className="relative h-[min(70vh,640px)] w-full bg-surface-muted">
-        <div ref={containerRef} className="absolute inset-0 overflow-auto" role="document">
+        <div
+          ref={containerRef}
+          className="absolute inset-0 overflow-auto outline-none"
+          role="document"
+          tabIndex={0}
+          onKeyDown={handleDocumentKeyDown}
+          onWheel={handleDocumentWheel}
+        >
           <div ref={viewerRef} className="pdfViewer" />
         </div>
         {status === 'loading' ? (

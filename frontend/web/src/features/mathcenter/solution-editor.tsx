@@ -152,7 +152,10 @@ export function SolutionWorkbench({
 
   return (
     <section
-      className="animate-rise rounded-xl border border-line bg-surface p-4 shadow-sm"
+      className={cn(
+        'animate-rise min-w-0',
+        active === 'pdf' ? '' : 'rounded-xl border border-line bg-surface p-4 shadow-sm',
+      )}
       aria-label={title}
       tabIndex={-1}
       onKeyDown={(event) => {
@@ -162,7 +165,10 @@ export function SolutionWorkbench({
         }
       }}
     >
-      <header className="flex min-w-0 items-center gap-2 border-b border-line pb-2">
+      <header className={cn(
+        'flex min-w-0 items-center gap-2',
+        active === 'pdf' ? 'pb-3' : 'border-b border-line pb-2',
+      )}>
         <h2 className="min-w-[3.5rem] flex-1 truncate font-display text-lg font-medium text-ink" title={title}>{title}</h2>
 
         {formats.length > 0 ? (
@@ -237,7 +243,7 @@ export function SolutionWorkbench({
       {error ? <p className="mt-3 text-sm text-danger" role="alert">{error}</p> : null}
       {done ? <p className="mt-3 text-sm text-status-accepted" role="status">{done === 'publish' ? 'Разбор опубликован.' : 'Сохранено: ' + FORMAT_LABEL[done] + '.'}</p> : null}
 
-      <div className="mt-4">
+      <div className={active === 'pdf' ? 'mt-3' : 'mt-4'}>
         {active === 'tex' ? (
           editor ? (
             <div className="flex flex-col gap-3">

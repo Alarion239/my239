@@ -120,7 +120,7 @@ export function SeriesStrip({
               ) : null}
             </button>
             {isSelected && selectedActionsOpen && selectedActions ? (
-              <div className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded-lg border border-line bg-surface/95 p-1 shadow-lg backdrop-blur-sm">
+              <div className="pointer-events-none absolute right-2 top-2 z-10 flex items-center gap-1">
                 {selectedActions}
               </div>
             ) : null}

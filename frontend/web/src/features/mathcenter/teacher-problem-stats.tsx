@@ -204,15 +204,15 @@ export function TeacherProblemStats({
   const previewIds = new Set(panel?.subproblemIds ?? [])
 
   return (
-    // Side-by-side master-detail on ≥md; on phones the разбор preview stacks
-    // above the list (no cramped horizontal split).
+    // Side-by-side master-detail on ≥md; the preview gets 60% so a PDF remains
+    // readable, while on phones it stacks above the list.
     <div className="flex flex-col gap-4 md:flex-row md:items-start md:gap-0">
       {/* разбор of the pressed problem. Desktop: a sliding left pane. Mobile: a
           full-width block shown above the list, hidden when nothing is open. */}
       <div
         className={cn(
           'overflow-hidden md:shrink-0 md:transition-all md:duration-300 md:ease-out',
-          previewSub ? 'md:w-1/2 md:opacity-100' : 'hidden md:block md:w-0 md:opacity-0',
+          previewSub ? 'md:w-3/5 md:opacity-100' : 'hidden md:block md:w-0 md:opacity-0',
         )}
       >
         <div className="md:pr-4">

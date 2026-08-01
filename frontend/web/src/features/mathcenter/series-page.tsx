@@ -557,7 +557,7 @@ function EditSeriesButton({ centerId, series }: { centerId: number; series: Seri
           type="button"
           aria-label="Редактировать серию"
           title="Редактировать серию"
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-line-strong bg-surface text-muted transition-colors hover:bg-surface-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          className="pointer-events-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/60 bg-paper/70 text-muted shadow-lg shadow-black/10 backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-paper/90 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 dark:border-white/10 dark:bg-surface/75 dark:hover:bg-surface"
         >
           <Pencil className="h-4 w-4" aria-hidden />
         </button>
@@ -610,7 +610,7 @@ function DeleteSeriesButton({
           type="button"
           aria-label="Удалить серию"
           title="Удалить серию"
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-line-strong bg-surface text-muted transition-colors hover:bg-danger-soft hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/40"
+          className="pointer-events-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/60 bg-paper/70 text-muted shadow-lg shadow-black/10 backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-danger-soft hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/40 dark:border-white/10 dark:bg-surface/75"
         >
           <Trash2 className="h-4 w-4" aria-hidden />
         </button>

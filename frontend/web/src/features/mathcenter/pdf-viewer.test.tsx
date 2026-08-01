@@ -15,8 +15,9 @@ describe('PdfViewer', () => {
 
     expect(screen.getByRole('status', { name: 'Загрузка PDF' })).toBeInTheDocument()
     expect(screen.getAllByRole('toolbar', { name: 'Управление PDF' })).toHaveLength(1)
-    expect(screen.getByRole('button', { name: 'Уменьшить масштаб' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Увеличить масштаб' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Уменьшить масштаб' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Увеличить масштаб' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Масштаб PDF')).toHaveTextContent('Загрузка…')
     expect(screen.getByRole('document')).toHaveClass('absolute')
     expect(container.querySelector('iframe')).toBeNull()
   })
