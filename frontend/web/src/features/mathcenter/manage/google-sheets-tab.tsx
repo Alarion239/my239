@@ -11,6 +11,7 @@ import {
   useSetGoogleSheetLinkEnabled,
   useSyncGoogleSheetSeries,
   useSyncGoogleSheetStudents,
+  isUnallocatedGroup,
 } from '@my239/shared'
 import { Button, Card, CardContent, Input, Spinner } from '../../../design/ui'
 import { ConfirmButton, SectionHeader } from '../../admin/_shared'
@@ -167,7 +168,7 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
                   Группа
                   <select className="rounded-lg border border-line bg-surface px-2 py-2 text-sm text-ink" value={groupId} onChange={(event) => setGroupId(Number(event.target.value))}>
                     <option value={0}>Выберите группу</option>
-                    {(groups.data ?? []).map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+                    {(groups.data ?? []).filter((group) => !isUnallocatedGroup(group.name)).map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
                   </select>
                 </label>
               ) : null}

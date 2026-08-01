@@ -284,7 +284,7 @@ describe('SeriesPage — teacher view', () => {
     const tabs = Array.from(tabList.querySelectorAll('[role="tab"]')).map(
       (tab) => tab.textContent,
     )
-    expect(tabs).toEqual(['Очередь', 'Условие', 'Разбор', 'Очно'])
+    expect(tabs).toEqual(['Очередь', 'Условие', 'Разбор'])
     expect(screen.queryByRole('tab', { name: 'Таблица' })).not.toBeInTheDocument()
 
     // The queue is now the default teacher tab; the Разбор tab still renders
@@ -322,6 +322,37 @@ describe('SeriesPage — teacher view', () => {
     await user.click(screen.getByRole('tab', { name: /Серия 2/ }))
     expect(screen.getByRole('button', { name: 'Редактировать серию' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Удалить серию' })).toBeInTheDocument()
+  })
+
+  it('keeps the offline tab on phone view', async () => {
+    const originalWidth = window.innerWidth
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 500 })
+    try {
+      const me: MeResponse = {
+        teacher: {
+          centers: [{
+            id: CENTER_ID,
+            graduation_year: GRAD_YEAR,
+            grade: 9,
+            is_head_teacher: true,
+            teachers: [],
+            groups: [],
+          }],
+        },
+      }
+      mockFetch(me, makeUser())
+      renderPage()
+
+      const tabList = await screen.findByRole('tablist', { name: 'Раздел проверки' })
+      expect(Array.from(tabList.querySelectorAll('[role="tab"]')).map((tab) => tab.textContent)).toEqual([
+        'Очередь',
+        'Условие',
+        'Разбор',
+        'Очно',
+      ])
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth })
+    }
   })
 
   it('drives tab switching through the URL (push navigation)', async () => {

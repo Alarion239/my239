@@ -77,9 +77,7 @@ function LikbezCatalog({ centerId, isTeacher, selectedTermID }: { centerId: numb
     <div className="animate-rise flex flex-col gap-5">
       <header className="flex flex-wrap items-end justify-between gap-3 border-b border-line pb-4">
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Сквозной курс</p>
           <h1 className="mt-1 font-display text-2xl font-medium text-ink">Ликбезы</h1>
-          <p className="mt-1 text-sm text-muted">Лекции матцентра — отдельно от серий задач.</p>
         </div>
         {isTeacher ? <LikbezFormDialog centerId={centerId} terms={terms} /> : null}
       </header>
@@ -87,7 +85,6 @@ function LikbezCatalog({ centerId, isTeacher, selectedTermID }: { centerId: numb
       {visible?.length === 0 ? (
         <Card className="px-6 py-16 text-center">
           <p className="text-muted">{selectedTermID === null ? 'Ликбезов пока нет.' : 'В этом периоде ликбезов пока нет.'}</p>
-          {isTeacher ? <p className="mt-2 text-sm text-muted">Создайте первую лекцию, чтобы собрать материалы в одном месте.</p> : null}
         </Card>
       ) : (
         <div className="grid gap-3">

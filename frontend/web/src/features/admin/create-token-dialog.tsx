@@ -7,6 +7,7 @@ import {
   useCenterGroups,
   useCreateToken,
   useMathCenters,
+  isUnallocatedGroup,
   type CreateTokenValues,
   type InvitationToken,
   type TokenPreset,
@@ -330,7 +331,7 @@ export function CreateTokenDialog() {
                             ? '— в центре нет групп —'
                             : '— выберите —'}
                       </option>
-                      {(groups.data ?? []).map((g) => (
+                      {(groups.data ?? []).filter((group) => !isUnallocatedGroup(group.name)).map((g) => (
                         <option key={g.id} value={g.id}>
                           {g.name}
                         </option>

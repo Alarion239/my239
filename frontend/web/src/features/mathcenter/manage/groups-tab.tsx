@@ -5,13 +5,15 @@ import {
   useManageGroups,
   useManageCreateGroup,
   useManageDeleteGroup,
+  isUnallocatedGroup,
   type CreateGroupValues,
 } from '@my239/shared'
 import { Button, Card, CardContent, Input, Spinner } from '../../../design/ui'
 import { ConfirmButton, SectionHeader } from '../../admin/_shared'
 
-// GroupsTab lists a center's groups and lets a head teacher add or remove them.
-// The protected "Не распределены" bucket is displayed but cannot be deleted.
+// GroupsTab lists a center's user-created groups and lets a head teacher add or
+// remove them. The allocation board is the only place that exposes the system
+// bucket for students without a group.
 export function GroupsTab({ centerId }: { centerId: number }) {
   const { data: groups, isPending, isError } = useManageGroups(centerId)
   const createGroup = useManageCreateGroup(centerId)
@@ -53,28 +55,24 @@ export function GroupsTab({ centerId }: { centerId: number }) {
           <Spinner />
         ) : isError || !groups ? (
           <p className="text-sm text-danger">Не удалось загрузить группы.</p>
-        ) : groups.length === 0 ? (
+        ) : groups.filter((group) => !isUnallocatedGroup(group.name)).length === 0 ? (
           <p className="text-sm text-muted">Пока нет групп.</p>
         ) : (
           <ul className="flex flex-col gap-1.5">
-            {groups.map((g) => (
+            {groups.filter((group) => !isUnallocatedGroup(group.name)).map((g) => (
               <li
                 key={g.id}
                 className="flex items-center justify-between gap-2 rounded-lg bg-surface-muted px-3 py-2"
               >
                 <span className="text-sm text-ink">{g.name}</span>
-                {g.name === 'Не распределены' ? (
-                  <span className="text-xs text-faint">Системная</span>
-                ) : (
-                  <ConfirmButton
-                    variant="ghost"
-                    size="sm"
-                    disabled={deleteGroup.isPending}
-                    onConfirm={() => deleteGroup.mutate(g.id)}
-                  >
-                    Удалить
-                  </ConfirmButton>
-                )}
+                <ConfirmButton
+                  variant="ghost"
+                  size="sm"
+                  disabled={deleteGroup.isPending}
+                  onConfirm={() => deleteGroup.mutate(g.id)}
+                >
+                  Удалить
+                </ConfirmButton>
               </li>
             ))}
           </ul>

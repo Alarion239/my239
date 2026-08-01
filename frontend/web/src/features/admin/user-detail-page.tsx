@@ -15,6 +15,7 @@ import {
   useSetTeacherHead,
   useSetUserAdmin,
   useUserEnrollments,
+  isUnallocatedGroup,
   type StudentEnrollment,
   type TeacherEnrollment,
   type User,
@@ -331,6 +332,7 @@ function StudentRow({
 }) {
   const remove = useRemoveStudent()
   const [error, setError] = useState<string | null>(null)
+  const groupName = isUnallocatedGroup(enrollment.group_name) ? 'Без группы' : enrollment.group_name
 
   function removeStudent() {
     setError(null)
@@ -344,7 +346,7 @@ function StudentRow({
     <div className="flex flex-col gap-1.5">
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-paper px-3 py-2">
         <span className="font-medium text-ink">
-          Матцентр {enrollment.graduation_year} · {enrollment.group_name}
+          Матцентр {enrollment.graduation_year} · {groupName}
         </span>
         <ConfirmButton
           variant="ghost"
@@ -415,7 +417,7 @@ function AddStudent({ userId }: { userId: number }) {
           disabled={!centerId}
         >
           <option value="">Выберите группу…</option>
-          {(groups ?? []).map((g) => (
+          {(groups ?? []).filter((group) => !isUnallocatedGroup(group.name)).map((g) => (
             <option key={g.id} value={g.id}>
               {g.name}
             </option>

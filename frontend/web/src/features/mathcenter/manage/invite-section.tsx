@@ -5,6 +5,7 @@ import {
   useManageInvites,
   useManageCreateInvite,
   useManageRevokeInvite,
+  isUnallocatedGroup,
 } from '@my239/shared'
 import { Button, Input, Select } from '../../../design/ui'
 import { ConfirmButton, SectionHeader } from '../../admin/_shared'
@@ -30,7 +31,7 @@ export function InviteSection({
         description={
           role === 'teacher'
             ? 'Ссылка-приглашение для нового преподавателя.'
-            : 'Ссылка-приглашение для нового ученика. Без выбора группы он попадёт в «Не распределены».'
+            : 'Ссылка-приглашение для нового ученика. Группу можно назначить позже.'
         }
       />
 
@@ -156,8 +157,8 @@ function CreateInviteForm({
             aria-label="Группа"
             className="max-w-40"
           >
-            <option value="">Не распределены (по умолчанию)</option>
-            {(groups ?? []).map((g) => (
+            <option value="">Без группы (по умолчанию)</option>
+            {(groups ?? []).filter((group) => !isUnallocatedGroup(group.name)).map((g) => (
               <option key={g.id} value={g.id}>
                 {g.name}
               </option>

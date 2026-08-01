@@ -911,7 +911,6 @@ export function ConduitTable({
       >
         {syncGoogleSheets.isPending ? 'Импорт…' : 'Sheets'}
       </button>
-      <span className="hidden whitespace-nowrap text-xs text-faint xl:inline">Ваши инициалы</span>
       <div className="min-w-0 w-56 sm:w-64">
         <GraderInitialsInput
           centerId={centerId}

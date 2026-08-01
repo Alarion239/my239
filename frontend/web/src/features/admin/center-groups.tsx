@@ -5,6 +5,7 @@ import {
   useCenterGroups,
   useCreateGroup,
   useDeleteGroup,
+  isUnallocatedGroup,
   type CreateGroupValues,
 } from '@my239/shared'
 import { Button, Input, Spinner } from '../../design/ui'
@@ -51,11 +52,11 @@ export function CenterGroups({ centerId }: { centerId: number }) {
         <Spinner />
       ) : isError || !groups ? (
         <p className="text-sm text-danger">Не удалось загрузить группы.</p>
-      ) : groups.length === 0 ? (
+      ) : groups.filter((group) => !isUnallocatedGroup(group.name)).length === 0 ? (
         <p className="text-sm text-muted">Пока нет групп.</p>
       ) : (
         <ul className="flex flex-col gap-1.5">
-          {groups.map((g) => (
+          {groups.filter((group) => !isUnallocatedGroup(group.name)).map((g) => (
             <li
               key={g.id}
               className="flex items-center justify-between gap-2 rounded-lg bg-paper px-3 py-2"

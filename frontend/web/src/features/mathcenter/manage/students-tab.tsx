@@ -19,6 +19,8 @@ import {
   useManageRosterBoard,
   useManageSetRosterStudentGroup,
   useManageSetRazborAccess,
+  isUnallocatedGroup,
+  UNALLOCATED_GROUP_NAME,
   type ManageRazborAccessCell,
   type ManageRazborAccessResponse,
   type ManageRazborAccessStudent,
@@ -278,7 +280,7 @@ function RazborAccessMatrix({
     })
   }
 
-  const groupRows = draft.groups.map((group) => {
+  const groupRows = draft.groups.filter((group) => !isUnallocatedGroup(group.name)).map((group) => {
     const groupStudents = studentsByGroup.get(group.id) ?? []
     return { group, students: groupStudents }
   })
@@ -507,8 +509,8 @@ export function StudentsTab({ centerId }: { centerId: number }) {
             <div className="flex flex-wrap items-center gap-3 rounded-lg bg-surface-muted px-3 py-2">
               <span className="text-sm text-ink">{fullName(picked)}</span>
               <Select value={addGroupId} onChange={(event) => setAddGroupId(event.target.value)} aria-label="Группа" className="h-9 max-w-40">
-                <option value="">Не распределены (по умолчанию)</option>
-                {(groups ?? []).map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+                <option value="">Без группы (по умолчанию)</option>
+                {(groups ?? []).filter((group) => !isUnallocatedGroup(group.name)).map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
               </Select>
               <Button type="button" variant="secondary" size="sm" onClick={onAdd}>Добавить учеником</Button>
               <Button type="button" variant="ghost" size="sm" onClick={() => setPicked(null)}>Отмена</Button>
@@ -589,7 +591,7 @@ function RosterBoard({
   const students = board.data?.students ?? EMPTY_ROSTER_STUDENTS
   const groups = board.data?.groups ?? EMPTY_ROSTER_GROUPS
   const columns = useMemo(
-    () => [{ id: 'unallocated', name: 'Не распределены' }, ...groups.map((group) => ({ id: 'group:' + group.id, name: group.name }))],
+    () => [{ id: 'unallocated', name: UNALLOCATED_GROUP_NAME }, ...groups.filter((group) => !isUnallocatedGroup(group.name)).map((group) => ({ id: 'group:' + group.id, name: group.name }))],
     [groups],
   )
   const studentsByColumn = useMemo(() => {
@@ -705,7 +707,7 @@ function RosterBoard({
             className="font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
             onClick={() => {
               const student = students.find((candidate) => candidate.user_id === undo.userId)
-              if (student) moveStudent(student, undo.fromGroupId, undo.fromGroupId === null ? 'Не распределены' : (groups.find((group) => group.id === undo.fromGroupId)?.name ?? 'группу'), true)
+              if (student) moveStudent(student, undo.fromGroupId, undo.fromGroupId === null ? UNALLOCATED_GROUP_NAME : (groups.find((group) => group.id === undo.fromGroupId)?.name ?? 'группу'), true)
             }}
           >
             Отменить

@@ -29,6 +29,7 @@ import {
 } from '../../design/ui'
 import { cn } from '../../design/cn'
 import { useAuth } from '../../auth/auth-context'
+import { usePhoneViewport } from '../../use-phone-viewport'
 import { StatementPanel } from './statement-panel'
 import { SeriesStrip } from './series-strip'
 import { StudentProblemList } from './student-problem-list'
@@ -224,6 +225,7 @@ function CenterSeries({
     tab?: string
   }>()
   const navigate = useNavigate()
+  const isPhone = usePhoneViewport()
   const [actionsSeriesId, setActionsSeriesId] = useState<number | null>(null)
   const { data: list, isPending, isError } = useSeriesList(centerId, termId)
   const current = useMemo(() => (list ? currentSeries(list) : undefined), [list])
@@ -240,7 +242,11 @@ function CenterSeries({
     return <p className="py-10 text-sm text-danger">Не удалось загрузить серии.</p>
   }
 
-  const allowedTabs = isStudentView ? STUDENT_TAB_IDS : TEACHER_TAB_IDS
+  const allowedTabs = isStudentView
+    ? STUDENT_TAB_IDS
+    : isPhone
+      ? TEACHER_TAB_IDS
+      : TEACHER_TAB_IDS.filter((tabID) => tabID !== 'offline')
   // Pre-fill the next series number: one past the highest existing number.
   const nextNumber =
     list.length > 0 ? Math.max(...list.map((s) => s.number)) + 1 : 1
@@ -337,15 +343,16 @@ function CenterSeries({
       ) : !selected.published ? (
         <SeriesDraftEditor centerId={centerId} series={selected} />
       ) : (
-        // Teachers get Очередь / Условие / Разбор / Очно as full-width tabs;
-        // разбор carries the statistics + coffin handling, while the
-        // center-wide Кондуит owns the shared computer grid.
+        // Teachers get the queue, statement, and razbor on laptop; the
+        // phone-only offline workflow adds «Очно». The center-wide Кондуит
+        // owns the shared computer grid.
         <TeacherSeriesView
           centerId={centerId}
           series={selected}
           year={year ?? ''}
           tab={activeTab as TeacherTab}
           termSearch={termSearch}
+          isPhone={isPhone}
         />
       )}
     </>
@@ -485,22 +492,23 @@ function StudentProblemListWithCounts({
 
 type TeacherTab = (typeof TEACHER_TAB_IDS)[number]
 
-// TeacherSeriesView gives teachers full-width tabs in workflow order:
-// «Очередь», «Условие», «Разбор», then «Очно». The shared computer matrix
-// lives only in the center-wide «Кондуит»; the queue stays the compact
-// per-series workflow suitable for phones.
+// TeacherSeriesView gives teachers full-width tabs in workflow order. The
+// shared computer matrix lives only in the center-wide «Кондуит»; the queue
+// stays the compact per-series workflow suitable for phones.
 function TeacherSeriesView({
   centerId,
   series,
   year,
   tab,
   termSearch,
+  isPhone,
 }: {
   centerId: number
   series: Series
   year: string
   tab: TeacherTab
   termSearch: string
+  isPhone: boolean
 }) {
   const navigate = useNavigate()
   return (
@@ -511,7 +519,7 @@ function TeacherSeriesView({
           onChange={(t) =>
             navigate('/mathcenter/' + year + '/series/' + series.id + '/' + t + termSearch)
           }
-          options={TEACHER_TABS}
+          options={isPhone ? TEACHER_TABS : TEACHER_TABS.filter((option) => option.id !== 'offline')}
           ariaLabel="Раздел проверки"
           className="shrink-0"
         />
