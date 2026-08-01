@@ -14,6 +14,7 @@ describe('PdfViewer', () => {
     const { container } = render(<PdfViewer path="/mathcenter/series/7/pdf" title="Условие" />)
 
     expect(screen.getByRole('status', { name: 'Загрузка PDF' })).toBeInTheDocument()
+    expect(screen.getByRole('document')).toHaveClass('absolute')
     expect(container.querySelector('iframe')).toBeNull()
   })
 

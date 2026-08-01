@@ -220,10 +220,12 @@ export function PdfViewer({
         <span>Масштаб</span>
         <button type="button" onClick={() => changeZoom(1)} disabled={status !== 'ready'} className="rounded-full px-2 py-0.5 hover:bg-surface-muted disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">+</button>
       </div>
-      <div ref={containerRef} className="relative h-[min(70vh,640px)] w-full overflow-auto bg-surface-muted" role="document">
-        <div ref={viewerRef} className="pdfViewer" />
+      <div className="relative h-[min(70vh,640px)] w-full bg-surface-muted">
+        <div ref={containerRef} className="absolute inset-0 overflow-auto" role="document">
+          <div ref={viewerRef} className="pdfViewer" />
+        </div>
         {status === 'loading' ? (
-          <div className="absolute inset-0 flex items-center justify-center" role="status" aria-label="Загрузка PDF">
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center" role="status" aria-label="Загрузка PDF">
             <Spinner />
           </div>
         ) : null}
