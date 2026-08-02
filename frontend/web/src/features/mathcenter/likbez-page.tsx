@@ -255,21 +255,6 @@ function LikbezDraftEditor({ likbez, terms }: { likbez: Likbez; terms: MathCente
 
   return (
     <div className="animate-rise flex flex-col gap-6">
-      <Link to={'/mathcenter/' + year + '/likbez' + search} className="self-start text-sm font-medium text-accent hover:underline">← Все ликбезы</Link>
-      <form className="flex flex-col gap-4 border-b border-line pb-6" noValidate onSubmit={(event) => event.preventDefault()}>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <p className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Черновик · ликбез №{likbez.number}</p>
-        </div>
-        <div className="grid gap-4 lg:grid-cols-[minmax(11rem,1fr)_7rem_minmax(14rem,2fr)_11rem]">
-          <Field label="Период" error={errors.term_id?.message}>{({ id, invalid }) => <Select id={id} invalid={invalid} {...register('term_id', { valueAsNumber: true })}>{terms.map((term) => <option key={term.id} value={term.id}>{term.display_name}</option>)}</Select>}</Field>
-          <Field label="Номер" error={errors.number?.message}>{({ id, invalid }) => <Input id={id} type="number" min={1} invalid={invalid} {...register('number', { valueAsNumber: true })} />}</Field>
-          <Field label="Название" error={errors.title?.message}>{({ id, invalid }) => <Input id={id} invalid={invalid} {...register('title')} />}</Field>
-          <LikbezDateField control={control} error={errors.held_on?.message} />
-        </div>
-        <Field label="Краткое описание" error={errors.description?.message}>{({ id, invalid }) => <Textarea id={id} invalid={invalid} {...register('description')} />}</Field>
-        {detailsAutosave.error ? <p className="text-sm text-danger" role="status">{detailsAutosave.error}</p> : detailsAutosave.status === 'saving' ? <p className="text-sm text-muted" role="status">Сохраняем сведения…</p> : detailsAutosave.status === 'saved' ? <p className="text-sm text-status-accepted" role="status">Сведения сохранены</p> : null}
-      </form>
-
       <SolutionWorkbench
         title={'Ликбез №' + likbez.number}
         mode="edit"
@@ -283,6 +268,15 @@ function LikbezDraftEditor({ likbez, terms }: { likbez: Likbez; terms: MathCente
         texQuery={texQuery}
         formatTabLabel="Формат ликбеза"
         confirmPublication={false}
+        publishPlacement="header"
+        headerPrefix={(
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <Link to={'/mathcenter/' + year + '/likbez' + search} className="text-sm font-medium text-accent hover:underline">← Все ликбезы</Link>
+            <span className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Черновик · ликбез №{likbez.number}</span>
+          </div>
+        )}
+        hideTitle
+        plain
         onPutTex={(tex) => putTex.mutateAsync(tex)}
         onUploadPdf={(file) => uploadPdf.mutateAsync(file)}
         onSetLink={(link) => setVideo.mutateAsync(link)}
@@ -290,6 +284,17 @@ function LikbezDraftEditor({ likbez, terms }: { likbez: Likbez; terms: MathCente
         onPublish={() => publish.mutateAsync()}
         onClose={() => navigate('/mathcenter/' + year + '/likbez' + search)}
       />
+
+      <form className="flex flex-col gap-4 border-b border-line pb-6" noValidate onSubmit={(event) => event.preventDefault()}>
+        <div className="grid gap-4 lg:grid-cols-[minmax(10rem,1fr)_6rem_minmax(11rem,1.2fr)_auto]">
+          <Field label="Период" error={errors.term_id?.message}>{({ id, invalid }) => <Select id={id} invalid={invalid} {...register('term_id', { valueAsNumber: true })}>{terms.map((term) => <option key={term.id} value={term.id}>{term.display_name}</option>)}</Select>}</Field>
+          <Field label="Номер" error={errors.number?.message}>{({ id, invalid }) => <Input id={id} type="number" min={1} invalid={invalid} {...register('number', { valueAsNumber: true })} />}</Field>
+          <Field label="Название" error={errors.title?.message}>{({ id, invalid }) => <Input id={id} invalid={invalid} {...register('title')} />}</Field>
+          <LikbezDateField control={control} error={errors.held_on?.message} />
+        </div>
+        <Field label="Краткое описание" error={errors.description?.message}>{({ id, invalid }) => <Textarea id={id} invalid={invalid} {...register('description')} />}</Field>
+        {detailsAutosave.error ? <p className="text-sm text-danger" role="status">{detailsAutosave.error}</p> : detailsAutosave.status === 'saving' ? <p className="text-sm text-muted" role="status">Сохраняем сведения…</p> : detailsAutosave.status === 'saved' ? <p className="text-sm text-status-accepted" role="status">Сведения сохранены</p> : null}
+      </form>
 
       <section className="flex flex-wrap items-center justify-between gap-3 border-t border-danger/20 pt-5" aria-label="Опасная зона">
         <div>
@@ -326,12 +331,13 @@ function LikbezDateField({ control, error }: { control: Control<LikbezValues>; e
             const weekday = likbezWeekdayFromISO(iso)
             const capitalizedWeekday = weekday ? weekday.charAt(0).toLocaleUpperCase('ru-RU') + weekday.slice(1) : null
             return (
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-nowrap items-center gap-2">
                 <Input
                   id={id}
                   ref={field.ref}
                   name={field.name}
                   type="date"
+                  className="w-[10rem] shrink-0"
                   value={iso}
                   invalid={invalid}
                   onBlur={field.onBlur}

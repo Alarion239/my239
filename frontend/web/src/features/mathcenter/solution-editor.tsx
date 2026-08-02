@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
+import { useDeferredValue, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { APIErrorImpl, DEFAULT_LATEX_PREAMBLE, latexBodySource, normalizeLatexSource, useMathCenterLatexPreamble } from '@my239/shared'
 import { Eye, ExternalLink, FileText, Pencil, X } from 'lucide-react'
 import { Button, Input, Spinner, Textarea } from '../../design/ui'
@@ -32,6 +32,10 @@ export interface SolutionWorkbenchProps {
   texQuery?: QueryLike
   formatTabLabel?: string
   confirmPublication?: boolean
+  publishPlacement?: 'status' | 'header'
+  headerPrefix?: ReactNode
+  hideTitle?: boolean
+  plain?: boolean
   onModeChange?: (mode: SolutionWorkbenchMode) => void
   onPutTex?: (tex: string) => Promise<unknown>
   onUploadPdf?: (file: Blob) => Promise<unknown>
@@ -75,6 +79,10 @@ export function SolutionWorkbench({
   texQuery,
   formatTabLabel = 'Формат разбора',
   confirmPublication = true,
+  publishPlacement = 'status',
+  headerPrefix,
+  hideTitle = false,
+  plain = false,
   onModeChange,
   onPutTex,
   onUploadPdf,
@@ -148,6 +156,26 @@ export function SolutionWorkbench({
         ? null
         : statusLabel(texStatus) ?? statusLabel(linkStatus)
 
+  const publicationControl = onPublish && !publishedAt ? (
+    !confirmPublication ? (
+      <Button size="sm" disabled={busy !== null || !hasMaterial} onClick={() => { void publish() }}>
+        {busy === 'publish' ? 'Публикуем…' : 'Опубликовать'}
+      </Button>
+    ) : (
+      confirmPublish ? (
+        <span className="flex flex-wrap items-center justify-end gap-2 text-right">
+          <span>Публикация необратима{closesCoffin ? ' и закроет сдачу гроба' : ''}.</span>
+          <Button size="sm" disabled={busy !== null || !hasMaterial} onClick={() => { void publish() }}>Опубликовать</Button>
+          <Button size="sm" variant="ghost" onClick={() => setConfirmPublish(false)}>Отмена</Button>
+        </span>
+      ) : (
+        <Button size="sm" disabled={busy !== null || !hasMaterial} onClick={() => setConfirmPublish(true)}>
+          Опубликовать
+        </Button>
+      )
+    )
+  ) : null
+
   async function flushMaterials() {
     if (!(await flushTex())) return false
     return flushLink()
@@ -175,7 +203,7 @@ export function SolutionWorkbench({
     })
   }
 
-  const publish = async () => {
+  async function publish() {
     if (!onPublish) return
     setBusy('publish')
     setError(null)
@@ -232,9 +260,9 @@ export function SolutionWorkbench({
     <section
       className={cn(
         'material-workbench-container animate-rise min-w-0',
-        active === 'pdf' ? '' : 'rounded-xl border border-line bg-surface p-4 shadow-sm',
+        plain || active === 'pdf' ? '' : 'rounded-xl border border-line bg-surface p-4 shadow-sm',
       )}
-      aria-label={title}
+      aria-label={hideTitle ? formatTabLabel : title}
       tabIndex={-1}
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
@@ -245,9 +273,10 @@ export function SolutionWorkbench({
     >
       <header className={cn(
         'flex min-w-0 items-center gap-2',
-        active === 'pdf' ? 'pb-3' : 'border-b border-line pb-2',
+        plain || active === 'pdf' ? 'pb-3' : 'border-b border-line pb-2',
       )}>
-        <h2 className="min-w-[3.5rem] flex-1 truncate font-display text-lg font-medium text-ink" title={title}>{title}</h2>
+        {headerPrefix ? <div className="min-w-0 flex-1">{headerPrefix}</div> : null}
+        {!hideTitle ? <h2 className="min-w-[3.5rem] flex-1 truncate font-display text-lg font-medium text-ink" title={title}>{title}</h2> : null}
 
         {formats.length > 0 ? (
           <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-surface-muted p-0.5" role="tablist" aria-label={formatTabLabel}>
@@ -283,6 +312,7 @@ export function SolutionWorkbench({
               <Pencil className="h-4 w-4" aria-hidden />
             </Button>
           ) : null}
+          {editor && publishPlacement === 'header' ? publicationControl : null}
           <Button type="button" size="icon" variant="ghost" aria-label="Закрыть" onClick={close}>
             <X className="h-4 w-4" aria-hidden />
           </Button>
@@ -294,25 +324,7 @@ export function SolutionWorkbench({
           <span role={autosaveError ? 'alert' : 'status'} className={autosaveError ? 'text-danger' : ''}>
             {autosaveError ? autosaveError : autosaveStatus ?? (lastAction === 'pdf' ? 'PDF сохранён' : null)}
           </span>
-          {onPublish && !publishedAt ? (
-            !confirmPublication ? (
-              <Button size="sm" disabled={busy !== null || !hasMaterial} onClick={() => { void publish() }}>
-                {busy === 'publish' ? 'Публикуем…' : 'Опубликовать'}
-              </Button>
-            ) : (
-            confirmPublish ? (
-              <span className="flex flex-wrap items-center justify-end gap-2 text-right">
-                <span>Публикация необратима{closesCoffin ? ' и закроет сдачу гроба' : ''}.</span>
-                <Button size="sm" disabled={busy !== null || !hasMaterial} onClick={() => { void publish() }}>Опубликовать</Button>
-                <Button size="sm" variant="ghost" onClick={() => setConfirmPublish(false)}>Отмена</Button>
-              </span>
-            ) : (
-              <Button size="sm" disabled={busy !== null || !hasMaterial} onClick={() => setConfirmPublish(true)}>
-                Опубликовать
-              </Button>
-            )
-            )
-          ) : null}
+          {publishPlacement === 'status' ? publicationControl : null}
         </div>
       ) : null}
 
@@ -332,15 +344,17 @@ export function SolutionWorkbench({
         {active === 'tex' ? (
           editor ? (
             <div className="flex flex-col gap-3">
-              <label htmlFor={formatId + '-source'} className="text-sm font-medium text-ink">Исходник LaTeX</label>
               <div className="material-tex-grid gap-3">
-                <Textarea
-                  id={formatId + '-source'}
-                  value={tex}
-                  onChange={(event) => { setTex(event.target.value); scheduleTex(event.target.value) }}
-                  className="min-h-[24rem] font-mono text-xs leading-6"
-                  placeholder="Введите текст и формулы без преамбулы…"
-                />
+                <div className="min-h-[24rem] overflow-auto rounded-lg border border-line bg-surface-muted p-3">
+                  <label htmlFor={formatId + '-source'} className="mb-2 block text-sm font-medium text-ink">LaTeX</label>
+                  <Textarea
+                    id={formatId + '-source'}
+                    value={tex}
+                    onChange={(event) => { setTex(event.target.value); scheduleTex(event.target.value) }}
+                    className="min-h-[20rem] font-mono text-xs leading-6"
+                    placeholder="Введите текст и формулы без преамбулы…"
+                  />
+                </div>
                 <div className="min-h-[24rem] overflow-auto rounded-lg border border-line bg-surface-muted p-3">
                   <p className="mb-2 text-sm font-medium text-ink">Предпросмотр</p>
                   {renderedPreview.trim() === '' ? <p className="text-sm text-muted">Предпросмотр появится здесь.</p> : <TexViewer tex={renderedPreview} />}
