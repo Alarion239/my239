@@ -280,6 +280,16 @@ export function SolutionWorkbench({
 
   const toolbarStatus = autosaveError ?? autosaveStatus ?? (lastAction === 'pdf' ? 'PDF сохранён' : null)
 
+  const pdfControl = editor && active === 'pdf' && onUploadPdf ? (
+    <>
+      <input ref={fileRef} type="file" accept="application/pdf" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void uploadPdf(file) }} />
+      <Button type="button" size="sm" variant="secondary" disabled={busy !== null} onClick={() => fileRef.current?.click()}>
+        <FileText className="h-4 w-4" aria-hidden />
+        {busy === 'pdf' ? 'Загружаем…' : hasPdf ? 'Заменить PDF' : 'Загрузить PDF'}
+      </Button>
+    </>
+  ) : null
+
   return (
     <section
       className="material-workbench-container animate-rise min-w-0"
@@ -294,19 +304,11 @@ export function SolutionWorkbench({
     >
       <header className="flex min-w-0 flex-wrap items-center gap-2 pb-2">
         {headerPrefix ? <div className="min-w-0 flex-1">{headerPrefix}</div> : <h2 className="min-w-[3.5rem] flex-1 truncate font-display text-lg font-medium text-ink" title={title}>{title}</h2>}
+        {!details ? pdfControl : null}
         {!details ? formatTabs : null}
         {toolbarStatus ? <span role={autosaveError ? 'alert' : 'status'} className={cn('min-w-0 truncate text-xs', autosaveError ? 'text-danger' : 'text-muted')}>{toolbarStatus}</span> : null}
 
         <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-1">
-          {editor && active === 'pdf' && onUploadPdf ? (
-            <>
-              <input ref={fileRef} type="file" accept="application/pdf" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void uploadPdf(file) }} />
-              <Button type="button" size="sm" variant="secondary" disabled={busy !== null} onClick={() => fileRef.current?.click()}>
-                <FileText className="h-4 w-4" aria-hidden />
-                {busy === 'pdf' ? 'Загружаем…' : hasPdf ? 'Заменить PDF' : 'Загрузить PDF'}
-              </Button>
-            </>
-          ) : null}
           {editor && onPublish ? publicationControl : null}
           {editor && onModeChange && publishedAt ? (
             <Button type="button" size="icon" variant="ghost" aria-label="Закончить редактирование" onClick={() => switchMode('view')}>
@@ -325,7 +327,7 @@ export function SolutionWorkbench({
       </header>
 
       {details ? <div className="mt-1">{details}</div> : null}
-      {details ? <div className="mt-2">{formatTabs}</div> : null}
+      {details ? <div className="mt-2 flex flex-wrap items-center gap-2">{pdfControl}{formatTabs}</div> : null}
 
       {confirmClose ? (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/30 bg-status-checking-soft px-3 py-2 text-sm text-ink" role="alert">

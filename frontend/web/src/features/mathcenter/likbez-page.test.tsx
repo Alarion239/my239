@@ -147,7 +147,11 @@ describe('Likbez controls', () => {
     expect(screen.queryByRole('button', { name: 'Сохранить LaTeX' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: 'PDF' }))
-    expect(workbenchHeader).toContainElement(screen.getByRole('button', { name: 'Загрузить PDF' }))
+    const pdfButton = screen.getByRole('button', { name: 'Загрузить PDF' })
+    expect(workbenchHeader).not.toContainElement(pdfButton)
+    const formatRow = pdfButton.parentElement?.parentElement
+    expect(formatRow).toContainElement(screen.getByRole('tablist', { name: 'Формат ликбеза' }))
+    expect(formatRow!.compareDocumentPosition(screen.getByRole('tablist', { name: 'Формат ликбеза' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 
     await user.clear(screen.getByLabelText('Название'))
     await user.type(screen.getByLabelText('Название'), 'Обновлённый черновик')
