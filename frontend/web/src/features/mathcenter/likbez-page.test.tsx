@@ -124,27 +124,61 @@ describe('Likbez controls', () => {
     await user.click(await screen.findByRole('button', { name: 'Редактировать' }))
     const publishButton = await screen.findByRole('button', { name: 'Опубликовать' })
     expect(mocks.unpublish.mutateAsync).not.toHaveBeenCalled()
+    expect(screen.getByRole('tablist', { name: 'Формат ликбеза' })).toBeInTheDocument()
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['LaTeX', 'PDF', 'Видео'])
+    expect(document.querySelector('.material-tex-grid')).toBeInTheDocument()
+    expect(screen.getByLabelText('Дата')).toHaveAttribute('type', 'date')
+    expect(screen.getByText('Суббота')).toBeInTheDocument()
+    expect(screen.queryByText(/Материал 0[123]/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Добавьте PDF-версию лекции')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Сохранить сведения' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Сохранить LaTeX' })).not.toBeInTheDocument()
 
     await user.clear(screen.getByLabelText('Название'))
     await user.type(screen.getByLabelText('Название'), 'Обновлённый черновик')
+    await user.click(screen.getByRole('tab', { name: 'Видео' }))
+    const videoInput = screen.getByLabelText('Ссылка на видео')
+    await user.clear(videoInput)
+    await user.type(videoInput, 'https://youtu.be/abc12345678')
     await user.click(publishButton)
 
     await waitFor(() => expect(mocks.update.mutateAsync).toHaveBeenCalled())
+    await waitFor(() => expect(mocks.setVideo.mutateAsync).toHaveBeenCalledWith('https://youtu.be/abc12345678'))
     await waitFor(() => expect(mocks.publish.mutateAsync).toHaveBeenCalledTimes(1))
     expect(mocks.update.mutateAsync.mock.invocationCallOrder[0]).toBeLessThan(mocks.publish.mutateAsync.mock.invocationCallOrder[0])
+    expect(mocks.setVideo.mutateAsync.mock.invocationCallOrder[0]).toBeLessThan(mocks.publish.mutateAsync.mock.invocationCallOrder[0])
   })
 
   it('does not publish when saving draft details fails', async () => {
     mocks.list = [draft]
     mocks.detail = draft
-    mocks.update.mutateAsync.mockRejectedValueOnce(new Error('save failed'))
+    mocks.update.mutateAsync.mockRejectedValue(new Error('save failed'))
     const user = userEvent.setup()
     renderPage()
 
     await user.click(await screen.findByRole('button', { name: 'Редактировать' }))
+    await user.clear(screen.getByLabelText('Название'))
+    await user.type(screen.getByLabelText('Название'), 'Сломанный черновик')
     await user.click(await screen.findByRole('button', { name: 'Опубликовать' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось опубликовать ликбез')
+    expect(mocks.publish.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('blocks publication when the video link cannot be saved', async () => {
+    mocks.list = [draft]
+    mocks.detail = draft
+    mocks.setVideo.mutateAsync.mockRejectedValue(new Error('invalid video link'))
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Редактировать' }))
+    await user.click(screen.getByRole('tab', { name: 'Видео' }))
+    await user.clear(screen.getByLabelText('Ссылка на видео'))
+    await user.type(screen.getByLabelText('Ссылка на видео'), 'not-a-url')
+    await user.click(await screen.findByRole('button', { name: 'Опубликовать' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('invalid video link')
     expect(mocks.publish.mutateAsync).not.toHaveBeenCalled()
   })
 

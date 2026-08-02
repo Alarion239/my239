@@ -286,21 +286,23 @@ describe('TeacherProblemStats — разбор frame', () => {
         .closest('[role="button"]') as HTMLElement,
     )
     await user.click(screen.getByRole('button', { name: 'Редактировать' }))
-    await user.click(screen.getByRole('button', { name: 'Сохранить ссылку' }))
+    const link = screen.getByRole('textbox', { name: 'Ссылка на видео' })
+    await user.clear(link)
+    await user.type(link, 'https://example.com/updated')
 
     await waitFor(() => {
       expect(request).toHaveBeenCalledWith(
         '/mathcenter/subproblems/1000/solution/link',
         {
           method: 'PUT',
-          body: { link: 'https://example.com/shared' },
+          body: { link: 'https://example.com/updated' },
         },
       )
       expect(request).toHaveBeenCalledWith(
         '/mathcenter/subproblems/1001/solution/link',
         {
           method: 'PUT',
-          body: { link: 'https://example.com/shared' },
+          body: { link: 'https://example.com/updated' },
         },
       )
       expect(request).toHaveBeenCalledWith(
@@ -310,6 +312,6 @@ describe('TeacherProblemStats — разбор frame', () => {
           body: { subproblem_ids: [1000, 1001] },
         },
       )
-    })
+    }, { timeout: 3000 })
   })
 })

@@ -144,6 +144,22 @@ body {
   animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
+/* The workbench responds to its own panel width, not only the viewport. */
+.material-workbench-container {
+  container-type: inline-size;
+}
+
+.material-tex-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@container (min-width: 48rem) {
+  .material-tex-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-rise {
     animation: none;

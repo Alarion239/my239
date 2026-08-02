@@ -1,15 +1,14 @@
-import { useDeferredValue, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ExternalLink, FileText, Pencil, Plus, Trash2, Video } from 'lucide-react'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm, useWatch } from 'react-hook-form'
+import type { Control } from 'react-hook-form'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   APIErrorImpl,
-  DEFAULT_LATEX_PREAMBLE,
-  latexBodySource,
   likbezSchema,
   likbezDateFromISO,
-  normalizeLatexSource,
+  likbezWeekdayFromISO,
   russianLikbezDateToISO,
   todayLikbezDate,
   useCreateLikbez,
@@ -17,7 +16,6 @@ import {
   useLikbez,
   useLikbezList,
   useLikbezTex,
-  useMathCenterLatexPreamble,
   useMathCenterTerms,
   usePublishLikbez,
   usePutLikbezTex,
@@ -47,6 +45,8 @@ import { PdfViewer } from './pdf-viewer'
 import { TexViewer } from './tex-viewer'
 import { useCenterIdContext, useCenterTermContext } from './center-id-context'
 import { useSeriesContext } from './use-series-context'
+import { SolutionWorkbench } from './solution-editor'
+import { useAutosave } from './use-autosave'
 
 export function LikbezPage() {
   const centerId = useCenterIdContext()
@@ -194,103 +194,57 @@ function LikbezDraftEditor({ likbez, terms }: { likbez: Likbez; terms: MathCente
   const remove = useDeleteLikbez(likbez.math_center_id)
   const texQuery = useLikbezTex(likbez.id, true)
   const putTex = usePutLikbezTex(likbez.id)
-  const preambleQuery = useMathCenterLatexPreamble(likbez.math_center_id)
   const uploadPdf = useUploadLikbezPdf(likbez.id)
   const setVideo = useSetLikbezVideo(likbez.id)
-  const [tex, setTex] = useState('')
-  const [link, setLink] = useState(likbez.video_url ?? '')
-  const [materialError, setMaterialError] = useState<string | null>(null)
-  const [publishError, setPublishError] = useState<string | null>(null)
-  const [publishing, setPublishing] = useState(false)
-  const initialTexRef = useRef<string | null>(null)
-  const initialLinkRef = useRef(likbez.video_url ?? '')
-  const fileRef = useRef<HTMLInputElement>(null)
-  const previewTex = useDeferredValue(tex)
-  const preamble = preambleQuery.data?.preamble ?? DEFAULT_LATEX_PREAMBLE
-  const renderedPreviewTex = normalizeLatexSource(previewTex, preamble)
-  const { register, handleSubmit, reset, setError, trigger, getValues, formState: { errors, isSubmitting } } = useForm<LikbezValues>({ resolver: zodResolver(likbezSchema) })
-
-  useEffect(() => {
-    reset({ term_id: likbez.term_id, number: likbez.number, title: likbez.title, held_on: likbezDateFromISO(likbez.held_on), description: likbez.description })
-  }, [likbez, reset])
-
-  useEffect(() => {
-    if (texQuery.data?.tex === undefined) return
-    const source = latexBodySource(texQuery.data.tex)
-    initialTexRef.current = source
-    setTex(source)
-  }, [texQuery.data?.tex])
-
-  useEffect(() => {
-    const nextLink = likbez.video_url ?? ''
-    initialLinkRef.current = nextLink
-    setLink(nextLink)
-  }, [likbez.video_url])
-
-  const saveDetails = handleSubmit((values) => new Promise<void>((resolve) => {
-    const heldOn = russianLikbezDateToISO(values.held_on)
-    if (!heldOn) {
-      setError('held_on', { message: 'Укажите дату в формате ДД-ММ-ГГГГ' })
-      resolve()
-      return
-    }
-    update.mutate({ ...values, held_on: heldOn }, {
-      onSuccess: () => resolve(),
-      onError: (error: unknown) => {
-        setError('title', { message: error instanceof APIErrorImpl ? error.message : 'Не удалось сохранить ликбез.' })
-        resolve()
-      },
-    })
-  }))
-
-  const runMaterialAction = (work: () => Promise<unknown>) => void work().catch((error: unknown) => setMaterialError(error instanceof APIErrorImpl ? error.message : 'Не удалось сохранить материал.'))
-  const busy = putTex.isPending || uploadPdf.isPending || setVideo.isPending || update.isPending || publish.isPending || publishing
-  const materialsReady = !texQuery.isPending && !preambleQuery.isPending
-  const hasEffectiveMaterials = likbez.has_pdf || tex.trim() !== '' || link.trim() !== ''
-  const hasStoredMaterials = likbez.has_pdf || likbez.has_tex || !!likbez.video_url
-
-  async function saveAndPublish() {
-    setPublishError(null)
-    setMaterialError(null)
-    if (!materialsReady) {
-      setPublishError('Дождитесь загрузки материалов и попробуйте снова.')
-      return
-    }
-    if (!(await trigger())) {
-      setPublishError('Проверьте сведения о ликбезе.')
-      return
-    }
-    const values = getValues()
-    const heldOn = russianLikbezDateToISO(values.held_on)
-    if (!heldOn) {
-      setError('held_on', { message: 'Укажите дату в формате ДД-ММ-ГГГГ' })
-      setPublishError('Проверьте дату проведения.')
-      return
-    }
-    if (!hasEffectiveMaterials) {
-      setPublishError('Добавьте хотя бы один материал перед публикацией.')
-      return
-    }
-    if (tex.trim() === '' && (initialTexRef.current ?? '').trim() !== '') {
-      setPublishError('LaTeX-конспект не может быть пустым. Восстановите текст или сохраните другой материал.')
-      return
-    }
-
-    setPublishing(true)
-    try {
+  const initialDetails = useMemo<LikbezValues>(() => ({
+    term_id: likbez.term_id,
+    number: likbez.number,
+    title: likbez.title,
+    held_on: likbezDateFromISO(likbez.held_on),
+    description: likbez.description,
+  }), [likbez.description, likbez.held_on, likbez.number, likbez.term_id, likbez.title])
+  const { register, control, reset, setError, trigger, getValues, formState: { errors } } = useForm<LikbezValues>({
+    resolver: zodResolver(likbezSchema),
+    defaultValues: initialDetails,
+  })
+  const watchedDetails = useWatchValues(control)
+  const { term_id: watchedTermID, number: watchedNumber, title: watchedTitle, held_on: watchedHeldOn, description: watchedDescription } = watchedDetails
+  const detailsAutosave = useAutosave({
+    initialValue: initialDetails,
+    save: async (values: LikbezValues) => {
+      const heldOn = russianLikbezDateToISO(values.held_on)
+      if (!heldOn) throw new Error('Укажите дату проведения.')
       await update.mutateAsync({ ...values, held_on: heldOn })
-      if (tex.trim() !== '' && tex !== (initialTexRef.current ?? '')) {
-        await putTex.mutateAsync(normalizeLatexSource(tex, preamble))
+    },
+    equals: sameLikbezValues,
+    isValid: (values) => likbezSchema.safeParse(values).success,
+    invalidMessage: 'Проверьте сведения о ликбезе.',
+    formatError: (value) => value instanceof APIErrorImpl ? value.message : value instanceof Error ? value.message : 'Не удалось сохранить ликбез.',
+  })
+  const { schedule: scheduleDetails, setBaseline: setDetailsBaseline } = detailsAutosave
+
+  useEffect(() => {
+    reset(initialDetails)
+    setDetailsBaseline(initialDetails)
+  }, [initialDetails, reset, setDetailsBaseline])
+
+  useEffect(() => {
+    scheduleDetails({ term_id: watchedTermID, number: watchedNumber, title: watchedTitle, held_on: watchedHeldOn, description: watchedDescription })
+  }, [scheduleDetails, watchedDescription, watchedHeldOn, watchedNumber, watchedTermID, watchedTitle])
+
+  async function flushDetails() {
+    try {
+      if (!(await trigger())) {
+        setError('held_on', { message: 'Проверьте дату проведения.' })
+        throw new Error('Проверьте сведения о ликбезе.')
       }
-      const nextLink = link.trim()
-      if (nextLink !== initialLinkRef.current.trim()) {
-        await setVideo.mutateAsync(nextLink)
+      scheduleDetails(getValues())
+      if (!(await detailsAutosave.flush())) {
+        throw new Error('Не удалось опубликовать ликбез: ' + (detailsAutosave.error ?? 'не удалось сохранить сведения.'))
       }
-      await publish.mutateAsync()
-    } catch (error: unknown) {
-      setPublishError(error instanceof APIErrorImpl ? error.message : 'Не удалось опубликовать ликбез. Исправьте ошибку и попробуйте снова.')
-    } finally {
-      setPublishing(false)
+    } catch (value) {
+      const message = value instanceof Error ? value.message : 'Не удалось опубликовать ликбез.'
+      throw new Error(message)
     }
   }
 
@@ -302,61 +256,94 @@ function LikbezDraftEditor({ likbez, terms }: { likbez: Likbez; terms: MathCente
   return (
     <div className="animate-rise flex flex-col gap-6">
       <Link to={'/mathcenter/' + year + '/likbez' + search} className="self-start text-sm font-medium text-accent hover:underline">← Все ликбезы</Link>
-      <form className="flex flex-col gap-4 border-b border-line pb-6" noValidate onSubmit={saveDetails}>
+      <form className="flex flex-col gap-4 border-b border-line pb-6" noValidate onSubmit={(event) => event.preventDefault()}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Черновик · ликбез №{likbez.number}</p>
-          <Button type="button" variant="primary" disabled={busy || !materialsReady || (!hasEffectiveMaterials && !hasStoredMaterials)} onClick={() => { void saveAndPublish() }}>
-            {publishing || publish.isPending ? 'Публикуем…' : 'Опубликовать'}
-          </Button>
         </div>
-        {publishError ? <p className="text-sm text-danger" role="alert">{publishError}</p> : null}
         <div className="grid gap-4 lg:grid-cols-[minmax(11rem,1fr)_7rem_minmax(14rem,2fr)_11rem]">
           <Field label="Период" error={errors.term_id?.message}>{({ id, invalid }) => <Select id={id} invalid={invalid} {...register('term_id', { valueAsNumber: true })}>{terms.map((term) => <option key={term.id} value={term.id}>{term.display_name}</option>)}</Select>}</Field>
           <Field label="Номер" error={errors.number?.message}>{({ id, invalid }) => <Input id={id} type="number" min={1} invalid={invalid} {...register('number', { valueAsNumber: true })} />}</Field>
           <Field label="Название" error={errors.title?.message}>{({ id, invalid }) => <Input id={id} invalid={invalid} {...register('title')} />}</Field>
-          <Field label="Дата" error={errors.held_on?.message}>{({ id, invalid }) => <Input id={id} inputMode="numeric" placeholder="ДД-ММ-ГГГГ" invalid={invalid} {...register('held_on')} />}</Field>
+          <LikbezDateField control={control} error={errors.held_on?.message} />
         </div>
         <Field label="Краткое описание" error={errors.description?.message}>{({ id, invalid }) => <Textarea id={id} invalid={invalid} {...register('description')} />}</Field>
-        <Button type="submit" className="self-start" disabled={isSubmitting || update.isPending}>{isSubmitting || update.isPending ? 'Сохраняем…' : 'Сохранить сведения'}</Button>
+        {detailsAutosave.error ? <p className="text-sm text-danger" role="status">{detailsAutosave.error}</p> : detailsAutosave.status === 'saving' ? <p className="text-sm text-muted" role="status">Сохраняем сведения…</p> : detailsAutosave.status === 'saved' ? <p className="text-sm text-status-accepted" role="status">Сведения сохранены</p> : null}
       </form>
 
-      <section className="flex flex-col gap-3" aria-labelledby="likbez-latex-heading">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <div><p className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Материал 01</p><h1 id="likbez-latex-heading" className="mt-1 font-display text-2xl font-medium text-ink">LaTeX-конспект</h1></div>
-          <Button size="sm" variant="secondary" disabled={busy || tex.trim() === ''} onClick={() => runMaterialAction(async () => { await putTex.mutateAsync(normalizeLatexSource(tex, preamble)) })}>{putTex.isPending ? 'Сохраняем…' : 'Сохранить LaTeX'}</Button>
-        </div>
-        {materialError ? <p className="text-sm text-danger" role="alert">{materialError}</p> : null}
-        <div className="grid gap-4 lg:grid-cols-2">
-          <section className="flex min-w-0 flex-col gap-2"><label htmlFor="likbez-tex-source" className="text-sm font-medium text-ink">Исходник</label><Textarea id="likbez-tex-source" value={tex} onChange={(event) => setTex(event.target.value)} className="min-h-[32rem] flex-1 font-mono text-xs leading-6" placeholder={'Введите текст и формулы без преамбулы…'} /></section>
-          <section className="flex min-w-0 flex-col gap-2"><p className="text-sm font-medium text-ink">Предпросмотр</p><div className="min-h-[32rem] overflow-auto rounded-lg border border-line bg-surface p-5">{renderedPreviewTex.trim() === '' ? <p className="text-sm text-muted">Предпросмотр появится здесь.</p> : <TexViewer tex={renderedPreviewTex} />}</div></section>
-        </div>
-      </section>
-
-      <section className="flex flex-col gap-3 border-t border-line pt-6" aria-labelledby="likbez-pdf-heading">
-        <div><p className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Материал 02</p><h2 id="likbez-pdf-heading" className="mt-1 font-display text-2xl font-medium text-ink">PDF</h2></div>
-        <p className="text-sm text-muted">{likbez.has_pdf ? 'PDF уже загружен. Новая загрузка заменит его.' : 'Добавьте PDF-версию лекции.'}</p>
-        {likbez.has_pdf ? <PdfViewer path={'/mathcenter/likbez/' + likbez.id + '/pdf'} title={likbez.title + ' (PDF)'} /> : null}
-        <input ref={fileRef} type="file" accept="application/pdf" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) runMaterialAction(async () => { await uploadPdf.mutateAsync(file) }) }} />
-        <Button size="sm" variant="secondary" className="self-start" disabled={busy} onClick={() => fileRef.current?.click()}>{uploadPdf.isPending ? 'Загружаем…' : likbez.has_pdf ? 'Заменить PDF' : 'Загрузить PDF'}</Button>
-      </section>
-
-      <section className="flex flex-col gap-3 border-t border-line pt-6" aria-labelledby="likbez-video-heading">
-        <div><p className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Материал 03</p><h2 id="likbez-video-heading" className="mt-1 font-display text-2xl font-medium text-ink">Видео</h2></div>
-        <Input value={link} onChange={(event) => setLink(event.target.value)} placeholder="https://youtube.com/watch?v=…" />
-        {likbez.video_url ? <VideoAttachment url={likbez.video_url} title={likbez.title + ' (видео)'} /> : null}
-        <div className="flex gap-2"><Button size="sm" variant="secondary" disabled={busy || link.trim() === ''} onClick={() => runMaterialAction(async () => { await setVideo.mutateAsync(link.trim()) })}>{setVideo.isPending ? 'Сохраняем…' : 'Сохранить ссылку'}</Button>{likbez.video_url ? <Button size="sm" variant="ghost" disabled={busy} onClick={() => runMaterialAction(async () => { await setVideo.mutateAsync(''); setLink('') })}>Убрать</Button> : null}</div>
-      </section>
+      <SolutionWorkbench
+        title={'Ликбез №' + likbez.number}
+        mode="edit"
+        hasTex={likbez.has_tex}
+        hasPdf={likbez.has_pdf}
+        link={likbez.video_url}
+        centerId={likbez.math_center_id}
+        pdfPath={'/mathcenter/likbez/' + likbez.id + '/pdf'}
+        pdfTitle={likbez.title + ' (PDF)'}
+        initialTex={texQuery.data?.tex}
+        texQuery={texQuery}
+        formatTabLabel="Формат ликбеза"
+        confirmPublication={false}
+        onPutTex={(tex) => putTex.mutateAsync(tex)}
+        onUploadPdf={(file) => uploadPdf.mutateAsync(file)}
+        onSetLink={(link) => setVideo.mutateAsync(link)}
+        onBeforePublish={flushDetails}
+        onPublish={() => publish.mutateAsync()}
+        onClose={() => navigate('/mathcenter/' + year + '/likbez' + search)}
+      />
 
       <section className="flex flex-wrap items-center justify-between gap-3 border-t border-danger/20 pt-5" aria-label="Опасная зона">
         <div>
           <h2 className="font-medium text-ink">Удалить ликбез</h2>
           <p className="mt-1 text-sm text-muted">Черновик и все его материалы будут удалены без возможности восстановления.</p>
         </div>
-        <Button type="button" variant="ghost" className="text-danger hover:bg-danger-soft" disabled={busy || remove.isPending} onClick={deleteDraft}>
+        <Button type="button" variant="ghost" className="text-danger hover:bg-danger-soft" disabled={detailsAutosave.status === 'saving' || uploadPdf.isPending || remove.isPending} onClick={deleteDraft}>
           <Trash2 className="h-4 w-4" />{remove.isPending ? 'Удаляем…' : 'Удалить ликбез'}
         </Button>
       </section>
     </div>
+  )
+}
+
+function useWatchValues(control: Control<LikbezValues>): LikbezValues {
+  // Kept as a tiny wrapper so the editor's autosave subscription remains
+  // explicit and the form fields stay strongly typed.
+  return useWatch({ control }) as LikbezValues
+}
+
+function sameLikbezValues(left: LikbezValues, right: LikbezValues) {
+  return left.term_id === right.term_id && left.number === right.number && left.title === right.title && left.held_on === right.held_on && left.description === right.description
+}
+
+function LikbezDateField({ control, error }: { control: Control<LikbezValues>; error?: string }) {
+  return (
+    <Field label="Дата" error={error}>
+      {({ id, invalid }) => (
+        <Controller
+          control={control}
+          name="held_on"
+          render={({ field }) => {
+            const iso = russianLikbezDateToISO(field.value) ?? ''
+            const weekday = likbezWeekdayFromISO(iso)
+            const capitalizedWeekday = weekday ? weekday.charAt(0).toLocaleUpperCase('ru-RU') + weekday.slice(1) : null
+            return (
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  id={id}
+                  ref={field.ref}
+                  name={field.name}
+                  type="date"
+                  value={iso}
+                  invalid={invalid}
+                  onBlur={field.onBlur}
+                  onChange={(event) => field.onChange(likbezDateFromISO(event.target.value))}
+                />
+                {capitalizedWeekday ? <span className="rounded-lg bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink">{capitalizedWeekday}</span> : null}
+              </div>
+            )
+          }}
+        />
+      )}
+    </Field>
   )
 }
 
@@ -401,7 +388,7 @@ function youtubeEmbed(url: string): string | null {
 function LikbezFormDialog({ centerId, terms, trigger }: { centerId: number; terms: MathCenterTerm[]; trigger?: ReactNode }) {
   const [open, setOpen] = useState(false)
   const create = useCreateLikbez(centerId)
-  const { register, handleSubmit, reset, setError, formState: { errors, isSubmitting } } = useForm<LikbezValues>({ resolver: zodResolver(likbezSchema) })
+  const { register, control, handleSubmit, reset, setError, formState: { errors, isSubmitting } } = useForm<LikbezValues>({ resolver: zodResolver(likbezSchema) })
 
   useEffect(() => {
     if (open) reset({ term_id: terms.find((term) => term.is_active)?.id ?? 0, number: 1, title: '', held_on: todayLikbezDate(), description: '' })
@@ -435,7 +422,7 @@ function LikbezFormDialog({ centerId, terms, trigger }: { centerId: number; term
         <form className="mt-4 flex flex-col gap-4" noValidate onSubmit={submit}>
           <Field label="Период" error={errors.term_id?.message}>{({ id, invalid }) => <Select id={id} invalid={invalid} {...register('term_id', { valueAsNumber: true })}><option value={0}>Выберите период</option>{terms.map((term) => <option key={term.id} value={term.id}>{term.display_name}</option>)}</Select>}</Field>
           <Field label="Название" error={errors.title?.message}>{({ id, invalid }) => <Input id={id} invalid={invalid} {...register('title')} />}</Field>
-          <Field label="Дата" error={errors.held_on?.message}>{({ id, invalid }) => <Input id={id} inputMode="numeric" placeholder="ДД-ММ-ГГГГ" invalid={invalid} {...register('held_on')} />}</Field>
+          <LikbezDateField control={control} error={errors.held_on?.message} />
           <Field label="Краткое описание" error={errors.description?.message}>{({ id, invalid }) => <Textarea id={id} invalid={invalid} {...register('description')} />}</Field>
           <Button type="submit" disabled={isSubmitting || create.isPending}>{isSubmitting || create.isPending ? 'Сохраняем…' : 'Сохранить'}</Button>
         </form>

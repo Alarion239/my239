@@ -22,6 +22,14 @@ export function likbezDateFromISO(value: string): string {
   return year && month && day ? day + '-' + month + '-' + year : value
 }
 
+export function likbezWeekdayFromISO(value: string): string | null {
+  const [year, month, day] = value.split('-').map(Number)
+  if (!year || !month || !day) return null
+  const date = new Date(Date.UTC(year, month - 1, day))
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null
+  return new Intl.DateTimeFormat('ru-RU', { weekday: 'long', timeZone: 'UTC' }).format(date)
+}
+
 export function todayLikbezDate(now = new Date()): string {
   const day = String(now.getDate()).padStart(2, '0')
   const month = String(now.getMonth() + 1).padStart(2, '0')
