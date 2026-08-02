@@ -32,10 +32,9 @@ export interface SolutionWorkbenchProps {
   texQuery?: QueryLike
   formatTabLabel?: string
   confirmPublication?: boolean
-  publishPlacement?: 'status' | 'header'
   headerPrefix?: ReactNode
-  hideTitle?: boolean
-  plain?: boolean
+  details?: ReactNode
+  relatedAutosave?: { status: AutosaveStatus; error: string | null }
   onModeChange?: (mode: SolutionWorkbenchMode) => void
   onPutTex?: (tex: string) => Promise<unknown>
   onUploadPdf?: (file: Blob) => Promise<unknown>
@@ -79,10 +78,9 @@ export function SolutionWorkbench({
   texQuery,
   formatTabLabel = 'Формат разбора',
   confirmPublication = true,
-  publishPlacement = 'status',
   headerPrefix,
-  hideTitle = false,
-  plain = false,
+  details,
+  relatedAutosave,
   onModeChange,
   onPutTex,
   onUploadPdf,
@@ -148,13 +146,14 @@ export function SolutionWorkbench({
 
   const active = formats.includes(format) ? format : (formats[0] ?? 'tex')
   const hasMaterial = hasTex || hasPdf || !!link || tex.trim() !== '' || linkValue.trim() !== ''
-  const autosaveError = texError ?? linkError
+  const autosaveError = relatedAutosave?.error ?? texError ?? linkError
+  const statuses = [relatedAutosave?.status, texStatus, linkStatus]
   const autosaveStatus =
-    texStatus === 'saving' || linkStatus === 'saving'
+    statuses.includes('saving')
       ? 'Сохраняем…'
       : autosaveError
         ? null
-        : statusLabel(texStatus) ?? statusLabel(linkStatus)
+        : statusLabel(relatedAutosave?.status ?? 'idle') ?? statusLabel(texStatus) ?? statusLabel(linkStatus)
 
   const publicationControl = onPublish && !publishedAt ? (
     !confirmPublication ? (
@@ -256,13 +255,35 @@ export function SolutionWorkbench({
     document.getElementById(formatId + '-' + next)?.focus()
   }
 
+  const formatTabs = formats.length > 0 ? (
+    <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-surface-muted p-0.5" role="tablist" aria-label={formatTabLabel}>
+      {formats.map((item) => (
+        <button
+          key={item}
+          id={formatId + '-' + item}
+          type="button"
+          role="tab"
+          aria-selected={active === item}
+          tabIndex={active === item ? 0 : -1}
+          onClick={() => setFormat(item)}
+          onKeyDown={onFormatKeyDown}
+          className={cn(
+            'rounded-md px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+            active === item ? 'bg-accent-soft text-accent-ink' : 'text-muted hover:bg-surface hover:text-ink',
+          )}
+        >
+          {FORMAT_LABEL[item]}
+        </button>
+      ))}
+    </div>
+  ) : null
+
+  const toolbarStatus = autosaveError ?? autosaveStatus ?? (lastAction === 'pdf' ? 'PDF сохранён' : null)
+
   return (
     <section
-      className={cn(
-        'material-workbench-container animate-rise min-w-0',
-        plain || active === 'pdf' ? '' : 'rounded-xl border border-line bg-surface p-4 shadow-sm',
-      )}
-      aria-label={hideTitle ? formatTabLabel : title}
+      className="material-workbench-container animate-rise min-w-0"
+      aria-label={headerPrefix ? formatTabLabel : title}
       tabIndex={-1}
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
@@ -271,37 +292,22 @@ export function SolutionWorkbench({
         }
       }}
     >
-      <header className={cn(
-        'flex min-w-0 items-center gap-2',
-        plain || active === 'pdf' ? 'pb-3' : 'border-b border-line pb-2',
-      )}>
-        {headerPrefix ? <div className="min-w-0 flex-1">{headerPrefix}</div> : null}
-        {!hideTitle ? <h2 className="min-w-[3.5rem] flex-1 truncate font-display text-lg font-medium text-ink" title={title}>{title}</h2> : null}
+      <header className="flex min-w-0 flex-wrap items-center gap-2 pb-2">
+        {headerPrefix ? <div className="min-w-0 flex-1">{headerPrefix}</div> : <h2 className="min-w-[3.5rem] flex-1 truncate font-display text-lg font-medium text-ink" title={title}>{title}</h2>}
+        {!details ? formatTabs : null}
+        {toolbarStatus ? <span role={autosaveError ? 'alert' : 'status'} className={cn('min-w-0 truncate text-xs', autosaveError ? 'text-danger' : 'text-muted')}>{toolbarStatus}</span> : null}
 
-        {formats.length > 0 ? (
-          <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-surface-muted p-0.5" role="tablist" aria-label={formatTabLabel}>
-            {formats.map((item) => (
-              <button
-                key={item}
-                id={formatId + '-' + item}
-                type="button"
-                role="tab"
-                aria-selected={active === item}
-                tabIndex={active === item ? 0 : -1}
-                onClick={() => setFormat(item)}
-                onKeyDown={onFormatKeyDown}
-                className={cn(
-                  'rounded-md px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-                  active === item ? 'bg-accent-soft text-accent-ink' : 'text-muted hover:bg-surface hover:text-ink',
-                )}
-              >
-                {FORMAT_LABEL[item]}
-              </button>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="ml-auto flex shrink-0 items-center gap-0.5">
+        <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-1">
+          {editor && active === 'pdf' && onUploadPdf ? (
+            <>
+              <input ref={fileRef} type="file" accept="application/pdf" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void uploadPdf(file) }} />
+              <Button type="button" size="sm" variant="secondary" disabled={busy !== null} onClick={() => fileRef.current?.click()}>
+                <FileText className="h-4 w-4" aria-hidden />
+                {busy === 'pdf' ? 'Загружаем…' : hasPdf ? 'Заменить PDF' : 'Загрузить PDF'}
+              </Button>
+            </>
+          ) : null}
+          {editor && onPublish ? publicationControl : null}
           {editor && onModeChange && publishedAt ? (
             <Button type="button" size="icon" variant="ghost" aria-label="Закончить редактирование" onClick={() => switchMode('view')}>
               <Eye className="h-4 w-4" aria-hidden />
@@ -312,21 +318,14 @@ export function SolutionWorkbench({
               <Pencil className="h-4 w-4" aria-hidden />
             </Button>
           ) : null}
-          {editor && publishPlacement === 'header' ? publicationControl : null}
           <Button type="button" size="icon" variant="ghost" aria-label="Закрыть" onClick={close}>
             <X className="h-4 w-4" aria-hidden />
           </Button>
         </div>
       </header>
 
-      {editor ? (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
-          <span role={autosaveError ? 'alert' : 'status'} className={autosaveError ? 'text-danger' : ''}>
-            {autosaveError ? autosaveError : autosaveStatus ?? (lastAction === 'pdf' ? 'PDF сохранён' : null)}
-          </span>
-          {publishPlacement === 'status' ? publicationControl : null}
-        </div>
-      ) : null}
+      {details ? <div className="mt-1">{details}</div> : null}
+      {details ? <div className="mt-2">{formatTabs}</div> : null}
 
       {confirmClose ? (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/30 bg-status-checking-soft px-3 py-2 text-sm text-ink" role="alert">
@@ -337,7 +336,7 @@ export function SolutionWorkbench({
           </span>
         </div>
       ) : null}
-      {error ? <p className="mt-3 text-sm text-danger" role="alert">{error}</p> : null}
+      {error ? <p className="mt-3 text-sm text-danger" role={autosaveError ? 'status' : 'alert'}>{error}</p> : null}
       {lastAction === 'publish' ? <p className="mt-3 text-sm text-status-accepted" role="status">Опубликовано.</p> : null}
 
       <div className={active === 'pdf' ? 'mt-3' : 'mt-4'}>
@@ -369,15 +368,6 @@ export function SolutionWorkbench({
         ) : active === 'pdf' ? (
           <div className="flex flex-col gap-3">
             {hasPdf ? <PdfViewer path={pdfPath} title={pdfTitle ?? title + ' (PDF)'} /> : editor ? <p className="text-sm text-muted">PDF ещё не прикреплён.</p> : null}
-            {editor ? (
-              <>
-                <input ref={fileRef} type="file" accept="application/pdf" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void uploadPdf(file) }} />
-                <Button type="button" size="sm" variant="secondary" className="self-start" disabled={busy !== null || !onUploadPdf} onClick={() => fileRef.current?.click()}>
-                  <FileText className="h-4 w-4" aria-hidden />
-                  {busy === 'pdf' ? 'Загружаем…' : hasPdf ? 'Заменить PDF' : 'Загрузить PDF'}
-                </Button>
-              </>
-            ) : null}
           </div>
         ) : (
           <div className="flex flex-col gap-3">

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { ExternalLink, FileText, Pencil, Plus, Trash2, Video } from 'lucide-react'
+import { ExternalLink, FileText, Plus, Trash2, Video } from 'lucide-react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import type { Control } from 'react-hook-form'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -104,8 +104,9 @@ function LikbezCard({ likbez, isTeacher }: { likbez: Likbez; isTeacher: boolean 
   const [editError, setEditError] = useState<string | null>(null)
 
   async function openDraft() {
+    if (unpublish.isPending) return
     setEditError(null)
-    if (!likbez.published) {
+    if (!isTeacher || !likbez.published) {
       navigate(detailPath)
       return
     }
@@ -122,11 +123,12 @@ function LikbezCard({ likbez, isTeacher }: { likbez: Likbez; isTeacher: boolean 
       className="group flex cursor-pointer flex-col gap-4 p-4 transition-colors hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 sm:flex-row sm:items-start"
       role="link"
       tabIndex={0}
-      onClick={() => navigate(detailPath)}
+      aria-busy={unpublish.isPending || undefined}
+      onClick={() => { void openDraft() }}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
-          navigate(detailPath)
+          void openDraft()
         }
       }}
     >
@@ -137,23 +139,17 @@ function LikbezCard({ likbez, isTeacher }: { likbez: Likbez; isTeacher: boolean 
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <h2 className="font-display text-lg font-medium text-ink group-hover:text-accent">{likbez.title}</h2>
           {!likbez.published ? <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-muted">Черновик</span> : null}
+          {unpublish.isPending ? <span className="text-xs text-muted" role="status">Открываем…</span> : null}
         </div>
         <p className="mt-1 text-sm text-muted">Ликбез №{likbez.number} · {likbezDateFromISO(likbez.held_on)} · {likbez.term_display_name}</p>
         <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-ink">{likbez.description}</p>
+        {editError ? <p className="mt-2 text-xs text-danger" role="alert">{editError}</p> : null}
         <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted">
           {likbez.has_tex ? <span className="inline-flex items-center gap-1"><FileText className="h-3.5 w-3.5" />TeX</span> : null}
           {likbez.has_pdf ? <span className="inline-flex items-center gap-1"><FileText className="h-3.5 w-3.5" />PDF</span> : null}
           {likbez.video_url ? <span className="inline-flex items-center gap-1"><Video className="h-3.5 w-3.5" />Видео</span> : null}
         </div>
       </div>
-      {isTeacher ? (
-        <div className="flex flex-col items-stretch gap-2 sm:w-44 sm:items-end" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
-          <Button size="sm" variant="secondary" disabled={unpublish.isPending} onClick={() => { void openDraft() }}>
-            <Pencil className="h-4 w-4" />{unpublish.isPending ? 'Открываем…' : 'Редактировать'}
-          </Button>
-          {editError ? <p className="text-right text-xs text-danger" role="alert">{editError}</p> : null}
-        </div>
-      ) : null}
     </Card>
   )
 }
@@ -253,6 +249,18 @@ function LikbezDraftEditor({ likbez, terms }: { likbez: Likbez; terms: MathCente
     remove.mutate(likbez.id, { onSuccess: () => navigate('/mathcenter/' + year + '/likbez' + search) })
   }
 
+  const detailsForm = (
+    <form className="flex flex-col gap-3" noValidate onSubmit={(event) => event.preventDefault()}>
+      <div className="grid gap-3 lg:grid-cols-[minmax(10rem,1fr)_5rem_minmax(12rem,18rem)_auto]">
+        <Field label="Период" error={errors.term_id?.message}>{({ id, invalid }) => <Select id={id} invalid={invalid} {...register('term_id', { valueAsNumber: true })}>{terms.map((term) => <option key={term.id} value={term.id}>{term.display_name}</option>)}</Select>}</Field>
+        <Field label="Номер" error={errors.number?.message}>{({ id, invalid }) => <Input id={id} type="number" min={1} invalid={invalid} {...register('number', { valueAsNumber: true })} />}</Field>
+        <Field label="Название" error={errors.title?.message}>{({ id, invalid }) => <Input id={id} invalid={invalid} {...register('title')} />}</Field>
+        <LikbezDateField control={control} error={errors.held_on?.message} />
+      </div>
+      <Field label="Краткое описание" error={errors.description?.message}>{({ id, invalid }) => <Textarea id={id} invalid={invalid} className="min-h-[4.5rem]" {...register('description')} />}</Field>
+    </form>
+  )
+
   return (
     <div className="animate-rise flex flex-col gap-6">
       <SolutionWorkbench
@@ -268,15 +276,14 @@ function LikbezDraftEditor({ likbez, terms }: { likbez: Likbez; terms: MathCente
         texQuery={texQuery}
         formatTabLabel="Формат ликбеза"
         confirmPublication={false}
-        publishPlacement="header"
         headerPrefix={(
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <Link to={'/mathcenter/' + year + '/likbez' + search} className="text-sm font-medium text-accent hover:underline">← Все ликбезы</Link>
-            <span className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Черновик · ликбез №{likbez.number}</span>
+            <span className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Черновик</span>
           </div>
         )}
-        hideTitle
-        plain
+        details={detailsForm}
+        relatedAutosave={{ status: detailsAutosave.status, error: detailsAutosave.error }}
         onPutTex={(tex) => putTex.mutateAsync(tex)}
         onUploadPdf={(file) => uploadPdf.mutateAsync(file)}
         onSetLink={(link) => setVideo.mutateAsync(link)}
@@ -284,27 +291,11 @@ function LikbezDraftEditor({ likbez, terms }: { likbez: Likbez; terms: MathCente
         onPublish={() => publish.mutateAsync()}
         onClose={() => navigate('/mathcenter/' + year + '/likbez' + search)}
       />
-
-      <form className="flex flex-col gap-4 border-b border-line pb-6" noValidate onSubmit={(event) => event.preventDefault()}>
-        <div className="grid gap-4 lg:grid-cols-[minmax(10rem,1fr)_6rem_minmax(11rem,1.2fr)_auto]">
-          <Field label="Период" error={errors.term_id?.message}>{({ id, invalid }) => <Select id={id} invalid={invalid} {...register('term_id', { valueAsNumber: true })}>{terms.map((term) => <option key={term.id} value={term.id}>{term.display_name}</option>)}</Select>}</Field>
-          <Field label="Номер" error={errors.number?.message}>{({ id, invalid }) => <Input id={id} type="number" min={1} invalid={invalid} {...register('number', { valueAsNumber: true })} />}</Field>
-          <Field label="Название" error={errors.title?.message}>{({ id, invalid }) => <Input id={id} invalid={invalid} {...register('title')} />}</Field>
-          <LikbezDateField control={control} error={errors.held_on?.message} />
-        </div>
-        <Field label="Краткое описание" error={errors.description?.message}>{({ id, invalid }) => <Textarea id={id} invalid={invalid} {...register('description')} />}</Field>
-        {detailsAutosave.error ? <p className="text-sm text-danger" role="status">{detailsAutosave.error}</p> : detailsAutosave.status === 'saving' ? <p className="text-sm text-muted" role="status">Сохраняем сведения…</p> : detailsAutosave.status === 'saved' ? <p className="text-sm text-status-accepted" role="status">Сведения сохранены</p> : null}
-      </form>
-
-      <section className="flex flex-wrap items-center justify-between gap-3 border-t border-danger/20 pt-5" aria-label="Опасная зона">
-        <div>
-          <h2 className="font-medium text-ink">Удалить ликбез</h2>
-          <p className="mt-1 text-sm text-muted">Черновик и все его материалы будут удалены без возможности восстановления.</p>
-        </div>
+      <div className="flex justify-end pt-1">
         <Button type="button" variant="ghost" className="text-danger hover:bg-danger-soft" disabled={detailsAutosave.status === 'saving' || uploadPdf.isPending || remove.isPending} onClick={deleteDraft}>
           <Trash2 className="h-4 w-4" />{remove.isPending ? 'Удаляем…' : 'Удалить ликбез'}
         </Button>
-      </section>
+      </div>
     </div>
   )
 }

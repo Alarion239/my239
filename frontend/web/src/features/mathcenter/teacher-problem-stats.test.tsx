@@ -249,6 +249,7 @@ describe('TeacherProblemStats — разбор frame', () => {
     await user.click(firstRow)
 
     const workbench = screen.getByRole('region', { name: 'Задачи 1' })
+    expect(workbench).not.toHaveClass('rounded-xl', 'border', 'bg-surface', 'shadow-sm')
     const title = within(workbench).getByRole('heading', { name: 'Задачи 1' })
     const header = title.closest('header') as HTMLElement
     const formatTabs = within(workbench).getByRole('tablist', { name: 'Формат разбора' })

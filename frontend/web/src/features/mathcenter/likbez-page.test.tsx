@@ -92,15 +92,16 @@ afterEach(() => {
 })
 
 describe('Likbez controls', () => {
-  it('uses one Edit action and unpublishes a published card before opening it', async () => {
+  it('opens a published card by unpublishing it first', async () => {
     const user = userEvent.setup()
     renderPage()
 
-    expect(await screen.findByRole('button', { name: 'Редактировать' })).toBeInTheDocument()
+    const card = await screen.findByRole('link')
+    expect(screen.queryByRole('button', { name: 'Редактировать' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Опубликовать/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Материалы/ })).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Редактировать' }))
+    await user.click(card)
     await waitFor(() => expect(mocks.unpublish.mutateAsync).toHaveBeenCalledTimes(1))
     expect(screen.queryByRole('button', { name: /Материалы/ })).not.toBeInTheDocument()
   })
@@ -110,7 +111,7 @@ describe('Likbez controls', () => {
     const user = userEvent.setup()
     renderPage()
 
-    await user.click(await screen.findByRole('button', { name: 'Редактировать' }))
+    await user.click(await screen.findByRole('link'))
     expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось открыть черновик.')
     expect(screen.getByText('Проценты')).toBeInTheDocument()
   })
@@ -121,7 +122,7 @@ describe('Likbez controls', () => {
     const user = userEvent.setup()
     renderPage()
 
-    await user.click(await screen.findByRole('button', { name: 'Редактировать' }))
+    await user.click(await screen.findByRole('link'))
     const publishButton = await screen.findByRole('button', { name: 'Опубликовать' })
     expect(mocks.unpublish.mutateAsync).not.toHaveBeenCalled()
     expect(screen.getByRole('tablist', { name: 'Формат ликбеза' })).toBeInTheDocument()
@@ -129,8 +130,13 @@ describe('Likbez controls', () => {
     expect(document.querySelector('.material-tex-grid')).toBeInTheDocument()
     const workbench = screen.getByRole('region', { name: 'Формат ликбеза' })
     const workbenchHeader = workbench.querySelector('header')
-    expect(workbenchHeader).toContainElement(screen.getByText('Черновик · ликбез №1'))
+    const metadataForm = workbench.querySelector('form')
+    const formatTabs = screen.getByRole('tablist', { name: 'Формат ликбеза' })
+    expect(workbenchHeader).toContainElement(screen.getByText('Черновик'))
     expect(workbenchHeader).toContainElement(screen.getByRole('button', { name: 'Опубликовать' }))
+    expect(workbench).not.toHaveClass('rounded-xl', 'border', 'bg-surface', 'shadow-sm')
+    expect(metadataForm).not.toBeNull()
+    expect(metadataForm!.compareDocumentPosition(formatTabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.queryByRole('heading', { name: 'Ликбез №1' })).not.toBeInTheDocument()
     expect(screen.queryByText('Исходник')).not.toBeInTheDocument()
     expect(screen.getByLabelText('Дата')).toHaveAttribute('type', 'date')
@@ -139,6 +145,9 @@ describe('Likbez controls', () => {
     expect(screen.queryByText('Добавьте PDF-версию лекции')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Сохранить сведения' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Сохранить LaTeX' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: 'PDF' }))
+    expect(workbenchHeader).toContainElement(screen.getByRole('button', { name: 'Загрузить PDF' }))
 
     await user.clear(screen.getByLabelText('Название'))
     await user.type(screen.getByLabelText('Название'), 'Обновлённый черновик')
@@ -162,12 +171,12 @@ describe('Likbez controls', () => {
     const user = userEvent.setup()
     renderPage()
 
-    await user.click(await screen.findByRole('button', { name: 'Редактировать' }))
+    await user.click(await screen.findByRole('link'))
     await user.clear(screen.getByLabelText('Название'))
     await user.type(screen.getByLabelText('Название'), 'Сломанный черновик')
     await user.click(await screen.findByRole('button', { name: 'Опубликовать' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось опубликовать ликбез')
+    expect(await screen.findByText('Не удалось опубликовать ликбез: не удалось сохранить сведения.')).toBeInTheDocument()
     expect(mocks.publish.mutateAsync).not.toHaveBeenCalled()
   })
 
@@ -178,7 +187,7 @@ describe('Likbez controls', () => {
     const user = userEvent.setup()
     renderPage()
 
-    await user.click(await screen.findByRole('button', { name: 'Редактировать' }))
+    await user.click(await screen.findByRole('link'))
     await user.click(screen.getByRole('tab', { name: 'Видео' }))
     await user.clear(screen.getByLabelText('Ссылка на видео'))
     await user.type(screen.getByLabelText('Ссылка на видео'), 'not-a-url')
