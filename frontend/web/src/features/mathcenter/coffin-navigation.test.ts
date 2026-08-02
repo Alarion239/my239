@@ -16,4 +16,10 @@ describe('coffin thread navigation', () => {
       '/mathcenter/2026/series?term_id=12',
     )
   })
+
+  it('returns a series thread to the series that launched it', () => {
+    expect(threadBackPath('2026', 'series', '?term_id=12', 37)).toBe(
+      '/mathcenter/2026/series/37/progress?term_id=12',
+    )
+  })
 })

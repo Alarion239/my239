@@ -91,16 +91,16 @@ function ThreadPageInner({ origin }: { origin: 'series' | 'coffins' }) {
   const ctx = useSeriesContext(centerId)
 
   if (!Number.isFinite(centerId) || centerId <= 0) {
-    return <NotFound year={year} centerId={centerId} termSearch={search} origin={origin} />
+    return <NotFound year={year} centerId={centerId} seriesId={seriesId} termSearch={search} origin={origin} />
   }
   if (ctx.isLoading) {
     return <CenteredSpinner />
   }
   if (!ctx.hasAccess) {
-    return <NotFound year={year} centerId={centerId} termSearch={search} origin={origin} />
+    return <NotFound year={year} centerId={centerId} seriesId={seriesId} termSearch={search} origin={origin} />
   }
 
-  const backPath = threadBackPath(year, origin, search)
+  const backPath = threadBackPath(year, origin, search, seriesId)
   const backLabel = origin === 'coffins' ? 'Назад к очереди' : 'Назад к серии'
 
   return (
@@ -456,11 +456,13 @@ function CenteredSpinner() {
 function NotFound({
   year,
   centerId,
+  seriesId,
   termSearch,
   origin = 'series',
 }: {
   year: string
   centerId: number
+  seriesId: number
   termSearch?: string
   origin?: 'series' | 'coffins'
 }) {
@@ -469,7 +471,7 @@ function NotFound({
       <p className="text-muted">Нет доступа к этой задаче.</p>
       {year && Number.isFinite(centerId) && centerId > 0 ? (
         <Link
-          to={threadBackPath(year, origin, termSearch)}
+          to={threadBackPath(year, origin, termSearch, seriesId)}
           className="mt-2 inline-block text-sm font-medium text-accent underline-offset-4 hover:underline"
         >
           {origin === 'coffins' ? 'Назад к очереди' : 'Назад к серии'}
