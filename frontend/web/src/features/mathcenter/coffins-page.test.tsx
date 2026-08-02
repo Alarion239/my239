@@ -135,10 +135,10 @@ describe('CoffinsPage student cards', () => {
       coffins: [coffin],
     })
 
-    const tile = await screen.findByRole('img', { name: 'а: В очереди' })
-    expect(tile).toHaveTextContent('а')
+    const tile = await screen.findByRole('img', { name: '1а: В очереди' })
+    expect(tile).toHaveTextContent('1а')
     expect(tile).toHaveClass('bg-status-checking-soft')
-    expect(screen.getByRole('link', { name: 'а: В очереди' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '1а: В очереди' })).toHaveAttribute(
       'href',
       '/mathcenter/2099/series/37/thread/11?term_id=7',
     )
@@ -161,8 +161,8 @@ describe('CoffinsPage student cards', () => {
       coffins: [makeCoffin({ released_at: '2026-07-01T00:00:00Z', current_status: 'accepted', thread_id: 12, subproblem_label: 'б' })],
     })
 
-    const tile = await screen.findByRole('img', { name: 'б: Принято' })
-    expect(tile).toHaveTextContent('б')
+    const tile = await screen.findByRole('img', { name: '1б: Принято' })
+    expect(tile).toHaveTextContent('1б')
     expect(tile).toHaveClass('bg-status-accepted-soft')
     expect(screen.queryByText('Открыт для сдачи')).not.toBeInTheDocument()
     expect(screen.queryByText(/Разобрана/)).not.toBeInTheDocument()

@@ -95,9 +95,9 @@ describe('StudentProblemList — per-subproblem deadline gating', () => {
   // Every tile keeps its subproblem letter; status is carried by the tile fill.
   it('keeps the subproblem letter on every tile', () => {
     renderList(makeSeries(FUTURE, [sub({ id: 10, label: 'а' }), sub({ id: 11, label: 'б' })]))
-    expect(screen.getByRole('img', { name: 'а: Не решено' })).toHaveTextContent('а')
-    expect(screen.getByRole('img', { name: 'б: Отклонено' })).toHaveTextContent('б')
-    expect(screen.getByRole('img', { name: 'б: Отклонено' })).toHaveClass('bg-status-rejected-soft')
+    expect(screen.getByRole('img', { name: '1а: Не решено' })).toHaveTextContent('1а')
+    expect(screen.getByRole('img', { name: '1б: Отклонено' })).toHaveTextContent('1б')
+    expect(screen.getByRole('img', { name: '1б: Отклонено' })).toHaveClass('bg-status-rejected-soft')
   })
 
   it('uses the problem identifier for a single-part untouched problem', () => {
@@ -141,9 +141,9 @@ describe('StudentProblemList — per-subproblem deadline gating', () => {
       sub({ id: 33, label: 'г' }),
     ]), pending)
 
-    for (const letter of ['а', 'б', 'в', 'г']) {
-      const tile = screen.getByRole('img', { name: letter + ': В очереди' })
-      expect(tile).toHaveTextContent(letter)
+    for (const identifier of ['3а', '3б', '3в', '3г']) {
+      const tile = screen.getByRole('img', { name: identifier + ': В очереди' })
+      expect(tile).toHaveTextContent(identifier)
       expect(tile).toHaveClass('bg-status-checking-soft')
     }
     expect(screen.queryByText('На проверке')).not.toBeInTheDocument()

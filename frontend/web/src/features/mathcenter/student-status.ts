@@ -38,6 +38,6 @@ export function studentSubproblemIdentifier(
   label: string,
   problemNumber: number,
 ): string {
-  if (label !== '') return label
-  return problemNumber === 0 ? 'У' : String(problemNumber)
+  const problemIdentifier = problemNumber === 0 ? 'У' : String(problemNumber)
+  return label === '' ? problemIdentifier : problemIdentifier + label
 }

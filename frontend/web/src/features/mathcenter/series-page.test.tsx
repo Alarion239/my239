@@ -211,16 +211,48 @@ describe('SeriesPage — student view', () => {
     // The upcoming published series is marked current.
     expect(screen.getByText('Текущая')).toBeInTheDocument()
 
-    // The student rollup renders per-subproblem status tiles (no panel heading).
+    const studentTabs = screen.getByRole('tablist', { name: 'Раздел серии' })
+    expect(Array.from(studentTabs.querySelectorAll('[role="tab"]')).map((tab) => tab.textContent)).toEqual([
+      'Задачи',
+      'Разбор',
+    ])
+    expect(await screen.findByText('Условие ещё не опубликовано')).toBeInTheDocument()
+
+    // The student rollup renders per-subproblem status tiles in the right pane.
     expect(await screen.findByText('Задача 1')).toBeInTheDocument()
-    expect(screen.getByRole('img', { name: 'а: Принято' })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: '1а: Принято' })).toBeInTheDocument()
     // Claimed student submissions use the same yellow queued state.
-    expect(screen.getByRole('img', { name: 'б: В очереди' })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: '1б: В очереди' })).toBeInTheDocument()
     expect(screen.queryByText('На проверке')).not.toBeInTheDocument()
     expect(screen.queryByText('Принято:')).not.toBeInTheDocument()
     expect(screen.queryByRole('list', { name: 'Обозначения статусов' })).not.toBeInTheDocument()
     // No teacher "create series" card in the student view.
     expect(screen.queryByRole('button', { name: 'Создать серию' })).not.toBeInTheDocument()
+  })
+
+  it('keeps separate condition and progress tabs on phone view', async () => {
+    const originalWidth = window.innerWidth
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 500 })
+    try {
+      const me: MeResponse = {
+        student: {
+          center: { id: CENTER_ID, graduation_year: 2026, grade: 9 },
+          group: { id: 1, name: 'А' },
+          head_teachers: [],
+        },
+      }
+      mockFetch(me, makeUser())
+      renderPage()
+
+      const tabList = await screen.findByRole('tablist', { name: 'Раздел серии' })
+      expect(Array.from(tabList.querySelectorAll('[role="tab"]')).map((tab) => tab.textContent)).toEqual([
+        'Условие',
+        'Прогресс',
+        'Разбор',
+      ])
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth })
+    }
   })
 })
 

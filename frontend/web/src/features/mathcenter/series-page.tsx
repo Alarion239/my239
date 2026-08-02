@@ -42,7 +42,8 @@ import { useCenterIdContext, useCenterTermContext } from './center-id-context'
 
 // Allowed tab ids per view, with the default first. The route carries the tab
 // (e.g. /mathcenter/2027/series/42/razbor) so it survives reload + back/forward.
-const STUDENT_TAB_IDS = ['progress', 'statement', 'razbor'] as const
+const STUDENT_LAPTOP_TAB_IDS = ['tasks', 'razbor'] as const
+const STUDENT_PHONE_TAB_IDS = ['statement', 'progress', 'razbor'] as const
 const TEACHER_TAB_IDS = ['queue', 'statement', 'razbor', 'offline'] as const
 
 export function SeriesPage() {
@@ -241,7 +242,9 @@ function CenterSeries({
   }
 
   const allowedTabs = isStudentView
-    ? STUDENT_TAB_IDS
+    ? isPhone
+      ? STUDENT_PHONE_TAB_IDS
+      : STUDENT_LAPTOP_TAB_IDS
     : isPhone
       ? TEACHER_TAB_IDS
       : TEACHER_TAB_IDS.filter((tabID) => tabID !== 'offline')
@@ -337,6 +340,7 @@ function CenterSeries({
           year={year ?? ''}
           tab={activeTab as StudentTab}
           termSearch={termSearch}
+          isPhone={isPhone}
         />
       ) : !selected.published ? (
         <SeriesDraftEditor centerId={centerId} series={selected} />
@@ -357,9 +361,16 @@ function CenterSeries({
   )
 }
 
-type StudentTab = (typeof STUDENT_TAB_IDS)[number]
+type StudentTab =
+  | (typeof STUDENT_LAPTOP_TAB_IDS)[number]
+  | (typeof STUDENT_PHONE_TAB_IDS)[number]
 
-const STUDENT_TABS: { id: StudentTab; label: string }[] = [
+const STUDENT_LAPTOP_TABS: { id: (typeof STUDENT_LAPTOP_TAB_IDS)[number]; label: string }[] = [
+  { id: 'tasks', label: 'Задачи' },
+  { id: 'razbor', label: 'Разбор' },
+]
+
+const STUDENT_PHONE_TABS: { id: (typeof STUDENT_PHONE_TAB_IDS)[number]; label: string }[] = [
   { id: 'statement', label: 'Условие' },
   { id: 'progress', label: 'Прогресс' },
   { id: 'razbor', label: 'Разбор' },
@@ -373,13 +384,16 @@ function StudentSeriesView({
   year,
   tab,
   termSearch,
+  isPhone,
 }: {
   series: Series
   year: string
   tab: StudentTab
   termSearch: string
+  isPhone: boolean
 }) {
   const navigate = useNavigate()
+  const tabs = isPhone ? STUDENT_PHONE_TABS : STUDENT_LAPTOP_TABS
   return (
     <div className="flex flex-col gap-4">
       <PillTabs
@@ -387,17 +401,35 @@ function StudentSeriesView({
         onChange={(t) =>
           navigate('/mathcenter/' + year + '/series/' + series.id + '/' + t + termSearch)
         }
-        options={STUDENT_TABS}
+        options={tabs}
         ariaLabel="Раздел серии"
         className="self-start"
       />
-      {tab === 'statement' ? (
+      {!isPhone && tab === 'tasks' ? (
+        <StudentTasks series={series} />
+      ) : tab === 'statement' ? (
         <StatementPanel series={series} bare />
       ) : tab === 'progress' ? (
         <StudentSide series={series} />
       ) : (
         <StudentRazbor series={series} />
       )}
+    </div>
+  )
+}
+
+// StudentTasks combines the statement and personal progress into the same
+// laptop master/detail frame used by the teacher razbor view. Each side gets
+// half the available width; phones retain the separate tabs for easier focus.
+function StudentTasks({ series }: { series: Series }) {
+  return (
+    <div className="flex flex-col gap-4 md:flex-row md:items-start md:gap-0">
+      <div className="min-w-0 md:w-1/2 md:pr-4">
+        <StatementPanel series={series} bare />
+      </div>
+      <div className="min-w-0 md:w-1/2 md:border-l md:border-line md:pl-4">
+        <StudentSide series={series} />
+      </div>
     </div>
   )
 }
