@@ -391,7 +391,7 @@ function ProblemStatRow({
                 style={{ width: percentage + '%' }}
                 aria-hidden
               >
-                {percentage >= 5 ? (
+                {percentage >= 10 ? (
                   <span className="truncate px-1 text-sm font-medium tabular-nums text-surface">
                     {value}
                   </span>
@@ -413,21 +413,15 @@ function ProblemStatRow({
           onKeyDown={(e) => e.stopPropagation()}
           role="presentation"
         >
-          {hasSolution ? (
-            <span className={cn('hidden text-xs font-medium sm:inline', published ? 'text-status-accepted' : 'text-muted')}>
-              {published ? 'Разбор ✓' : 'Черновик'}
-            </span>
+          {isCoffin || !published ? (
+            <CoffinBadge
+              problemDisplay={subStatLabel(stat)}
+              isCoffin={isCoffin}
+              busy={busy}
+              onMark={onMark}
+              onUnmark={onUnmark}
+            />
           ) : null}
-          {/* Keep the existing coffin status control visible even after the
-              razbor is published; publication changes the razbor background,
-              not the coffin's own status affordance. */}
-          <CoffinBadge
-            problemDisplay={subStatLabel(stat)}
-            isCoffin={isCoffin}
-            busy={busy}
-            onMark={onMark}
-            onUnmark={onUnmark}
-          />
         </div>
       </div>
       {replacementWarning ? (

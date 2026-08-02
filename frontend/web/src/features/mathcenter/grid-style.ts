@@ -1,5 +1,5 @@
 // grid-style.ts — the visual vocabulary for the center-wide «Кондуит»:
-// borders, sticky behaviour, header look, and coffin tint.
+// borders, sticky behaviour, and header look.
 //
 // STICKY BORDER RULE (the important bit): the table uses `border-separate` so
 // every border belongs to exactly ONE cell. A frozen (position: sticky) cell
@@ -51,21 +51,15 @@ export const nameCell =
 export const groupLabel =
   'sticky left-0 inline-block px-3 py-1 text-xs font-medium uppercase tracking-wide text-faint'
 
-// coffinColumnClasses(isCoffin, open) — tint for a column *header* cell.
-// Open coffins are amber (accepting submissions); разобранные (solved) coffins
-// are gray; ordinary columns use the muted surface.
-export function coffinColumnClasses(isCoffin: boolean, open: boolean): string {
-  if (open) return 'bg-status-checking text-white'
-  if (isCoffin) return 'bg-faint text-white'
+// Coffin columns use the same quiet header treatment as ordinary columns. The
+// current/solved split is structural, not a second status-color system.
+export function coffinColumnClasses(_isCoffin: boolean, _open: boolean): string {
   return 'bg-surface-muted text-muted'
 }
 
-// coffinCellClasses(isCoffin, open) — the lighter tint for a *data* cell of a
-// coffin column (the tile / initials sit on top of it). `/25` and `/35` keep it
-// subtle. Returns '' for ordinary columns.
-export function coffinCellClasses(isCoffin: boolean, open: boolean): string {
-  if (open) return 'bg-status-checking/25'
-  if (isCoffin) return 'bg-faint/35'
+// Coffin data cells do not add a separate coffin tint; submission status colors
+// remain the only state colors in the grid.
+export function coffinCellClasses(_isCoffin: boolean, _open: boolean): string {
   return ''
 }
 

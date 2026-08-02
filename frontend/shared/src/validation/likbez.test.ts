@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { likbezDateFromISO, likbezSchema, likbezWeekdayFromISO, russianLikbezDateToISO, todayLikbezDate } from './likbez'
+import { likbezCalendarDateFromISO, likbezDateFromISO, likbezSchema, likbezWeekdayFromISO, russianLikbezDateToISO, todayLikbezDate } from './likbez'
 
 const valid = {
   term_id: 7,
@@ -28,5 +28,6 @@ describe('likbezSchema', () => {
     expect(todayLikbezDate(new Date(2026, 6, 23, 12))).toBe('23-07-2026')
     expect(likbezWeekdayFromISO('2026-07-23')).toBe('четверг')
     expect(likbezWeekdayFromISO('2026-02-29')).toBeNull()
+    expect(likbezCalendarDateFromISO('2026-08-13')).toBe('13 Августа')
   })
 })

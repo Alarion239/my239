@@ -9,6 +9,7 @@ import {
 import { Spinner } from '../../design/ui'
 import { cn } from '../../design/cn'
 import { displayPill } from './status-style'
+import { appealsLast } from './queue-order'
 
 export interface GraderQueueProps {
   seriesId: number
@@ -27,14 +28,6 @@ function itemLabel(item: QueueItem): string {
 // New solutions are graded before appeals (an appeal is a re-read request that
 // waits behind fresh submissions). Stable sort keeps the backend's within-group
 // order (oldest-waiting first).
-function solutionsFirst(items: QueueItem[]): QueueItem[] {
-  return [...items].sort(
-    (a, b) =>
-      (a.current_status === 'appealed' ? 1 : 0) -
-      (b.current_status === 'appealed' ? 1 : 0),
-  )
-}
-
 // GraderQueue lists submissions/appeals to grade in a series. The backend
 // returns the caller's own active claims plus the unclaimed pool; items another
 // grader is actively holding are excluded from this actionable phone list but
@@ -46,8 +39,8 @@ export function GraderQueue({ seriesId }: GraderQueueProps) {
   const all = queue.data ?? []
   // A live claim in this result is necessarily the caller's own (others are
   // filtered out server-side), so it's "in my work".
-  const mine = solutionsFirst(all.filter((i) => claimIsLive(i)))
-  const available = solutionsFirst(all.filter((i) => !claimIsLive(i)))
+  const mine = appealsLast(all.filter((i) => claimIsLive(i)))
+  const available = appealsLast(all.filter((i) => !claimIsLive(i)))
 
   return (
     <div className="flex flex-col gap-4">

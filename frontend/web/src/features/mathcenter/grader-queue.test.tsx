@@ -41,6 +41,14 @@ const claimedByMe = {
   claim_expires_at: '2999-01-01T00:00:00Z',
 }
 
+const appealed = {
+  ...available,
+  thread_id: 57,
+  student_name: 'Вера Петрова',
+  current_status: 'appealed' as const,
+  updated_at: '2030-01-01T09:00:00Z',
+}
+
 function stubFetch(items: unknown[]) {
   const fetchMock = vi.fn(async (url: string) => {
     if (typeof url === 'string' && url.includes('/queue')) {
@@ -111,5 +119,14 @@ describe('GraderQueue', () => {
     const mine = screen.getByText('Борис Иванов')
     const free = screen.getByText('Аня Смирнова')
     expect(mine.compareDocumentPosition(free) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('places appeals after normal submissions regardless of timestamp', async () => {
+    stubFetch([appealed, available])
+    renderQueue()
+
+    const normal = await screen.findByText('Аня Смирнова')
+    const appeal = screen.getByText('Вера Петрова')
+    expect(normal.compareDocumentPosition(appeal) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 })

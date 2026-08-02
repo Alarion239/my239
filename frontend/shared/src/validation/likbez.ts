@@ -30,6 +30,17 @@ export function likbezWeekdayFromISO(value: string): string | null {
   return new Intl.DateTimeFormat('ru-RU', { weekday: 'long', timeZone: 'UTC' }).format(date)
 }
 
+export function likbezCalendarDateFromISO(value: string): string {
+  const [year, month, day] = value.split('-').map(Number)
+  if (!year || !month || !day) return value
+  const date = new Date(Date.UTC(year, month - 1, day))
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return value
+  const formatted = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', timeZone: 'UTC' }).format(date)
+  const [dayPart, ...monthParts] = formatted.split(/\s+/)
+  const monthPart = monthParts.join(' ')
+  return dayPart + ' ' + monthPart.charAt(0).toLocaleUpperCase('ru-RU') + monthPart.slice(1)
+}
+
 export function todayLikbezDate(now = new Date()): string {
   const day = String(now.getDate()).padStart(2, '0')
   const month = String(now.getMonth() + 1).padStart(2, '0')

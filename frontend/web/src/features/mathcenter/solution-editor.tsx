@@ -32,6 +32,7 @@ export interface SolutionWorkbenchProps {
   texQuery?: QueryLike
   formatTabLabel?: string
   confirmPublication?: boolean
+  pdfActionPlacement?: 'before-tabs' | 'after-tabs'
   headerPrefix?: ReactNode
   details?: ReactNode
   relatedAutosave?: { status: AutosaveStatus; error: string | null }
@@ -78,6 +79,7 @@ export function SolutionWorkbench({
   texQuery,
   formatTabLabel = 'Формат разбора',
   confirmPublication = true,
+  pdfActionPlacement = 'before-tabs',
   headerPrefix,
   details,
   relatedAutosave,
@@ -251,8 +253,24 @@ export function SolutionWorkbench({
     const direction = event.key === 'ArrowRight' ? 1 : -1
     const index = formats.indexOf(active)
     const next = formats[(index + direction + formats.length) % formats.length]
+    changeFormat(next)
+    document.getElementById(formatId + '-' + next)?.focus({ preventScroll: true })
+  }
+
+  const changeFormat = (next: SolutionFormat) => {
+    const scrollX = typeof window === 'undefined' ? 0 : window.scrollX
+    const scrollY = typeof window === 'undefined' ? 0 : window.scrollY
     setFormat(next)
-    document.getElementById(formatId + '-' + next)?.focus()
+    const isJsdom = typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent)
+    if (typeof window !== 'undefined' && !isJsdom) {
+      window.requestAnimationFrame(() => {
+        try {
+          window.scrollTo(scrollX, scrollY)
+        } catch {
+          // Some test DOMs expose scrollTo but intentionally do not implement it.
+        }
+      })
+    }
   }
 
   const formatTabs = formats.length > 0 ? (
@@ -265,7 +283,7 @@ export function SolutionWorkbench({
           role="tab"
           aria-selected={active === item}
           tabIndex={active === item ? 0 : -1}
-          onClick={() => setFormat(item)}
+          onClick={() => changeFormat(item)}
           onKeyDown={onFormatKeyDown}
           className={cn(
             'rounded-md px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
@@ -304,8 +322,9 @@ export function SolutionWorkbench({
     >
       <header className="flex min-w-0 flex-wrap items-center gap-2 pb-2">
         {headerPrefix ? <div className="min-w-0 flex-1">{headerPrefix}</div> : <h2 className="min-w-[3.5rem] flex-1 truncate font-display text-lg font-medium text-ink" title={title}>{title}</h2>}
-        {!details ? pdfControl : null}
+        {!details && pdfActionPlacement === 'before-tabs' ? pdfControl : null}
         {!details ? formatTabs : null}
+        {!details && pdfActionPlacement === 'after-tabs' ? pdfControl : null}
         {toolbarStatus ? <span role={autosaveError ? 'alert' : 'status'} className={cn('min-w-0 truncate text-xs', autosaveError ? 'text-danger' : 'text-muted')}>{toolbarStatus}</span> : null}
 
         <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-1">
@@ -327,7 +346,7 @@ export function SolutionWorkbench({
       </header>
 
       {details ? <div className="mt-1">{details}</div> : null}
-      {details ? <div className="mt-2 flex flex-wrap items-center gap-2">{pdfControl}{formatTabs}</div> : null}
+      {details ? <div className="mt-2 flex flex-wrap items-center gap-2">{pdfActionPlacement === 'before-tabs' ? pdfControl : null}{formatTabs}{pdfActionPlacement === 'after-tabs' ? pdfControl : null}</div> : null}
 
       {confirmClose ? (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/30 bg-status-checking-soft px-3 py-2 text-sm text-ink" role="alert">
@@ -353,7 +372,7 @@ export function SolutionWorkbench({
                     value={tex}
                     onChange={(event) => { setTex(event.target.value); scheduleTex(event.target.value) }}
                     className="min-h-[20rem] font-mono text-xs leading-6"
-                    placeholder="Введите текст и формулы без преамбулы…"
+                    placeholder="Решение..."
                   />
                 </div>
                 <div className="min-h-[24rem] overflow-auto rounded-lg border border-line bg-surface-muted p-3">
@@ -374,10 +393,7 @@ export function SolutionWorkbench({
         ) : (
           <div className="flex flex-col gap-3">
             {editor ? (
-              <>
-                <label htmlFor={formatId + '-video-link'} className="text-sm font-medium text-ink">Ссылка на видео</label>
-                <Input id={formatId + '-video-link'} value={linkValue} onChange={(event) => { setLinkValue(event.target.value); scheduleLink(event.target.value) }} placeholder="https://youtube.com/watch?v=…" />
-              </>
+              <Input id={formatId + '-video-link'} aria-label="Ссылка на видео" value={linkValue} onChange={(event) => { setLinkValue(event.target.value); scheduleLink(event.target.value) }} placeholder="Ссылка на видео" />
             ) : null}
             {((editor ? linkValue : (linkValue || link))?.trim()) ? <VideoLink url={(editor ? linkValue : (linkValue || link)) as string} /> : <p className="text-sm text-muted">Видео ещё не прикреплено.</p>}
           </div>

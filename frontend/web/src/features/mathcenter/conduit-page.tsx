@@ -1045,8 +1045,8 @@ export function ConduitTable({
                 </div>
               </th>
             </tr>
-            {/* Per-subproblem column labels. Coffins are tinted — amber while
-                open for submission, gray once разобрана (solved). */}
+            {/* Per-subproblem column labels. Coffins stay structurally marked
+                but use the same neutral treatment in every queue. */}
             <tr>
               {cols.map(({ col, seriesId, firstInSeries }) => {
                 const open = col.is_coffin && coffinOpen(col.coffin_released_at)

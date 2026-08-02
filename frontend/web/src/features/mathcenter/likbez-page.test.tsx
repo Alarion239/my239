@@ -92,6 +92,20 @@ afterEach(() => {
 })
 
 describe('Likbez controls', () => {
+  it('uses a calendar-style date and keeps material indicators at card top-right', async () => {
+    mocks.list = [{ ...published, held_on: '2026-08-13', has_tex: true, has_pdf: true, video_url: 'https://youtu.be/dQw4w9WgXcQ' }]
+    renderPage()
+
+    const card = await screen.findByRole('link')
+    expect(screen.getByText(/13\s+Августа/)).toBeInTheDocument()
+    expect(screen.queryByText('Ликбез №1')).not.toBeInTheDocument()
+    const title = screen.getByText('Проценты')
+    const materials = screen.getByText('PDF').parentElement
+    expect(materials).not.toBeNull()
+    expect(title.parentElement!.compareDocumentPosition(materials!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(card).toContainElement(materials)
+  })
+
   it('opens a published card by unpublishing it first', async () => {
     const user = userEvent.setup()
     renderPage()
@@ -141,6 +155,7 @@ describe('Likbez controls', () => {
     expect(screen.queryByText('Исходник')).not.toBeInTheDocument()
     expect(screen.getByLabelText('Дата')).toHaveAttribute('type', 'date')
     expect(screen.getByText('Суббота')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Решение...')).toBeInTheDocument()
     expect(screen.queryByText(/Материал 0[123]/)).not.toBeInTheDocument()
     expect(screen.queryByText('Добавьте PDF-версию лекции')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Сохранить сведения' })).not.toBeInTheDocument()
@@ -157,6 +172,7 @@ describe('Likbez controls', () => {
     await user.type(screen.getByLabelText('Название'), 'Обновлённый черновик')
     await user.click(screen.getByRole('tab', { name: 'Видео' }))
     const videoInput = screen.getByLabelText('Ссылка на видео')
+    expect(videoInput).toHaveAttribute('placeholder', 'Ссылка на видео')
     await user.clear(videoInput)
     await user.type(videoInput, 'https://youtu.be/abc12345678')
     await user.click(publishButton)

@@ -6,6 +6,7 @@ import type { Control } from 'react-hook-form'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   APIErrorImpl,
+  likbezCalendarDateFromISO,
   likbezSchema,
   likbezDateFromISO,
   likbezWeekdayFromISO,
@@ -132,7 +133,7 @@ function LikbezCard({ likbez, isTeacher }: { likbez: Likbez; isTeacher: boolean 
         }
       }}
     >
-      <div className="flex h-11 min-w-11 items-center justify-center rounded-lg bg-accent-soft px-2 font-display text-lg font-medium text-accent-ink" aria-label={'Ликбез №' + likbez.number}>
+      <div className="flex h-11 min-w-11 items-center justify-center rounded-lg bg-accent-soft px-2 font-display text-lg font-medium text-accent-ink" aria-label={'Номер ликбеза ' + likbez.number}>
         {likbez.number}
       </div>
       <div className="min-w-0 flex-1">
@@ -141,14 +142,14 @@ function LikbezCard({ likbez, isTeacher }: { likbez: Likbez; isTeacher: boolean 
           {!likbez.published ? <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-muted">Черновик</span> : null}
           {unpublish.isPending ? <span className="text-xs text-muted" role="status">Открываем…</span> : null}
         </div>
-        <p className="mt-1 text-sm text-muted">Ликбез №{likbez.number} · {likbezDateFromISO(likbez.held_on)} · {likbez.term_display_name}</p>
+        <p className="mt-1 text-sm text-muted">{likbezCalendarDateFromISO(likbez.held_on)} · {likbez.term_display_name}</p>
         <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-ink">{likbez.description}</p>
         {editError ? <p className="mt-2 text-xs text-danger" role="alert">{editError}</p> : null}
-        <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted">
-          {likbez.has_tex ? <span className="inline-flex items-center gap-1"><FileText className="h-3.5 w-3.5" />TeX</span> : null}
-          {likbez.has_pdf ? <span className="inline-flex items-center gap-1"><FileText className="h-3.5 w-3.5" />PDF</span> : null}
-          {likbez.video_url ? <span className="inline-flex items-center gap-1"><Video className="h-3.5 w-3.5" />Видео</span> : null}
-        </div>
+      </div>
+      <div className="flex shrink-0 flex-wrap gap-2 text-xs text-muted sm:max-w-[12rem] sm:justify-end sm:self-start">
+        {likbez.has_tex ? <span className="inline-flex items-center gap-1"><FileText className="h-3.5 w-3.5" />TeX</span> : null}
+        {likbez.has_pdf ? <span className="inline-flex items-center gap-1"><FileText className="h-3.5 w-3.5" />PDF</span> : null}
+        {likbez.video_url ? <span className="inline-flex items-center gap-1"><Video className="h-3.5 w-3.5" />Видео</span> : null}
       </div>
     </Card>
   )
@@ -173,7 +174,7 @@ function LikbezDetail({ likbezId, isTeacher }: { likbezId: number; isTeacher: bo
       <header className="border-b border-line pb-5">
         <p className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Ликбез №{data.number} · {data.term_display_name}</p>
         <h1 className="mt-2 font-display text-3xl font-medium text-ink">{data.title}</h1>
-        <p className="mt-2 text-sm text-muted">{likbezDateFromISO(data.held_on)}</p>
+        <p className="mt-2 text-sm text-muted">{likbezCalendarDateFromISO(data.held_on)}</p>
         <p className="mt-4 max-w-3xl whitespace-pre-wrap leading-7 text-ink">{data.description}</p>
       </header>
       <LikbezMaterials likbez={data} tex={tex} />
@@ -276,6 +277,7 @@ function LikbezDraftEditor({ likbez, terms }: { likbez: Likbez; terms: MathCente
         texQuery={texQuery}
         formatTabLabel="Формат ликбеза"
         confirmPublication={false}
+        pdfActionPlacement="after-tabs"
         headerPrefix={(
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <Link to={'/mathcenter/' + year + '/likbez' + search} className="text-sm font-medium text-accent hover:underline">← Все ликбезы</Link>
