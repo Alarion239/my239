@@ -3,7 +3,6 @@ import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-route
 import {
   claimIsLive,
   coffinOpen,
-  displayStatusMeta,
   formatDateTime,
   usePutSubproblemSolutionTex,
   usePublishSubproblemSolutionsBatch,
@@ -15,13 +14,15 @@ import {
   type Coffin,
   type CoffinQueueItem,
 } from '@my239/shared'
-import { Button, Card, Spinner, StatusTile } from '../../design/ui'
+import { Button, Card, Spinner } from '../../design/ui'
 import { cn } from '../../design/cn'
 import { useSeriesContext } from './use-series-context'
 import { useCenterIdContext, useCenterTermContext } from './center-id-context'
 import { SolutionWorkbench, type SolutionWorkbenchMode } from './solution-editor'
 import { displayPill } from './status-style'
 import { coffinQueueThreadPath } from './navigation-paths'
+import { studentStatusMeta, studentSubproblemIdentifier } from './student-status'
+import { StudentStatusTile } from './student-status-tile'
 
 export function CoffinsPage() {
   const centerId = useCenterIdContext()
@@ -266,20 +267,18 @@ function CoffinCard({
 
   return (
     <div ref={cardRef}>
-    <Card className={cn('p-4', coffin.is_coffin && !solved && 'border-status-checking', hasSolution && coffin.solution_published_at ? 'bg-status-accepted-soft' : hasSolution ? 'bg-surface-muted' : '')}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
+    <Card className={cn(
+      'p-4',
+      isManager && coffin.is_coffin && !solved && 'border-status-checking',
+      isManager && hasSolution && coffin.solution_published_at
+        ? 'bg-status-accepted-soft'
+        : isManager && hasSolution
+          ? 'bg-surface-muted'
+          : '',
+    )}>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex min-w-0 flex-[1_1_16rem] flex-wrap items-center gap-x-3 gap-y-1">
           <div className="font-medium text-ink">{coffin.display}</div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-2">
-            {solved ? (
-              <span className="rounded-full bg-surface-muted px-2.5 py-0.5 text-xs font-medium text-muted">
-                Разобрана · {formatDateTime(coffin.released_at)}
-              </span>
-            ) : (
-              <span className="rounded-full bg-status-checking-soft px-2.5 py-0.5 text-xs font-medium text-status-checking">
-                Открыт для сдачи
-              </span>
-            )}
             {isManager && hasSolution ? (
               <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium', coffin.solution_published_at ? 'bg-status-accepted-soft text-status-accepted' : 'bg-surface-muted text-muted')}>
                 {coffin.solution_published_at ? 'Разбор опубликован' : 'Черновик'}
@@ -293,8 +292,13 @@ function CoffinCard({
             {!isManager && solved && accessLabel ? (
               <span className="text-xs text-muted">{accessLabel}</span>
             ) : null}
-          </div>
         </div>
+
+        {!isManager ? (
+          <div className="flex min-w-[5rem] flex-[0_1_8rem]">
+            <SubTile coffin={coffin} solved={solved} />
+          </div>
+        ) : null}
 
         <div className="flex flex-wrap items-center gap-2">
           {canSeeSolution ? (
@@ -324,13 +328,6 @@ function CoffinCard({
           ) : null}
         </div>
       </div>
-
-      {/* Student submit tile (only while the coffin is open). */}
-      {!isManager && !solved ? (
-        <div className="mt-3">
-          <SubTile coffin={coffin} />
-        </div>
-      ) : null}
 
       {panelMode && (panelMode === 'edit' || canSeeSolution) ? (
         <div className="mt-4 border-t border-line pt-4">
@@ -385,26 +382,37 @@ function ManagerControls({
   )
 }
 
-function SubTile({ coffin }: { coffin: Coffin }) {
+function SubTile({ coffin, solved }: { coffin: Coffin; solved: boolean }) {
   const { year } = useParams<{ year: string }>()
   const { search } = useLocation()
   const status = coffin.current_status ?? 'ungraded'
-  const beingGraded = coffin.being_graded ?? false
   const threadId = coffin.thread_id ?? 0
-  const meta = displayStatusMeta(status, beingGraded)
+  const meta = studentStatusMeta(status)
+  const identifier = studentSubproblemIdentifier(
+    coffin.subproblem_label,
+    coffin.problem_number,
+  )
   const base = '/mathcenter/' + year + '/series/' + coffin.series_id
   const to =
     threadId > 0
       ? base + '/thread/' + threadId
       : base + '/submit/' + coffin.subproblem_id
-  return (
+  const tile = (
+    <StudentStatusTile status={status} identifier={identifier} />
+  )
+  const interactive = threadId > 0 || !solved
+  return interactive ? (
     <Link
       to={to + search}
-      title={meta.label}
-      className="inline-flex rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      aria-label={identifier + ': ' + meta.label}
+      className="flex min-w-0 flex-1 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
     >
-      <StatusTile status={status} beingGraded={beingGraded} label={meta.label} />
+      {tile}
     </Link>
+  ) : (
+    <span title={identifier + ': ' + meta.label} className="flex min-w-0 flex-1">
+      {tile}
+    </span>
   )
 }
 

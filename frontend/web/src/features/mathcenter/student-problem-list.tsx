@@ -1,9 +1,6 @@
 import { Link, useLocation, useParams } from 'react-router-dom'
 import {
-  displayStatusMeta,
   exerciseComplete,
-  homeworkStatusMeta,
-  problemStateFromSubproblems,
   submissionClosedFor,
   type MyRollup,
   type RollupProblem,
@@ -11,8 +8,9 @@ import {
   type Series,
   type Subproblem,
 } from '@my239/shared'
-import { StatusLegend, StatusTile } from '../../design/ui'
 import { cn } from '../../design/cn'
+import { studentStatusMeta, studentSubproblemIdentifier } from './student-status'
+import { StudentStatusTile } from './student-status-tile'
 
 export interface StudentProblemListProps {
   seriesId: number
@@ -57,8 +55,7 @@ function subproblemPath(
 }
 
 // StudentProblemList shows the calling student's own progress: one row per
-// problem with a clickable status tile per subproblem, a problem-level summary
-// badge, and a "Сдать" shortcut to the first not-yet-accepted subproblem.
+// problem with a clickable, letter-preserving status tile per subproblem.
 export function StudentProblemList({
   seriesId,
   rollup,
@@ -91,7 +88,6 @@ export function StudentProblemList({
           exerciseUnlocked={exerciseUnlocked}
         />
       ))}
-      <StatusLegend className="mt-2" />
     </div>
   )
 }
@@ -112,12 +108,8 @@ function ProblemRow({
   exerciseUnlocked: boolean
 }) {
   const { search } = useLocation()
-  const summary = problemStateFromSubproblems(
-    problem.subproblems.map((s) => s.current_status),
-  )
-  const summaryMeta = homeworkStatusMeta(summary)
 
-  // Submission is done by pressing a subproblem's status tile (its symbol):
+  // Submission is done by pressing a subproblem's status tile:
   // an existing thread opens its dialog; an untouched-but-open subproblem opens
   // the submit form. No separate "Сдать" button.
   return (
@@ -131,30 +123,21 @@ function ProblemRow({
             : 'border-line',
       )}
     >
-      <div className="min-w-0 flex-1">
+      <div className="min-w-[8rem] flex-[0_1_12rem]">
         <div className="font-medium text-ink">{problem.problem_display}</div>
-        <div className="text-xs text-muted">{summaryMeta.label}</div>
       </div>
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="grid min-w-0 flex-[1_1_18rem] grid-cols-[repeat(auto-fit,minmax(2.75rem,1fr))] gap-1.5">
         {problem.subproblems.map((sub) => {
-          const tileLabel =
-            sub.subproblem_label +
-            ': ' +
-            displayStatusMeta(sub.current_status, sub.being_graded).label
-          // Show the subproblem letter up front on an untouched subproblem, so a
-          // row of "a b c" reads as distinct subproblems rather than identical
-          // circles. Single-part problems (no letter) keep the ○; attempted
-          // subproblems show their status glyph.
-          const letterGlyph =
-            sub.current_status === 'ungraded' && sub.subproblem_label !== ''
-              ? sub.subproblem_label
-              : undefined
+          const statusMeta = studentStatusMeta(sub.current_status)
+          const identifier = studentSubproblemIdentifier(
+            sub.subproblem_label,
+            problem.problem_number,
+          )
+          const tileLabel = identifier + ': ' + statusMeta.label
           const tile = (
-            <StatusTile
+            <StudentStatusTile
               status={sub.current_status}
-              beingGraded={sub.being_graded}
-              label={tileLabel}
-              glyph={letterGlyph}
+              identifier={identifier}
             />
           )
           // A tile links to its thread when one exists; an untouched subproblem
@@ -165,15 +148,13 @@ function ProblemRow({
             <Link
               key={sub.subproblem_id}
               to={subproblemPath(year, seriesId, sub) + search}
-              title={tileLabel}
-              className={cn(
-                'rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-              )}
+              aria-label={tileLabel}
+              className="flex min-w-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
             >
               {tile}
             </Link>
           ) : (
-            <span key={sub.subproblem_id} title={tileLabel}>
+            <span key={sub.subproblem_id} title={tileLabel} className="flex min-w-0">
               {tile}
             </span>
           )

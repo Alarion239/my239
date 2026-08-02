@@ -92,18 +92,15 @@ describe('StudentProblemList — per-subproblem deadline gating', () => {
     ).not.toBeNull()
   })
 
-  // The untouched lettered subproblem 'а' shows its letter; the attempted 'б'
-  // shows a status glyph, not its letter.
-  it('shows the subproblem letter on an untouched tile', () => {
+  // Every tile keeps its subproblem letter; status is carried by the tile fill.
+  it('keeps the subproblem letter on every tile', () => {
     renderList(makeSeries(FUTURE, [sub({ id: 10, label: 'а' }), sub({ id: 11, label: 'б' })]))
     expect(screen.getByRole('img', { name: 'а: Не решено' })).toHaveTextContent('а')
-    // The rejected sibling keeps a status glyph (✗), never its letter.
-    expect(screen.getByRole('img', { name: 'б: Отклонено' })).not.toHaveTextContent('б')
+    expect(screen.getByRole('img', { name: 'б: Отклонено' })).toHaveTextContent('б')
+    expect(screen.getByRole('img', { name: 'б: Отклонено' })).toHaveClass('bg-status-rejected-soft')
   })
 
-  // A single-part problem (empty label) keeps the ○ rather than showing a
-  // (blank) letter.
-  it('keeps the circle for a single-part untouched problem', () => {
+  it('uses the problem identifier for a single-part untouched problem', () => {
     const single: MyRollup = {
       counts: { accepted: 0, rejected: 0, pending: 1 },
       problems: [
@@ -118,7 +115,39 @@ describe('StudentProblemList — per-subproblem deadline gating', () => {
       ],
     }
     renderList(makeSeries(FUTURE, [sub({ id: 20, label: '' })]), single)
-    expect(screen.getByRole('img', { name: ': Не решено' })).toHaveTextContent('○')
+    expect(screen.getByRole('img', { name: '2: Не решено' })).toHaveTextContent('2')
+    expect(screen.getByRole('img', { name: '2: Не решено' })).toHaveClass('bg-status-unsolved-soft')
+  })
+
+  it('collapses claimed submissions and appeals into the yellow queued state', () => {
+    const pending: MyRollup = {
+      counts: { accepted: 0, rejected: 0, pending: 4 },
+      problems: [{
+        problem_id: 3,
+        problem_number: 3,
+        problem_display: 'Задача 3',
+        subproblems: [
+          { subproblem_id: 30, subproblem_label: 'а', thread_id: 30, current_status: 'submitted', being_graded: true },
+          { subproblem_id: 31, subproblem_label: 'б', thread_id: 31, current_status: 'submitted', being_graded: false },
+          { subproblem_id: 32, subproblem_label: 'в', thread_id: 32, current_status: 'appealed', being_graded: true },
+          { subproblem_id: 33, subproblem_label: 'г', thread_id: 33, current_status: 'appealed', being_graded: false },
+        ],
+      }],
+    }
+    renderList(makeSeries(FUTURE, [
+      sub({ id: 30, label: 'а' }),
+      sub({ id: 31, label: 'б' }),
+      sub({ id: 32, label: 'в' }),
+      sub({ id: 33, label: 'г' }),
+    ]), pending)
+
+    for (const letter of ['а', 'б', 'в', 'г']) {
+      const tile = screen.getByRole('img', { name: letter + ': В очереди' })
+      expect(tile).toHaveTextContent(letter)
+      expect(tile).toHaveClass('bg-status-checking-soft')
+    }
+    expect(screen.queryByText('На проверке')).not.toBeInTheDocument()
+    expect(screen.queryByText('Апелляция в очереди')).not.toBeInTheDocument()
   })
 
   // Regression: an OPEN coffin stays submittable from the series page past the

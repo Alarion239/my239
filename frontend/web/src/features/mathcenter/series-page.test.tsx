@@ -214,8 +214,11 @@ describe('SeriesPage — student view', () => {
     // The student rollup renders per-subproblem status tiles (no panel heading).
     expect(await screen.findByText('Задача 1')).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'а: Принято' })).toBeInTheDocument()
-    // Subproblem б is submitted AND claimed (being_graded) → "На проверке".
-    expect(screen.getByRole('img', { name: 'б: На проверке' })).toBeInTheDocument()
+    // Claimed student submissions use the same yellow queued state.
+    expect(screen.getByRole('img', { name: 'б: В очереди' })).toBeInTheDocument()
+    expect(screen.queryByText('На проверке')).not.toBeInTheDocument()
+    expect(screen.queryByText('Принято:')).not.toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Обозначения статусов' })).not.toBeInTheDocument()
     // No teacher "create series" card in the student view.
     expect(screen.queryByRole('button', { name: 'Создать серию' })).not.toBeInTheDocument()
   })

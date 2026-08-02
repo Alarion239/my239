@@ -4,9 +4,7 @@ import { Pencil, Plus, Trash2 } from 'lucide-react'
 import {
   APIErrorImpl,
   currentSeries,
-  exerciseComplete,
   isClosed,
-  solvedForCredit,
   useDeleteSeries,
   useMathCenterMe,
   useMySeriesRollup,
@@ -410,7 +408,7 @@ function StudentSide({ series }: { series: Series }) {
   return (
     <AsyncGate isPending={isPending} isError={isError} hasData={!!data}>
       {data ? (
-        <StudentProblemListWithCounts
+        <StudentProblemListWithNotice
           series={series}
           rollup={data}
           closed={closed}
@@ -420,7 +418,7 @@ function StudentSide({ series }: { series: Series }) {
   )
 }
 
-function StudentProblemListWithCounts({
+function StudentProblemListWithNotice({
   series,
   rollup,
   closed,
@@ -429,52 +427,8 @@ function StudentProblemListWithCounts({
   rollup: MyRollup
   closed: boolean
 }) {
-  // Count per-subproblem statuses granularly so the summary matches the tiles:
-  // the backend's `pending` lumps unsolved with under-review, which reads wrong.
-  // "На проверке"/"В очереди" split mirrors the per-tile being_graded flag.
-  const exerciseUnlocked = exerciseComplete(
-    rollup.problems.flatMap((problem) =>
-      problem.subproblems.map((sub) => ({
-        problem_number: problem.problem_number,
-        current_status: sub.current_status,
-      })),
-    ),
-  )
-  let accepted = 0
-  let queued = 0
-  let grading = 0
-  let rejected = 0
-  let unsolved = 0
-  for (const p of rollup.problems) {
-    if (p.problem_number === 0) continue
-    for (const s of p.subproblems) {
-      if (solvedForCredit(p.problem_number, s.current_status, exerciseUnlocked)) accepted++
-      else if (s.current_status === 'rejected') rejected++
-      else if (s.current_status === 'submitted' || s.current_status === 'appealed') {
-        if (s.being_graded) grading++
-        else queued++
-      } else unsolved++
-    }
-  }
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap gap-3 text-xs text-muted">
-        <span>
-          Принято: <span className="font-medium text-status-accepted">{accepted}</span>
-        </span>
-        <span>
-          В очереди: <span className="font-medium text-status-checking">{queued}</span>
-        </span>
-        <span>
-          На проверке: <span className="font-medium text-status-grading">{grading}</span>
-        </span>
-        <span>
-          Отклонено: <span className="font-medium text-status-rejected">{rejected}</span>
-        </span>
-        <span>
-          Не решено: <span className="font-medium text-muted">{unsolved}</span>
-        </span>
-      </div>
       {closed ? (
         <p className="text-xs text-muted">
           Срок серии прошёл — обычные задачи сдавать нельзя (можно открыть задачу
