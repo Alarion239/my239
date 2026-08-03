@@ -1,5 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronDown, Trash2 } from 'lucide-react'
+import { snapCenterToCursor } from '@dnd-kit/modifiers'
 import {
   DndContext,
   DragOverlay,
@@ -12,9 +14,7 @@ import {
   useSensors,
   type DragEndEvent,
   type DragStartEvent,
-  type Modifier,
 } from '@dnd-kit/core'
-import { getEventCoordinates } from '@dnd-kit/utilities'
 import {
   fullName,
   useManageAddStudent,
@@ -543,24 +543,6 @@ const rosterNameCollator = new Intl.Collator('ru', { sensitivity: 'base' })
 const EMPTY_ROSTER_STUDENTS: ManageRosterBoardStudent[] = []
 const EMPTY_ROSTER_GROUPS: ManageRosterBoardGroup[] = []
 
-const centerDragOverlayOnPointer: Modifier = ({
-  activatorEvent,
-  activeNodeRect,
-  overlayNodeRect,
-  transform,
-}) => {
-  if (!activatorEvent || !activeNodeRect) return transform
-  const pointer = getEventCoordinates(activatorEvent)
-  if (!pointer) return transform
-  const width = overlayNodeRect?.width ?? activeNodeRect.width
-  const height = overlayNodeRect?.height ?? activeNodeRect.height
-  return {
-    ...transform,
-    x: transform.x + pointer.x - activeNodeRect.left - width / 2,
-    y: transform.y + pointer.y - activeNodeRect.top - height / 2,
-  }
-}
-
 function rosterStudentName(student: ManageRosterBoardStudent): string {
   return fullName(student)
 }
@@ -793,12 +775,15 @@ function RosterBoard({
             )
           })}
         </div>
-        <DragOverlay modifiers={[centerDragOverlayOnPointer]} dropAnimation={null}>
-          {activeUserId === null ? null : (() => {
-            const student = students.find((candidate) => candidate.user_id === activeUserId)
-            return student ? <RosterStudentCardPreview student={student} /> : null
-          })()}
-        </DragOverlay>
+        {createPortal(
+          <DragOverlay modifiers={[snapCenterToCursor]} dropAnimation={null}>
+            {activeUserId === null ? null : (() => {
+              const student = students.find((candidate) => candidate.user_id === activeUserId)
+              return student ? <RosterStudentCardPreview student={student} /> : null
+            })()}
+          </DragOverlay>,
+          document.body,
+        )}
       </DndContext>
       <p className="sr-only" aria-live="polite">{announcement}</p>
       <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
