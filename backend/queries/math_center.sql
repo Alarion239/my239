@@ -214,13 +214,10 @@ candidates AS (
     SELECT student.user_id
     FROM math_center_students student
     WHERE student.term_id = (SELECT id FROM active_term)
-    UNION
-    SELECT student.user_id
-    FROM math_center_students student
-    WHERE student.term_id = (SELECT id FROM previous_term)
 ),
 current_enrollment AS (
-    SELECT student.user_id,
+    SELECT student.id AS student_id,
+           student.user_id,
            CASE WHEN group_row.name = 'Не распределены' THEN NULL::bigint ELSE student.group_id END AS group_id
     FROM math_center_students student
     JOIN math_center_groups group_row ON group_row.id = student.group_id
@@ -259,7 +256,8 @@ rating_totals AS (
       )
     GROUP BY thread.student_user_id
 )
-SELECT candidate.user_id,
+SELECT current_enrollment.student_id,
+       candidate.user_id,
        current_enrollment.group_id AS current_group_id,
        previous_enrollment.group_id AS previous_group_id,
        previous_enrollment.group_name AS previous_group_name,
@@ -276,6 +274,15 @@ LEFT JOIN current_enrollment ON current_enrollment.user_id = candidate.user_id
 LEFT JOIN previous_enrollment ON previous_enrollment.user_id = candidate.user_id
 LEFT JOIN rating_totals ON rating_totals.student_user_id = candidate.user_id
 ORDER BY user_row.last_name ASC, user_row.first_name ASC, user_row.middle_name ASC, candidate.user_id ASC;
+
+-- name: RemoveActiveStudentForCenter :execrows
+DELETE FROM math_center_students student
+USING math_center_groups group_row, math_center_terms term_row
+WHERE student.id = sqlc.arg(student_id)::bigint
+  AND group_row.id = student.group_id
+  AND term_row.id = student.term_id
+  AND group_row.math_center_id = sqlc.arg(math_center_id)::bigint
+  AND term_row.is_active = TRUE;
 
 -- name: GetActiveStudentByUser :one
 SELECT student.id,

@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Trash2 } from 'lucide-react'
 import {
   DndContext,
   PointerSensor,
@@ -16,6 +16,7 @@ import {
   useManageAddStudent,
   useManageGroups,
   useManageRazborAccess,
+  useManageRemoveStudent,
   useManageRosterBoard,
   useManageSetRosterStudentGroup,
   useManageSetRazborAccess,
@@ -29,7 +30,18 @@ import {
   type ManageRosterBoardStudent,
   type UserSearchResult,
 } from '@my239/shared'
-import { Button, Card, CardContent, Select, Spinner } from '../../../design/ui'
+import {
+  Button,
+  Card,
+  CardContent,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  Input,
+  Select,
+  Spinner,
+} from '../../../design/ui'
 import { cn } from '../../../design/cn'
 import { SectionHeader } from '../../admin/_shared'
 import { UserSearchSelect } from './user-search-select'
@@ -497,29 +509,27 @@ export function StudentsTab({ centerId }: { centerId: number }) {
   }
 
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-4">
-        <RosterBoard board={board} centerId={centerId} />
+    <div className="flex flex-col gap-4">
+      <RosterBoard board={board} centerId={centerId} />
 
-        {error ? <p className="text-sm text-danger">{error}</p> : null}
-        <div className="flex flex-col gap-2 border-t border-line pt-4">
-          <p className="text-sm font-medium text-ink">Добавить из пользователей</p>
-          <UserSearchSelect centerId={centerId} onSelect={setPicked} />
-          {picked ? (
-            <div className="flex flex-wrap items-center gap-3 rounded-lg bg-surface-muted px-3 py-2">
-              <span className="text-sm text-ink">{fullName(picked)}</span>
-              <Select value={addGroupId} onChange={(event) => setAddGroupId(event.target.value)} aria-label="Группа" className="h-9 max-w-40">
-                <option value="">Без группы (по умолчанию)</option>
-                {(groups ?? []).filter((group) => !isUnallocatedGroup(group.name)).map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-              </Select>
-              <Button type="button" variant="secondary" size="sm" onClick={onAdd}>Добавить учеником</Button>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setPicked(null)}>Отмена</Button>
-            </div>
-          ) : null}
-        </div>
-        <InviteSection centerId={centerId} role="student" />
-      </CardContent>
-    </Card>
+      {error ? <p className="text-sm text-danger">{error}</p> : null}
+      <div className="flex flex-col gap-2 border-t border-line pt-4">
+        <p className="text-sm font-medium text-ink">Добавить из пользователей</p>
+        <UserSearchSelect centerId={centerId} onSelect={setPicked} />
+        {picked ? (
+          <div className="flex flex-wrap items-center gap-3 rounded-lg bg-surface-muted px-3 py-2">
+            <span className="text-sm text-ink">{fullName(picked)}</span>
+            <Select value={addGroupId} onChange={(event) => setAddGroupId(event.target.value)} aria-label="Группа" className="h-9 max-w-40">
+              <option value="">Без группы (по умолчанию)</option>
+              {(groups ?? []).filter((group) => !isUnallocatedGroup(group.name)).map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+            </Select>
+            <Button type="button" variant="secondary" size="sm" onClick={onAdd}>Добавить учеником</Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setPicked(null)}>Отмена</Button>
+          </div>
+        ) : null}
+      </div>
+      <InviteSection centerId={centerId} role="student" />
+    </div>
   )
 }
 
@@ -557,6 +567,7 @@ function RosterBoard({
   centerId: number
 }) {
   const setGroup = useManageSetRosterStudentGroup(centerId)
+  const removeStudent = useManageRemoveStudent(centerId)
   const [movingUserId, setMovingUserId] = useState<number | null>(null)
   const [restoreFocusUserId, setRestoreFocusUserId] = useState<number | null>(null)
   const [sort, setSort] = useState<RosterSort>('alpha')
@@ -568,6 +579,9 @@ function RosterBoard({
   } | null>(null)
   const [announcement, setAnnouncement] = useState('')
   const [moveError, setMoveError] = useState<string | null>(null)
+  const [removeError, setRemoveError] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [removalCandidate, setRemovalCandidate] = useState<ManageRosterBoardStudent | null>(null)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
@@ -597,13 +611,15 @@ function RosterBoard({
   const studentsByColumn = useMemo(() => {
     const result = new Map<string, ManageRosterBoardStudent[]>()
     for (const column of columns) result.set(column.id, [])
+    const needle = search.trim().toLocaleLowerCase('ru-RU')
     for (const student of students) {
+      if (needle && !rosterStudentName(student).toLocaleLowerCase('ru-RU').includes(needle)) continue
       const id = rosterColumnId(student.current_group_id)
       const bucket = result.get(id)
       if (bucket) bucket.push(student)
     }
     return result
-  }, [columns, students])
+  }, [columns, search, students])
 
   function sortStudents(values: ManageRosterBoardStudent[]): ManageRosterBoardStudent[] {
     return [...values].sort((left, right) => {
@@ -649,9 +665,29 @@ function RosterBoard({
     const userId = Number(String(event.active.id).replace('student:', ''))
     const target = event.over ? String(event.over.id) : ''
     const student = students.find((candidate) => candidate.user_id === userId)
+    if (target === 'remove') {
+      if (student) requestRemoval(student)
+      return
+    }
     const column = columns.find((candidate) => candidate.id === target)
     if (!student || !column) return
     moveStudent(student, rosterGroupId(column.id), column.name)
+  }
+
+  function requestRemoval(student: ManageRosterBoardStudent) {
+    setRemoveError(null)
+    setRemovalCandidate(student)
+  }
+
+  function confirmRemoval() {
+    if (!removalCandidate || removeStudent.isPending) return
+    removeStudent.mutate(removalCandidate.student_id, {
+      onSuccess: () => {
+        setAnnouncement(rosterStudentName(removalCandidate) + ' удалён из матцентра.')
+        setRemovalCandidate(null)
+      },
+      onError: () => setRemoveError('Не удалось удалить ученика. Попробуйте ещё раз.'),
+    })
   }
 
   if (board.isPending) return <Spinner />
@@ -670,13 +706,41 @@ function RosterBoard({
         title="Распределение учеников"
         description={'Перетаскивайте карточки между группами. Рейтинг сейчас основан на показателе «Решено» за ' + ratingTermName + '.'}
       />
+      <div className="max-w-sm">
+        <Input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Поиск ученика…"
+          aria-label="Поиск ученика по имени"
+        />
+      </div>
       <DndContext
         sensors={sensors}
         collisionDetection={pointerWithin}
         onDragEnd={handleDragEnd}
       >
         <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:thin]">
-          {columns.map((column) => {
+          <div className="flex h-[65vh] max-h-[65vh] w-72 min-w-72 snap-start flex-col gap-2 sm:w-80 sm:min-w-80">
+            <RemovalDropZone />
+            {(() => {
+              const column = columns[0]
+              const columnStudents = sortStudents(studentsByColumn.get(column.id) ?? [])
+              return (
+                <RosterColumn
+                  id={column.id}
+                  name={column.name}
+                  students={columnStudents}
+                  sort={sort}
+                  isUnallocated
+                  movingUserId={movingUserId}
+                  onSortChange={setSort}
+                  onRequestRemoval={requestRemoval}
+                  fillHeight
+                />
+              )
+            })()}
+          </div>
+          {columns.slice(1).map((column) => {
             const columnStudents = sortStudents(studentsByColumn.get(column.id) ?? [])
             return (
               <RosterColumn
@@ -688,6 +752,7 @@ function RosterBoard({
                 isUnallocated={column.id === 'unallocated'}
                 movingUserId={movingUserId}
                 onSortChange={setSort}
+                onRequestRemoval={requestRemoval}
               />
             )
           })}
@@ -715,6 +780,39 @@ function RosterBoard({
         </div>
       ) : null}
       {moveError ? <p className="text-sm text-danger">{moveError}</p> : null}
+      <Dialog open={removalCandidate !== null} onOpenChange={(open) => {
+        if (!open && !removeStudent.isPending) setRemovalCandidate(null)
+      }}>
+        <DialogContent>
+          <DialogTitle>Удалить ученика из матцентра?</DialogTitle>
+          <DialogDescription className="mt-2">
+            {removalCandidate ? rosterStudentName(removalCandidate) + ' будет удалён только из текущего периода. История прошлых периодов и домашние работы сохранятся.' : null}
+          </DialogDescription>
+          {removeError ? <p className="mt-3 text-sm text-danger">{removeError}</p> : null}
+          <div className="mt-5 flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={() => setRemovalCandidate(null)} disabled={removeStudent.isPending}>Отмена</Button>
+            <Button type="button" variant="danger" onClick={confirmRemoval} disabled={removeStudent.isPending}>Удалить</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+function RemovalDropZone() {
+  const { setNodeRef, isOver } = useDroppable({ id: 'remove' })
+  return (
+    <div
+      ref={setNodeRef}
+      role="region"
+      aria-label="Удалить ученика"
+      className={cn(
+        'flex shrink-0 items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-2 text-xs font-medium text-danger transition-colors',
+        isOver ? 'border-danger bg-danger/10' : 'border-danger/50',
+      )}
+    >
+      <Trash2 className="h-4 w-4" aria-hidden="true" />
+      Перетащите сюда, чтобы удалить
     </div>
   )
 }
@@ -727,6 +825,8 @@ function RosterColumn({
   isUnallocated,
   movingUserId,
   onSortChange,
+  onRequestRemoval,
+  fillHeight = false,
 }: {
   id: string
   name: string
@@ -735,6 +835,8 @@ function RosterColumn({
   isUnallocated: boolean
   movingUserId: number | null
   onSortChange: (sort: RosterSort) => void
+  onRequestRemoval: (student: ManageRosterBoardStudent) => void
+  fillHeight?: boolean
 }) {
   const { setNodeRef, isOver } = useDroppable({ id })
   const nextSort: RosterSort = sort === 'alpha' ? 'rating-desc' : sort === 'rating-desc' ? 'rating-asc' : 'alpha'
@@ -742,7 +844,8 @@ function RosterColumn({
     <section
       ref={setNodeRef}
       className={cn(
-        'flex w-72 min-w-72 snap-start flex-col rounded-xl border bg-surface p-3 transition-colors sm:w-80 sm:min-w-80',
+        'flex w-72 min-w-72 snap-start flex-col overflow-hidden rounded-xl border bg-surface p-3 transition-colors sm:w-80 sm:min-w-80',
+        fillHeight ? 'min-h-0 flex-1' : 'h-[65vh] max-h-[65vh]',
         isUnallocated ? 'border-dashed border-line-strong' : 'border-line',
         isOver && 'border-accent bg-accent-soft/50',
       )}
@@ -762,13 +865,18 @@ function RosterColumn({
           {rosterSortLabel(sort)}
         </button>
       </div>
-      <div className="flex min-h-28 flex-col gap-2">
+      <div
+        role="group"
+        aria-label={name + ' список учеников'}
+        className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1 [scrollbar-width:thin]"
+      >
         {students.length === 0 ? <p className="rounded-lg border border-dashed border-line px-3 py-6 text-center text-xs text-faint">Перетащите сюда ученика</p> : null}
         {students.map((student) => (
           <RosterStudentCard
             key={student.user_id}
             student={student}
             isMoving={movingUserId === student.user_id}
+            onRequestRemoval={onRequestRemoval}
           />
         ))}
       </div>
@@ -779,9 +887,11 @@ function RosterColumn({
 function RosterStudentCard({
   student,
   isMoving = false,
+  onRequestRemoval,
 }: {
   student: ManageRosterBoardStudent
   isMoving?: boolean
+  onRequestRemoval: (student: ManageRosterBoardStudent) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: 'student:' + student.user_id })
   const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined
@@ -792,6 +902,14 @@ function RosterStudentCard({
       style={style}
       {...listeners}
       {...attributes}
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if ((event.key === 'Delete' || event.key === 'Backspace') && !isMoving) {
+          event.preventDefault()
+          onRequestRemoval(student)
+        }
+      }}
+      aria-label={rosterStudentName(student) + '. Нажмите Delete, чтобы удалить из матцентра.'}
       className={cn(
         'rounded-lg border border-line bg-surface-muted px-3 py-2 shadow-sm transition-opacity',
         'cursor-grab active:cursor-grabbing',

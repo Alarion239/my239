@@ -338,6 +338,7 @@ export interface ManageRosterBoardGroup {
 }
 
 export interface ManageRosterBoardStudent {
+  student_id: number
   user_id: number
   current_group_id: number | null
   previous_group_id: number | null

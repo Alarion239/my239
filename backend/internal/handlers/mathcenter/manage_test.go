@@ -98,9 +98,9 @@ func TestManage_RosterBoardSnapshot(t *testing.T) {
 	mock.ExpectQuery(`WITH active_term AS`).
 		WithArgs(int64(42)).
 		WillReturnRows(mock.NewRows([]string{
-			"user_id", "current_group_id", "previous_group_id", "previous_group_name",
+			"student_id", "user_id", "current_group_id", "previous_group_id", "previous_group_name",
 			"previous_term_enrolled", "first_name", "middle_name", "last_name", "rating", "published_series_count", "rating_term_id",
-		}).AddRow(int64(101), nil, nil, nil, false, "Ира", nil, "Петрова", float64(4), int64(3), int64(19)))
+		}).AddRow(int64(55), int64(101), nil, nil, nil, false, "Ира", nil, "Петрова", float64(4), int64(3), int64(19)))
 
 	req := authedAdminRequest(t, access, 9, http.MethodGet, "/centers/42/manage/roster-board", nil)
 	rr := httptest.NewRecorder()
@@ -114,6 +114,7 @@ func TestManage_RosterBoardSnapshot(t *testing.T) {
 			ID int64 `json:"id"`
 		} `json:"groups"`
 		Students []struct {
+			StudentID       int64   `json:"student_id"`
 			UserID         int64   `json:"user_id"`
 			CurrentGroupID *int64  `json:"current_group_id"`
 			Rating         float64 `json:"rating"`
@@ -123,8 +124,48 @@ func TestManage_RosterBoardSnapshot(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 	if body.PublishedSeriesCount != 3 || len(body.Groups) != 1 || len(body.Students) != 1 ||
-		body.Students[0].UserID != 101 || body.Students[0].CurrentGroupID != nil || body.Students[0].Rating != 4 {
+		body.Students[0].StudentID != 55 || body.Students[0].UserID != 101 || body.Students[0].CurrentGroupID != nil || body.Students[0].Rating != 4 {
 		t.Fatalf("unexpected board snapshot: %#v", body)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+func TestManage_RemoveActiveStudent(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+	mock.ExpectExec(`DELETE FROM math_center_students student\s+USING math_center_groups group_row, math_center_terms term_row`).
+		WithArgs(int64(55), int64(42)).
+		WillReturnResult(pgxmock.NewResult("DELETE", 1))
+
+	req := authedAdminRequest(t, access, 9, http.MethodDelete, "/centers/42/manage/students/55", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("got %d, want 204; body=%s", rr.Code, rr.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+func TestManage_RemoveStudentRejectsNonActiveOrForeignEnrollment(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+	mock.ExpectExec(`DELETE FROM math_center_students student\s+USING math_center_groups group_row, math_center_terms term_row`).
+		WithArgs(int64(55), int64(42)).
+		WillReturnResult(pgxmock.NewResult("DELETE", 0))
+
+	req := authedAdminRequest(t, access, 9, http.MethodDelete, "/centers/42/manage/students/55", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("got %d, want 404; body=%s", rr.Code, rr.Body.String())
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet expectations: %v", err)

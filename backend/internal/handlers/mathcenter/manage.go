@@ -497,6 +497,7 @@ type manageRosterBoardGroup struct {
 }
 
 type manageRosterBoardStudent struct {
+	StudentID            int64   `json:"student_id"`
 	UserID               int64   `json:"user_id"`
 	CurrentGroupID       *int64  `json:"current_group_id"`
 	PreviousGroupID      *int64  `json:"previous_group_id"`
@@ -603,6 +604,7 @@ func manageListRosterBoard(database *db.DB) http.HandlerFunc {
 		}
 		for _, student := range students {
 			out.Students = append(out.Students, manageRosterBoardStudent{
+				StudentID:            student.StudentID,
 				UserID:               student.UserID,
 				CurrentGroupID:       student.CurrentGroupID,
 				PreviousGroupID:      student.PreviousGroupID,
@@ -1215,12 +1217,16 @@ func manageRemoveStudent(database *db.DB, hub *live.Hub) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid student id")
 			return
 		}
-		if !studentInCenter(w, r, q, studentID, centerID) {
-			return
-		}
-		if _, err := q.RemoveStudent(r.Context(), studentID); err != nil {
+		removed, err := q.RemoveActiveStudentForCenter(r.Context(), store.RemoveActiveStudentForCenterParams{
+			StudentID: studentID, MathCenterID: centerID,
+		})
+		if err != nil {
 			logger.LogErrorContext(r.Context(), "manage: remove student", err)
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to remove student")
+			return
+		}
+		if removed == 0 {
+			httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "student not found")
 			return
 		}
 		live.Publish(r.Context(), database.Pool(), live.Event{CenterID: centerID, Kind: live.KindMembership})
