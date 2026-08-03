@@ -108,7 +108,26 @@ func Register(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 
 		var user store.User
 		claimedSheetsStudent := false
-		if preset.MathCenterStudent != nil {
+		personalSheetsClaim := preset.MathCenterStudentClaim != nil
+		if personalSheetsClaim {
+			if invitation.MathCenterID == nil {
+				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+				return
+			}
+			user, claimedSheetsStudent, err = claimSheetsStudentByID(
+				ctx,
+				tx,
+				preset.MathCenterStudentClaim.UserID,
+				*invitation.MathCenterID,
+				username,
+				passwordHash,
+				invitation.ID,
+			)
+			if err == nil && !claimedSheetsStudent {
+				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "student account has already been claimed or is no longer in this math center")
+				return
+			}
+		} else if preset.MathCenterStudent != nil {
 			user, claimedSheetsStudent, err = claimUniqueSheetsStudent(
 				ctx,
 				tx,
@@ -120,7 +139,7 @@ func Register(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 				invitation.ID,
 			)
 		}
-		if err == nil && !claimedSheetsStudent {
+		if err == nil && !claimedSheetsStudent && !personalSheetsClaim {
 			user, err = q.CreateUser(ctx, store.CreateUserParams{
 				Username:          username,
 				PasswordHash:      passwordHash,
@@ -149,6 +168,7 @@ func Register(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 			// its student history. Apply any other grants on the invitation, but
 			// do not try to insert that enrollment a second time.
 			presetToApply.MathCenterStudent = nil
+			presetToApply.MathCenterStudentClaim = nil
 		}
 		if err := tokenpreset.Apply(ctx, q, user.ID, presetToApply); err != nil {
 			switch {
@@ -189,6 +209,62 @@ func Register(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 			User:         user,
 		})
 	}
+}
+
+// claimSheetsStudentByID activates the exact unavailable Sheets account named
+// by a personal invitation. The center check is repeated at consumption time,
+// so moving or removing the student cannot leave a stale bearer link capable
+// of claiming an unrelated account.
+func claimSheetsStudentByID(
+	ctx context.Context,
+	tx pgx.Tx,
+	userID int64,
+	centerID int64,
+	username string,
+	passwordHash string,
+	invitationTokenID int64,
+) (store.User, bool, error) {
+	const query = `
+		UPDATE users AS user_row
+		SET username = $3,
+		    password_hash = $4,
+		    invitation_token_id = $5,
+		    updated_at = NOW()
+		WHERE user_row.id = $1
+		  AND user_row.username LIKE 'sheets-%'
+		  AND user_row.invitation_token_id IS NULL
+		  AND NOT user_row.is_math_center
+		  AND EXISTS (
+		      SELECT 1
+		      FROM math_center_students student
+		      JOIN math_center_groups group_row ON group_row.id = student.group_id
+		      WHERE student.user_id = user_row.id
+		        AND group_row.math_center_id = $2
+		  )
+		RETURNING id, username, password_hash, first_name, middle_name, last_name,
+		          invitation_token_id, created_at, updated_at, is_admin, is_math_center`
+
+	var user store.User
+	err := tx.QueryRow(ctx, query, userID, centerID, username, passwordHash, invitationTokenID).Scan(
+		&user.ID,
+		&user.Username,
+		&user.PasswordHash,
+		&user.FirstName,
+		&user.MiddleName,
+		&user.LastName,
+		&user.InvitationTokenID,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+		&user.IsAdmin,
+		&user.IsMathCenter,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return store.User{}, false, nil
+	}
+	if err != nil {
+		return store.User{}, false, err
+	}
+	return user, true, nil
 }
 
 // claimUniqueSheetsStudent activates an unavailable account provisioned by

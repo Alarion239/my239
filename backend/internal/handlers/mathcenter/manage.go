@@ -61,6 +61,8 @@ func ManageRouter(database *db.DB, hub *live.Hub, sheetServices ...*googlesheets
 
 	r.Get("/invites", manageListInvites(database))
 	r.Post("/invites", manageCreateInvite(database))
+	r.Get("/invites/personal-students", manageListPersonalInviteStudents(database))
+	r.Post("/invites/personal", manageCreatePersonalInvite(database))
 	r.Delete("/invites/{tokenID}", manageRevokeInvite(database))
 
 	// Google Sheets link configuration remains a head-teacher operation.
@@ -1269,7 +1271,22 @@ type manageInviteView struct {
 	CreatedAt   time.Time `json:"created_at"`
 	Role        string    `json:"role"`
 	GroupID     *int64    `json:"group_id,omitempty"`
+	ClaimUserID *int64    `json:"claim_user_id,omitempty"`
 	IsHead      bool      `json:"is_head_teacher"`
+}
+
+type managePersonalInviteStudentView struct {
+	UserID     int64   `json:"user_id"`
+	GroupID    int64   `json:"group_id"`
+	GroupName  string  `json:"group_name"`
+	FirstName  string  `json:"first_name"`
+	MiddleName *string `json:"middle_name"`
+	LastName   string  `json:"last_name"`
+}
+
+type manageCreatePersonalInviteRequest struct {
+	UserID         int64 `json:"user_id"`
+	ExpiresInHours int   `json:"expires_in_hours"`
 }
 
 type manageCreateInviteRequest struct {
@@ -1314,11 +1331,160 @@ func manageListInvites(database *db.DB) http.HandlerFunc {
 					view.Role = "student"
 					gid := preset.MathCenterStudent.GroupID
 					view.GroupID = &gid
+				case preset.MathCenterStudentClaim != nil:
+					view.Role = "student"
+					uid := preset.MathCenterStudentClaim.UserID
+					view.ClaimUserID = &uid
 				}
 			}
 			out = append(out, view)
 		}
 		httpx.WriteJSON(w, http.StatusOK, out)
+	}
+}
+
+func manageListPersonalInviteStudents(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		q := store.New(database.Pool())
+		centerID, _, ok := manageGate(w, r, q)
+		if !ok {
+			return
+		}
+
+		const query = `
+			WITH selected_term AS (
+				SELECT COALESCE(
+					(SELECT id FROM math_center_terms WHERE math_center_id = $1 AND is_active = TRUE),
+					(SELECT id FROM math_center_terms WHERE math_center_id = $1 AND kind = 'legacy')
+				) AS id
+			)
+			SELECT user_row.id, student.group_id, group_row.name,
+			       user_row.first_name, user_row.middle_name, user_row.last_name
+			FROM math_center_students student
+			JOIN math_center_groups group_row ON group_row.id = student.group_id
+			JOIN users user_row ON user_row.id = student.user_id
+			WHERE student.term_id = (SELECT id FROM selected_term)
+			  AND group_row.math_center_id = $1
+			  AND user_row.username LIKE 'sheets-%'
+			  AND user_row.invitation_token_id IS NULL
+			  AND NOT user_row.is_math_center
+			ORDER BY group_row.name, user_row.last_name, user_row.first_name, user_row.id`
+
+		rows, err := database.Pool().Query(r.Context(), query, centerID)
+		if err != nil {
+			logger.LogErrorContext(r.Context(), "manage: list personal invite students", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to list students")
+			return
+		}
+		defer rows.Close()
+
+		out := make([]managePersonalInviteStudentView, 0)
+		for rows.Next() {
+			var student managePersonalInviteStudentView
+			if err := rows.Scan(
+				&student.UserID,
+				&student.GroupID,
+				&student.GroupName,
+				&student.FirstName,
+				&student.MiddleName,
+				&student.LastName,
+			); err != nil {
+				logger.LogErrorContext(r.Context(), "manage: scan personal invite student", err)
+				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to list students")
+				return
+			}
+			out = append(out, student)
+		}
+		if err := rows.Err(); err != nil {
+			logger.LogErrorContext(r.Context(), "manage: iterate personal invite students", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to list students")
+			return
+		}
+		httpx.WriteJSON(w, http.StatusOK, out)
+	}
+}
+
+func manageCreatePersonalInvite(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		q := store.New(database.Pool())
+		centerID, _, ok := manageGate(w, r, q)
+		if !ok {
+			return
+		}
+		var req manageCreatePersonalInviteRequest
+		if !httpx.DecodeJSONBody(w, r, &req) {
+			return
+		}
+		if req.UserID <= 0 || req.ExpiresInHours <= 0 {
+			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "user_id and expires_in_hours must be positive")
+			return
+		}
+
+		const targetQuery = `
+			SELECT user_row.first_name, user_row.middle_name, user_row.last_name
+			FROM users user_row
+			WHERE user_row.id = $1
+			  AND user_row.username LIKE 'sheets-%'
+			  AND user_row.invitation_token_id IS NULL
+			  AND NOT user_row.is_math_center
+			  AND EXISTS (
+			      SELECT 1
+			      FROM math_center_students student
+			      JOIN math_center_groups group_row ON group_row.id = student.group_id
+			      WHERE student.user_id = user_row.id
+			        AND group_row.math_center_id = $2
+			        AND student.term_id = COALESCE(
+			            (SELECT id FROM math_center_terms WHERE math_center_id = $2 AND is_active = TRUE),
+			            (SELECT id FROM math_center_terms WHERE math_center_id = $2 AND kind = 'legacy')
+			        )
+			  )`
+		var firstName, lastName string
+		var middleName *string
+		if err := database.Pool().QueryRow(r.Context(), targetQuery, req.UserID, centerID).Scan(&firstName, &middleName, &lastName); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				httpx.WriteAPIError(w, r, http.StatusNotFound, httpx.CodeNotFound, "unclaimed Sheets student not found")
+				return
+			}
+			logger.LogErrorContext(r.Context(), "manage: resolve personal invite student", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to create invite")
+			return
+		}
+
+		preset := tokenpreset.Preset{
+			MathCenterStudentClaim: &tokenpreset.MathCenterStudentClaim{UserID: req.UserID},
+		}
+		presetJSON, err := tokenpreset.Marshal(preset)
+		if err != nil {
+			logger.LogErrorContext(r.Context(), "manage: marshal personal invite", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to create invite")
+			return
+		}
+		raw, err := randomHexToken(32)
+		if err != nil {
+			logger.LogErrorContext(r.Context(), "manage: random personal token", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to create invite")
+			return
+		}
+		description := "Личное приглашение: " + strings.TrimSpace(lastName+" "+firstName)
+		tok, err := q.CreateInvitationToken(r.Context(), store.CreateInvitationTokenParams{
+			Token:        raw,
+			Description:  description,
+			MaxUses:      1,
+			ExpiresAt:    time.Now().Add(time.Duration(req.ExpiresInHours) * time.Hour),
+			Preset:       presetJSON,
+			MathCenterID: &centerID,
+		})
+		if err != nil {
+			logger.LogErrorContext(r.Context(), "manage: create personal invite", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to create invite")
+			return
+		}
+		uid := req.UserID
+		httpx.WriteJSON(w, http.StatusCreated, manageInviteView{
+			ID: tok.ID, Token: tok.Token, Description: tok.Description,
+			MaxUses: tok.MaxUses, Uses: 0, ExpiresAt: tok.ExpiresAt, CreatedAt: tok.CreatedAt,
+			Role: "student", ClaimUserID: &uid,
+		})
 	}
 }
 

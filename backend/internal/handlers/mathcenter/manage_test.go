@@ -617,6 +617,76 @@ func TestManage_CreateTeacherInvite(t *testing.T) {
 	}
 }
 
+func TestManage_CreatePersonalStudentInvite(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	now := time.Now()
+	expectHeadCheck(mock, 3, 42, true)
+	mock.ExpectQuery(`FROM users user_row`).
+		WithArgs(int64(77), int64(42)).
+		WillReturnRows(mock.NewRows([]string{"first_name", "middle_name", "last_name"}).
+			AddRow("Иван", (*string)(nil), "Иванов"))
+	wantPreset := json.RawMessage(`{"version":1,"mathcenter_student_claim":{"user_id":77}}`)
+	mock.ExpectQuery(`INSERT INTO invitation_tokens`).
+		WithArgs(pgxmock.AnyArg(), "Личное приглашение: Иванов Иван", int32(1), pgxmock.AnyArg(), wantPreset, ptrInt64(42)).
+		WillReturnRows(mock.NewRows(manageTokenColumns).
+			AddRow(int64(20), "tok-personal", "Личное приглашение: Иванов Иван", int32(1), now.Add(72*time.Hour), now, wantPreset, ptrInt64(42)))
+
+	body := strings.NewReader(`{"user_id":77,"expires_in_hours":72}`)
+	req := authedRequest(t, access, 3, http.MethodPost, "/centers/42/manage/invites/personal", body)
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("got %d, want 201; body=%s", rr.Code, rr.Body.String())
+	}
+	var resp struct {
+		Token       string `json:"token"`
+		ClaimUserID int64  `json:"claim_user_id"`
+		MaxUses     int32  `json:"max_uses"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Token != "tok-personal" || resp.ClaimUserID != 77 || resp.MaxUses != 1 {
+		t.Fatalf("invite = %+v", resp)
+	}
+}
+
+func TestManage_ListPersonalInviteStudents(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	expectHeadCheck(mock, 3, 42, true)
+	mock.ExpectQuery(`WITH selected_term AS`).
+		WithArgs(int64(42)).
+		WillReturnRows(mock.NewRows([]string{
+			"user_id", "group_id", "group_name", "first_name", "middle_name", "last_name",
+		}).AddRow(int64(77), int64(16), "16", "Иван", (*string)(nil), "Иванов"))
+
+	req := authedRequest(t, access, 3, http.MethodGet, "/centers/42/manage/invites/personal-students", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	var resp []struct {
+		UserID    int64  `json:"user_id"`
+		GroupName string `json:"group_name"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp) != 1 || resp[0].UserID != 77 || resp[0].GroupName != "16" {
+		t.Fatalf("students = %+v", resp)
+	}
+}
+
 func TestManage_CreateInviteBadRole(t *testing.T) {
 	t.Parallel()
 	mock, _ := pgxmock.NewPool()

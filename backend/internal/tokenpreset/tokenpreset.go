@@ -43,10 +43,11 @@ const CurrentVersion = 1
 // `omitempty`) plus a Validate/Apply branch. No migration is required because
 // the column is schemaless JSONB.
 type Preset struct {
-	Version           int                `json:"version"`
-	GrantsAdmin       bool               `json:"grants_admin,omitempty"`
-	MathCenterStudent *MathCenterStudent `json:"mathcenter_student,omitempty"`
-	MathCenterTeacher *MathCenterTeacher `json:"mathcenter_teacher,omitempty"`
+	Version                int                     `json:"version"`
+	GrantsAdmin            bool                    `json:"grants_admin,omitempty"`
+	MathCenterStudent      *MathCenterStudent      `json:"mathcenter_student,omitempty"`
+	MathCenterStudentClaim *MathCenterStudentClaim `json:"mathcenter_student_claim,omitempty"`
+	MathCenterTeacher      *MathCenterTeacher      `json:"mathcenter_teacher,omitempty"`
 }
 
 // MathCenterStudent enrolls the registrant as a student in the given group. The
@@ -54,6 +55,13 @@ type Preset struct {
 // center directly as a student.
 type MathCenterStudent struct {
 	GroupID int64 `json:"group_id"`
+}
+
+// MathCenterStudentClaim binds a one-use personal invitation to an unavailable
+// student account created by Google Sheets. Registration verifies that the
+// user is still an unclaimed Sheets placeholder in the invitation's center.
+type MathCenterStudentClaim struct {
+	UserID int64 `json:"user_id"`
 }
 
 // MathCenterTeacher enrolls the registrant as a teacher of the given center,
@@ -137,6 +145,15 @@ func Marshal(p Preset) (json.RawMessage, error) {
 //     at registration on per-center student/teacher exclusivity, so reject the
 //     contradiction up front rather than mint an unusable token.
 func Validate(ctx context.Context, q Store, p Preset) error {
+	if p.MathCenterStudentClaim != nil {
+		if p.MathCenterStudentClaim.UserID <= 0 {
+			return fmt.Errorf("%w: claimed student user id must be positive", ErrInvalidPreset)
+		}
+		if p.GrantsAdmin || p.MathCenterStudent != nil || p.MathCenterTeacher != nil {
+			return fmt.Errorf("%w: a personal student claim cannot carry another grant", ErrInvalidPreset)
+		}
+	}
+
 	var studentCenterID int64
 	haveStudentCenter := false
 
@@ -180,6 +197,9 @@ func Validate(ctx context.Context, q Store, p Preset) error {
 //     this user. Surface as 409.
 //   - anything else — wrapped internal/database error; surface as 500.
 func Apply(ctx context.Context, q Store, userID int64, p Preset) error {
+	if p.MathCenterStudentClaim != nil {
+		return fmt.Errorf("%w: personal student claim was not consumed during registration", ErrInvalidPreset)
+	}
 	if p.GrantsAdmin {
 		if err := q.SetUserAdmin(ctx, store.SetUserAdminParams{ID: userID, IsAdmin: true}); err != nil {
 			return fmt.Errorf("grant admin: %w", err)

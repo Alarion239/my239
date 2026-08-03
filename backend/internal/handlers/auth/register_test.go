@@ -465,3 +465,54 @@ func TestRegister_AmbiguousSheetsStudentsCreatesNewUser(t *testing.T) {
 		t.Errorf("unfulfilled: %v", err)
 	}
 }
+
+func TestRegister_PersonalInviteClaimsExactSheetsStudent(t *testing.T) {
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+
+	now := time.Now()
+	middleName := "Петрович"
+	preset := []byte(`{"version":1,"mathcenter_student_claim":{"user_id":77}}`)
+	mock.ExpectBegin()
+	mock.ExpectQuery(`FOR UPDATE`).
+		WithArgs("personal-abc").
+		WillReturnRows(mock.NewRows(invitationTokenColumns).
+			AddRow(int64(1), "personal-abc", "Personal invite", int32(1), now.Add(24*time.Hour), now, preset, ptrInt64(7)))
+	mock.ExpectQuery(`SELECT COUNT`).
+		WithArgs(int64(1)).
+		WillReturnRows(mock.NewRows([]string{"count"}).AddRow(int64(0)))
+	mock.ExpectQuery(`UPDATE users AS user_row`).
+		WithArgs(int64(77), int64(7), "newuser", pgxmock.AnyArg(), int64(1)).
+		WillReturnRows(mock.NewRows(userColumns).
+			AddRow(int64(77), "newuser", "argon2idhash", "Иван", &middleName, "Иванов", ptrInt64(1), now, now, false, false))
+	mock.ExpectCommit()
+	expectRefreshInsert(t, mock, 77)
+
+	body, _ := json.Marshal(map[string]any{
+		"username":         "newuser",
+		"password":         "password123",
+		"invitation_token": "personal-abc",
+		"first_name":       "Ignored",
+		"middle_name":      nil,
+		"last_name":        "Name",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	database := db.NewWithPool(mock)
+	authHandlers.Register(database, newTokens(t, database))(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("status: got %d, body=%s", rr.Code, rr.Body.String())
+	}
+	var resp authHandlers.RegisterResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.User.ID != 77 || resp.User.FirstName != "Иван" || resp.User.LastName != "Иванов" {
+		t.Fatalf("claimed user = %+v, want exact Sheets user 77", resp.User)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled: %v", err)
+	}
+}

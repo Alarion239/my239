@@ -21,6 +21,7 @@ import type {
   ManageRosterBoardResponse,
   ManageStudent,
   ManageTeacher,
+  PersonalInviteStudent,
   UserSearchResult,
 } from '../types'
 import { useApiClient } from './context'
@@ -434,6 +435,30 @@ export function useManageCreateInvite(centerId: number) {
       expires_in_hours: number
     }) =>
       client.request<CenterInvite>(base(centerId) + '/invites', {
+        method: 'POST',
+        body,
+      }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: queryKeys.manageInvites(centerId) }),
+  })
+}
+
+export function useManagePersonalInviteStudents(centerId: number) {
+  const client = useApiClient()
+  return useQuery<PersonalInviteStudent[]>({
+    queryKey: queryKeys.managePersonalInviteStudents(centerId),
+    queryFn: () =>
+      client.request<PersonalInviteStudent[]>(base(centerId) + '/invites/personal-students'),
+    enabled: centerId > 0,
+  })
+}
+
+export function useManageCreatePersonalInvite(centerId: number) {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { user_id: number; expires_in_hours: number }) =>
+      client.request<CenterInvite>(base(centerId) + '/invites/personal', {
         method: 'POST',
         body,
       }),
