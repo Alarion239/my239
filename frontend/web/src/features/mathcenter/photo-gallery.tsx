@@ -40,6 +40,10 @@ interface PhotoSize {
   height: number
 }
 
+interface MeasuredPhoto extends PhotoSize {
+  key: string
+}
+
 const MIN_SCALE = 1
 const MAX_SCALE = 4
 const SCALE_STEP = 0.25
@@ -233,8 +237,12 @@ function PhotoLightbox({
   const suppressClickRef = useRef(false)
   const [scale, setScale] = useState(MIN_SCALE)
   const [offset, setOffset] = useState<Point>({ x: 0, y: 0 })
-  const [baseSize, setBaseSize] = useState<PhotoSize | null>(null)
+  const [baseSize, setBaseSize] = useState<MeasuredPhoto | null>(null)
   const [imageError, setImageError] = useState(false)
+  const activePhotoKey = photo
+    ? `${photoKey(photo, openIndex ?? 0)}:${photo.url}`
+    : ''
+  const measuredSize = baseSize?.key === activePhotoKey ? baseSize : null
 
   const setScaleAndOffset = useCallback(
     (nextScale: number, nextOffset: Point = offset) => {
@@ -257,7 +265,6 @@ function PhotoLightbox({
   useEffect(() => {
     setScale(MIN_SCALE)
     setOffset({ x: 0, y: 0 })
-    setBaseSize(null)
     setImageError(false)
   }, [openIndex, photo?.url])
 
@@ -269,14 +276,14 @@ function PhotoLightbox({
         ? fittedPhotoSize(image.naturalWidth, image.naturalHeight, viewportRef.current)
         : null
       if (!nextSize) return
-      setBaseSize(nextSize)
+      setBaseSize({ ...nextSize, key: activePhotoKey })
       setOffset((current) =>
         clampOffset(current, scale, viewportRef.current, frameRef.current),
       )
     }
     window.addEventListener('resize', resize)
     return () => window.removeEventListener('resize', resize)
-  }, [openIndex, scale])
+  }, [activePhotoKey, openIndex, scale])
 
   useEffect(() => {
     if (openIndex === null) return
@@ -510,8 +517,8 @@ function PhotoLightbox({
                 ref={frameRef}
                 className="relative flex max-h-full max-w-full items-center justify-center"
                 style={{
-                  width: baseSize ? `${baseSize.width}px` : undefined,
-                  height: baseSize ? `${baseSize.height}px` : undefined,
+                  width: measuredSize ? `${measuredSize.width}px` : undefined,
+                  height: measuredSize ? `${measuredSize.height}px` : undefined,
                   transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${scale})`,
                   transformOrigin: 'center center',
                 }}
@@ -535,7 +542,7 @@ function PhotoLightbox({
                         viewportRef.current,
                       )
                       if (!nextSize) return
-                      setBaseSize(nextSize)
+                      setBaseSize({ ...nextSize, key: activePhotoKey })
                       setOffset({ x: 0, y: 0 })
                     }}
                     onError={() => {
@@ -544,7 +551,9 @@ function PhotoLightbox({
                     }}
                     className={cn(
                       'block select-none object-contain',
-                      baseSize ? 'h-full w-full' : 'max-h-full max-w-full',
+                      measuredSize
+                        ? 'h-full w-full'
+                        : 'invisible max-h-full max-w-full',
                     )}
                   />
                 )}

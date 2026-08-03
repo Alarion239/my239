@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { PhotoView } from '@my239/shared'
 import { PhotoAttachments } from './photo-gallery'
@@ -69,6 +69,17 @@ describe('PhotoAttachments', () => {
     await user.click(screen.getByRole('button', { name: 'Следующее фото' }))
     expect(screen.getByText('2 / 3')).toBeInTheDocument()
     expect(screen.getByLabelText('Масштаб')).toHaveTextContent('100%')
+  })
+
+  it('keeps the next frame hidden until its fit size is measured', async () => {
+    const user = await openPhoto(0)
+    const dialog = screen.getByRole('dialog')
+
+    expect(within(dialog).getByAltText('Решение ученика, фото 1 из 3')).toHaveClass('invisible')
+
+    await user.click(screen.getByRole('button', { name: 'Следующее фото' }))
+
+    expect(within(dialog).getByAltText('Решение ученика, фото 2 из 3')).toHaveClass('invisible')
   })
 
   it('recognizes horizontal touch swipes only at fit scale', () => {
