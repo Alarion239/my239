@@ -114,7 +114,7 @@ func TestManage_RosterBoardSnapshot(t *testing.T) {
 			ID int64 `json:"id"`
 		} `json:"groups"`
 		Students []struct {
-			StudentID       int64   `json:"student_id"`
+			StudentID      int64   `json:"student_id"`
 			UserID         int64   `json:"user_id"`
 			CurrentGroupID *int64  `json:"current_group_id"`
 			Rating         float64 `json:"rating"`

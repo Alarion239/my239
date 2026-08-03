@@ -205,7 +205,7 @@ func loadGoogleServiceAccountJSON() (string, error) {
 		return "", fmt.Errorf("read Google service account file %q: %w", filename, err)
 	}
 	if len(strings.TrimSpace(string(data))) == 0 {
-		return "", errors.New("Google service account file is empty")
+		return "", errors.New("google service account file is empty")
 	}
 	return string(data), nil
 }

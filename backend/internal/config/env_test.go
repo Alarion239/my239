@@ -153,6 +153,7 @@ func TestLoad_GoogleServiceAccountCredentials(t *testing.T) {
 		{
 			name: "blank values are unset",
 			setup: func(t *testing.T) {
+				t.Helper()
 				t.Setenv("GOOGLE_SERVICE_ACCOUNT_JSON", "  \n\t")
 				t.Setenv("GOOGLE_SERVICE_ACCOUNT_FILE", "  \n\t")
 			},
@@ -160,6 +161,7 @@ func TestLoad_GoogleServiceAccountCredentials(t *testing.T) {
 		{
 			name: "inline JSON",
 			setup: func(t *testing.T) {
+				t.Helper()
 				t.Setenv("GOOGLE_SERVICE_ACCOUNT_JSON", `{"type":"service_account","private_key":"inline-private-key"}`)
 			},
 			want: `{"type":"service_account","private_key":"inline-private-key"}`,
@@ -167,6 +169,7 @@ func TestLoad_GoogleServiceAccountCredentials(t *testing.T) {
 		{
 			name: "mounted file",
 			setup: func(t *testing.T) {
+				t.Helper()
 				filename := filepath.Join(t.TempDir(), "credentials.json")
 				contents := "{\n  \"type\": \"service_account\",\n  \"private_key\": \"file-private-key\"\n}\n"
 				if err := os.WriteFile(filename, []byte(contents), 0o600); err != nil {
@@ -179,17 +182,19 @@ func TestLoad_GoogleServiceAccountCredentials(t *testing.T) {
 		{
 			name: "empty file",
 			setup: func(t *testing.T) {
+				t.Helper()
 				filename := filepath.Join(t.TempDir(), "credentials.json")
 				if err := os.WriteFile(filename, nil, 0o600); err != nil {
 					t.Fatalf("write empty credentials fixture: %v", err)
 				}
 				t.Setenv("GOOGLE_SERVICE_ACCOUNT_FILE", filename)
 			},
-			wantErr: "Google service account file is empty",
+			wantErr: "google service account file is empty",
 		},
 		{
 			name: "missing file",
 			setup: func(t *testing.T) {
+				t.Helper()
 				t.Setenv("GOOGLE_SERVICE_ACCOUNT_FILE", filepath.Join(t.TempDir(), "missing.json"))
 			},
 			wantErr: "read Google service account file",
@@ -197,6 +202,7 @@ func TestLoad_GoogleServiceAccountCredentials(t *testing.T) {
 		{
 			name: "unreadable file",
 			setup: func(t *testing.T) {
+				t.Helper()
 				t.Setenv("GOOGLE_SERVICE_ACCOUNT_FILE", t.TempDir())
 			},
 			wantErr: "read Google service account file",
@@ -204,6 +210,7 @@ func TestLoad_GoogleServiceAccountCredentials(t *testing.T) {
 		{
 			name: "both sources",
 			setup: func(t *testing.T) {
+				t.Helper()
 				const secret = "representative-private-key"
 				t.Setenv("GOOGLE_SERVICE_ACCOUNT_JSON", `{"private_key":"`+secret+`"}`)
 				t.Setenv("GOOGLE_SERVICE_ACCOUNT_FILE", "/run/secrets/google.json")

@@ -101,7 +101,7 @@ func applyPoolDefaults(connectionString string, cfg *pgxpool.Config) error {
 	if err != nil {
 		return fmt.Errorf("parse pool options: %w", err)
 	}
-	params := raw.Config.RuntimeParams
+	params := raw.RuntimeParams
 	if _, ok := params["pool_max_conns"]; !ok {
 		cfg.MaxConns = defaultMaxConns
 	}
