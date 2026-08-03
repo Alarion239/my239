@@ -14,12 +14,12 @@ describe('likbezSchema', () => {
     expect(likbezSchema.safeParse(valid).success).toBe(true)
   })
 
-  it('requires a period, title, calendar date, and description', () => {
+  it('requires a period, title, and calendar date while allowing an empty description', () => {
     expect(likbezSchema.safeParse({ ...valid, term_id: 0 }).success).toBe(false)
     expect(likbezSchema.safeParse({ ...valid, title: '  ' }).success).toBe(false)
     expect(likbezSchema.safeParse({ ...valid, held_on: '2026-07-23' }).success).toBe(false)
     expect(likbezSchema.safeParse({ ...valid, held_on: '31-02-2026' }).success).toBe(false)
-    expect(likbezSchema.safeParse({ ...valid, description: '' }).success).toBe(false)
+    expect(likbezSchema.safeParse({ ...valid, description: '' }).success).toBe(true)
   })
 
   it('converts UI dates to and from the API calendar-date format', () => {

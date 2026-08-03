@@ -9,6 +9,7 @@ import { LikbezPage } from './likbez-page'
 const mocks = vi.hoisted(() => ({
   list: [] as Likbez[],
   detail: null as Likbez | null,
+  create: { isPending: false, mutateAsync: vi.fn() },
   unpublish: { isPending: false, mutateAsync: vi.fn() },
   publish: { isPending: false, mutateAsync: vi.fn() },
   update: { isPending: false, mutateAsync: vi.fn(), mutate: vi.fn() },
@@ -31,7 +32,7 @@ vi.mock('@my239/shared', async (importOriginal) => {
     useLikbezTex: () => ({ data: undefined, isPending: false, isError: false }),
     useMathCenterTerms: () => ({ data: [{ id: 1, kind: 'academic', grade: 9, display_name: '9 класс', is_active: true }], isPending: false }),
     useMathCenterLatexPreamble: () => ({ data: { preamble: '\\documentclass{article}' }, isPending: false }),
-    useCreateLikbez: () => ({ isPending: false, mutate: vi.fn() }),
+    useCreateLikbez: () => mocks.create,
     useDeleteLikbez: () => mocks.remove,
     usePublishLikbez: () => mocks.publish,
     useUnpublishLikbez: () => mocks.unpublish,
@@ -78,6 +79,7 @@ beforeEach(() => {
   mocks.list = [published]
   mocks.detail = published
   mocks.unpublish.mutateAsync.mockReset().mockResolvedValue(published)
+  mocks.create.mutateAsync.mockReset().mockResolvedValue(draft)
   mocks.publish.mutateAsync.mockReset().mockResolvedValue({ ...draft, published: true })
   mocks.update.mutateAsync.mockReset().mockResolvedValue(draft)
   mocks.update.mutate.mockReset()
@@ -92,6 +94,25 @@ afterEach(() => {
 })
 
 describe('Likbez controls', () => {
+  it('creates today\'s empty placeholder without opening a dialog, then opens the draft', async () => {
+    mocks.detail = draft
+    const now = new Date()
+    const heldOn = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-')
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.click(screen.getByRole('button', { name: 'Новый ликбез' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(mocks.create.mutateAsync).toHaveBeenCalledWith({
+      term_id: 1,
+      title: 'Черновик Ликбеза',
+      held_on: heldOn,
+      description: '',
+    })
+    expect(await screen.findByRole('button', { name: 'Опубликовать' })).toBeInTheDocument()
+  })
+
   it('uses a calendar-style date and keeps material indicators at card top-right', async () => {
     mocks.list = [{ ...published, held_on: '2026-08-13', has_tex: true, has_pdf: true, video_url: 'https://youtu.be/dQw4w9WgXcQ' }]
     renderPage()

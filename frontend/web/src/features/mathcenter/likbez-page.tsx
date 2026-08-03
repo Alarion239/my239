@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ExternalLink, FileText, Plus, Trash2, Video } from 'lucide-react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
@@ -31,11 +31,6 @@ import {
 import {
   Button,
   Card,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-  DialogTrigger,
   Field,
   Input,
   Select,
@@ -80,7 +75,7 @@ function LikbezCatalog({ centerId, isTeacher, selectedTermID }: { centerId: numb
         <div>
           <h1 className="mt-1 font-display text-2xl font-medium text-ink">Ликбезы</h1>
         </div>
-        {isTeacher ? <LikbezFormDialog centerId={centerId} terms={terms} /> : null}
+        {isTeacher ? <CreateLikbezButton centerId={centerId} terms={terms} /> : null}
       </header>
 
       {visible?.length === 0 ? (
@@ -384,49 +379,44 @@ function youtubeEmbed(url: string): string | null {
   return match ? 'https://www.youtube.com/embed/' + match[1] : null
 }
 
-function LikbezFormDialog({ centerId, terms, trigger }: { centerId: number; terms: MathCenterTerm[]; trigger?: ReactNode }) {
-  const [open, setOpen] = useState(false)
+function CreateLikbezButton({ centerId, terms }: { centerId: number; terms: MathCenterTerm[] }) {
   const create = useCreateLikbez(centerId)
-  const { register, control, handleSubmit, reset, setError, formState: { errors, isSubmitting } } = useForm<LikbezValues>({ resolver: zodResolver(likbezSchema) })
+  const navigate = useNavigate()
+  const { year } = useParams<{ year: string }>()
+  const { search } = useLocation()
+  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (open) reset({ term_id: terms.find((term) => term.is_active)?.id ?? 0, number: 1, title: '', held_on: todayLikbezDate(), description: '' })
-  }, [open, reset, terms])
-
-  const submit = handleSubmit((values) => new Promise<void>((resolve) => {
-    const heldOn = russianLikbezDateToISO(values.held_on)
-    if (!heldOn) {
-      setError('held_on', { message: 'Укажите дату в формате ДД-ММ-ГГГГ' })
-      resolve()
+  async function createDraft() {
+    const activeTerm = terms.find((term) => term.is_active)
+    if (!activeTerm) {
+      setError('Нет активного периода для нового ликбеза.')
       return
     }
-    const body = { ...values, held_on: heldOn }
-    const callbacks = {
-      onSuccess: () => { setOpen(false); resolve() },
-      onError: (error: unknown) => {
-        if (error instanceof APIErrorImpl) setError('title', { message: error.message })
-        else setError('title', { message: 'Не удалось сохранить ликбез.' })
-        resolve()
-      },
+
+    const heldOn = russianLikbezDateToISO(todayLikbezDate())
+    if (!heldOn) return
+
+    setError(null)
+    try {
+      const created = await create.mutateAsync({
+        term_id: activeTerm.id,
+        title: 'Черновик Ликбеза',
+        held_on: heldOn,
+        description: '',
+      })
+      navigate('/mathcenter/' + year + '/likbez/' + created.id + search)
+    } catch (createError: unknown) {
+      setError(createError instanceof APIErrorImpl ? createError.message : 'Не удалось создать ликбез.')
     }
-    create.mutate({ term_id: body.term_id, title: body.title, held_on: body.held_on, description: body.description }, callbacks)
-  }))
+  }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger ?? <Button><Plus className="h-4 w-4" />Новый ликбез</Button>}</DialogTrigger>
-      <DialogContent className="max-h-[85vh] overflow-y-auto">
-        <DialogTitle>Новый ликбез</DialogTitle>
-        <DialogDescription>Номер будет присвоен автоматически.</DialogDescription>
-        <form className="mt-4 flex flex-col gap-4" noValidate onSubmit={submit}>
-          <Field label="Период" error={errors.term_id?.message}>{({ id, invalid }) => <Select id={id} invalid={invalid} {...register('term_id', { valueAsNumber: true })}><option value={0}>Выберите период</option>{terms.map((term) => <option key={term.id} value={term.id}>{term.display_name}</option>)}</Select>}</Field>
-          <Field label="Название" error={errors.title?.message}>{({ id, invalid }) => <Input id={id} invalid={invalid} {...register('title')} />}</Field>
-          <LikbezDateField control={control} error={errors.held_on?.message} />
-          <Field label="Краткое описание" error={errors.description?.message}>{({ id, invalid }) => <Textarea id={id} invalid={invalid} {...register('description')} />}</Field>
-          <Button type="submit" disabled={isSubmitting || create.isPending}>{isSubmitting || create.isPending ? 'Сохраняем…' : 'Сохранить'}</Button>
-        </form>
-      </DialogContent>
-    </Dialog>
+    <div className="flex flex-col items-end gap-2">
+      <Button type="button" disabled={create.isPending} onClick={() => void createDraft()}>
+        <Plus className="h-4 w-4" />{create.isPending ? 'Создаём…' : 'Новый ликбез'}
+      </Button>
+      {error ? <p role="alert" className="text-sm text-danger">{error}</p> : null}
+    </div>
   )
 }
 
