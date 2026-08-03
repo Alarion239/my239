@@ -13,6 +13,7 @@ import {
 } from '@my239/shared'
 import { Button, Textarea } from '../../design/ui'
 import { cn } from '../../design/cn'
+import { PhotoAttachments } from './photo-gallery'
 
 export interface ThreadTimelineProps {
   thread: ThreadView
@@ -133,23 +134,10 @@ function EventCard({
         </p>
       ) : null}
       {event.photos.length > 0 ? (
-        <div className="mt-2 flex flex-wrap gap-2">
-          {event.photos.map((p) => (
-            <a
-              key={p.object_key}
-              href={p.url}
-              target="_blank"
-              rel="noreferrer"
-              className="block overflow-hidden rounded-md border border-line focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-            >
-              <img
-                src={p.url}
-                alt="Вложение"
-                className="h-24 w-24 bg-surface-muted object-cover"
-              />
-            </a>
-          ))}
-        </div>
+        <PhotoAttachments
+          photos={event.photos}
+          title={event.kind === 'graded' ? 'Комментарий проверяющего' : 'Решение ученика'}
+        />
       ) : null}
     </div>
   )

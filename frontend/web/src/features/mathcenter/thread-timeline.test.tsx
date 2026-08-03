@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   ApiClient,
@@ -131,5 +132,35 @@ describe('ThreadTimeline', () => {
     expect(
       screen.queryByRole('button', { name: 'Отправить апелляцию' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('opens event photos in the in-page gallery instead of a new-tab link', async () => {
+    renderTimeline(
+      thread({
+        events: [
+          event({
+            id: 5,
+            kind: 'submitted',
+            photos: [
+              {
+                index: 0,
+                object_key: 'solution-5',
+                url: 'https://cdn.example.test/solution-5.jpg',
+                content_type: 'image/jpeg',
+                size_bytes: 1,
+              },
+            ],
+          }),
+        ],
+      }),
+      false,
+      2,
+    )
+
+    expect(screen.queryByRole('link', { name: 'Вложение' })).not.toBeInTheDocument()
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'Открыть фото 1 из 1' }))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByText('1 / 1')).toBeInTheDocument()
   })
 })
