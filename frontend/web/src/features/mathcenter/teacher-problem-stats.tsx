@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Skull } from 'lucide-react'
 import {
   useMarkCoffin,
@@ -110,6 +110,7 @@ export interface TeacherProblemStatsProps {
   stats: SeriesProblemStats
   series: Series
   centerId: number
+  initialSubproblemId?: number
 }
 
 // TeacherProblemStats renders the per-subproblem aggregate across all students.
@@ -122,16 +123,20 @@ export function TeacherProblemStats({
   stats,
   series,
   centerId,
+  initialSubproblemId,
 }: TeacherProblemStatsProps) {
   const mark = useMarkCoffin(centerId)
   const unmark = useUnmarkCoffin(centerId)
   const busy = mark.isPending || unmark.isPending
 
   // Per-subproblem разбор/coffin metadata, keyed by subproblem id.
-  const metaById = new Map<number, Subproblem>()
-  for (const p of series.problems) {
-    for (const sub of p.subproblems) metaById.set(sub.id, sub)
-  }
+  const metaById = useMemo(() => {
+    const next = new Map<number, Subproblem>()
+    for (const p of series.problems) {
+      for (const sub of p.subproblems) next.set(sub.id, sub)
+    }
+    return next
+  }, [series])
 
   const group = useGroupSubproblemSolutions(centerId)
   // The first click on an existing razbor is deliberately non-destructive: it
@@ -144,6 +149,21 @@ export function TeacherProblemStats({
     subproblemIds: number[]
   } | null>(null)
   const originId = useRef<number | null>(null)
+  const openedInitialId = useRef<number | null>(null)
+  const initialMeta = initialSubproblemId == null ? undefined : metaById.get(initialSubproblemId)
+
+  // Coffin cards link here with the selected subproblem in the URL so the
+  // originating coffin's разбор opens as soon as the stats query is ready.
+  useEffect(() => {
+    if (initialSubproblemId == null || openedInitialId.current === initialSubproblemId || panel !== null || !hasRazbor(initialMeta)) return
+    openedInitialId.current = initialSubproblemId
+    originId.current = initialSubproblemId
+    setPanel({
+      mode: 'view',
+      representativeId: initialSubproblemId,
+      subproblemIds: solutionIds(initialSubproblemId, metaById),
+    })
+  }, [initialMeta, initialSubproblemId, metaById, panel])
 
   const addToDraft = (id: number) => {
     if (panel?.mode !== 'edit' || panel.subproblemIds.includes(id)) return
@@ -283,9 +303,13 @@ function RazborPreview({
   const uploadPdf = useUploadSubproblemSolutionPdfBatch(centerId)
   const setLink = useSetSubproblemSolutionLinkBatch(centerId)
   const publish = usePublishSubproblemSolutionsBatch(centerId)
+  const target = subproblemIds.length > 1 ? targetTitle : sub.display
+  const title = hasRazbor(sub) && !sub.solution_published_at
+    ? draftRazborTitle(target)
+    : target
   return (
     <SolutionWorkbench
-      title={subproblemIds.length > 1 ? targetTitle : sub.display}
+      title={title}
       mode={mode}
       hasTex={sub.has_solution_tex}
       hasPdf={sub.has_solution_pdf}
@@ -303,6 +327,11 @@ function RazborPreview({
       onClose={onClose}
     />
   )
+}
+
+function draftRazborTitle(title: string): string {
+  if (title.startsWith('Задачи')) return title.replace(/^Задачи/, 'Черновик разбора задач')
+  return title.replace(/^Задача/, 'Черновик разбора задачи')
 }
 
 function ProblemStatRow({

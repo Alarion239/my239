@@ -199,7 +199,7 @@ describe('CoffinsPage teacher cards', () => {
     })
 
     const card = await screen.findByRole('link', { name: 'Задача 1 (а) — открыть разбор' })
-    expect(card).toHaveAttribute('href', '/mathcenter/2099/series/37/razbor?term_id=7')
+    expect(card).toHaveAttribute('href', '/mathcenter/2099/series/37/razbor?coffin_subproblem_id=10&term_id=7')
     expect(screen.getByText('решили 8 из 10')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Разбор' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Загрузить разбор' })).not.toBeInTheDocument()
@@ -208,6 +208,22 @@ describe('CoffinsPage teacher cards', () => {
     expect(screen.queryByText('Черновик')).not.toBeInTheDocument()
     expect(screen.queryByText('Открыт для сдачи')).not.toBeInTheDocument()
     expect(screen.queryByText(/Разобрана/)).not.toBeInTheDocument()
+  })
+
+  it('opens the series statement for an open coffin', async () => {
+    const me: MeResponse = {
+      teacher: {
+        centers: [{ id: CENTER_ID, graduation_year: 2099, grade: 9, is_head_teacher: true, teachers: [], groups: [] }],
+      },
+    }
+    renderPage({
+      entry: '/mathcenter/2099/coffins/current?term_id=' + TERM_ID,
+      me,
+      coffins: [makeCoffin()],
+    })
+
+    const card = await screen.findByRole('link', { name: 'Задача 1 (а) — открыть условие' })
+    expect(card).toHaveAttribute('href', '/mathcenter/2099/series/37/statement?term_id=7')
   })
 
   it('puts ordinary coffin submissions before appeals', async () => {

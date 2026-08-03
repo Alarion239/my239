@@ -274,7 +274,7 @@ export function SolutionWorkbench({
   }
 
   const formatTabs = formats.length > 0 ? (
-    <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-surface-muted p-0.5" role="tablist" aria-label={formatTabLabel}>
+    <div className="flex h-10 shrink-0 items-center gap-0.5 rounded-lg bg-surface-muted p-0.5" role="tablist" aria-label={formatTabLabel}>
       {formats.map((item) => (
         <button
           key={item}
@@ -286,7 +286,7 @@ export function SolutionWorkbench({
           onClick={() => changeFormat(item)}
           onKeyDown={onFormatKeyDown}
           className={cn(
-            'rounded-md px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+            'h-9 rounded-md px-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
             active === item ? 'bg-accent-soft text-accent-ink' : 'text-muted hover:bg-surface hover:text-ink',
           )}
         >
@@ -320,8 +320,8 @@ export function SolutionWorkbench({
         }
       }}
     >
-      <header className="flex min-w-0 flex-wrap items-center gap-2 pb-2">
-        {headerPrefix ? <div className="min-w-0 flex-1">{headerPrefix}</div> : <h2 className="min-w-[3.5rem] flex-1 truncate font-display text-lg font-medium text-ink" title={title}>{title}</h2>}
+      <header className="flex min-w-0 flex-wrap items-center gap-2 pb-2 md:flex-nowrap">
+        {headerPrefix ? <div className="min-w-0 flex-1 basis-0">{headerPrefix}</div> : <h2 className="min-w-0 flex-1 basis-0 truncate font-display text-lg font-medium text-ink" title={title}>{title}</h2>}
         {!details && pdfActionPlacement === 'before-tabs' ? pdfControl : null}
         {!details ? formatTabs : null}
         {!details && pdfActionPlacement === 'after-tabs' ? pdfControl : null}

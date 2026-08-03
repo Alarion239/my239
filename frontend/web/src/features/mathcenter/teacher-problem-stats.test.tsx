@@ -123,13 +123,13 @@ function makeStats(): SeriesProblemStats {
   }
 }
 
-function renderStats(series = makeSeries()) {
+function renderStats(series = makeSeries(), initialSubproblemId?: number) {
   const client = new ApiClient({ baseURL: '/api/v1', tokenStore: noopStore })
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={queryClient}>
       <ApiClientProvider client={client}>
-        <TeacherProblemStats stats={makeStats()} series={series} centerId={7} />
+        <TeacherProblemStats stats={makeStats()} series={series} centerId={7} initialSubproblemId={initialSubproblemId} />
       </ApiClientProvider>
     </QueryClientProvider>,
   )
@@ -233,6 +233,38 @@ describe('TeacherProblemStats — разбор frame', () => {
     expect(screen.queryByText(/Прикрепить разбор/)).not.toBeInTheDocument()
   })
 
+  it('opens the subproblem selected by a coffin link', async () => {
+    renderStats(makeSeries(), 1000)
+
+    const workbench = await screen.findByRole('region', { name: 'Задача 1 (а)' })
+    const row = screen
+      .getByRole('img', { name: /по задаче Задача 1 \(а\)/ })
+      .closest('[role="button"]') as HTMLElement
+    expect(workbench).toBeInTheDocument()
+    expect(row).toHaveAttribute('aria-pressed', 'true')
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Закрыть' }))
+    expect(screen.queryByRole('region', { name: 'Задача 1 (а)' })).not.toBeInTheDocument()
+  })
+
+  it('labels an unpublished solution as a draft razbor', async () => {
+    const series = makeSeries()
+    series.problems[0].subproblems[0] = sub({
+      id: 1000,
+      label: 'а',
+      display: 'Задача 1 (а)',
+      has_solution_tex: true,
+    })
+    renderStats(series)
+
+    await userEvent.setup().click(
+      screen
+        .getByRole('img', { name: /по задаче Задача 1 \(а\)/ })
+        .closest('[role="button"]') as HTMLElement,
+    )
+    expect(await screen.findByRole('region', { name: 'Черновик разбора задачи 1 (а)' })).toBeInTheDocument()
+  })
+
   it('highlights every problem covered by the selected shared разбор', async () => {
     renderStats(makeSharedSeries())
     const user = userEvent.setup()
@@ -248,9 +280,9 @@ describe('TeacherProblemStats — разбор frame', () => {
 
     await user.click(firstRow)
 
-    const workbench = screen.getByRole('region', { name: 'Задачи 1' })
+    const workbench = screen.getByRole('region', { name: 'Черновик разбора задач 1' })
     expect(workbench).not.toHaveClass('rounded-xl', 'border', 'bg-surface', 'shadow-sm')
-    const title = within(workbench).getByRole('heading', { name: 'Задачи 1' })
+    const title = within(workbench).getByRole('heading', { name: 'Черновик разбора задач 1' })
     const header = title.closest('header') as HTMLElement
     const formatTabs = within(workbench).getByRole('tablist', { name: 'Формат разбора' })
     const edit = within(workbench).getByRole('button', { name: 'Редактировать' })

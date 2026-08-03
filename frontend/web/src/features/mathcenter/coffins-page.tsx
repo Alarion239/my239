@@ -176,6 +176,11 @@ function CoffinCard({
           : 'Разбор недоступен'
   const { year } = useParams<{ year: string }>()
   const { search } = useLocation()
+  const termSuffix = search ? search.replace('?', '&') : ''
+  const destination = solved
+    ? '/mathcenter/' + year + '/series/' + coffin.series_id + '/razbor?coffin_subproblem_id=' + coffin.subproblem_id + termSuffix
+    : '/mathcenter/' + year + '/series/' + coffin.series_id + '/statement' + search
+  const destinationLabel = solved ? 'открыть разбор' : 'открыть условие'
   const card = (
     <Card className={cn('p-4', isManager && 'cursor-pointer transition-colors hover:bg-surface-muted')}>
       <div className="flex flex-wrap items-center gap-3">
@@ -203,8 +208,8 @@ function CoffinCard({
   if (!isManager) return card
   return (
     <Link
-      to={'/mathcenter/' + year + '/series/' + coffin.series_id + '/razbor' + search}
-      aria-label={coffin.display + ' — открыть разбор'}
+      to={destination}
+      aria-label={coffin.display + ' — ' + destinationLabel}
       className="block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
     >
       {card}

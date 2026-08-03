@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import {
   APIErrorImpl,
@@ -643,6 +643,9 @@ function StatsTab({
   centerId: number
 }) {
   const { data, isPending, isError } = useSeriesProblemStats(series.id)
+  const [searchParams] = useSearchParams()
+  const selectedCoffinId = Number(searchParams.get('coffin_subproblem_id'))
+  const initialSubproblemId = Number.isInteger(selectedCoffinId) && selectedCoffinId > 0 ? selectedCoffinId : undefined
   return (
     <AsyncGate isPending={isPending} isError={isError} hasData={!!data}>
       {data ? (
@@ -650,6 +653,7 @@ function StatsTab({
           stats={data}
           series={series}
           centerId={centerId}
+          initialSubproblemId={initialSubproblemId}
         />
       ) : null}
     </AsyncGate>
