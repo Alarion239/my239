@@ -35,6 +35,11 @@ interface SinglePointerGesture {
   pointerType: string
 }
 
+interface PhotoSize {
+  width: number
+  height: number
+}
+
 const MIN_SCALE = 1
 const MAX_SCALE = 4
 const SCALE_STEP = 0.25
@@ -69,6 +74,26 @@ function clampOffset(
 
 function nextScaleFromWheel(scale: number, deltaY: number): number {
   return clampScale(scale * Math.exp(-Math.max(-240, Math.min(240, deltaY)) / 720))
+}
+
+function fittedPhotoSize(
+  naturalWidth: number,
+  naturalHeight: number,
+  viewport: HTMLDivElement | null,
+): PhotoSize | null {
+  if (!viewport || naturalWidth <= 0 || naturalHeight <= 0) return null
+  const bounds = viewport.getBoundingClientRect()
+  const availableWidth = Math.max(1, bounds.width - VIEWPORT_GUTTER)
+  const availableHeight = Math.max(1, bounds.height - VIEWPORT_GUTTER)
+  const ratio = Math.min(
+    1,
+    availableWidth / naturalWidth,
+    availableHeight / naturalHeight,
+  )
+  return {
+    width: Math.max(1, Math.round(naturalWidth * ratio)),
+    height: Math.max(1, Math.round(naturalHeight * ratio)),
+  }
 }
 
 // PhotoAttachments keeps each event's photos together: a student's attempt or
@@ -199,6 +224,7 @@ function PhotoLightbox({
   const photo = openIndex === null ? null : photos[openIndex]
   const viewportRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<HTMLDivElement>(null)
+  const imageRef = useRef<HTMLImageElement>(null)
   const thumbnailStripRef = useRef<HTMLDivElement>(null)
   const lightboxThumbnailRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const pointersRef = useRef<Map<number, Point>>(new Map())
@@ -207,6 +233,7 @@ function PhotoLightbox({
   const suppressClickRef = useRef(false)
   const [scale, setScale] = useState(MIN_SCALE)
   const [offset, setOffset] = useState<Point>({ x: 0, y: 0 })
+  const [baseSize, setBaseSize] = useState<PhotoSize | null>(null)
   const [imageError, setImageError] = useState(false)
 
   const setScaleAndOffset = useCallback(
@@ -230,8 +257,26 @@ function PhotoLightbox({
   useEffect(() => {
     setScale(MIN_SCALE)
     setOffset({ x: 0, y: 0 })
+    setBaseSize(null)
     setImageError(false)
   }, [openIndex, photo?.url])
+
+  useEffect(() => {
+    if (openIndex === null) return
+    const resize = () => {
+      const image = imageRef.current
+      const nextSize = image
+        ? fittedPhotoSize(image.naturalWidth, image.naturalHeight, viewportRef.current)
+        : null
+      if (!nextSize) return
+      setBaseSize(nextSize)
+      setOffset((current) =>
+        clampOffset(current, scale, viewportRef.current, frameRef.current),
+      )
+    }
+    window.addEventListener('resize', resize)
+    return () => window.removeEventListener('resize', resize)
+  }, [openIndex, scale])
 
   useEffect(() => {
     if (openIndex === null) return
@@ -465,6 +510,8 @@ function PhotoLightbox({
                 ref={frameRef}
                 className="relative flex max-h-full max-w-full items-center justify-center"
                 style={{
+                  width: baseSize ? `${baseSize.width}px` : undefined,
+                  height: baseSize ? `${baseSize.height}px` : undefined,
                   transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${scale})`,
                   transformOrigin: 'center center',
                 }}
@@ -476,18 +523,29 @@ function PhotoLightbox({
                   </div>
                 ) : (
                   <img
+                    ref={imageRef}
                     src={photo.url}
                     alt={`${title}, фото ${openIndex + 1} из ${photos.length}`}
                     draggable={false}
                     decoding="async"
-                    onLoad={() => {
-                      setOffset((current) => clampOffset(current, scale, viewportRef.current, frameRef.current))
+                    onLoad={(event) => {
+                      const nextSize = fittedPhotoSize(
+                        event.currentTarget.naturalWidth,
+                        event.currentTarget.naturalHeight,
+                        viewportRef.current,
+                      )
+                      if (!nextSize) return
+                      setBaseSize(nextSize)
+                      setOffset({ x: 0, y: 0 })
                     }}
                     onError={() => {
                       setImageError(true)
                       onImageError(photo, openIndex)
                     }}
-                    className="block max-h-full max-w-full select-none object-contain"
+                    className={cn(
+                      'block select-none object-contain',
+                      baseSize ? 'h-full w-full' : 'max-h-full max-w-full',
+                    )}
                   />
                 )}
               </div>
