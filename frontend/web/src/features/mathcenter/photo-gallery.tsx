@@ -41,7 +41,13 @@ interface PhotoSize {
 }
 
 interface MeasuredPhoto extends PhotoSize {
+  index: number
   key: string
+}
+
+interface PreloadedDimensions {
+  naturalWidth: number
+  naturalHeight: number
 }
 
 const MIN_SCALE = 1
@@ -198,7 +204,7 @@ export function PhotoAttachments({ photos, title }: PhotoAttachmentsProps) {
           triggerRef.current?.focus()
         }}
         onSelect={setActiveIndex}
-        onImageError={(photo, index) => markUnavailable(photo, index)}
+        onImageError={markUnavailable}
       />
     </>
   )
@@ -231,18 +237,58 @@ function PhotoLightbox({
   const imageRef = useRef<HTMLImageElement>(null)
   const thumbnailStripRef = useRef<HTMLDivElement>(null)
   const lightboxThumbnailRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const preloadCacheRef = useRef<Map<string, Promise<PreloadedDimensions>>>(new Map())
   const pointersRef = useRef<Map<number, Point>>(new Map())
   const pinchRef = useRef<{ distance: number; scale: number } | null>(null)
   const gestureRef = useRef<SinglePointerGesture | null>(null)
   const suppressClickRef = useRef(false)
   const [scale, setScale] = useState(MIN_SCALE)
   const [offset, setOffset] = useState<Point>({ x: 0, y: 0 })
-  const [baseSize, setBaseSize] = useState<MeasuredPhoto | null>(null)
+  const [displayedFrame, setDisplayedFrame] = useState<MeasuredPhoto | null>(null)
   const [imageError, setImageError] = useState(false)
   const activePhotoKey = photo
     ? `${photoKey(photo, openIndex ?? 0)}:${photo.url}`
     : ''
-  const measuredSize = baseSize?.key === activePhotoKey ? baseSize : null
+  const displayedPhoto = displayedFrame ? photos[displayedFrame.index] : null
+  const framePhoto = displayedPhoto ?? photo
+  const frameIndex = displayedFrame?.index ?? openIndex ?? 0
+
+  const preloadImage = useCallback(
+    (index: number): Promise<PreloadedDimensions> => {
+      const target = photos[index]
+      if (!target?.url || unavailable.has(photoKey(target, index))) {
+        return Promise.reject(new Error('Photo is unavailable'))
+      }
+      const key = `${photoKey(target, index)}:${target.url}`
+      const cached = preloadCacheRef.current.get(key)
+      if (cached) return cached
+
+      const promise = new Promise<PreloadedDimensions>((resolve, reject) => {
+        const image = new Image()
+        image.decoding = 'async'
+        image.onload = () => {
+          if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+            resolve({
+              naturalWidth: image.naturalWidth,
+              naturalHeight: image.naturalHeight,
+            })
+          } else {
+            reject(new Error('Photo has no natural dimensions'))
+          }
+        }
+        image.onerror = () => reject(new Error('Photo failed to load'))
+        image.src = target.url
+      })
+      preloadCacheRef.current.set(key, promise)
+      promise.catch(() => {
+        if (preloadCacheRef.current.get(key) === promise) {
+          preloadCacheRef.current.delete(key)
+        }
+      })
+      return promise
+    },
+    [photos, unavailable],
+  )
 
   const setScaleAndOffset = useCallback(
     (nextScale: number, nextOffset: Point = offset) => {
@@ -269,37 +315,64 @@ function PhotoLightbox({
   }, [openIndex, photo?.url])
 
   useEffect(() => {
-    if (openIndex === null) return
+    if (openIndex === null) setDisplayedFrame(null)
+  }, [openIndex])
+
+  useEffect(() => {
+    if (openIndex === null || !photo?.url || unavailable.has(photoKey(photo, openIndex))) {
+      return
+    }
+    const targetIndex = openIndex
+    const targetKey = activePhotoKey
+    let cancelled = false
+
+    preloadImage(targetIndex)
+      .then((dimensions) => {
+        if (cancelled) return
+        const nextSize = fittedPhotoSize(
+          dimensions.naturalWidth,
+          dimensions.naturalHeight,
+          viewportRef.current,
+        )
+        if (!nextSize) return
+        setDisplayedFrame({ ...nextSize, index: targetIndex, key: targetKey })
+        setOffset({ x: 0, y: 0 })
+        setImageError(false)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setImageError(true)
+        onImageError(photo, targetIndex)
+      })
+
+    for (const neighborIndex of [targetIndex - 1, targetIndex + 1]) {
+      void preloadImage(neighborIndex).catch(() => undefined)
+    }
+
+    return () => {
+      cancelled = true
+    }
+  }, [activePhotoKey, onImageError, openIndex, photo, preloadImage, unavailable])
+
+  useEffect(() => {
+    if (openIndex === null || !displayedFrame) return
+    const displayedKey = displayedFrame.key
     const resize = () => {
       const image = imageRef.current
       const nextSize = image
         ? fittedPhotoSize(image.naturalWidth, image.naturalHeight, viewportRef.current)
         : null
       if (!nextSize) return
-      setBaseSize({ ...nextSize, key: activePhotoKey })
+      setDisplayedFrame((current) =>
+        current?.key === displayedKey ? { ...current, ...nextSize } : current,
+      )
       setOffset((current) =>
         clampOffset(current, scale, viewportRef.current, frameRef.current),
       )
     }
     window.addEventListener('resize', resize)
     return () => window.removeEventListener('resize', resize)
-  }, [activePhotoKey, openIndex, scale])
-
-  useEffect(() => {
-    if (openIndex === null) return
-    const neighborIndexes = [openIndex - 1, openIndex + 1]
-    const preloaders: HTMLImageElement[] = []
-    for (const index of neighborIndexes) {
-      const neighbor = photos[index]
-      if (!neighbor?.url || unavailable.has(photoKey(neighbor, index))) continue
-      const preloader = new Image()
-      preloader.src = neighbor.url
-      preloaders.push(preloader)
-    }
-    return () => {
-      for (const preloader of preloaders) preloader.onload = null
-    }
-  }, [openIndex, photos, unavailable])
+  }, [displayedFrame, openIndex, scale])
 
   useEffect(() => {
     if (openIndex === null) return
@@ -517,8 +590,8 @@ function PhotoLightbox({
                 ref={frameRef}
                 className="relative flex max-h-full max-w-full items-center justify-center"
                 style={{
-                  width: measuredSize ? `${measuredSize.width}px` : undefined,
-                  height: measuredSize ? `${measuredSize.height}px` : undefined,
+                  width: displayedFrame ? `${displayedFrame.width}px` : undefined,
+                  height: displayedFrame ? `${displayedFrame.height}px` : undefined,
                   transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${scale})`,
                   transformOrigin: 'center center',
                 }}
@@ -531,8 +604,8 @@ function PhotoLightbox({
                 ) : (
                   <img
                     ref={imageRef}
-                    src={photo.url}
-                    alt={`${title}, фото ${openIndex + 1} из ${photos.length}`}
+                    src={(framePhoto ?? photo).url}
+                    alt={`${title}, фото ${frameIndex + 1} из ${photos.length}`}
                     draggable={false}
                     decoding="async"
                     onLoad={(event) => {
@@ -542,16 +615,22 @@ function PhotoLightbox({
                         viewportRef.current,
                       )
                       if (!nextSize) return
-                      setBaseSize({ ...nextSize, key: activePhotoKey })
+                      const loadedIndex = displayedFrame?.index ?? openIndex
+                      const loadedKey = displayedFrame?.key ?? activePhotoKey
+                      setDisplayedFrame({
+                        ...nextSize,
+                        index: loadedIndex,
+                        key: loadedKey,
+                      })
                       setOffset({ x: 0, y: 0 })
                     }}
                     onError={() => {
                       setImageError(true)
-                      onImageError(photo, openIndex)
+                      onImageError(framePhoto ?? photo, frameIndex)
                     }}
                     className={cn(
                       'block select-none object-contain',
-                      measuredSize
+                      displayedFrame
                         ? 'h-full w-full'
                         : 'invisible max-h-full max-w-full',
                     )}
