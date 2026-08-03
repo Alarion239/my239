@@ -253,64 +253,46 @@ describe('ConduitTable', () => {
     )
   })
 
-  it('cycles solved ranking and toggles between group and global order', () => {
+  it('switches groups on one line and offers a center-wide rating', () => {
     const { container } = renderConduit(rankingData())
     const sort = screen.getByRole('button', {
       name: 'Сортировать учеников по числу решённых задач',
     })
 
-    expect(renderedStudentNames(container)).toEqual([
-      'Анна',
-      'Борис',
-      'Вера',
-      'Глеб',
-    ])
+    const group16 = screen.getByRole('button', { name: 'Группа 16' })
+    const group17 = screen.getByRole('button', { name: 'Группа 17' })
+    expect(group16).toHaveAttribute('aria-pressed', 'true')
+    expect(group17).toHaveAttribute('aria-pressed', 'false')
+    expect(renderedStudentNames(container)).toEqual(['Анна', 'Борис'])
 
-    // First click: descending rating within each group.
+    fireEvent.click(group17)
+    expect(group17).toHaveAttribute('aria-pressed', 'true')
+    expect(renderedStudentNames(container)).toEqual(['Вера', 'Глеб'])
+
+    // First click: descending rating in the selected group.
     fireEvent.click(sort)
-    expect(renderedStudentNames(container)).toEqual([
-      'Анна',
-      'Борис',
-      'Глеб',
-      'Вера',
-    ])
-    const grouping = screen.getByRole('switch', {
-      name: 'Группировать рейтинг по группам',
-    })
-    expect(grouping).toHaveAttribute('aria-checked', 'true')
+    expect(renderedStudentNames(container)).toEqual(['Глеб', 'Вера'])
 
-    // Switch off group boundaries: one center-wide rating.
-    fireEvent.click(grouping)
+    // The same selector line exposes one center-wide rating.
+    const centerRating = screen.getByRole('button', { name: 'Общий рейтинг' })
+    fireEvent.click(centerRating)
     expect(renderedStudentNames(container)).toEqual([
       'Анна',
       'Глеб',
       'Вера',
       'Борис',
     ])
-    expect(screen.queryByText('16')).not.toBeInTheDocument()
-    expect(screen.queryByText('17')).not.toBeInTheDocument()
+    expect(centerRating).toHaveAttribute('aria-pressed', 'true')
 
-    // Switch grouping back on, then cycle ascending → alphabetical.
-    fireEvent.click(grouping)
+    // Choosing a group exits the center-wide view; cycling restores alphabetic.
+    fireEvent.click(group16)
     fireEvent.click(sort)
-    expect(renderedStudentNames(container)).toEqual([
-      'Борис',
-      'Анна',
-      'Вера',
-      'Глеб',
-    ])
+    expect(renderedStudentNames(container)).toEqual(['Борис', 'Анна'])
 
     fireEvent.click(sort)
-    expect(renderedStudentNames(container)).toEqual([
-      'Анна',
-      'Борис',
-      'Вера',
-      'Глеб',
-    ])
+    expect(renderedStudentNames(container)).toEqual(['Анна', 'Борис'])
     expect(
-      screen.queryByRole('switch', {
-        name: 'Группировать рейтинг по группам',
-      }),
+      screen.queryByRole('button', { name: 'Общий рейтинг' }),
     ).not.toBeInTheDocument()
   })
 

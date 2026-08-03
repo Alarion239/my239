@@ -12,7 +12,9 @@ import {
   useSensors,
   type DragEndEvent,
   type DragStartEvent,
+  type Modifier,
 } from '@dnd-kit/core'
+import { getEventCoordinates } from '@dnd-kit/utilities'
 import {
   fullName,
   useManageAddStudent,
@@ -541,6 +543,24 @@ const rosterNameCollator = new Intl.Collator('ru', { sensitivity: 'base' })
 const EMPTY_ROSTER_STUDENTS: ManageRosterBoardStudent[] = []
 const EMPTY_ROSTER_GROUPS: ManageRosterBoardGroup[] = []
 
+const centerDragOverlayOnPointer: Modifier = ({
+  activatorEvent,
+  activeNodeRect,
+  overlayNodeRect,
+  transform,
+}) => {
+  if (!activatorEvent || !activeNodeRect) return transform
+  const pointer = getEventCoordinates(activatorEvent)
+  if (!pointer) return transform
+  const width = overlayNodeRect?.width ?? activeNodeRect.width
+  const height = overlayNodeRect?.height ?? activeNodeRect.height
+  return {
+    ...transform,
+    x: transform.x + pointer.x - activeNodeRect.left - width / 2,
+    y: transform.y + pointer.y - activeNodeRect.top - height / 2,
+  }
+}
+
 function rosterStudentName(student: ManageRosterBoardStudent): string {
   return fullName(student)
 }
@@ -773,7 +793,7 @@ function RosterBoard({
             )
           })}
         </div>
-        <DragOverlay>
+        <DragOverlay modifiers={[centerDragOverlayOnPointer]} dropAnimation={null}>
           {activeUserId === null ? null : (() => {
             const student = students.find((candidate) => candidate.user_id === activeUserId)
             return student ? <RosterStudentCardPreview student={student} /> : null
@@ -935,7 +955,7 @@ function RosterStudentCard({
       className={cn(
         'rounded-lg border border-line bg-surface-muted px-3 py-2 shadow-sm transition-opacity',
         'cursor-grab active:cursor-grabbing',
-        isDragging && 'opacity-35',
+        isDragging && 'opacity-0',
         isMoving && !isDragging && 'opacity-60',
       )}
     >
@@ -946,7 +966,7 @@ function RosterStudentCard({
 
 function RosterStudentCardPreview({ student }: { student: ManageRosterBoardStudent }) {
   return (
-    <article className="w-full rounded-lg border border-accent bg-surface-muted px-3 py-2 shadow-xl">
+    <article className="w-full cursor-grabbing rounded-lg border border-line bg-surface-muted px-3 py-2 shadow-sm">
       <RosterStudentCardBody student={student} />
     </article>
   )

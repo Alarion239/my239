@@ -47,7 +47,6 @@ import {
   exerciseColumnClasses,
   gridScrollerWithHeight,
   gridTable,
-  groupLabel,
   nameCell,
   vert,
 } from './grid-style'
@@ -204,17 +203,10 @@ type ConduitCellAction = (
   column: FlatCol,
 ) => void
 
-type ConduitVirtualRow =
-  | {
-      kind: 'group'
-      key: string
-      name: string
-    }
-  | {
-      kind: 'student'
-      key: string
-      student: CenterGridStudentEntry
-    }
+type ConduitVirtualRow = {
+  key: string
+  student: CenterGridStudentEntry
+}
 
 interface ConduitStudentRowProps {
   student: CenterGridStudentEntry
@@ -441,7 +433,11 @@ export function ConduitTable({
   const { search } = useLocation()
   const [query, setQuery] = useState('')
   const [solvedSort, setSolvedSort] = useState<SolvedSort>('none')
-  const [groupSolvedRanking, setGroupSolvedRanking] = useState(true)
+  const [centerWideRanking, setCenterWideRanking] = useState(false)
+  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(
+    () =>
+      data.groups.find((group) => group.students.length > 0)?.group_id ?? null,
+  )
 
   // Offline-grading interaction state. A grader picks an active student (their
   // row lights up) and enters their initials once; tapping un-accepted cells in
@@ -579,6 +575,20 @@ export function ConduitTable({
     () => data.groups.flatMap((g) => g.students),
     [data.groups],
   )
+  const availableGroups = useMemo(
+    () => data.groups.filter((group) => group.students.length > 0),
+    [data.groups],
+  )
+
+  useEffect(() => {
+    if (
+      selectedGroupId != null &&
+      availableGroups.some((group) => group.group_id === selectedGroupId)
+    ) {
+      return
+    }
+    setSelectedGroupId(availableGroups[0]?.group_id ?? null)
+  }, [availableGroups, selectedGroupId])
 
   const creditGatesByStudent = useMemo(() => {
     const gates = new Map<number, Map<number, boolean>>()
@@ -649,63 +659,32 @@ export function ConduitTable({
       .filter((g) => g.students.length > 0)
   }, [data.groups, query])
 
-  const displayedGroups = useMemo(
-    () =>
-      filteredGroups.map((group) => ({
-        ...group,
-        students: [...group.students].sort((left, right) =>
-          solvedSort === 'none'
-            ? compareStudentNames(left, right)
-            : compareStudentsBySolved(
-                left,
-                right,
-                solvedSort,
-                solvedTotals,
-              ),
-        ),
-      })),
-    [filteredGroups, solvedSort, solvedTotals],
-  )
+  const globalRanking = solvedSort !== 'none' && centerWideRanking
 
-  const globalRanking = solvedSort !== 'none' && !groupSolvedRanking
+  const displayedStudents = useMemo(() => {
+    const visible = globalRanking
+      ? filteredGroups.flatMap((group) => group.students)
+      : (filteredGroups.find((group) => group.group_id === selectedGroupId)
+          ?.students ?? [])
+    return [...visible].sort((left, right) =>
+      solvedSort === 'none'
+        ? compareStudentNames(left, right)
+        : compareStudentsBySolved(left, right, solvedSort, solvedTotals),
+    )
+  }, [filteredGroups, globalRanking, selectedGroupId, solvedSort, solvedTotals])
 
-  const shown = useMemo(
-    () => filteredGroups.reduce((n, g) => n + g.students.length, 0),
-    [filteredGroups],
-  )
+  const selectedGroupSize =
+    availableGroups.find((group) => group.group_id === selectedGroupId)?.students
+      .length ?? 0
+  const shown = displayedStudents.length
+  const shownFrom = globalRanking ? students.length : selectedGroupSize
 
   const virtualRows = useMemo<ConduitVirtualRow[]>(() => {
-    if (globalRanking) {
-      return filteredGroups
-        .flatMap((group) => group.students)
-        .sort((left, right) =>
-          compareStudentsBySolved(left, right, solvedSort, solvedTotals),
-        )
-        .map((student) => ({
-          kind: 'student' as const,
-          key: 'student:' + student.user_id,
-          student,
-        }))
-    }
-    return displayedGroups.flatMap((group) => [
-      {
-        kind: 'group' as const,
-        key: 'group:' + group.group_id,
-        name: group.name,
-      },
-      ...group.students.map((student) => ({
-        kind: 'student' as const,
-        key: 'student:' + student.user_id,
-        student,
-      })),
-    ])
-  }, [
-    displayedGroups,
-    filteredGroups,
-    globalRanking,
-    solvedSort,
-    solvedTotals,
-  ])
+    return displayedStudents.map((student) => ({
+      key: 'student:' + student.user_id,
+      student,
+    }))
+  }, [displayedStudents])
   const scrollerRef = useRef<HTMLDivElement>(null)
   const [rowWindow, setRowWindow] = useState({
     start: 0,
@@ -925,9 +904,90 @@ export function ConduitTable({
     </div>
   )
 
+  function showGroup(groupId: number) {
+    if (activeStudentId != null) selectStudent(null)
+    setSelectedGroupId(groupId)
+    setCenterWideRanking(false)
+    if (scrollerRef.current) scrollerRef.current.scrollTop = 0
+  }
+
+  function showCenterWideRanking() {
+    setCenterWideRanking(true)
+    if (scrollerRef.current) scrollerRef.current.scrollTop = 0
+  }
+
+  function cycleSolvedSort() {
+    if (solvedSort === 'none') {
+      setSolvedSort('desc')
+      return
+    }
+    if (solvedSort === 'desc') {
+      setSolvedSort('asc')
+      return
+    }
+    setSolvedSort('none')
+    setCenterWideRanking(false)
+  }
+
   return (
     <div className="flex h-full flex-col">
       {toolbarSlot ? createPortal(toolbar, toolbarSlot) : null}
+
+      <div className="flex shrink-0 items-center gap-2 border-b border-line bg-surface px-3 py-2">
+        <span className="shrink-0 text-xs font-medium text-faint">Группа</span>
+        <div
+          role="group"
+          aria-label="Выбор группы"
+          className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {availableGroups.map((group) => {
+            const selected = !globalRanking && group.group_id === selectedGroupId
+            return (
+              <button
+                key={group.group_id}
+                type="button"
+                aria-label={'Группа ' + group.name}
+                aria-pressed={selected}
+                onClick={() => showGroup(group.group_id)}
+                className={cn(
+                  'inline-flex h-8 shrink-0 items-center gap-2 rounded-md border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                  selected
+                    ? 'border-accent bg-accent text-white shadow-sm'
+                    : 'border-transparent text-muted hover:border-line hover:bg-surface-muted hover:text-ink',
+                )}
+              >
+                <span>{group.name}</span>
+                <span
+                  className={cn(
+                    'text-[0.65rem] font-normal tabular-nums',
+                    selected ? 'text-white/75' : 'text-faint',
+                  )}
+                >
+                  {group.students.length}
+                </span>
+              </button>
+            )
+          })}
+          {solvedSort !== 'none' ? (
+            <>
+              <span aria-hidden="true" className="mx-1 h-5 w-px shrink-0 bg-line" />
+              <button
+                type="button"
+                aria-pressed={globalRanking}
+                onClick={showCenterWideRanking}
+                className={cn(
+                  'h-8 shrink-0 rounded-md border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                  globalRanking
+                    ? 'border-accent bg-accent text-white shadow-sm'
+                    : 'border-line text-muted hover:bg-surface-muted hover:text-ink',
+                )}
+              >
+                Общий рейтинг
+              </button>
+            </>
+          ) : null}
+        </div>
+      </div>
 
       <div ref={scrollerRef} className={gridScrollerWithHeight('min-h-0 flex-1')}>
         <table className={gridTable}>
@@ -946,7 +1006,7 @@ export function ConduitTable({
                     aria-label="Поиск ученика"
                   />
                   <span className="text-[0.65rem] font-normal text-faint">
-                    {shown} из {students.length}
+                    {shown} из {shownFrom}
                   </span>
                 </div>
               </th>
@@ -984,15 +1044,7 @@ export function ConduitTable({
                 <div className="flex min-h-14 flex-col items-center justify-center">
                   <button
                     type="button"
-                    onClick={() =>
-                      setSolvedSort((current) =>
-                        current === 'none'
-                          ? 'desc'
-                          : current === 'desc'
-                            ? 'asc'
-                            : 'none',
-                      )
-                    }
+                    onClick={cycleSolvedSort}
                     className="whitespace-nowrap rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                     title={
                       solvedSort === 'none'
@@ -1010,38 +1062,6 @@ export function ConduitTable({
                         ? ' ↑'
                         : ''}
                   </button>
-                  {solvedSort !== 'none' ? (
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={groupSolvedRanking}
-                      aria-label="Группировать рейтинг по группам"
-                      onClick={() =>
-                        setGroupSolvedRanking((current) => !current)
-                      }
-                      className="mt-1 flex items-center gap-1 rounded-sm text-[0.625rem] font-normal text-faint hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-                    >
-                      <span
-                        aria-hidden="true"
-                        className={cn(
-                          'relative inline-flex h-3.5 w-6 rounded-full border transition-colors',
-                          groupSolvedRanking
-                            ? 'border-accent bg-accent'
-                            : 'border-line-strong bg-surface',
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            'absolute top-0.5 h-2.5 w-2.5 rounded-full transition-transform',
-                            groupSolvedRanking
-                              ? 'translate-x-2.5 bg-white'
-                              : 'translate-x-0.5 bg-faint',
-                          )}
-                        />
-                      </span>
-                      по группам
-                    </button>
-                  ) : null}
                 </div>
               </th>
             </tr>
@@ -1102,19 +1122,6 @@ export function ConduitTable({
               </tr>
             ) : null}
             {visibleRows.map((row) => {
-              if (row.kind === 'group') {
-                return (
-                  <tr key={row.key} className="h-9 bg-surface-muted/60">
-                    <td
-                      colSpan={cols.length + 2}
-                      className="border-b border-line p-0"
-                    >
-                      <div className={groupLabel}>{row.name}</div>
-                    </td>
-                  </tr>
-                )
-              }
-
               const st = row.student
               const isActiveRow = activeStudentId === st.user_id
               const pendingPrefix = st.user_id + ':'
