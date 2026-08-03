@@ -324,6 +324,11 @@ func TestRegister_StudentPreset(t *testing.T) {
 	mock.ExpectQuery(`SELECT COUNT`).
 		WithArgs(int64(1)).
 		WillReturnRows(mock.NewRows([]string{"count"}).AddRow(int64(0)))
+	// No same-name Sheets placeholder exists, so registration follows the
+	// existing create-user + enrollment path.
+	mock.ExpectQuery(`JOIN math_center_students student`).
+		WithArgs(int64(3), "New", "User").
+		WillReturnRows(mock.NewRows([]string{"id"}))
 	mock.ExpectQuery(`INSERT INTO users`).
 		WithArgs("newuser", pgxmock.AnyArg(), "New", (*string)(nil), "User", ptrInt64(1)).
 		WillReturnRows(mock.NewRows(userColumns).
@@ -348,6 +353,108 @@ func TestRegister_StudentPreset(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
+	database := db.NewWithPool(mock)
+	authHandlers.Register(database, newTokens(t, database))(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("status: got %d, body=%s", rr.Code, rr.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled: %v", err)
+	}
+}
+
+func TestRegister_ClaimsUniqueSheetsStudentInInvitedGroup(t *testing.T) {
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+
+	now := time.Now()
+	middleName := "Иванович"
+	mock.ExpectBegin()
+	mock.ExpectQuery(`FOR UPDATE`).
+		WithArgs("invite-abc").
+		WillReturnRows(mock.NewRows(invitationTokenColumns).
+			AddRow(int64(1), "invite-abc", "student invite", int32(5), now.Add(24*time.Hour), now, []byte(`{"version":1,"mathcenter_student":{"group_id":3}}`), nil))
+	mock.ExpectQuery(`SELECT COUNT`).
+		WithArgs(int64(1)).
+		WillReturnRows(mock.NewRows([]string{"count"}).AddRow(int64(0)))
+	mock.ExpectQuery(`JOIN math_center_students student`).
+		WithArgs(int64(3), " иВан ", " Иванов ").
+		WillReturnRows(mock.NewRows([]string{"id"}).AddRow(int64(77)))
+	mock.ExpectQuery(`UPDATE users`).
+		WithArgs(int64(77), "newuser", pgxmock.AnyArg(), int64(1)).
+		WillReturnRows(mock.NewRows(userColumns).
+			AddRow(int64(77), "newuser", "argon2idhash", "Иван", &middleName, "Иванов", ptrInt64(1), now, now, false, false))
+	mock.ExpectCommit()
+	expectRefreshInsert(t, mock, 77)
+
+	body, _ := json.Marshal(map[string]any{
+		"username":         "newuser",
+		"password":         "password123",
+		"invitation_token": "invite-abc",
+		"first_name":       " иВан ",
+		"middle_name":      nil,
+		"last_name":        " Иванов ",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	database := db.NewWithPool(mock)
+	authHandlers.Register(database, newTokens(t, database))(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("status: got %d, body=%s", rr.Code, rr.Body.String())
+	}
+	var resp authHandlers.RegisterResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.User.ID != 77 || resp.User.FirstName != "Иван" || resp.User.LastName != "Иванов" {
+		t.Fatalf("claimed user = %+v, want Sheets user 77 with canonical name", resp.User)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled: %v", err)
+	}
+}
+
+func TestRegister_AmbiguousSheetsStudentsCreatesNewUser(t *testing.T) {
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+
+	now := time.Now()
+	mock.ExpectBegin()
+	mock.ExpectQuery(`FOR UPDATE`).
+		WithArgs("invite-abc").
+		WillReturnRows(mock.NewRows(invitationTokenColumns).
+			AddRow(int64(1), "invite-abc", "student invite", int32(5), now.Add(24*time.Hour), now, []byte(`{"version":1,"mathcenter_student":{"group_id":3}}`), nil))
+	mock.ExpectQuery(`SELECT COUNT`).
+		WithArgs(int64(1)).
+		WillReturnRows(mock.NewRows([]string{"count"}).AddRow(int64(0)))
+	mock.ExpectQuery(`JOIN math_center_students student`).
+		WithArgs(int64(3), "New", "User").
+		WillReturnRows(mock.NewRows([]string{"id"}).AddRow(int64(70)).AddRow(int64(71)))
+	mock.ExpectQuery(`INSERT INTO users`).
+		WithArgs("newuser", pgxmock.AnyArg(), "New", (*string)(nil), "User", ptrInt64(1)).
+		WillReturnRows(mock.NewRows(userColumns).
+			AddRow(int64(42), "newuser", "argon2idhash", "New", (*string)(nil), "User", ptrInt64(1), now, now, false, false))
+	mock.ExpectQuery(`SELECT .* FROM math_center_groups WHERE id = \$1`).
+		WithArgs(int64(3)).
+		WillReturnRows(mock.NewRows([]string{"id", "math_center_id", "name", "created_at"}).
+			AddRow(int64(3), int64(7), "Group A", now))
+	mock.ExpectQuery(`SELECT EXISTS`).
+		WithArgs(int64(42), int64(7)).
+		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(false))
+	mock.ExpectQuery(`INSERT INTO math_center_students`).
+		WithArgs(int64(42), int64(3)).
+		WillReturnRows(mock.NewRows([]string{"id", "user_id", "group_id", "created_at"}).
+			AddRow(int64(1), int64(42), int64(3), now))
+	mock.ExpectCommit()
+	expectRefreshInsert(t, mock, 42)
+
+	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewReader(validRegisterBody()))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
 	database := db.NewWithPool(mock)
 	authHandlers.Register(database, newTokens(t, database))(rr, req)
 
