@@ -431,7 +431,7 @@ function PhotoLightbox({
 
           <div
             ref={viewportRef}
-            className="relative flex min-h-0 flex-1 touch-none items-center justify-center overflow-hidden p-4"
+            className="relative flex min-h-0 flex-1 touch-none items-center justify-center overflow-hidden"
             onWheel={onWheel}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
@@ -448,60 +448,62 @@ function PhotoLightbox({
             role="group"
             aria-label={`${title}, фото ${openIndex + 1} из ${photos.length}`}
           >
-            {photos.length > 1 ? (
-              <button
-                type="button"
-                aria-label="Предыдущее фото"
-                disabled={!canGoPrevious}
-                onClick={() => navigate(-1)}
-                className="absolute left-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-black/45 p-3 text-white shadow-lg transition-colors hover:bg-black/70 disabled:pointer-events-none disabled:opacity-25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3cc39d] sm:left-5"
-              >
-                <ChevronLeft className="h-6 w-6" aria-hidden />
-              </button>
-            ) : null}
+            <div className="absolute inset-4 flex min-h-0 min-w-0 items-center justify-center">
+              {photos.length > 1 ? (
+                <button
+                  type="button"
+                  aria-label="Предыдущее фото"
+                  disabled={!canGoPrevious}
+                  onClick={() => navigate(-1)}
+                  className="absolute left-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-black/45 p-3 text-white shadow-lg transition-colors hover:bg-black/70 disabled:pointer-events-none disabled:opacity-25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3cc39d] sm:left-5"
+                >
+                  <ChevronLeft className="h-6 w-6" aria-hidden />
+                </button>
+              ) : null}
 
-            <div
-              ref={frameRef}
-              className="relative flex max-h-full max-w-full items-center justify-center"
-              style={{
-                transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${scale})`,
-                transformOrigin: 'center center',
-              }}
-            >
-              {displayError ? (
-                <div className="flex max-w-xs flex-col items-center gap-3 rounded-xl border border-white/15 bg-white/5 px-6 py-8 text-center text-sm text-white/70">
-                  <ImageOff className="h-8 w-8 text-white/45" aria-hidden />
-                  <span>{photoIsAvailable ? 'Не удалось загрузить фото' : 'Фото недоступно'}</span>
-                </div>
-              ) : (
-                <img
-                  src={photo.url}
-                  alt={`${title}, фото ${openIndex + 1} из ${photos.length}`}
-                  draggable={false}
-                  decoding="async"
-                  onLoad={() => {
-                    setOffset((current) => clampOffset(current, scale, viewportRef.current, frameRef.current))
-                  }}
-                  onError={() => {
-                    setImageError(true)
-                    onImageError(photo, openIndex)
-                  }}
-                  className="block max-h-[calc(100dvh-10rem)] max-w-[calc(100dvw-2rem)] select-none object-contain sm:max-h-[calc(100dvh-9rem)] sm:max-w-[calc(100dvw-8rem)]"
-                />
-              )}
+              <div
+                ref={frameRef}
+                className="relative flex max-h-full max-w-full items-center justify-center"
+                style={{
+                  transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${scale})`,
+                  transformOrigin: 'center center',
+                }}
+              >
+                {displayError ? (
+                  <div className="flex max-w-xs flex-col items-center gap-3 rounded-xl border border-white/15 bg-white/5 px-6 py-8 text-center text-sm text-white/70">
+                    <ImageOff className="h-8 w-8 text-white/45" aria-hidden />
+                    <span>{photoIsAvailable ? 'Не удалось загрузить фото' : 'Фото недоступно'}</span>
+                  </div>
+                ) : (
+                  <img
+                    src={photo.url}
+                    alt={`${title}, фото ${openIndex + 1} из ${photos.length}`}
+                    draggable={false}
+                    decoding="async"
+                    onLoad={() => {
+                      setOffset((current) => clampOffset(current, scale, viewportRef.current, frameRef.current))
+                    }}
+                    onError={() => {
+                      setImageError(true)
+                      onImageError(photo, openIndex)
+                    }}
+                    className="block max-h-full max-w-full select-none object-contain"
+                  />
+                )}
+              </div>
+
+              {photos.length > 1 ? (
+                <button
+                  type="button"
+                  aria-label="Следующее фото"
+                  disabled={!canGoNext}
+                  onClick={() => navigate(1)}
+                  className="absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-black/45 p-3 text-white shadow-lg transition-colors hover:bg-black/70 disabled:pointer-events-none disabled:opacity-25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3cc39d] sm:right-5"
+                >
+                  <ChevronRight className="h-6 w-6" aria-hidden />
+                </button>
+              ) : null}
             </div>
-
-            {photos.length > 1 ? (
-              <button
-                type="button"
-                aria-label="Следующее фото"
-                disabled={!canGoNext}
-                onClick={() => navigate(1)}
-                className="absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-black/45 p-3 text-white shadow-lg transition-colors hover:bg-black/70 disabled:pointer-events-none disabled:opacity-25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3cc39d] sm:right-5"
-              >
-                <ChevronRight className="h-6 w-6" aria-hidden />
-              </button>
-            ) : null}
           </div>
 
           <div className="relative z-10 flex shrink-0 flex-col gap-2 border-t border-white/10 bg-[#14120d]/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-5">
