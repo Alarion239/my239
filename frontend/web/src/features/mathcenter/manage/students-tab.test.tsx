@@ -204,8 +204,10 @@ describe('StudentsTab roster board', () => {
 
     renderStudentsTab()
     const user = userEvent.setup()
-    expect(await screen.findByRole('region', { name: 'Не распределены, 1 учеников' })).toBeInTheDocument()
-    expect(screen.getByRole('group', { name: 'А список учеников' })).toHaveClass('overflow-y-auto')
+    expect(await screen.findByRole('region', { name: 'Удалить ученика' })).toHaveClass('min-h-20')
+    expect(screen.getByTestId('roster-board-columns')).toHaveClass('overflow-x-auto', '[scrollbar-width:none]', '[&::-webkit-scrollbar]:hidden')
+    expect(screen.getByRole('region', { name: 'Не распределены, 1 учеников' })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'А список учеников' })).toHaveClass('overflow-y-auto', '[scrollbar-width:none]', '[&::-webkit-scrollbar]:hidden')
     expect(screen.getByRole('region', { name: 'А, 1 учеников' })).toHaveClass('max-h-[65vh]')
     expect(screen.getByText('Предыдущая группа: А')).toBeInTheDocument()
     expect(screen.getByText('Новый ученик')).toBeInTheDocument()

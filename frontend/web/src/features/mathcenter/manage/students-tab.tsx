@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react'
 import { ChevronDown, Trash2 } from 'lucide-react'
 import {
   DndContext,
+  DragOverlay,
   PointerSensor,
   TouchSensor,
   pointerWithin,
@@ -10,6 +11,7 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core'
 import {
   fullName,
@@ -582,6 +584,7 @@ function RosterBoard({
   const [removeError, setRemoveError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [removalCandidate, setRemovalCandidate] = useState<ManageRosterBoardStudent | null>(null)
+  const [activeUserId, setActiveUserId] = useState<number | null>(null)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
@@ -661,7 +664,17 @@ function RosterBoard({
     )
   }
 
+  function handleDragStart(event: DragStartEvent) {
+    const userId = Number(String(event.active.id).replace('student:', ''))
+    setActiveUserId(Number.isFinite(userId) ? userId : null)
+  }
+
+  function clearActiveDrag() {
+    setActiveUserId(null)
+  }
+
   function handleDragEnd(event: DragEndEvent) {
+    clearActiveDrag()
     const userId = Number(String(event.active.id).replace('student:', ''))
     const target = event.over ? String(event.over.id) : ''
     const student = students.find((candidate) => candidate.user_id === userId)
@@ -717,9 +730,12 @@ function RosterBoard({
       <DndContext
         sensors={sensors}
         collisionDetection={pointerWithin}
+        autoScroll={false}
+        onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
+        onDragCancel={clearActiveDrag}
       >
-        <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:thin]">
+        <div data-testid="roster-board-columns" className="flex snap-x snap-mandatory gap-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <div className="flex h-[65vh] max-h-[65vh] w-72 min-w-72 snap-start flex-col gap-2 sm:w-80 sm:min-w-80">
             <RemovalDropZone />
             {(() => {
@@ -757,6 +773,12 @@ function RosterBoard({
             )
           })}
         </div>
+        <DragOverlay>
+          {activeUserId === null ? null : (() => {
+            const student = students.find((candidate) => candidate.user_id === activeUserId)
+            return student ? <RosterStudentCardPreview student={student} /> : null
+          })()}
+        </DragOverlay>
       </DndContext>
       <p className="sr-only" aria-live="polite">{announcement}</p>
       <div className="flex flex-wrap items-center gap-3 text-xs text-muted">
@@ -807,7 +829,7 @@ function RemovalDropZone() {
       role="region"
       aria-label="Удалить ученика"
       className={cn(
-        'flex shrink-0 items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-2 text-xs font-medium text-danger transition-colors',
+        'flex min-h-20 shrink-0 items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-2 text-xs font-medium text-danger transition-colors',
         isOver ? 'border-danger bg-danger/10' : 'border-danger/50',
       )}
     >
@@ -868,7 +890,7 @@ function RosterColumn({
       <div
         role="group"
         aria-label={name + ' список учеников'}
-        className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1 [scrollbar-width:thin]"
+        className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {students.length === 0 ? <p className="rounded-lg border border-dashed border-line px-3 py-6 text-center text-xs text-faint">Перетащите сюда ученика</p> : null}
         {students.map((student) => (
@@ -917,21 +939,35 @@ function RosterStudentCard({
         isMoving && !isDragging && 'opacity-60',
       )}
     >
-      <div className="flex items-start gap-2">
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-ink">{rosterStudentName(student)}</p>
-          <p className="truncate text-xs text-muted">
-            {student.previous_group_name
-              ? 'Предыдущая группа: ' + student.previous_group_name
-              : student.previous_term_enrolled
-                ? 'Не распределён в прошлом периоде'
-                : 'Новый ученик'}
-          </p>
-        </div>
-        <span className="shrink-0 rounded-md bg-surface px-1.5 py-0.5 font-mono text-xs text-accent-ink" title="Рейтинг">
-          {Number.isInteger(student.rating) ? student.rating : student.rating.toFixed(1)}
-        </span>
-      </div>
+      <RosterStudentCardBody student={student} />
     </article>
+  )
+}
+
+function RosterStudentCardPreview({ student }: { student: ManageRosterBoardStudent }) {
+  return (
+    <article className="w-full rounded-lg border border-accent bg-surface-muted px-3 py-2 shadow-xl">
+      <RosterStudentCardBody student={student} />
+    </article>
+  )
+}
+
+function RosterStudentCardBody({ student }: { student: ManageRosterBoardStudent }) {
+  return (
+    <div className="flex items-start gap-2">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-ink">{rosterStudentName(student)}</p>
+        <p className="truncate text-xs text-muted">
+          {student.previous_group_name
+            ? 'Предыдущая группа: ' + student.previous_group_name
+            : student.previous_term_enrolled
+              ? 'Не распределён в прошлом периоде'
+              : 'Новый ученик'}
+        </p>
+      </div>
+      <span className="shrink-0 rounded-md bg-surface px-1.5 py-0.5 font-mono text-xs text-accent-ink" title="Рейтинг">
+        {Number.isInteger(student.rating) ? student.rating : student.rating.toFixed(1)}
+      </span>
+    </div>
   )
 }
