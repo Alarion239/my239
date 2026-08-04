@@ -111,14 +111,14 @@ export function SeriesDraftEditor({ centerId, series }: { centerId: number; seri
   }
 
   return (
-    <div className="animate-rise flex flex-col gap-7">
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-line pb-5">
+    <div className="flex flex-col gap-7">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-5">
         <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-[0.16em] text-faint">
+          <p className="text-xs font-medium uppercase tracking-[0.16em] text-text-subtle">
             Черновик · серия {series.number}
           </p>
           <div className="mt-1 flex items-center gap-2">
-            <h1 className="truncate font-display text-2xl font-medium text-ink">{series.name}</h1>
+            <h1 className="truncate font-display text-2xl font-medium text-text">{series.name}</h1>
             <UploadSeriesDialog
               key={'draft-meta-' + series.id}
               centerId={centerId}
@@ -128,7 +128,7 @@ export function SeriesDraftEditor({ centerId, series }: { centerId: number; seri
                   type="button"
                   aria-label="Редактировать серию"
                   title="Редактировать серию"
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-subtle hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                 >
                   <Pencil className="h-4 w-4" aria-hidden />
                 </button>
@@ -153,7 +153,7 @@ export function SeriesDraftEditor({ centerId, series }: { centerId: number; seri
             {publish.isPending ? 'Публикуем…' : 'Опубликовать'}
           </Button>
           {!canPublish ? (
-            <span className="text-right text-xs text-faint">Нужны условие и задача</span>
+            <span className="text-right text-xs text-text-subtle">Нужны условие и задача</span>
           ) : null}
         </div>
       </header>
@@ -162,8 +162,8 @@ export function SeriesDraftEditor({ centerId, series }: { centerId: number; seri
       <section className="flex flex-col gap-3" aria-labelledby="series-statement-heading">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Условие</p>
-            <h2 id="series-statement-heading" className="mt-1 font-display text-xl font-medium text-ink">
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-text-subtle">Условие</p>
+            <h2 id="series-statement-heading" className="mt-1 text-xl font-medium text-text">
               Материал серии
             </h2>
           </div>
@@ -174,7 +174,7 @@ export function SeriesDraftEditor({ centerId, series }: { centerId: number; seri
         {format === 'tex' ? (
           <div className="grid gap-4 lg:grid-cols-2">
             <section className="flex min-w-0 flex-col gap-2">
-              <label htmlFor="series-draft-tex" className="text-sm font-medium text-ink">Исходник</label>
+              <label htmlFor="series-draft-tex" className="text-sm font-medium text-text">Исходник</label>
               <Textarea
                 id="series-draft-tex"
                 value={tex}
@@ -193,8 +193,8 @@ export function SeriesDraftEditor({ centerId, series }: { centerId: number; seri
               </Button>
             </section>
             <section className="flex min-w-0 flex-col gap-2">
-              <p className="text-sm font-medium text-ink">Предпросмотр</p>
-              <div className="min-h-[28rem] overflow-auto rounded-lg border border-line bg-surface p-5">
+              <p className="text-sm font-medium text-text">Предпросмотр</p>
+              <div className="min-h-[28rem] overflow-auto rounded-lg border border-border bg-surface p-5">
                 {preview ? <TexViewer tex={preview} /> : <p className="text-sm text-muted">Предпросмотр появится здесь.</p>}
               </div>
             </section>
@@ -208,7 +208,7 @@ export function SeriesDraftEditor({ centerId, series }: { centerId: number; seri
                 fileName={'series-' + series.number + '.pdf'}
               />
             ) : (
-              <div className="rounded-xl border border-dashed border-line-strong px-4 py-10 text-center text-sm text-muted">
+              <div className="rounded-lg border border-dashed border-border-control px-4 py-10 text-center text-sm text-muted">
                 PDF ещё не загружен
               </div>
             )}
@@ -226,11 +226,11 @@ export function SeriesDraftEditor({ centerId, series }: { centerId: number; seri
         )}
       </section>
 
-      <section className="flex flex-col gap-3 border-t border-line pt-6" aria-labelledby="series-problems-heading">
+      <section className="flex flex-col gap-3 border-t border-border pt-6" aria-labelledby="series-problems-heading">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Структура</p>
-            <h2 id="series-problems-heading" className="mt-1 font-display text-xl font-medium text-ink">Задачи</h2>
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-text-subtle">Структура</p>
+            <h2 id="series-problems-heading" className="mt-1 text-xl font-medium text-text">Задачи</h2>
           </div>
           <Button size="sm" disabled={update.isPending} onClick={saveProblems}>
             {update.isPending ? 'Сохраняем…' : 'Сохранить задачи'}
@@ -251,7 +251,7 @@ function FormatTabs({
   onChange: (next: StatementFormat) => void
 }) {
   return (
-    <div className="inline-flex rounded-full border border-line bg-surface-muted p-0.5" role="group" aria-label="Формат условия">
+    <div className="inline-flex rounded-full border border-border bg-surface-subtle p-0.5" role="group" aria-label="Формат условия">
       {(['tex', 'pdf'] as const).map((format) => (
         <button
           key={format}
@@ -259,8 +259,8 @@ function FormatTabs({
           aria-pressed={value === format}
           onClick={() => onChange(format)}
           className={cn(
-            'rounded-full px-3 py-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-            value === format ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink',
+            'rounded-full px-3 py-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus',
+            value === format ? 'bg-surface text-text shadow-sm' : 'text-muted hover:text-text',
           )}
         >
           {format === 'tex' ? 'LaTeX' : 'PDF'}

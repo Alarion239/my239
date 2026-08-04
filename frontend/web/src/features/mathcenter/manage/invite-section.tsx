@@ -27,7 +27,7 @@ export function InviteSection({
   const mine = (invites ?? []).filter((i) => i.role === role)
 
   return (
-    <div className="flex flex-col gap-3 border-t border-line pt-4">
+    <div className="flex flex-col gap-3 border-t border-border pt-4">
       <SectionHeader
         title="Пригласить по ссылке"
         description={
@@ -42,10 +42,10 @@ export function InviteSection({
           {mine.map((inv) => (
             <li
               key={inv.id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-muted px-3 py-2"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-subtle px-3 py-2"
             >
               <div className="min-w-0">
-                <p className="truncate text-sm text-ink">
+                <p className="truncate text-sm text-text">
                   {inv.description || 'Без описания'}
                 </p>
                 <p className="text-xs text-muted">
@@ -103,9 +103,9 @@ function CreatePersonalInviteForm({ centerId }: { centerId: number }) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-2 rounded-lg bg-surface-muted p-3">
+    <form onSubmit={onSubmit} className="flex flex-col gap-2 rounded-lg bg-surface-subtle p-3">
       <div>
-        <p className="text-sm font-medium text-ink">Личная ссылка для ученика из Google Sheets</p>
+        <p className="text-sm font-medium text-text">Личная ссылка для ученика из Google Sheets</p>
         <p className="text-xs text-muted">Ссылка привязана к одному ученику и используется один раз.</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -215,7 +215,7 @@ function CreateInviteForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-2 rounded-lg bg-surface-muted p-3">
+    <form onSubmit={onSubmit} className="flex flex-col gap-2 rounded-lg bg-surface-subtle p-3">
       <Input
         value={description}
         onChange={(e) => setDescription(e.target.value)}
@@ -238,7 +238,7 @@ function CreateInviteForm({
             ))}
           </Select>
         ) : (
-          <label className="flex items-center gap-2 text-sm text-ink">
+          <label className="flex items-center gap-2 text-sm text-text">
             <input
               type="checkbox"
               checked={isHead}

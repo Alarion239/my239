@@ -148,7 +148,7 @@ export function GraderInitialsInput({
           role="listbox"
           aria-hidden={!focused}
           className={cn(
-            'absolute z-50 mt-1 max-h-48 w-full origin-top overflow-auto rounded-lg border border-line bg-surface shadow-lg transition-[opacity,transform,visibility] duration-200 ease-out motion-reduce:transition-none',
+            'absolute z-50 mt-1 max-h-48 w-full origin-top overflow-auto rounded-lg border border-border bg-surface shadow-lg transition-[opacity,transform,visibility] duration-200 ease-out motion-reduce:transition-none',
             focused
               ? 'visible translate-y-0 scale-100 opacity-100'
               : 'pointer-events-none invisible -translate-y-1 scale-[0.98] opacity-0',
@@ -164,9 +164,9 @@ export function GraderInitialsInput({
                   e.preventDefault()
                   pick(t)
                 }}
-                className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm hover:bg-surface-muted ${index === 0 ? 'bg-surface-muted' : ''}`}
+                className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm hover:bg-surface-subtle ${index === 0 ? 'bg-surface-subtle' : ''}`}
               >
-                <span className="text-ink">{t.name}</span>
+                <span className="text-text">{t.name}</span>
                 <span className="text-xs font-medium text-muted">{t.initials}</span>
               </button>
             </li>

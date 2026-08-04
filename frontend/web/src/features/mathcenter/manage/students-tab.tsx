@@ -210,7 +210,7 @@ function TriangleCell({
   return (
     <div
       className={cn(
-        'relative h-10 w-12 shrink-0 overflow-hidden rounded-md border border-line-strong bg-surface',
+        'relative h-10 w-12 shrink-0 overflow-hidden rounded-md border border-border-control bg-surface',
         disabled && 'opacity-60',
       )}
     >
@@ -220,8 +220,8 @@ function TriangleCell({
         disabled={disabled}
         onClick={() => onToggle('pdf_tex')}
         className={cn(
-          'absolute inset-0 flex items-start justify-start px-1 pt-0.5 text-[0.7rem] font-semibold text-status-accepted transition-colors focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/50',
-          writtenPosted ? 'hover:bg-status-accepted-soft' : 'bg-slate-300/75 text-slate-600 hover:bg-slate-400/75 dark:bg-slate-700/75 dark:text-slate-300',
+          'absolute inset-0 flex items-start justify-start px-1 pt-0.5 text-[0.7rem] font-semibold text-status-accepted transition-colors focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus',
+          writtenPosted ? 'hover:bg-status-accepted-soft' : 'bg-surface-strong text-muted hover:bg-border-control',
         )}
         style={{ clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}
       >
@@ -233,8 +233,8 @@ function TriangleCell({
         disabled={disabled}
         onClick={() => onToggle('video')}
         className={cn(
-          'absolute inset-0 flex items-end justify-end px-1 pb-0.5 text-[0.7rem] font-semibold text-status-accepted transition-colors focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/50',
-          videoPosted ? 'hover:bg-status-accepted-soft' : 'bg-slate-300/75 text-slate-600 hover:bg-slate-400/75 dark:bg-slate-700/75 dark:text-slate-300',
+          'absolute inset-0 flex items-end justify-end px-1 pb-0.5 text-[0.7rem] font-semibold text-status-accepted transition-colors focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus',
+          videoPosted ? 'hover:bg-status-accepted-soft' : 'bg-surface-strong text-muted hover:bg-border-control',
         )}
         style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }}
       >
@@ -302,15 +302,15 @@ function RazborAccessMatrix({
   })
 
   return (
-    <div className="overflow-hidden rounded-xl border border-line bg-surface">
+    <div className="overflow-hidden rounded-lg border border-border bg-surface">
       <div className="overflow-x-auto">
         <table className="min-w-max border-collapse text-sm">
           <thead>
-            <tr className="bg-surface-muted">
-              <th className="sticky left-0 z-30 min-w-56 border-b border-r border-line bg-surface-muted px-3 py-2 text-left font-medium text-ink">
+            <tr className="bg-surface-subtle">
+              <th className="sticky left-0 z-30 min-w-56 border-b border-r border-border bg-surface-subtle px-3 py-2 text-left font-medium text-text">
                 Ученик / группа
               </th>
-              <th className="border-b border-line px-2 py-2 text-center text-xs font-medium text-muted">
+              <th className="border-b border-border px-2 py-2 text-center text-xs font-medium text-muted">
                 <div className="mb-1 whitespace-nowrap">Все серии</div>
                 <TriangleCell
                   written={accessValue(draft, 'term', 'pdf_tex', 0)}
@@ -320,7 +320,7 @@ function RazborAccessMatrix({
                   context="Все серии"
                 />
               </th>
-              <th className="border-b border-line px-2 py-2 text-center text-xs font-medium text-muted">
+              <th className="border-b border-border px-2 py-2 text-center text-xs font-medium text-muted">
                 <div className="mb-1 whitespace-nowrap">По умолчанию</div>
                 <TriangleCell
                   written={defaultValue(draft, 'term', 'pdf_tex')}
@@ -331,7 +331,7 @@ function RazborAccessMatrix({
                 />
               </th>
               {draft.series.map((series) => (
-                <th key={series.series_id} className="border-b border-line px-2 py-2 text-center font-medium text-ink">
+                <th key={series.series_id} className="border-b border-border px-2 py-2 text-center font-medium text-text">
                   <div className="mb-1 whitespace-nowrap text-xs">Серия {series.series_number}</div>
                   <TriangleCell
                     written={accessValue(draft, 'term', 'pdf_tex', series.series_id)}
@@ -345,14 +345,14 @@ function RazborAccessMatrix({
                 </th>
               ))}
             </tr>
-            <tr className="bg-surface-muted/70">
-              <th className="sticky left-0 z-30 border-b border-r border-line bg-surface-muted/70 px-3 py-1 text-left text-[0.65rem] font-normal text-faint">
+            <tr className="bg-surface-subtle/70">
+              <th className="sticky left-0 z-30 border-b border-r border-border bg-surface-subtle/70 px-3 py-1 text-left text-[0.65rem] font-normal text-text-subtle">
                 Верхний левый треугольник — письменный · нижний правый — видео
               </th>
-              <th className="border-b border-line px-2 py-1 text-center text-[0.65rem] font-normal text-faint">текущие</th>
-              <th className="border-b border-line px-2 py-1 text-center text-[0.65rem] font-normal text-faint">новые серии</th>
+              <th className="border-b border-border px-2 py-1 text-center text-[0.65rem] font-normal text-text-subtle">текущие</th>
+              <th className="border-b border-border px-2 py-1 text-center text-[0.65rem] font-normal text-text-subtle">новые серии</th>
               {draft.series.map((series) => (
-                <th key={series.series_id} className="border-b border-line px-2 py-1 text-[0.65rem] font-normal text-faint">
+                <th key={series.series_id} className="border-b border-border px-2 py-1 text-[0.65rem] font-normal text-text-subtle">
                   {series.series_name}
                 </th>
               ))}
@@ -363,8 +363,8 @@ function RazborAccessMatrix({
               const isCollapsed = collapsed.has(group.id)
               return (
                 <Fragment key={group.id}>
-                  <tr className="bg-surface-muted/60">
-                    <th className="sticky left-0 z-20 border-b border-r border-line bg-surface-muted/60 px-2 py-1 text-left">
+                  <tr className="bg-surface-subtle/60">
+                    <th className="sticky left-0 z-20 border-b border-r border-border bg-surface-subtle/60 px-2 py-1 text-left">
                       <button
                         type="button"
                         aria-expanded={!isCollapsed}
@@ -375,13 +375,13 @@ function RazborAccessMatrix({
                           else next.add(group.id)
                           return next
                         })}
-                        className="flex min-h-9 items-center gap-1.5 rounded-md px-1 text-xs font-semibold uppercase tracking-wide text-muted hover:bg-surface hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                        className="flex min-h-9 items-center gap-1.5 rounded-md px-1 text-xs font-semibold uppercase tracking-wide text-muted hover:bg-surface hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                       >
                         <ChevronDown className={cn('h-4 w-4 transition-transform', isCollapsed && '-rotate-90')} aria-hidden="true" />
                         {group.name}
                       </button>
                     </th>
-                    <td className="border-b border-line px-2 py-1">
+                    <td className="border-b border-border px-2 py-1">
                       <TriangleCell
                         written={accessValue(draft, 'group', 'pdf_tex', 0, group.id)}
                         video={accessValue(draft, 'group', 'video', 0, group.id)}
@@ -390,7 +390,7 @@ function RazborAccessMatrix({
                         context={'Группа ' + group.name + ' · все серии'}
                       />
                     </td>
-                    <td className="border-b border-line px-2 py-1">
+                    <td className="border-b border-border px-2 py-1">
                       <TriangleCell
                         written={group.razbor_default_pdf_tex}
                         video={group.razbor_default_video}
@@ -400,7 +400,7 @@ function RazborAccessMatrix({
                       />
                     </td>
                     {draft.series.map((series) => (
-                      <td key={series.series_id} className="border-b border-line px-2 py-1">
+                      <td key={series.series_id} className="border-b border-border px-2 py-1">
                         <TriangleCell
                           written={accessValue(draft, 'group', 'pdf_tex', series.series_id, group.id)}
                           video={accessValue(draft, 'group', 'video', series.series_id, group.id)}
@@ -415,10 +415,10 @@ function RazborAccessMatrix({
                   </tr>
                   {!isCollapsed && students.map((student) => (
                     <tr key={student.student_id}>
-                      <td className="sticky left-0 z-10 border-b border-r border-line bg-surface px-3 py-1.5 text-sm text-ink">
+                      <td className="sticky left-0 z-10 border-b border-r border-border bg-surface px-3 py-1.5 text-sm text-text">
                         {fullNameFromMatrix(student)}
                       </td>
-                      <td className="border-b border-line px-2 py-1">
+                      <td className="border-b border-border px-2 py-1">
                         <TriangleCell
                           written={accessValue(draft, 'student', 'pdf_tex', 0, undefined, student.student_id)}
                           video={accessValue(draft, 'student', 'video', 0, undefined, student.student_id)}
@@ -427,7 +427,7 @@ function RazborAccessMatrix({
                           context={fullNameFromMatrix(student) + ' · все серии'}
                         />
                       </td>
-                      <td className="border-b border-line px-2 py-1">
+                      <td className="border-b border-border px-2 py-1">
                         <TriangleCell
                           written={student.razbor_default_pdf_tex}
                           video={student.razbor_default_video}
@@ -439,7 +439,7 @@ function RazborAccessMatrix({
                       {draft.series.map((series) => {
                         const cell = cellByKey.get(cellKey(student.student_id, series.series_id))
                         return (
-                          <td key={series.series_id} className="border-b border-line px-2 py-1">
+                          <td key={series.series_id} className="border-b border-border px-2 py-1">
                             <TriangleCell
                               written={cell?.can_view_pdf_tex ?? false}
                               video={cell?.can_view_video ?? false}
@@ -460,7 +460,7 @@ function RazborAccessMatrix({
           </tbody>
         </table>
       </div>
-      {error ? <p className="border-t border-line px-3 py-2 text-sm text-danger">{error}</p> : null}
+      {error ? <p className="border-t border-border px-3 py-2 text-sm text-danger">{error}</p> : null}
     </div>
   )
 }
@@ -517,12 +517,12 @@ export function StudentsTab({ centerId }: { centerId: number }) {
       <RosterBoard board={board} centerId={centerId} />
 
       {error ? <p className="text-sm text-danger">{error}</p> : null}
-      <div className="flex flex-col gap-2 border-t border-line pt-4">
-        <p className="text-sm font-medium text-ink">Добавить из пользователей</p>
+      <div className="flex flex-col gap-2 border-t border-border pt-4">
+        <p className="text-sm font-medium text-text">Добавить из пользователей</p>
         <UserSearchSelect centerId={centerId} onSelect={setPicked} />
         {picked ? (
-          <div className="flex flex-wrap items-center gap-3 rounded-lg bg-surface-muted px-3 py-2">
-            <span className="text-sm text-ink">{fullName(picked)}</span>
+          <div className="flex flex-wrap items-center gap-3 rounded-lg bg-surface-subtle px-3 py-2">
+            <span className="text-sm text-text">{fullName(picked)}</span>
             <Select value={addGroupId} onChange={(event) => setAddGroupId(event.target.value)} aria-label="Группа" className="h-9 max-w-40">
               <option value="">Без группы (по умолчанию)</option>
               {(groups ?? []).filter((group) => !isUnallocatedGroup(group.name)).map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
@@ -792,11 +792,11 @@ function RosterBoard({
         <span>Сортировка всех колонок: {rosterSortLabel(sort)}</span>
       </div>
       {undo ? (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-accent/30 bg-accent-soft px-3 py-2 text-sm text-accent-ink" role="status">
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-selected-border/30 bg-selected px-3 py-2 text-sm text-selected-text" role="status">
           <span>{undo.name} перемещён.</span>
           <button
             type="button"
-            className="font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+            className="font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
             onClick={() => {
               const student = students.find((candidate) => candidate.user_id === undo.userId)
               if (student) moveStudent(student, undo.fromGroupId, undo.fromGroupId === null ? UNALLOCATED_GROUP_NAME : (groups.find((group) => group.id === undo.fromGroupId)?.name ?? 'группу'), true)
@@ -871,21 +871,21 @@ function RosterColumn({
     <section
       ref={setNodeRef}
       className={cn(
-        'flex w-72 min-w-72 snap-start flex-col overflow-hidden rounded-xl border bg-surface p-3 transition-colors sm:w-80 sm:min-w-80',
+        'flex w-72 min-w-72 snap-start flex-col overflow-hidden rounded-lg border bg-surface p-3 transition-colors sm:w-80 sm:min-w-80',
         fillHeight ? 'min-h-0 flex-1' : 'h-[65vh] max-h-[65vh]',
-        isUnallocated ? 'border-dashed border-line-strong' : 'border-line',
-        isOver && 'border-accent bg-accent-soft/50',
+        isUnallocated ? 'border-dashed border-border-control' : 'border-border',
+        isOver && 'border-selected-border bg-selected/50',
       )}
       aria-label={name + ', ' + students.length + ' учеников'}
     >
-      <div className="mb-3 flex items-start gap-2 border-b border-line pb-2">
+      <div className="mb-3 flex items-start gap-2 border-b border-border pb-2">
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-sm font-semibold text-ink">{name}</h3>
+          <h3 className="truncate text-sm font-semibold text-text">{name}</h3>
           <p className="font-mono text-xs text-muted">{students.length} учеников</p>
         </div>
         <button
           type="button"
-          className="shrink-0 rounded-md px-1.5 py-1 text-[0.68rem] font-medium text-muted hover:bg-surface-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+          className="shrink-0 rounded-md px-1.5 py-1 text-[0.68rem] font-medium text-muted hover:bg-surface-subtle hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
           aria-label={'Сортировка колонки ' + name + ': ' + rosterSortLabel(sort)}
           onClick={() => onSortChange(nextSort)}
         >
@@ -897,7 +897,7 @@ function RosterColumn({
         aria-label={name + ' список учеников'}
         className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {students.length === 0 ? <p className="rounded-lg border border-dashed border-line px-3 py-6 text-center text-xs text-faint">Перетащите сюда ученика</p> : null}
+        {students.length === 0 ? <p className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-xs text-text-subtle">Перетащите сюда ученика</p> : null}
         {students.map((student) => (
           <RosterStudentCard
             key={student.user_id}
@@ -938,7 +938,7 @@ function RosterStudentCard({
       }}
       aria-label={rosterStudentName(student) + '. Нажмите Delete, чтобы удалить из матцентра.'}
       className={cn(
-        'rounded-lg border border-line bg-surface-muted px-3 py-2 shadow-sm transition-opacity',
+        'rounded-lg border border-border bg-surface-subtle px-3 py-2 shadow-sm transition-opacity',
         'cursor-grab active:cursor-grabbing',
         isDragging && 'opacity-0',
         isMoving && !isDragging && 'opacity-60',
@@ -951,7 +951,7 @@ function RosterStudentCard({
 
 function RosterStudentCardPreview({ student }: { student: ManageRosterBoardStudent }) {
   return (
-    <article className="w-full cursor-grabbing rounded-lg border border-line bg-surface-muted px-3 py-2 shadow-sm">
+    <article className="w-full cursor-grabbing rounded-lg border border-border bg-surface-subtle px-3 py-2 shadow-sm">
       <RosterStudentCardBody student={student} />
     </article>
   )
@@ -961,7 +961,7 @@ function RosterStudentCardBody({ student }: { student: ManageRosterBoardStudent 
   return (
     <div className="flex items-start gap-2">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-ink">{rosterStudentName(student)}</p>
+        <p className="truncate text-sm font-medium text-text">{rosterStudentName(student)}</p>
         <p className="truncate text-xs text-muted">
           {student.previous_group_name
             ? 'Предыдущая группа: ' + student.previous_group_name
@@ -970,7 +970,7 @@ function RosterStudentCardBody({ student }: { student: ManageRosterBoardStudent 
               : 'Новый ученик'}
         </p>
       </div>
-      <span className="shrink-0 rounded-md bg-surface px-1.5 py-0.5 font-mono text-xs text-accent-ink" title="Рейтинг">
+      <span className="shrink-0 rounded-md bg-surface px-1.5 py-0.5 font-mono text-xs text-selected-text" title="Рейтинг">
         {Number.isInteger(student.rating) ? student.rating : student.rating.toFixed(1)}
       </span>
     </div>

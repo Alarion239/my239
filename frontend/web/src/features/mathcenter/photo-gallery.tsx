@@ -160,7 +160,7 @@ export function PhotoAttachments({ photos, title }: PhotoAttachmentsProps) {
                 key={key}
                 role="img"
                 aria-label={`Фото ${index + 1} из ${orderedPhotos.length} недоступно`}
-                className="flex h-24 w-24 flex-col items-center justify-center gap-1 rounded-md border border-line bg-surface-muted text-faint"
+                className="flex h-24 w-24 flex-col items-center justify-center gap-1 rounded-md border border-border bg-surface-subtle text-text-subtle"
               >
                 <ImageOff className="h-5 w-5" aria-hidden />
                 <span className="text-[10px]">Недоступно</span>
@@ -173,7 +173,7 @@ export function PhotoAttachments({ photos, title }: PhotoAttachmentsProps) {
               type="button"
               aria-label={`Открыть фото ${index + 1} из ${orderedPhotos.length}`}
               onClick={(event) => open(index, event.currentTarget)}
-              className="group relative block h-24 w-24 overflow-hidden rounded-md border border-line bg-surface-muted text-left outline-none transition-shadow hover:border-line-strong focus-visible:ring-2 focus-visible:ring-accent/50"
+              className="group relative block h-24 w-24 overflow-hidden rounded-md border border-border bg-surface-subtle text-left outline-none transition-shadow hover:border-border-control focus-visible:ring-2 focus-visible:ring-focus"
             >
               <img
                 src={photo.url}
@@ -183,7 +183,7 @@ export function PhotoAttachments({ photos, title }: PhotoAttachmentsProps) {
                 onError={() => markUnavailable(photo, index)}
                 className="h-full w-full object-cover"
               />
-              <span className="absolute bottom-1 right-1 rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-white">
+              <span className="absolute bottom-1 right-1 rounded bg-media-canvas/65 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-media-text">
                 {index + 1}
               </span>
             </button>
@@ -520,20 +520,20 @@ function PhotoLightbox({
   return (
     <DialogPrimitive.Root open onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[#14120d]/95 backdrop-blur-sm" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-media-canvas/95 backdrop-blur-sm" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
-          className="fixed inset-0 z-50 flex h-[100dvh] w-[100dvw] flex-col overflow-hidden bg-[#14120d] text-white outline-none"
+          className="fixed inset-0 z-50 flex h-[100dvh] w-[100dvw] flex-col overflow-hidden bg-media-canvas text-media-text outline-none"
           onCloseAutoFocus={onCloseAutoFocus}
           onClick={(event) => {
             if (event.target === event.currentTarget) onOpenChange(false)
           }}
         >
-          <div className="relative z-10 flex shrink-0 items-center gap-3 border-b border-white/10 bg-[#14120d]/90 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-            <DialogPrimitive.Title className="min-w-0 flex-1 truncate font-sans text-sm font-medium text-white">
+          <div className="relative z-10 flex shrink-0 items-center gap-3 border-b border-media-text/10 bg-media-canvas/90 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+            <DialogPrimitive.Title className="min-w-0 flex-1 truncate font-sans text-sm font-medium text-media-text">
               {title}
             </DialogPrimitive.Title>
-            <span className="shrink-0 text-xs tabular-nums text-white/65" aria-live="polite">
+            <span className="shrink-0 text-xs tabular-nums text-media-text/65" aria-live="polite">
               {openIndex + 1} / {photos.length}
             </span>
             {photo.url ? (
@@ -541,14 +541,14 @@ function PhotoLightbox({
                 href={photo.url}
                 target="_blank"
                 rel="noreferrer"
-                className="hidden shrink-0 rounded-md px-2 py-1.5 text-xs font-medium text-white/75 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3cc39d] sm:inline-flex"
+                className="hidden shrink-0 rounded-md px-2 py-1.5 text-xs font-medium text-media-text/75 hover:bg-media-text/10 hover:text-media-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-media-focus sm:inline-flex"
               >
                 Открыть оригинал
               </a>
             ) : null}
             <DialogPrimitive.Close
               aria-label="Закрыть просмотр фотографий"
-              className="shrink-0 rounded-md p-2 text-white/75 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3cc39d]"
+              className="shrink-0 rounded-md p-2 text-media-text/75 hover:bg-media-text/10 hover:text-media-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-media-focus"
             >
               <X className="h-5 w-5" aria-hidden />
             </DialogPrimitive.Close>
@@ -580,7 +580,7 @@ function PhotoLightbox({
                   aria-label="Предыдущее фото"
                   disabled={!canGoPrevious}
                   onClick={() => navigate(-1)}
-                  className="absolute left-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-black/45 p-3 text-white shadow-lg transition-colors hover:bg-black/70 disabled:pointer-events-none disabled:opacity-25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3cc39d] sm:left-5"
+                  className="absolute left-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-media-canvas/45 p-3 text-media-text shadow-lg transition-colors hover:bg-media-canvas/70 disabled:pointer-events-none disabled:opacity-25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-media-focus sm:left-5"
                 >
                   <ChevronLeft className="h-6 w-6" aria-hidden />
                 </button>
@@ -597,8 +597,8 @@ function PhotoLightbox({
                 }}
               >
                 {displayError ? (
-                  <div className="flex max-w-xs flex-col items-center gap-3 rounded-xl border border-white/15 bg-white/5 px-6 py-8 text-center text-sm text-white/70">
-                    <ImageOff className="h-8 w-8 text-white/45" aria-hidden />
+                  <div className="flex max-w-xs flex-col items-center gap-3 rounded-lg border border-media-text/15 bg-media-text/5 px-6 py-8 text-center text-sm text-media-text/70">
+                    <ImageOff className="h-8 w-8 text-media-text/45" aria-hidden />
                     <span>{photoIsAvailable ? 'Не удалось загрузить фото' : 'Фото недоступно'}</span>
                   </div>
                 ) : (
@@ -644,7 +644,7 @@ function PhotoLightbox({
                   aria-label="Следующее фото"
                   disabled={!canGoNext}
                   onClick={() => navigate(1)}
-                  className="absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-black/45 p-3 text-white shadow-lg transition-colors hover:bg-black/70 disabled:pointer-events-none disabled:opacity-25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3cc39d] sm:right-5"
+                  className="absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-media-canvas/45 p-3 text-media-text shadow-lg transition-colors hover:bg-media-canvas/70 disabled:pointer-events-none disabled:opacity-25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-media-focus sm:right-5"
                 >
                   <ChevronRight className="h-6 w-6" aria-hidden />
                 </button>
@@ -652,7 +652,7 @@ function PhotoLightbox({
             </div>
           </div>
 
-          <div className="relative z-10 flex shrink-0 flex-col gap-2 border-t border-white/10 bg-[#14120d]/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-5">
+          <div className="relative z-10 flex shrink-0 flex-col gap-2 border-t border-media-text/10 bg-media-canvas/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-5">
             <div className="flex items-center justify-center gap-1" role="toolbar" aria-label="Управление просмотром">
               <button
                 type="button"
@@ -660,11 +660,11 @@ function PhotoLightbox({
                 title="Уменьшить масштаб"
                 disabled={scale <= MIN_SCALE}
                 onClick={() => zoomAt(scale - SCALE_STEP)}
-                className="rounded-md p-2 text-white/70 hover:bg-white/10 hover:text-white disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3cc39d]"
+                className="rounded-md p-2 text-media-text/70 hover:bg-media-text/10 hover:text-media-text disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-media-focus"
               >
                 <Minus className="h-4 w-4" aria-hidden />
               </button>
-              <span className="min-w-14 text-center text-xs tabular-nums text-white/70" aria-label="Масштаб">
+              <span className="min-w-14 text-center text-xs tabular-nums text-media-text/70" aria-label="Масштаб">
                 {Math.round(scale * 100)}%
               </span>
               <button
@@ -673,7 +673,7 @@ function PhotoLightbox({
                 title="Увеличить масштаб"
                 disabled={scale >= MAX_SCALE}
                 onClick={() => zoomAt(scale + SCALE_STEP)}
-                className="rounded-md p-2 text-white/70 hover:bg-white/10 hover:text-white disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3cc39d]"
+                className="rounded-md p-2 text-media-text/70 hover:bg-media-text/10 hover:text-media-text disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-media-focus"
               >
                 <Plus className="h-4 w-4" aria-hidden />
               </button>
@@ -683,7 +683,7 @@ function PhotoLightbox({
                 title="Вписать фото в окно"
                 disabled={scale === MIN_SCALE && offset.x === 0 && offset.y === 0}
                 onClick={resetZoom}
-                className="ml-1 rounded-md p-2 text-white/70 hover:bg-white/10 hover:text-white disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3cc39d]"
+                className="ml-1 rounded-md p-2 text-media-text/70 hover:bg-media-text/10 hover:text-media-text disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-media-focus"
               >
                 <Maximize className="h-4 w-4" aria-hidden />
               </button>
@@ -692,7 +692,7 @@ function PhotoLightbox({
                   href={photo.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="ml-1 rounded-md px-2 py-1.5 text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3cc39d] sm:hidden"
+                  className="ml-1 rounded-md px-2 py-1.5 text-xs font-medium text-media-text/70 hover:bg-media-text/10 hover:text-media-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-media-focus sm:hidden"
                 >
                   Оригинал
                 </a>
@@ -720,8 +720,8 @@ function PhotoLightbox({
                       disabled={!available}
                       onClick={() => onSelect(index)}
                       className={cn(
-                        'relative h-14 w-14 shrink-0 overflow-hidden rounded-md border bg-black/30 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[#3cc39d] sm:h-16 sm:w-16',
-                        index === openIndex ? 'border-[#3cc39d] ring-2 ring-[#3cc39d]/50' : 'border-white/15 hover:border-white/45',
+                        'relative h-14 w-14 shrink-0 overflow-hidden rounded-md border bg-media-canvas/30 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-media-focus sm:h-16 sm:w-16',
+                        index === openIndex ? 'border-media-focus ring-2 ring-media-focus/50' : 'border-media-text/15 hover:border-media-text/45',
                         !available && 'cursor-not-allowed opacity-45',
                       )}
                     >
@@ -735,9 +735,9 @@ function PhotoLightbox({
                           className="h-full w-full object-cover"
                         />
                       ) : (
-                        <ImageOff className="absolute inset-0 m-auto h-4 w-4 text-white/45" aria-hidden />
+                        <ImageOff className="absolute inset-0 m-auto h-4 w-4 text-media-text/45" aria-hidden />
                       )}
-                      <span className="absolute bottom-0.5 right-0.5 rounded bg-black/70 px-1 text-[10px] tabular-nums text-white">
+                      <span className="absolute bottom-0.5 right-0.5 rounded bg-media-canvas/70 px-1 text-[10px] tabular-nums text-media-text">
                         {index + 1}
                       </span>
                     </button>

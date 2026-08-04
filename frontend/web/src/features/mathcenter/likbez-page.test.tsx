@@ -169,7 +169,7 @@ describe('Likbez controls', () => {
     const formatTabs = screen.getByRole('tablist', { name: 'Формат ликбеза' })
     expect(workbenchHeader).toContainElement(screen.getByText('Черновик'))
     expect(workbenchHeader).toContainElement(screen.getByRole('button', { name: 'Опубликовать' }))
-    expect(workbench).not.toHaveClass('rounded-xl', 'border', 'bg-surface', 'shadow-sm')
+    expect(workbench).not.toHaveClass('rounded-lg', 'border', 'bg-surface', 'shadow-sm')
     expect(metadataForm).not.toBeNull()
     expect(metadataForm!.compareDocumentPosition(formatTabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.queryByRole('heading', { name: 'Ликбез №1' })).not.toBeInTheDocument()

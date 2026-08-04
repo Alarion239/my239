@@ -28,7 +28,7 @@ export function AppShell() {
   return (
     <div
       className={cn(
-        'flex bg-paper',
+        'flex bg-canvas',
         fullBleed ? 'h-screen overflow-hidden' : 'min-h-screen',
       )}
     >
@@ -43,7 +43,7 @@ export function AppShell() {
             onBrandClick={() => setNavOpen((open) => !open)}
           />
           {actingAs ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-accent-soft px-4 py-2.5 text-accent-ink sm:px-6 lg:px-10">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-selected px-4 py-2.5 text-selected-text sm:px-6 lg:px-10">
               <span className="text-sm font-medium">Просмотр от имени {actingAs.label}</span>
               <Button variant="secondary" size="sm" onClick={stop}>
                 Выйти из режима

@@ -15,7 +15,7 @@ export function SectionHeader({
   return (
     <div className="mb-3 flex items-end justify-between gap-3">
       <div>
-        <h2 className="font-display text-xl font-medium text-ink">{title}</h2>
+        <h2 className="text-xl font-medium text-text">{title}</h2>
         {description ? <p className="text-sm text-muted">{description}</p> : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}

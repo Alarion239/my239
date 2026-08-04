@@ -260,8 +260,8 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
   return (
     <tr
       className={cn(
-        'h-9 hover:bg-surface-muted/40',
-        active && 'bg-amber-50/60 dark:bg-amber-500/10',
+        'h-9 hover:bg-surface-subtle/40',
+        active && 'bg-private-soft',
       )}
     >
       <td className={nameCell}>
@@ -270,7 +270,7 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
           to={'../students/' + student.user_id + search}
           className={cn(
             'inline-flex items-center gap-1.5 underline-offset-2 hover:underline',
-            active && 'font-semibold text-ink',
+            active && 'font-semibold text-text',
           )}
         >
           <span>{student.name}</span>
@@ -278,7 +278,7 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
             <span
               title="Есть заметки об ученике"
               aria-label="Есть заметки об ученике"
-              className="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-500"
+              className="inline-block h-2 w-2 shrink-0 rounded-full bg-signature"
             />
           ) : null}
         </Link>
@@ -287,7 +287,7 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
         <td
           aria-hidden="true"
           colSpan={leadingColumns}
-          className="h-9 border-b border-line p-0"
+          className="h-9 border-b border-border p-0"
           data-conduit-column-spacer="left"
         />
       ) : null}
@@ -340,14 +340,14 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
             onClick={pending ? undefined : activate}
             onKeyDown={pending ? undefined : onKeyDown}
             className={cn(
-              'h-9 min-w-9 cursor-pointer select-none border-b border-line px-1.5 text-center align-middle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40',
+              'h-9 min-w-9 cursor-pointer select-none border-b border-border px-1.5 text-center align-middle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus',
               vert(firstInSeries),
               exercise
                 ? exerciseCellClasses(true)
                 : accepted && !inactive
                   ? 'bg-status-accepted-soft font-medium text-status-accepted'
                   : accepted
-                    ? 'bg-surface-muted font-medium text-muted opacity-70'
+                    ? 'bg-surface-subtle font-medium text-muted opacity-70'
                     : pendingStatus
                       ? cn(
                           'font-medium',
@@ -357,10 +357,10 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
                       : cn(
                           coffinCellClasses(col.is_coffin, coffinIsOpen),
                           inactive
-                            ? 'bg-surface-muted/70 text-faint hover:bg-surface-muted'
+                            ? 'bg-surface-subtle/70 text-text-subtle hover:bg-surface-subtle'
                             : active
                               ? 'text-status-accepted hover:bg-status-accepted-soft'
-                              : 'text-faint hover:bg-surface-muted',
+                              : 'text-text-subtle hover:bg-surface-subtle',
                         ),
             )}
           >
@@ -380,11 +380,11 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
         <td
           aria-hidden="true"
           colSpan={trailingColumns}
-          className="h-9 border-b border-line p-0"
+          className="h-9 border-b border-border p-0"
           data-conduit-column-spacer="right"
         />
       ) : null}
-      <td className="sticky right-0 z-10 border-b border-l border-r border-line bg-surface px-3 py-1.5 text-center font-medium text-ink">
+      <td className="sticky right-0 z-10 border-b border-l border-r border-border bg-surface px-3 py-1.5 text-center font-medium text-text">
         {solvedTotal}
       </td>
     </tr>
@@ -886,7 +886,7 @@ export function ConduitTable({
         title="Импортировать отмеченные решения из связанных Google Sheets"
         disabled={termId <= 0 || syncGoogleSheets.isPending}
         onClick={() => syncGoogleSheets.mutate(termId)}
-        className="h-8 shrink-0 rounded-lg border border-line px-2.5 text-xs text-muted hover:bg-surface-muted hover:text-ink disabled:opacity-50"
+        className="h-8 shrink-0 rounded-lg border border-border px-2.5 text-xs text-muted hover:bg-surface-subtle hover:text-text disabled:opacity-50"
       >
         {syncGoogleSheets.isPending ? 'Импорт…' : 'Sheets'}
       </button>
@@ -933,8 +933,8 @@ export function ConduitTable({
     <div className="flex h-full flex-col">
       {toolbarSlot ? createPortal(toolbar, toolbarSlot) : null}
 
-      <div className="flex shrink-0 items-center gap-2 border-b border-line bg-surface px-3 py-2">
-        <span className="shrink-0 text-xs font-medium text-faint">Группа</span>
+      <div className="flex shrink-0 items-center gap-2 border-b border-border bg-surface px-3 py-2">
+        <span className="shrink-0 text-xs font-medium text-text-subtle">Группа</span>
         <div
           role="group"
           aria-label="Выбор группы"
@@ -950,17 +950,17 @@ export function ConduitTable({
                 aria-pressed={selected}
                 onClick={() => showGroup(group.group_id)}
                 className={cn(
-                  'inline-flex h-8 shrink-0 items-center gap-2 rounded-md border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                  'inline-flex h-8 shrink-0 items-center gap-2 rounded-md border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus',
                   selected
-                    ? 'border-accent bg-accent text-white shadow-sm'
-                    : 'border-transparent text-muted hover:border-line hover:bg-surface-muted hover:text-ink',
+                    ? 'border-selected-border bg-action text-on-action shadow-sm'
+                    : 'border-transparent text-muted hover:border-border hover:bg-surface-subtle hover:text-text',
                 )}
               >
                 <span>{group.name}</span>
                 <span
                   className={cn(
                     'text-[0.65rem] font-normal tabular-nums',
-                    selected ? 'text-white/75' : 'text-faint',
+                    selected ? 'text-on-action/75' : 'text-text-subtle',
                   )}
                 >
                   {group.students.length}
@@ -970,16 +970,16 @@ export function ConduitTable({
           })}
           {solvedSort !== 'none' ? (
             <>
-              <span aria-hidden="true" className="mx-1 h-5 w-px shrink-0 bg-line" />
+              <span aria-hidden="true" className="mx-1 h-5 w-px shrink-0 bg-border" />
               <button
                 type="button"
                 aria-pressed={globalRanking}
                 onClick={showCenterWideRanking}
                 className={cn(
-                  'h-8 shrink-0 rounded-md border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                  'h-8 shrink-0 rounded-md border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus',
                   globalRanking
-                    ? 'border-accent bg-accent text-white shadow-sm'
-                    : 'border-line text-muted hover:bg-surface-muted hover:text-ink',
+                    ? 'border-selected-border bg-action text-on-action shadow-sm'
+                    : 'border-border text-muted hover:bg-surface-subtle hover:text-text',
                 )}
               >
                 Общий рейтинг
@@ -1005,7 +1005,7 @@ export function ConduitTable({
                     className="h-8 w-full min-w-40"
                     aria-label="Поиск ученика"
                   />
-                  <span className="text-[0.65rem] font-normal text-faint">
+                  <span className="text-[0.65rem] font-normal text-text-subtle">
                     {shown} из {shownFrom}
                   </span>
                 </div>
@@ -1016,7 +1016,7 @@ export function ConduitTable({
                   ref={s.series_id === currentId ? currentThRef : undefined}
                   colSpan={s.columns.length}
                   className={cn(
-                    'sticky top-0 z-20 h-9 whitespace-nowrap border-b border-t border-line bg-surface-muted px-3 text-center font-medium text-ink',
+                    'sticky top-0 z-20 h-9 whitespace-nowrap border-b border-t border-border bg-surface-subtle px-3 text-center font-medium text-text',
                     vert(true),
                   )}
                   title={s.display_name + ' — открыть условие'}
@@ -1031,7 +1031,7 @@ export function ConduitTable({
                       search
                     }
                     aria-label={'Серия ' + s.number + ' — открыть условие'}
-                    className="rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                    className="rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                   >
                     Серия {s.number}
                   </Link>
@@ -1039,13 +1039,13 @@ export function ConduitTable({
               ))}
               <th
                 rowSpan={2}
-                className="sticky right-0 top-0 z-40 border-b border-l border-r border-t border-line bg-surface-muted px-2 py-1 text-center font-medium text-ink"
+                className="sticky right-0 top-0 z-40 border-b border-l border-r border-t border-border bg-surface-subtle px-2 py-1 text-center font-medium text-text"
               >
                 <div className="flex min-h-14 flex-col items-center justify-center">
                   <button
                     type="button"
                     onClick={cycleSolvedSort}
-                    className="whitespace-nowrap rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                    className="whitespace-nowrap rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                     title={
                       solvedSort === 'none'
                         ? 'Сортировать по убыванию числа решённых задач'
@@ -1081,7 +1081,7 @@ export function ConduitTable({
                         : undefined
                     }
                     className={cn(
-                      'sticky top-9 z-20 min-w-9 border-b border-line px-1.5 py-1 text-center text-xs font-medium',
+                      'sticky top-9 z-20 min-w-9 border-b border-border px-1.5 py-1 text-center text-xs font-medium',
                       vert(firstInSeries),
                       col.problem_number === 0
                         ? exerciseColumnClasses(true)
@@ -1102,7 +1102,7 @@ export function ConduitTable({
                         col.column_label +
                         ' — открыть разбор'
                       }
-                      className="inline-flex min-h-6 min-w-6 items-center justify-center rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                      className="inline-flex min-h-6 min-w-6 items-center justify-center rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                     >
                       {col.column_label}
                     </Link>
@@ -1169,21 +1169,21 @@ export function ConduitTable({
             {/* Column totals: people who solved each problem — pinned to the
                 bottom so it's always on screen. Always over ALL students. */}
             <tr>
-              <td className="sticky bottom-0 left-0 z-30 border-b border-l border-r border-t border-line bg-surface-muted px-3 py-1.5 font-medium text-ink">
+              <td className="sticky bottom-0 left-0 z-30 border-b border-l border-r border-t border-border bg-surface-subtle px-3 py-1.5 font-medium text-text">
                 Решили
               </td>
               {cols.map(({ col, firstInSeries }) => (
                 <td
                   key={col.subproblem_id}
                   className={cn(
-                    'sticky bottom-0 z-20 border-b border-t border-line bg-surface-muted px-1.5 py-1.5 text-center font-medium text-ink',
+                    'sticky bottom-0 z-20 border-b border-t border-border bg-surface-subtle px-1.5 py-1.5 text-center font-medium text-text',
                     vert(firstInSeries),
                   )}
                 >
                   {solvedSummary.columnTotals.get(col.subproblem_id) ?? 0}
                 </td>
               ))}
-              <td className="sticky bottom-0 right-0 z-30 border-b border-l border-r border-t border-line bg-surface-muted px-3 py-1.5 text-center font-medium text-ink">
+              <td className="sticky bottom-0 right-0 z-30 border-b border-l border-r border-t border-border bg-surface-subtle px-3 py-1.5 text-center font-medium text-text">
                 {solvedSummary.grandTotal}
               </td>
             </tr>

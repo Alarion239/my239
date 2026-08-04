@@ -115,16 +115,16 @@ function ProblemRow({
   return (
     <div
       className={cn(
-        'flex flex-wrap items-center gap-3 rounded-xl border bg-surface px-4 py-3',
+        'flex flex-wrap items-center gap-3 rounded-lg border bg-surface px-4 py-3',
         problem.problem_number === 0
-          ? 'border-accent/40 bg-accent-soft/50'
+          ? 'border-selected-border/40 bg-selected/50'
           : !exerciseUnlocked
-            ? 'border-line bg-surface-muted/50 opacity-70'
-            : 'border-line',
+            ? 'border-border bg-surface-subtle/50 opacity-70'
+            : 'border-border',
       )}
     >
       <div className="min-w-[8rem] flex-[0_1_12rem]">
-        <div className="font-medium text-ink">{problem.problem_display}</div>
+        <div className="font-medium text-text">{problem.problem_display}</div>
       </div>
       <div className="grid min-w-0 flex-[1_1_18rem] grid-cols-[repeat(auto-fit,minmax(2.75rem,1fr))] gap-1.5">
         {problem.subproblems.map((sub) => {
@@ -149,7 +149,7 @@ function ProblemRow({
               key={sub.subproblem_id}
               to={subproblemPath(year, seriesId, sub) + search}
               aria-label={tileLabel}
-              className="flex min-w-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+              className="flex min-w-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
             >
               {tile}
             </Link>

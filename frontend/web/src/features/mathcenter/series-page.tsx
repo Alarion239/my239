@@ -73,7 +73,7 @@ export function SeriesPage() {
 	}
 
   return (
-    <div className="animate-rise flex flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <CenterSeries
         key={centerId + ':' + termId}
         centerId={centerId}
@@ -88,15 +88,15 @@ export function SeriesPage() {
 
 function UnassignedStudentState({ headTeachers }: { headTeachers: { display_name: string }[] }) {
   return (
-    <Card className="animate-rise px-6 py-12 text-center">
-      <p className="text-lg font-medium text-ink">Вы ещё не распределены в группу.</p>
+    <Card className="px-6 py-12 text-center">
+      <p className="text-lg font-medium text-text">Вы ещё не распределены в группу.</p>
       <p className="mx-auto mt-2 max-w-xl text-sm text-muted">
         Попросите одного из руководителей матцентра назначить вас в учебную группу.
       </p>
       {headTeachers.length > 0 ? (
         <div className="mx-auto mt-5 max-w-sm text-left">
-          <p className="text-xs font-medium uppercase tracking-wide text-faint">Руководители</p>
-          <ul className="mt-2 flex flex-col gap-1 text-sm text-ink">
+          <p className="text-xs font-medium uppercase tracking-wide text-text-subtle">Руководители</p>
+          <ul className="mt-2 flex flex-col gap-1 text-sm text-text">
             {headTeachers.map((teacher) => <li key={teacher.display_name}>{teacher.display_name}</li>)}
           </ul>
         </div>
@@ -107,7 +107,7 @@ function UnassignedStudentState({ headTeachers }: { headTeachers: { display_name
 
 function NotFoundState() {
   return (
-    <Card className="animate-rise px-6 py-16 text-center">
+    <Card className="px-6 py-16 text-center">
       <p className="text-muted">Нет доступа к этому матцентру.</p>
     </Card>
   )
@@ -143,9 +143,9 @@ function CreateSeriesCard({
           type="button"
           aria-label="Создать серию"
           className={cn(
-            'flex w-56 shrink-0 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-line-strong bg-surface p-4 text-muted transition-colors',
-            highlight && 'border-accent bg-accent-soft text-accent-ink ring-2 ring-accent/30',
-            'hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+            'flex w-56 shrink-0 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border-control bg-surface p-4 text-muted transition-colors',
+            highlight && 'border-selected-border bg-selected text-selected-text ring-2 ring-focus',
+            'hover:border-selected-border hover:text-link focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus',
           )}
         >
           <Plus className="h-6 w-6" aria-hidden />
@@ -183,14 +183,14 @@ export function MathCenterIndex() {
   }
 
   return (
-    <Card className="animate-rise px-6 py-16 text-center">
+    <Card className="px-6 py-16 text-center">
       <p className="text-muted">Вы не состоите ни в одном матцентре.</p>
       {isAdmin ? (
         <p className="mt-2 text-sm text-muted">
           Откройте{' '}
           <Link
             to="/admin/users"
-            className="font-medium text-accent underline-offset-4 hover:underline"
+            className="font-medium text-link underline-offset-4 hover:underline"
           >
             Администрирование
           </Link>
@@ -427,7 +427,7 @@ function StudentTasks({ series }: { series: Series }) {
       <div className="min-w-0 md:w-1/2 md:pr-4">
         <StatementPanel series={series} bare />
       </div>
-      <div className="min-w-0 md:w-1/2 md:border-l md:border-line md:pl-4">
+      <div className="min-w-0 md:w-1/2 md:border-l md:border-border md:pl-4">
         <StudentSide series={series} />
       </div>
     </div>
@@ -543,7 +543,7 @@ function EditSeriesButton({ centerId, series }: { centerId: number; series: Seri
           type="button"
           aria-label="Редактировать серию"
           title="Редактировать серию"
-          className="pointer-events-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/60 bg-paper/70 text-muted shadow-lg shadow-black/10 backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-paper/90 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 dark:border-white/10 dark:bg-surface/75 dark:hover:bg-surface"
+          className="pointer-events-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-control bg-surface/90 text-muted shadow-lg transition-all hover:-translate-y-0.5 hover:bg-surface hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
         >
           <Pencil className="h-4 w-4" aria-hidden />
         </button>
@@ -596,7 +596,7 @@ function DeleteSeriesButton({
           type="button"
           aria-label="Удалить серию"
           title="Удалить серию"
-          className="pointer-events-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/60 bg-paper/70 text-muted shadow-lg shadow-black/10 backdrop-blur-md transition-all hover:-translate-y-0.5 hover:bg-danger-soft hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/40 dark:border-white/10 dark:bg-surface/75"
+          className="pointer-events-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-control bg-surface/90 text-muted shadow-lg transition-all hover:-translate-y-0.5 hover:bg-danger-soft hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
         >
           <Trash2 className="h-4 w-4" aria-hidden />
         </button>

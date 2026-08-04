@@ -99,7 +99,7 @@ function LegacyCenterRedirect({ legacyId }: { legacyId: number }) {
 
 function NoAccess() {
   return (
-    <Card className="animate-rise px-6 py-16 text-center">
+    <Card className="px-6 py-16 text-center">
       <p className="text-muted">Нет доступа к этому матцентру.</p>
     </Card>
   )

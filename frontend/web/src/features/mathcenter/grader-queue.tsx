@@ -56,7 +56,7 @@ export function GraderQueue({ seriesId }: GraderQueueProps) {
         <>
           {mine.length > 0 ? (
             <section className="flex flex-col gap-2">
-              <h3 className="text-sm font-medium text-ink">В работе</h3>
+              <h3 className="text-sm font-medium text-text">В работе</h3>
               <ul className="flex flex-col gap-2">
                 {mine.map((item) => (
                   <li key={item.thread_id}>
@@ -69,7 +69,7 @@ export function GraderQueue({ seriesId }: GraderQueueProps) {
 
           <section className="flex flex-col gap-2">
             {mine.length > 0 ? (
-              <h3 className="text-sm font-medium text-ink">Доступно к проверке</h3>
+              <h3 className="text-sm font-medium text-text">Доступно к проверке</h3>
             ) : null}
             {available.length === 0 ? (
               <p className="py-2 text-sm text-muted">Свободных задач нет.</p>
@@ -104,16 +104,16 @@ function QueueRow({
   return (
     <Link
       to={threadPath(year, seriesId, item.thread_id) + search}
-      className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface px-4 py-3 transition-colors hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
     >
       <div className="min-w-0 flex-1">
-        <div className="truncate font-medium text-ink">{item.student_name}</div>
+        <div className="truncate font-medium text-text">{item.student_name}</div>
         <div className="text-xs text-muted">{itemLabel(item)}</div>
       </div>
       {locked ? (
-        <Lock className="h-3.5 w-3.5 text-faint" aria-label="Занято" />
+        <Lock className="h-3.5 w-3.5 text-text-subtle" aria-label="Занято" />
       ) : null}
-      <span className="hidden text-xs text-faint sm:inline">
+      <span className="hidden text-xs text-text-subtle sm:inline">
         {formatDateTime(item.updated_at)}
       </span>
       <span

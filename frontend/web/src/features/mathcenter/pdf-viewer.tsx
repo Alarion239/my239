@@ -371,12 +371,12 @@ export function PdfViewer({
         <button
           type="button"
           onClick={() => setAttempt((value) => value + 1)}
-          className="rounded-full border border-danger/30 px-3 py-1.5 font-medium hover:bg-danger/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/40"
+          className="rounded-full border border-danger/30 px-3 py-1.5 font-medium hover:bg-danger/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
         >
           Повторить
         </button>
         {downloadUrl ? (
-          <a href={downloadUrl} download={downloadName} className="inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1.5 font-medium text-accent-ink hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
+          <a href={downloadUrl} download={downloadName} className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 font-medium text-selected-text hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
             <Download className="h-3.5 w-3.5" aria-hidden />
             Скачать PDF
           </a>
@@ -386,40 +386,40 @@ export function PdfViewer({
   }
 
   return (
-    <section ref={sectionRef} className={'flex w-full flex-col overflow-hidden rounded-lg border border-line bg-surface ' + (className ?? '')} aria-label={title}>
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1 border-b border-line bg-surface-muted px-2 py-1.5" role="toolbar" aria-label="Управление PDF">
+    <section ref={sectionRef} className={'flex w-full flex-col overflow-hidden rounded-lg border border-border bg-surface ' + (className ?? '')} aria-label={title}>
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1 border-b border-border bg-surface-subtle px-2 py-1.5" role="toolbar" aria-label="Управление PDF">
         <div className="flex items-center gap-1">
-          <button type="button" onClick={() => changePage(-1)} disabled={page <= 1 || status !== 'ready'} aria-label="Предыдущая страница" className="rounded-md p-1.5 text-muted hover:bg-surface hover:text-ink disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
+          <button type="button" onClick={() => changePage(-1)} disabled={page <= 1 || status !== 'ready'} aria-label="Предыдущая страница" className="rounded-md p-1.5 text-muted hover:bg-surface hover:text-text disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
             <ChevronLeft className="h-4 w-4" aria-hidden />
           </button>
           <span className="min-w-16 text-center text-xs tabular-nums text-muted" aria-live="polite">
             {pages > 0 ? `${page} / ${pages}` : 'PDF'}
           </span>
-          <button type="button" onClick={() => changePage(1)} disabled={page >= pages || status !== 'ready'} aria-label="Следующая страница" className="rounded-md p-1.5 text-muted hover:bg-surface hover:text-ink disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
+          <button type="button" onClick={() => changePage(1)} disabled={page >= pages || status !== 'ready'} aria-label="Следующая страница" className="rounded-md p-1.5 text-muted hover:bg-surface hover:text-text disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
             <ChevronRight className="h-4 w-4" aria-hidden />
           </button>
         </div>
         <div className="flex items-center justify-center gap-1">
-          <button type="button" onClick={() => changeZoom(-1)} disabled={status !== 'ready' || scale <= MIN_ZOOM} aria-label="Уменьшить масштаб" title="Уменьшить масштаб" className="hidden rounded-md p-1 text-muted hover:bg-surface hover:text-ink disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 md:inline-flex">
+          <button type="button" onClick={() => changeZoom(-1)} disabled={status !== 'ready' || scale <= MIN_ZOOM} aria-label="Уменьшить масштаб" title="Уменьшить масштаб" className="hidden rounded-md p-1 text-muted hover:bg-surface hover:text-text disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus md:inline-flex">
             <Minus className="h-3.5 w-3.5" aria-hidden />
           </button>
           <span className="min-w-12 text-center text-xs tabular-nums text-muted" aria-label="Масштаб PDF" title="Ctrl/Cmd + или −, Ctrl/Cmd + колесо, щипок двумя пальцами">
             {status === 'ready' ? `${Math.round(scale * 100)}%` : 'Загрузка…'}
           </span>
-          <button type="button" onClick={() => changeZoom(1)} disabled={status !== 'ready' || scale >= MAX_ZOOM} aria-label="Увеличить масштаб" title="Увеличить масштаб" className="hidden rounded-md p-1 text-muted hover:bg-surface hover:text-ink disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 md:inline-flex">
+          <button type="button" onClick={() => changeZoom(1)} disabled={status !== 'ready' || scale >= MAX_ZOOM} aria-label="Увеличить масштаб" title="Увеличить масштаб" className="hidden rounded-md p-1 text-muted hover:bg-surface hover:text-text disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus md:inline-flex">
             <Plus className="h-3.5 w-3.5" aria-hidden />
           </button>
         </div>
         <div className="flex min-w-0 items-center justify-end gap-2">
           {downloadUrl ? (
-            <a href={downloadUrl} download={downloadName} className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium text-accent-ink hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
+            <a href={downloadUrl} download={downloadName} className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium text-selected-text hover:bg-selected focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
               <Download className="h-3.5 w-3.5" aria-hidden />
               Скачать PDF
             </a>
           ) : null}
         </div>
       </div>
-      <div className="relative h-[min(70vh,640px)] w-full bg-surface-muted">
+      <div className="relative h-[min(70vh,640px)] w-full bg-surface-subtle">
         <div
           ref={containerRef}
           className="absolute inset-0 overflow-auto outline-none"

@@ -130,7 +130,7 @@ function UsersTable() {
                 <Td>
                   <Link
                     to={'/admin/users/' + u.id}
-                    className="font-medium text-ink underline-offset-4 hover:text-accent hover:underline"
+                    className="font-medium text-text underline-offset-4 hover:text-link hover:underline"
                   >
                     {fullName(u)}
                   </Link>
@@ -229,7 +229,7 @@ function TokensTable() {
           const status = tokenStatus(t)
           return (
             <Tr key={t.id}>
-              <Td className="font-medium text-ink">{t.description}</Td>
+              <Td className="font-medium text-text">{t.description}</Td>
               <Td className="whitespace-nowrap text-muted">
                 {t.uses}/{t.max_uses}
               </Td>
@@ -257,7 +257,7 @@ function TokensTable() {
 
 export function UsersPage() {
   return (
-    <div className="animate-rise flex flex-col gap-8">
+    <div className="flex flex-col gap-8">
       <section>
         <SectionHeader title="Пользователи" description="Все учётные записи платформы." />
         <Card className="p-2">

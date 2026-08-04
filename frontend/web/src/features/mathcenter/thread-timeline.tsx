@@ -37,10 +37,10 @@ function accentClasses(kind: EventKind, verdict?: Verdict | null): {
     case 'appealed':
       return { border: 'border-status-appeal', text: 'text-status-appeal' }
     case 'retracted':
-      return { border: 'border-line-strong', text: 'text-muted' }
+      return { border: 'border-border-control', text: 'text-muted' }
     case 'submitted':
     default:
-      return { border: 'border-accent', text: 'text-accent' }
+      return { border: 'border-selected-border', text: 'text-link' }
   }
 }
 
@@ -124,12 +124,12 @@ function EventCard({
         <span className={cn('text-sm font-medium', accent.text)}>
           {eventKindLabel(event.kind, event.verdict)}
         </span>
-        <span className="text-xs text-faint">
+        <span className="text-xs text-text-subtle">
           {attribution} · {formatDateTime(event.created_at)}
         </span>
       </div>
       {event.body ? (
-        <p className="mt-1 whitespace-pre-wrap text-sm text-ink">
+        <p className="mt-1 whitespace-pre-wrap text-sm text-text">
           {event.body}
         </p>
       ) : null}

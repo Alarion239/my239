@@ -30,7 +30,7 @@ export function UserMenu({ user }: { user: User }) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
           aria-label="Меню пользователя"
         >
           <Avatar initials={initials(user)} />
@@ -38,8 +38,8 @@ export function UserMenu({ user }: { user: User }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuLabel>
-          <span className="block text-sm font-medium text-ink">{fullName(user)}</span>
-          <span className="block text-xs text-faint">@{user.username}</span>
+          <span className="block text-sm font-medium text-text">{fullName(user)}</span>
+          <span className="block text-xs text-text-subtle">@{user.username}</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>

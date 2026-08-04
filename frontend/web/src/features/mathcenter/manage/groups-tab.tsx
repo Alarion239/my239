@@ -62,9 +62,9 @@ export function GroupsTab({ centerId }: { centerId: number }) {
             {groups.filter((group) => !isUnallocatedGroup(group.name)).map((g) => (
               <li
                 key={g.id}
-                className="flex items-center justify-between gap-2 rounded-lg bg-surface-muted px-3 py-2"
+                className="flex items-center justify-between gap-2 rounded-lg bg-surface-subtle px-3 py-2"
               >
-                <span className="text-sm text-ink">{g.name}</span>
+                <span className="text-sm text-text">{g.name}</span>
                 <ConfirmButton
                   variant="ghost"
                   size="sm"

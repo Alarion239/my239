@@ -70,10 +70,10 @@ function LikbezCatalog({ centerId, isTeacher, selectedTermID }: { centerId: numb
   if (isError || !data) return <p className="py-10 text-sm text-danger">Не удалось загрузить ликбезы.</p>
 
   return (
-    <div className="animate-rise flex flex-col gap-5">
-      <header className="flex flex-wrap items-end justify-between gap-3 border-b border-line pb-4">
+    <div className="flex flex-col gap-5">
+      <header className="flex flex-wrap items-end justify-between gap-3 border-b border-border pb-4">
         <div>
-          <h1 className="mt-1 font-display text-2xl font-medium text-ink">Ликбезы</h1>
+          <h1 className="mt-1 font-display text-2xl font-medium text-text">Ликбезы</h1>
         </div>
         {isTeacher ? <CreateLikbezButton centerId={centerId} terms={terms} /> : null}
       </header>
@@ -116,7 +116,7 @@ function LikbezCard({ likbez, isTeacher }: { likbez: Likbez; isTeacher: boolean 
 
   return (
     <Card
-      className="group flex cursor-pointer flex-col gap-4 p-4 transition-colors hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 sm:flex-row sm:items-start"
+      className="group flex cursor-pointer flex-col gap-4 p-4 transition-colors hover:border-selected-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus sm:flex-row sm:items-start"
       role="link"
       tabIndex={0}
       aria-busy={unpublish.isPending || undefined}
@@ -128,17 +128,17 @@ function LikbezCard({ likbez, isTeacher }: { likbez: Likbez; isTeacher: boolean 
         }
       }}
     >
-      <div className="flex h-11 min-w-11 items-center justify-center rounded-lg bg-accent-soft px-2 font-display text-lg font-medium text-accent-ink" aria-label={'Номер ликбеза ' + likbez.number}>
+      <div className="flex h-11 min-w-11 items-center justify-center rounded-lg bg-selected px-2 text-lg font-medium text-selected-text" aria-label={'Номер ликбеза ' + likbez.number}>
         {likbez.number}
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <h2 className="font-display text-lg font-medium text-ink group-hover:text-accent">{likbez.title}</h2>
-          {!likbez.published ? <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-muted">Черновик</span> : null}
+          <h2 className="text-lg font-medium text-text group-hover:text-link">{likbez.title}</h2>
+          {!likbez.published ? <span className="rounded-full bg-surface-subtle px-2 py-0.5 text-xs font-medium text-muted">Черновик</span> : null}
           {unpublish.isPending ? <span className="text-xs text-muted" role="status">Открываем…</span> : null}
         </div>
         <p className="mt-1 text-sm text-muted">{likbezCalendarDateFromISO(likbez.held_on)} · {likbez.term_display_name}</p>
-        <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-ink">{likbez.description}</p>
+        <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-text">{likbez.description}</p>
         {editError ? <p className="mt-2 text-xs text-danger" role="alert">{editError}</p> : null}
       </div>
       <div className="flex shrink-0 flex-wrap gap-2 text-xs text-muted sm:max-w-[12rem] sm:justify-end sm:self-start">
@@ -164,13 +164,13 @@ function LikbezDetail({ likbezId, isTeacher }: { likbezId: number; isTeacher: bo
     return <LikbezDraftEditor likbez={data} terms={terms.data ?? []} />
   }
   return (
-    <div className="animate-rise flex flex-col gap-5">
-      <Link to={'/mathcenter/' + year + '/likbez' + search} className="self-start text-sm font-medium text-accent hover:underline">← Все ликбезы</Link>
-      <header className="border-b border-line pb-5">
-        <p className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Ликбез №{data.number} · {data.term_display_name}</p>
-        <h1 className="mt-2 font-display text-3xl font-medium text-ink">{data.title}</h1>
+    <div className="flex flex-col gap-5">
+      <Link to={'/mathcenter/' + year + '/likbez' + search} className="self-start text-sm font-medium text-link hover:underline">← Все ликбезы</Link>
+      <header className="border-b border-border pb-5">
+        <p className="text-xs font-medium uppercase tracking-[0.16em] text-text-subtle">Ликбез №{data.number} · {data.term_display_name}</p>
+        <h1 className="mt-2 font-display text-3xl font-medium text-text">{data.title}</h1>
         <p className="mt-2 text-sm text-muted">{likbezCalendarDateFromISO(data.held_on)}</p>
-        <p className="mt-4 max-w-3xl whitespace-pre-wrap leading-7 text-ink">{data.description}</p>
+        <p className="mt-4 max-w-3xl whitespace-pre-wrap leading-7 text-text">{data.description}</p>
       </header>
       <LikbezMaterials likbez={data} tex={tex} />
     </div>
@@ -258,7 +258,7 @@ function LikbezDraftEditor({ likbez, terms }: { likbez: Likbez; terms: MathCente
   )
 
   return (
-    <div className="animate-rise flex flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <SolutionWorkbench
         title={'Ликбез №' + likbez.number}
         mode="edit"
@@ -275,8 +275,8 @@ function LikbezDraftEditor({ likbez, terms }: { likbez: Likbez; terms: MathCente
         pdfActionPlacement="after-tabs"
         headerPrefix={(
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <Link to={'/mathcenter/' + year + '/likbez' + search} className="text-sm font-medium text-accent hover:underline">← Все ликбезы</Link>
-            <span className="text-xs font-medium uppercase tracking-[0.16em] text-faint">Черновик</span>
+            <Link to={'/mathcenter/' + year + '/likbez' + search} className="text-sm font-medium text-link hover:underline">← Все ликбезы</Link>
+            <span className="text-xs font-medium uppercase tracking-[0.16em] text-text-subtle">Черновик</span>
           </div>
         )}
         details={detailsForm}
@@ -331,7 +331,7 @@ function LikbezDateField({ control, error }: { control: Control<LikbezValues>; e
                   onBlur={field.onBlur}
                   onChange={(event) => field.onChange(likbezDateFromISO(event.target.value))}
                 />
-                {capitalizedWeekday ? <span className="rounded-lg bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink">{capitalizedWeekday}</span> : null}
+                {capitalizedWeekday ? <span className="rounded-lg bg-selected px-3 py-2 text-sm font-medium text-selected-text">{capitalizedWeekday}</span> : null}
               </div>
             )
           }}
@@ -346,9 +346,9 @@ function LikbezMaterials({ likbez, tex }: { likbez: Likbez; tex: ReturnType<type
   if (!hasMaterials) return <Card className="px-6 py-12 text-center"><p className="text-muted">Материалы ещё не добавлены.</p></Card>
   return (
     <div className="flex flex-col gap-6">
-      {likbez.has_tex ? <section><h2 className="mb-3 font-display text-xl font-medium text-ink">Конспект</h2>{tex.isPending ? <CenteredSpinner /> : tex.data ? <TexViewer tex={tex.data.tex} /> : <p className="text-danger">Не удалось загрузить TeX.</p>}</section> : null}
-      {likbez.has_pdf ? <section><h2 className="mb-3 font-display text-xl font-medium text-ink">PDF</h2><PdfViewer path={'/mathcenter/likbez/' + likbez.id + '/pdf'} title={likbez.title + ' (PDF)'} /></section> : null}
-      {likbez.video_url ? <section><h2 className="mb-3 font-display text-xl font-medium text-ink">Видео</h2><VideoAttachment url={likbez.video_url} title={likbez.title + ' (видео)'} /></section> : null}
+      {likbez.has_tex ? <section><h2 className="mb-3 text-xl font-medium text-text">Конспект</h2>{tex.isPending ? <CenteredSpinner /> : tex.data ? <TexViewer tex={tex.data.tex} /> : <p className="text-danger">Не удалось загрузить TeX.</p>}</section> : null}
+      {likbez.has_pdf ? <section><h2 className="mb-3 text-xl font-medium text-text">PDF</h2><PdfViewer path={'/mathcenter/likbez/' + likbez.id + '/pdf'} title={likbez.title + ' (PDF)'} /></section> : null}
+      {likbez.video_url ? <section><h2 className="mb-3 text-xl font-medium text-text">Видео</h2><VideoAttachment url={likbez.video_url} title={likbez.title + ' (видео)'} /></section> : null}
     </div>
   )
 }
@@ -362,9 +362,9 @@ function VideoAttachment({ url, title }: { url: string; title: string }) {
         title={title}
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
         allowFullScreen
-        className="aspect-video w-full rounded-lg border border-line bg-surface"
+        className="aspect-video w-full rounded-lg border border-border bg-surface"
       />
-      <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 self-start text-sm font-medium text-accent hover:underline">
+      <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 self-start text-sm font-medium text-link hover:underline">
         <ExternalLink className="h-4 w-4" />Открыть видео в новой вкладке
       </a>
     </div>
@@ -421,4 +421,4 @@ function CreateLikbezButton({ centerId, terms }: { centerId: number; terms: Math
 }
 
 function CenteredSpinner() { return <div className="flex justify-center py-16"><Spinner /></div> }
-function NoAccess() { return <Card className="animate-rise px-6 py-16 text-center"><p className="text-muted">Нет доступа к этому ликбезу.</p></Card> }
+function NoAccess() { return <Card className="px-6 py-16 text-center"><p className="text-muted">Нет доступа к этому ликбезу.</p></Card> }

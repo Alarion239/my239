@@ -11,8 +11,8 @@ export function HomePage() {
   if (!user) return null
 
   return (
-    <div className="animate-rise">
-      <h1 className="font-display text-3xl font-medium text-ink">
+    <div>
+      <h1 className="font-display text-3xl font-medium text-text">
         Здравствуйте, {user.first_name}
       </h1>
       <p className="mt-1 text-muted">Выберите модуль, чтобы начать.</p>
@@ -26,16 +26,16 @@ export function HomePage() {
             <Card
               className={cn(
                 'group h-full p-5 transition-colors',
-                soon ? 'opacity-60' : 'hover:border-line-strong hover:bg-surface-muted',
+                soon ? 'opacity-60' : 'hover:border-border-control hover:bg-surface-subtle',
               )}
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-soft text-accent-ink">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-selected text-selected-text">
                 <m.icon className="h-5 w-5" aria-hidden />
               </div>
               <div className="mt-4 flex items-center gap-2">
-                <h2 className="font-display text-lg font-medium text-ink">{m.label}</h2>
+                <h2 className="text-lg font-medium text-text">{m.label}</h2>
                 {soon ? (
-                  <span className="text-[10px] uppercase tracking-wide text-faint">скоро</span>
+                  <span className="text-[10px] uppercase tracking-wide text-text-subtle">скоро</span>
                 ) : (
                   <ArrowRight
                     className="h-4 w-4 text-muted transition-transform group-hover:translate-x-0.5"

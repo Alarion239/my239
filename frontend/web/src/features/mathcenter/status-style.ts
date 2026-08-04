@@ -6,7 +6,7 @@ import {
   type StatusTone,
 } from '@my239/shared'
 
-// statusPillClasses maps an abstract status tone to the soft-fill + ink utility
+// statusPillClasses maps an abstract status tone to the soft-fill + text utility
 // pair used by status pills across the submission/grading surfaces. Mirrors the
 // StatusTile mapping so pills and tiles stay in visual lockstep.
 export function statusPillClasses(tone: StatusTone): string {

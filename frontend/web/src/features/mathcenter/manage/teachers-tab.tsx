@@ -55,9 +55,9 @@ export function TeachersTab({ centerId }: { centerId: number }) {
             {teachers.map((t) => (
               <li
                 key={t.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-muted px-3 py-2"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-subtle px-3 py-2"
               >
-                <span className="flex items-center gap-2 text-sm text-ink">
+                <span className="flex items-center gap-2 text-sm text-text">
                   {fullName(t)}
                   {t.is_head_teacher ? <Badge>Старший</Badge> : null}
                 </span>
@@ -92,12 +92,12 @@ export function TeachersTab({ centerId }: { centerId: number }) {
           </ul>
         )}
 
-        <div className="flex flex-col gap-2 border-t border-line pt-4">
-          <p className="text-sm font-medium text-ink">Добавить из пользователей</p>
+        <div className="flex flex-col gap-2 border-t border-border pt-4">
+          <p className="text-sm font-medium text-text">Добавить из пользователей</p>
           <UserSearchSelect centerId={centerId} onSelect={setPicked} />
           {picked ? (
-            <div className="flex flex-wrap items-center gap-3 rounded-lg bg-surface-muted px-3 py-2">
-              <span className="text-sm text-ink">{fullName(picked)}</span>
+            <div className="flex flex-wrap items-center gap-3 rounded-lg bg-surface-subtle px-3 py-2">
+              <span className="text-sm text-text">{fullName(picked)}</span>
               <label className="flex items-center gap-2 text-sm text-muted">
                 <input
                   type="checkbox"

@@ -4,16 +4,16 @@ import { forwardRef, type ButtonHTMLAttributes } from 'react'
 import { cn } from '../cn'
 
 const button = cva(
-  'inline-flex items-center justify-center gap-2 rounded-lg font-medium whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-paper disabled:pointer-events-none disabled:opacity-55 active:scale-[0.98]',
+  'inline-flex items-center justify-center gap-2 rounded-md font-medium whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:pointer-events-none disabled:opacity-55 active:scale-[0.98]',
   {
     variants: {
       variant: {
-        primary: 'bg-accent text-white hover:bg-accent-strong',
+        primary: 'bg-action text-on-action hover:bg-action-hover',
         secondary:
-          'border border-line-strong bg-surface text-ink hover:bg-surface-muted',
-        ghost: 'text-ink hover:bg-surface-muted',
-        danger: 'bg-danger text-white hover:opacity-90',
-        link: 'text-accent underline-offset-4 hover:underline',
+          'border border-border-control bg-surface text-text hover:bg-surface-subtle',
+        ghost: 'text-text hover:bg-surface-subtle',
+        danger: 'bg-danger text-on-danger hover:opacity-90',
+        link: 'text-link underline-offset-4 hover:underline',
       },
       size: {
         sm: 'h-9 px-3 text-sm',

@@ -381,23 +381,23 @@ function ProblemStatRow({
         }
       }}
       className={cn(
-        'cursor-pointer rounded-xl border border-line px-3 py-2.5 transition-colors',
-        'hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+        'cursor-pointer rounded-lg border border-border px-3 py-2.5 transition-colors',
+        'hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus',
         published
           ? 'bg-status-accepted-soft'
           : hasSolution
-            ? 'bg-surface-muted'
+            ? 'bg-surface-subtle'
             : 'bg-surface',
-        active ? 'ring-2 ring-accent/50' : replacementWarning ? 'ring-2 ring-warning/50' : '',
+        active ? 'ring-2 ring-focus' : replacementWarning ? 'ring-2 ring-warning/50' : '',
       )}
     >
       <div className="flex min-w-0 items-center gap-3">
-        <span className="w-28 shrink-0 truncate font-medium text-ink sm:w-32">
+        <span className="w-28 shrink-0 truncate font-medium text-text sm:w-32">
           {subStatLabel(stat)}
         </span>
 
         <div
-          className="flex h-8 min-w-0 flex-1 rounded-lg bg-surface-muted"
+          className="flex h-8 min-w-0 flex-1 rounded-lg bg-surface-subtle"
           role="img"
           aria-label={
             'Распределение статусов по задаче ' +
@@ -427,7 +427,7 @@ function ProblemStatRow({
                 ) : null}
                 <span
                   role="tooltip"
-                  className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-line bg-ink px-2 py-1 text-xs font-medium text-paper opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
+                  className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-border bg-text px-2 py-1 text-xs font-medium text-canvas opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
                 >
                   {seg.label} — {value}
                 </span>
@@ -455,7 +455,7 @@ function ProblemStatRow({
       </div>
       {replacementWarning ? (
         <div
-          className="mt-2 grid grid-cols-1 gap-2 rounded-lg border border-warning/30 bg-status-checking-soft p-2 text-xs text-ink sm:grid-cols-[3fr_7fr] sm:items-stretch"
+          className="mt-2 grid grid-cols-1 gap-2 rounded-lg border border-warning/30 bg-status-checking-soft p-2 text-xs text-text sm:grid-cols-[3fr_7fr] sm:items-stretch"
           role="alert"
         >
           <Button
@@ -510,18 +510,18 @@ function CoffinBadge({
           aria-label={isCoffin ? 'Гроб: снять пометку' : 'Отметить гробом'}
           aria-describedby={hintId}
           className={cn(
-            'group relative inline-flex h-10 w-10 items-center justify-center rounded-xl border transition-colors disabled:opacity-55',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+            'group relative inline-flex h-10 w-10 items-center justify-center rounded-lg border transition-colors disabled:opacity-55',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus',
             isCoffin
               ? 'border-status-checking bg-status-checking-soft text-status-checking'
-              : 'border-line-strong bg-surface text-muted hover:border-status-checking hover:text-status-checking',
+              : 'border-border-control bg-surface text-muted hover:border-status-checking hover:text-status-checking',
           )}
         >
           <Skull className="h-5 w-5" aria-hidden />
           <span
             id={hintId}
             role="tooltip"
-            className="pointer-events-none absolute bottom-full right-0 z-30 mb-2 w-max max-w-56 rounded-md border border-line bg-ink px-2 py-1 text-left text-[11px] font-normal leading-snug text-paper opacity-0 shadow-md transition-opacity duration-150 delay-0 group-hover:opacity-100 group-hover:delay-[700ms] group-focus-visible:opacity-100 group-focus-visible:delay-0 group-data-[state=open]:hidden"
+            className="pointer-events-none absolute bottom-full right-0 z-30 mb-2 w-max max-w-56 rounded-md border border-border bg-text px-2 py-1 text-left text-[11px] font-normal leading-snug text-canvas opacity-0 shadow-md transition-opacity duration-150 delay-0 group-hover:opacity-100 group-hover:delay-[700ms] group-focus-visible:opacity-100 group-focus-visible:delay-0 group-data-[state=open]:hidden"
           >
             {hint}
           </span>

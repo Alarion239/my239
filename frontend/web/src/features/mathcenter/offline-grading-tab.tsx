@@ -98,7 +98,7 @@ function StudentPicker({
         placeholder="Поиск ученика…"
         aria-label="Поиск ученика"
       />
-      <ul className="overflow-hidden rounded-xl border border-line">
+      <ul className="overflow-hidden rounded-lg border border-border">
         {filtered.map((s) => {
           const exerciseUnlocked = exerciseComplete(
             s.cells.map((c) => ({
@@ -112,13 +112,13 @@ function StudentPicker({
             solvedForCredit(c.problem_number, c.current_status, exerciseUnlocked),
           ).length
           return (
-            <li key={s.student_user_id} className="border-b border-line last:border-b-0">
+            <li key={s.student_user_id} className="border-b border-border last:border-b-0">
               <button
                 type="button"
                 onClick={() => onPick(s.student_user_id)}
-                className="flex w-full items-center justify-between gap-3 bg-surface px-4 py-3 text-left hover:bg-surface-muted"
+                className="flex w-full items-center justify-between gap-3 bg-surface px-4 py-3 text-left hover:bg-surface-subtle"
               >
-                <span className="text-ink">{s.student_name}</span>
+                <span className="text-text">{s.student_name}</span>
                 <span className="text-sm tabular-nums text-muted">
                   {solved}/{total}
                 </span>
@@ -202,11 +202,11 @@ function StudentOfflineGrader({
         <button
           type="button"
           onClick={onBack}
-          className="rounded-lg border border-line px-3 py-1.5 text-sm text-muted hover:bg-surface-muted hover:text-ink"
+          className="rounded-lg border border-border px-3 py-1.5 text-sm text-muted hover:bg-surface-subtle hover:text-text"
         >
           ← Ученики
         </button>
-        <h3 className="font-display text-lg font-medium text-ink">{student.student_name}</h3>
+        <h3 className="text-lg font-medium text-text">{student.student_name}</h3>
       </div>
       <p className="text-sm text-muted">
         Нажмите на задачу, чтобы отметить её решённой очно. Зелёную — чтобы отменить или оставить заметку.
@@ -228,14 +228,14 @@ function StudentOfflineGrader({
               disabled={pending}
               onClick={() => (accepted ? openDialog(col, cell) : markSolved(col.subproblem_id))}
               className={cn(
-                'flex h-16 flex-col items-center justify-center gap-0.5 rounded-xl border text-sm transition-colors disabled:opacity-50',
+                'flex h-16 flex-col items-center justify-center gap-0.5 rounded-lg border text-sm transition-colors disabled:opacity-50',
                 col.problem_number === 0
-                  ? 'border-accent/40 bg-accent-soft text-accent-ink'
+                  ? 'border-selected-border/40 bg-selected text-selected-text'
                   : accepted && exerciseUnlocked
                     ? 'border-status-accepted/30 bg-status-accepted-soft text-status-accepted'
                     : accepted
-                      ? 'border-line bg-surface-muted text-muted opacity-70'
-                      : 'border-line bg-surface text-muted hover:bg-surface-muted',
+                      ? 'border-border bg-surface-subtle text-muted opacity-70'
+                      : 'border-border bg-surface text-muted hover:bg-surface-subtle',
               )}
             >
               <span className="font-medium">{columnLabelFor(col)}</span>

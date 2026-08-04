@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run",
+    "test": "npm run test:colors && vitest run",
+    "test:colors": "node scripts/check-theme-contrast.mjs",
     "test:watch": "vitest"
   },
   "dependencies": {

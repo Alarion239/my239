@@ -167,11 +167,11 @@ describe('TeacherProblemStats — разбор frame', () => {
     )
     expect(screen.getByRole('region', { name: /Задачи 1/ })).toBeInTheDocument()
     const added = screen.getByRole('img', { name: /по задаче Задача 1 \(в\)/ }).closest('[role="button"]') as HTMLElement
-    expect(added).toHaveClass('ring-2', 'ring-accent/50')
+    expect(added).toHaveClass('ring-2', 'ring-focus')
 
     await user.click(added)
     expect(added).toHaveAttribute('aria-pressed', 'false')
-    expect(added).not.toHaveClass('ring-2', 'ring-accent/50')
+    expect(added).not.toHaveClass('ring-2', 'ring-focus')
     expect(screen.getByRole('region', { name: /Задача 1 \(б\)/ })).toBeInTheDocument()
 
     await user.click(
@@ -198,17 +198,17 @@ describe('TeacherProblemStats — разбор frame', () => {
     await user.click(existing)
     expect(screen.getByRole('alert')).toHaveTextContent('прежней группы')
     expect(screen.getByRole('button', { name: 'Добавить в текущий разбор' })).toBeInTheDocument()
-    expect(existing).not.toHaveClass('ring-2', 'ring-accent/50')
+    expect(existing).not.toHaveClass('ring-2', 'ring-focus')
 
     request.mockClear()
     await user.click(existing)
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    expect(existing).not.toHaveClass('ring-2', 'ring-accent/50')
+    expect(existing).not.toHaveClass('ring-2', 'ring-focus')
     expect(request).not.toHaveBeenCalled()
 
     await user.click(existing)
     await user.click(screen.getByRole('button', { name: 'Добавить в текущий разбор' }))
-    expect(existing).toHaveClass('ring-2', 'ring-accent/50')
+    expect(existing).toHaveClass('ring-2', 'ring-focus')
     await waitFor(() => {
       expect(request).toHaveBeenCalledWith('/mathcenter/subproblem-solutions/group', {
         method: 'POST',
@@ -281,7 +281,7 @@ describe('TeacherProblemStats — разбор frame', () => {
     await user.click(firstRow)
 
     const workbench = screen.getByRole('region', { name: 'Черновик разбора задач 1' })
-    expect(workbench).not.toHaveClass('rounded-xl', 'border', 'bg-surface', 'shadow-sm')
+    expect(workbench).not.toHaveClass('rounded-lg', 'border', 'bg-surface', 'shadow-sm')
     const title = within(workbench).getByRole('heading', { name: 'Черновик разбора задач 1' })
     const header = title.closest('header') as HTMLElement
     const formatTabs = within(workbench).getByRole('tablist', { name: 'Формат разбора' })
@@ -296,8 +296,8 @@ describe('TeacherProblemStats — разбор frame', () => {
     expect(firstRow).toHaveAttribute('aria-pressed', 'true')
     expect(secondRow).toHaveAttribute('aria-pressed', 'true')
     expect(unrelatedRow).toHaveAttribute('aria-pressed', 'false')
-    expect(firstRow).toHaveClass('ring-2', 'ring-accent/50')
-    expect(secondRow).toHaveClass('ring-2', 'ring-accent/50')
+    expect(firstRow).toHaveClass('ring-2', 'ring-focus')
+    expect(secondRow).toHaveClass('ring-2', 'ring-focus')
 
     await user.click(secondRow)
 

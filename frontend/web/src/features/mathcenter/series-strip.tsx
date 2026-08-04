@@ -91,14 +91,14 @@ export function SeriesStrip({
               aria-selected={isSelected}
               onClick={() => onSelect(s.id)}
               className={cn(
-                'flex w-full flex-col gap-1 rounded-2xl border bg-surface p-4 text-left transition-colors',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-                isCurrent ? 'border-accent' : 'border-line hover:bg-surface-muted',
-                isSelected && 'ring-2 ring-accent/60',
+                'flex w-full flex-col gap-1 rounded-lg border bg-surface p-4 text-left transition-colors',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus',
+                isCurrent ? 'border-selected-border' : 'border-border hover:bg-surface-subtle',
+                isSelected && 'ring-2 ring-focus',
               )}
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="font-display text-lg font-medium text-ink">
+                <span className="text-lg font-medium text-text">
                   Серия {s.number}
                 </span>
                 <div className="flex items-center gap-1.5">
@@ -110,11 +110,11 @@ export function SeriesStrip({
                 </div>
               </div>
               <span className="line-clamp-2 text-sm text-muted">{s.name}</span>
-              <span className="mt-1 text-xs text-faint">
+              <span className="mt-1 text-xs text-text-subtle">
                 Срок: {formatDateTime(s.due_at)}
               </span>
               {progress?.[s.id] ? (
-                <span className="text-xs font-medium text-accent-ink">
+                <span className="text-xs font-medium text-selected-text">
                   {progress[s.id]}
                 </span>
               ) : null}

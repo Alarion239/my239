@@ -56,7 +56,7 @@ export function LoginPage() {
       footer={
         <>
           Есть приглашение?{' '}
-          <Link to="/register" className="font-medium text-accent hover:underline">
+          <Link to="/register" className="font-medium text-link hover:underline">
             Зарегистрироваться
           </Link>
         </>

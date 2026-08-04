@@ -54,7 +54,7 @@ export function ProblemBuilder({ value, onChange, disabled = false }: ProblemBui
   return (
     <div className="flex flex-col gap-3">
       {value.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-line-strong px-4 py-8 text-center text-sm text-muted">
+        <div className="rounded-lg border border-dashed border-border-control px-4 py-8 text-center text-sm text-muted">
           Задач пока нет
         </div>
       ) : null}
@@ -66,8 +66,8 @@ export function ProblemBuilder({ value, onChange, disabled = false }: ProblemBui
           const label = isExercise ? 'Упражнение' : 'Задача ' + problem.number
           const target = isExercise ? 'упражнение' : 'задачу ' + problem.number
           return (
-            <li key={key} className="flex items-center gap-2 rounded-xl border border-line bg-surface px-2.5 py-2.5">
-              <p className="w-24 shrink-0 font-display text-base font-medium text-ink">{label}</p>
+            <li key={key} className="flex items-center gap-2 rounded-lg border border-border bg-surface px-2.5 py-2.5">
+              <p className="w-24 shrink-0 text-base font-medium text-text">{label}</p>
               <SubpartSquares
                 label={label}
                 count={problem.subproblem_count}
@@ -144,10 +144,10 @@ function SubpartSquares({
             onClick={() => onChange(nextCount === count ? 0 : nextCount)}
             className={cn(
               'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border font-mono text-xs font-medium transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-40',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-40',
               selected
-                ? 'border-ink bg-ink text-paper'
-                : 'border-line-strong bg-surface text-muted hover:border-ink hover:text-ink',
+                ? 'border-action bg-action text-on-action'
+                : 'border-border-control bg-surface text-muted hover:border-selected-border hover:text-text',
             )}
           >
             {letter}
@@ -180,8 +180,8 @@ function IconButton({
       onClick={onClick}
       className={cn(
         'inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-40',
-        danger ? 'hover:bg-danger-soft hover:text-danger' : 'hover:bg-surface-muted hover:text-ink',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-40',
+        danger ? 'hover:bg-danger-soft hover:text-danger' : 'hover:bg-surface-subtle hover:text-text',
       )}
     >
       {children}

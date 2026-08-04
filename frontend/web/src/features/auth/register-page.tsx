@@ -90,7 +90,7 @@ export function RegisterPage() {
       footer={
         <>
           Уже есть аккаунт?{' '}
-          <Link to="/login" className="font-medium text-accent hover:underline">
+          <Link to="/login" className="font-medium text-link hover:underline">
             Войти
           </Link>
         </>
@@ -173,7 +173,7 @@ function InviteBanner({ token }: { token: string }) {
   if (isPending) return null
   if (isError || !data || !data.valid) {
     return (
-      <p className="rounded-lg bg-surface-muted px-3 py-2 text-sm text-muted">
+      <p className="rounded-lg bg-surface-subtle px-3 py-2 text-sm text-muted">
         Приглашение недействительно или истекло. Проверьте ссылку.
       </p>
     )
@@ -187,7 +187,7 @@ function InviteBanner({ token }: { token: string }) {
         : null
 
   return (
-    <div className="rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-sm text-ink">
+    <div className="rounded-lg border border-selected-border/30 bg-action/5 px-3 py-2 text-sm text-text">
       {data.center_name && roleLabel ? (
         <p>
           {data.personal_claim ? (

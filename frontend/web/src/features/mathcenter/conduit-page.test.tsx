@@ -373,8 +373,8 @@ describe('ConduitTable', () => {
 
     expect(screen.getByRole('link', { name: 'Упражнение У — открыть разбор' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Упражнение Уa — открыть разбор' })).toBeInTheDocument()
-    expect(firstCells[0]).toHaveClass('bg-accent-soft/70')
-    expect(firstCells[2]).toHaveClass('bg-surface-muted')
+    expect(firstCells[0]).toHaveClass('bg-selected/70')
+    expect(firstCells[2]).toHaveClass('bg-surface-subtle')
     expect(firstCells[2]).not.toHaveAttribute('aria-disabled')
     expect(firstRow.lastElementChild).toHaveTextContent('0')
     expect(secondRow.lastElementChild).toHaveTextContent('1')

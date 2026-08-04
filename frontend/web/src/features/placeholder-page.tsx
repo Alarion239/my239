@@ -14,10 +14,10 @@ export function PlaceholderPage({
   icon: LucideIcon
 }) {
   return (
-    <div className="animate-rise">
-      <h1 className="mb-6 font-display text-3xl font-medium text-ink">{title}</h1>
+    <div>
+      <h1 className="mb-6 font-display text-3xl font-medium text-text">{title}</h1>
       <Card className="flex flex-col items-center gap-3 px-6 py-16 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent-soft text-accent-ink">
+        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-selected text-selected-text">
           <Icon className="h-6 w-6" aria-hidden />
         </div>
         <p className="max-w-sm text-muted">{description}</p>

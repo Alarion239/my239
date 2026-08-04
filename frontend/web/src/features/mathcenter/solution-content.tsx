@@ -42,7 +42,7 @@ export function SolutionContent({
   const active: Fmt = formats.includes(fmt) ? fmt : (formats[0] ?? 'tex')
 
   if (formats.length === 0) {
-    return <p className="py-8 text-center text-sm text-faint">{emptyText}</p>
+    return <p className="py-8 text-center text-sm text-text-subtle">{emptyText}</p>
   }
 
   return (
@@ -104,7 +104,7 @@ function LinkViewer({ link }: { link: string }) {
         title="Видео-разбор"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
         allowFullScreen
-        className="aspect-video w-full rounded-lg border border-line bg-surface"
+        className="aspect-video w-full rounded-lg border border-border bg-surface"
       />
     )
   }
@@ -113,7 +113,7 @@ function LinkViewer({ link }: { link: string }) {
       href={link}
       target="_blank"
       rel="noreferrer"
-      className="inline-flex items-center gap-1.5 self-start rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-surface-muted"
+      className="inline-flex items-center gap-1.5 self-start rounded-lg border border-border-control bg-surface px-3 py-2 text-sm font-medium text-text transition-colors hover:bg-surface-subtle"
     >
       <ExternalLink className="h-4 w-4" aria-hidden />
       Открыть разбор
@@ -131,7 +131,7 @@ function FormatToggle({
   onChange: (f: Fmt) => void
 }) {
   return (
-    <div className="inline-flex self-start rounded-lg border border-line bg-surface-muted p-0.5" role="tablist" aria-label="Формат разбора">
+    <div className="inline-flex self-start rounded-lg border border-border bg-surface-subtle p-0.5" role="tablist" aria-label="Формат разбора">
       {formats.map((f) => (
         <Pill key={f} active={value === f} onClick={() => onChange(f)}>
           {FMT_LABEL[f]}
@@ -150,8 +150,8 @@ function Pill({ active, onClick, children }: { active: boolean; onClick: () => v
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        'rounded-full px-3 py-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-        active ? 'bg-accent-soft text-accent-ink' : 'text-muted hover:text-ink',
+        'rounded-full px-3 py-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus',
+        active ? 'bg-selected text-selected-text' : 'text-muted hover:text-text',
       )}
     >
       {children}
