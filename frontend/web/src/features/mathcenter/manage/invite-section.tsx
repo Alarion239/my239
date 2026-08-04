@@ -4,6 +4,8 @@ import {
   useManageGroups,
   useManageInvites,
   useManageCreateInvite,
+  useManageCreatePersonalInvite,
+  useManagePersonalInviteStudents,
   useManageRevokeInvite,
   isUnallocatedGroup,
 } from '@my239/shared'
@@ -25,7 +27,7 @@ export function InviteSection({
   const mine = (invites ?? []).filter((i) => i.role === role)
 
   return (
-    <div className="flex flex-col gap-3 border-t border-line pt-4">
+    <div className="flex flex-col gap-3 border-t border-border pt-4">
       <SectionHeader
         title="Пригласить по ссылке"
         description={
@@ -40,10 +42,10 @@ export function InviteSection({
           {mine.map((inv) => (
             <li
               key={inv.id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-muted px-3 py-2"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-subtle px-3 py-2"
             >
               <div className="min-w-0">
-                <p className="truncate text-sm text-ink">
+                <p className="truncate text-sm text-text">
                   {inv.description || 'Без описания'}
                 </p>
                 <p className="text-xs text-muted">
@@ -70,7 +72,78 @@ export function InviteSection({
       )}
 
       <CreateInviteForm centerId={centerId} role={role} />
+      {role === 'student' ? <CreatePersonalInviteForm centerId={centerId} /> : null}
     </div>
+  )
+}
+
+function CreatePersonalInviteForm({ centerId }: { centerId: number }) {
+  const students = useManagePersonalInviteStudents(centerId)
+  const create = useManageCreatePersonalInvite(centerId)
+  const [userId, setUserId] = useState('')
+  const [expiresHours, setExpiresHours] = useState('336')
+  const [error, setError] = useState<string | null>(null)
+
+  const onSubmit = (event: React.FormEvent) => {
+    event.preventDefault()
+    const selectedUserId = Number(userId)
+    const hours = Number(expiresHours)
+    if (!selectedUserId || !Number.isInteger(hours) || hours <= 0) {
+      setError('Выберите ученика и срок действия')
+      return
+    }
+    setError(null)
+    create.mutate(
+      { user_id: selectedUserId, expires_in_hours: hours },
+      {
+        onSuccess: () => setUserId(''),
+        onError: () => setError('Не удалось создать личную ссылку'),
+      },
+    )
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="flex flex-col gap-2 rounded-lg bg-surface-subtle p-3">
+      <div>
+        <p className="text-sm font-medium text-text">Личная ссылка для ученика из Google Sheets</p>
+        <p className="text-xs text-muted">Ссылка привязана к одному ученику и используется один раз.</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Select
+          value={userId}
+          onChange={(event) => setUserId(event.target.value)}
+          aria-label="Ученик для личной ссылки"
+          className="min-w-56"
+          disabled={students.isPending || (students.data?.length ?? 0) === 0}
+        >
+          <option value="">
+            {students.isPending
+              ? 'Загрузка…'
+              : (students.data?.length ?? 0) === 0
+                ? 'Нет учеников без аккаунта'
+                : 'Выберите ученика'}
+          </option>
+          {(students.data ?? []).map((student) => (
+            <option key={student.user_id} value={student.user_id}>
+              {student.last_name} {student.first_name}
+              {student.middle_name ? ' ' + student.middle_name : ''} · {student.group_name}
+            </option>
+          ))}
+        </Select>
+        <Input
+          type="number"
+          min={1}
+          value={expiresHours}
+          onChange={(event) => setExpiresHours(event.target.value)}
+          aria-label="Срок личной ссылки (часов)"
+          className="max-w-28"
+        />
+        <Button type="submit" variant="secondary" disabled={create.isPending || !userId}>
+          Создать личную ссылку
+        </Button>
+      </div>
+      {error ? <p className="text-sm text-danger">{error}</p> : null}
+    </form>
   )
 }
 
@@ -142,7 +215,7 @@ function CreateInviteForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-2 rounded-lg bg-surface-muted p-3">
+    <form onSubmit={onSubmit} className="flex flex-col gap-2 rounded-lg bg-surface-subtle p-3">
       <Input
         value={description}
         onChange={(e) => setDescription(e.target.value)}
@@ -165,7 +238,7 @@ function CreateInviteForm({
             ))}
           </Select>
         ) : (
-          <label className="flex items-center gap-2 text-sm text-ink">
+          <label className="flex items-center gap-2 text-sm text-text">
             <input
               type="checkbox"
               checked={isHead}

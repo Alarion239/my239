@@ -59,7 +59,7 @@ export function ManagePage() {
   }
 
   return (
-    <div className="animate-rise flex flex-col gap-5">
+    <div className="flex flex-col gap-5">
       <TermRolloverCard centerId={centerId} />
       {term !== null && !term.is_active ? (
         <Card className="px-5 py-4 text-sm text-muted">
@@ -103,7 +103,7 @@ function TermRolloverCard({ centerId }: { centerId: number }) {
   return (
     <Card className="flex flex-wrap items-end gap-3 p-4">
       <div className="mr-auto">
-        <div className="font-medium text-ink">Открыть следующий период</div>
+        <div className="font-medium text-text">Открыть следующий период</div>
         <p className="text-sm text-muted">
           После «{term.display_name}» будет открыт «{nextDisplayName}» с теми же группами. Ученикам можно будет назначить группы.
         </p>
@@ -130,7 +130,7 @@ function CenteredSpinner() {
 
 function NoAccess() {
   return (
-    <Card className="animate-rise px-6 py-16 text-center">
+    <Card className="px-6 py-16 text-center">
       <p className="text-muted">Нет доступа к управлению этим матцентром.</p>
     </Card>
   )

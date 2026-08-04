@@ -274,7 +274,7 @@ export function SolutionWorkbench({
   }
 
   const formatTabs = formats.length > 0 ? (
-    <div className="flex h-10 shrink-0 items-center gap-0.5 rounded-lg bg-surface-muted p-0.5" role="tablist" aria-label={formatTabLabel}>
+    <div className="flex h-10 shrink-0 items-center gap-0.5 rounded-lg bg-surface-subtle p-0.5" role="tablist" aria-label={formatTabLabel}>
       {formats.map((item) => (
         <button
           key={item}
@@ -286,8 +286,8 @@ export function SolutionWorkbench({
           onClick={() => changeFormat(item)}
           onKeyDown={onFormatKeyDown}
           className={cn(
-            'h-9 rounded-md px-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-            active === item ? 'bg-accent-soft text-accent-ink' : 'text-muted hover:bg-surface hover:text-ink',
+            'h-9 rounded-md px-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus',
+            active === item ? 'bg-selected text-selected-text' : 'text-muted hover:bg-surface hover:text-text',
           )}
         >
           {FORMAT_LABEL[item]}
@@ -310,7 +310,7 @@ export function SolutionWorkbench({
 
   return (
     <section
-      className="material-workbench-container animate-rise min-w-0"
+      className="material-workbench-container min-w-0"
       aria-label={headerPrefix ? formatTabLabel : title}
       tabIndex={-1}
       onKeyDown={(event) => {
@@ -321,7 +321,7 @@ export function SolutionWorkbench({
       }}
     >
       <header className="flex min-w-0 flex-wrap items-center gap-2 pb-2 md:flex-nowrap">
-        {headerPrefix ? <div className="min-w-0 flex-1 basis-0">{headerPrefix}</div> : <h2 className="min-w-0 flex-1 basis-0 truncate font-display text-lg font-medium text-ink" title={title}>{title}</h2>}
+        {headerPrefix ? <div className="min-w-0 flex-1 basis-0">{headerPrefix}</div> : <h2 className="min-w-0 flex-1 basis-0 truncate text-lg font-medium text-text" title={title}>{title}</h2>}
         {!details && pdfActionPlacement === 'before-tabs' ? pdfControl : null}
         {!details ? formatTabs : null}
         {!details && pdfActionPlacement === 'after-tabs' ? pdfControl : null}
@@ -349,7 +349,7 @@ export function SolutionWorkbench({
       {details ? <div className="mt-2 flex flex-wrap items-center gap-2">{pdfActionPlacement === 'before-tabs' ? pdfControl : null}{formatTabs}{pdfActionPlacement === 'after-tabs' ? pdfControl : null}</div> : null}
 
       {confirmClose ? (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/30 bg-status-checking-soft px-3 py-2 text-sm text-ink" role="alert">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/30 bg-status-checking-soft px-3 py-2 text-sm text-text" role="alert">
           <span>Не удалось сохранить изменения.</span>
           <span className="flex gap-2">
             <Button size="sm" variant="ghost" onClick={() => setConfirmClose(false)}>Продолжить</Button>
@@ -365,8 +365,8 @@ export function SolutionWorkbench({
           editor ? (
             <div className="flex flex-col gap-3">
               <div className="material-tex-grid gap-3">
-                <div className="min-h-[24rem] overflow-auto rounded-lg border border-line bg-surface-muted p-3">
-                  <label htmlFor={formatId + '-source'} className="mb-2 block text-sm font-medium text-ink">LaTeX</label>
+                <div className="min-h-[24rem] overflow-auto rounded-lg border border-border bg-surface-subtle p-3">
+                  <label htmlFor={formatId + '-source'} className="mb-2 block text-sm font-medium text-text">LaTeX</label>
                   <Textarea
                     id={formatId + '-source'}
                     value={tex}
@@ -375,8 +375,8 @@ export function SolutionWorkbench({
                     placeholder="Решение..."
                   />
                 </div>
-                <div className="min-h-[24rem] overflow-auto rounded-lg border border-line bg-surface-muted p-3">
-                  <p className="mb-2 text-sm font-medium text-ink">Предпросмотр</p>
+                <div className="min-h-[24rem] overflow-auto rounded-lg border border-border bg-surface-subtle p-3">
+                  <p className="mb-2 text-sm font-medium text-text">Предпросмотр</p>
                   {renderedPreview.trim() === '' ? <p className="text-sm text-muted">Предпросмотр появится здесь.</p> : <TexViewer tex={renderedPreview} />}
                 </div>
               </div>
@@ -406,9 +406,9 @@ export function SolutionWorkbench({
 function VideoLink({ url }: { url: string }) {
   const embed = youtubeEmbed(url)
   if (embed) {
-    return <iframe src={embed} title="Видео-разбор" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen className="aspect-video w-full rounded-lg border border-line bg-surface" />
+    return <iframe src={embed} title="Видео-разбор" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen className="aspect-video w-full rounded-lg border border-border bg-surface" />
   }
-  return <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 self-start rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm font-medium text-ink hover:bg-surface-muted"><ExternalLink className="h-4 w-4" aria-hidden />Открыть видео</a>
+  return <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 self-start rounded-lg border border-border-control bg-surface px-3 py-2 text-sm font-medium text-text hover:bg-surface-subtle"><ExternalLink className="h-4 w-4" aria-hidden />Открыть видео</a>
 }
 
 function youtubeEmbed(url: string): string | null {

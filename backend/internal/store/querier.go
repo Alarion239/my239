@@ -181,11 +181,10 @@ type Querier interface {
 	ListRazborAccessGroupsForManage(ctx context.Context, mathCenterID int64) ([]ListRazborAccessGroupsForManageRow, error)
 	ListRazborAccessSeriesForManage(ctx context.Context, mathCenterID int64) ([]ListRazborAccessSeriesForManageRow, error)
 	ListRazborAccessStudentsForManage(ctx context.Context, mathCenterID int64) ([]ListRazborAccessStudentsForManageRow, error)
-	// The allocation board compares the active roster with the immediately
-	// preceding term. A student may therefore have no active-period enrollment
-	// and still appear as an unallocated candidate. Rating is deliberately a
-	// derived value: it currently mirrors the credited "Решено" total and can be
-	// replaced by a difficulty-weighted calculation without changing the API.
+	// The allocation board lists the active roster and joins metadata from the
+	// immediately preceding term. Rating is deliberately a derived value: it
+	// currently mirrors the credited "Решено" total and can be replaced by a
+	// difficulty-weighted calculation without changing the API.
 	ListRosterBoardStudentsForManage(ctx context.Context, mathCenterID int64) ([]ListRosterBoardStudentsForManageRow, error)
 	ListSeriesForCenter(ctx context.Context, mathCenterID int64) ([]ListSeriesForCenterRow, error)
 	ListSeriesForTerm(ctx context.Context, arg ListSeriesForTermParams) ([]MathCenterSeries, error)
@@ -227,6 +226,7 @@ type Querier interface {
 	PurgeExpiredTelegramAlertEnrollmentSessions(ctx context.Context) error
 	ReleaseClaim(ctx context.Context, arg ReleaseClaimParams) (int64, error)
 	RemoveActiveStudentByUser(ctx context.Context, arg RemoveActiveStudentByUserParams) (int64, error)
+	RemoveActiveStudentForCenter(ctx context.Context, arg RemoveActiveStudentForCenterParams) (int64, error)
 	RemoveStudent(ctx context.Context, id int64) (int64, error)
 	RemoveTeacher(ctx context.Context, id int64) (int64, error)
 	RevokeAllRefreshTokensForUser(ctx context.Context, userID int64) error

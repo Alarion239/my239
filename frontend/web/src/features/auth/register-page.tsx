@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
@@ -22,11 +22,13 @@ export function RegisterPage() {
   const [params] = useSearchParams()
   const urlToken = params.get('token') ?? ''
   const fromLink = urlToken.length > 0
+  const inviteContext = useInviteContext(urlToken)
 
   const {
     register,
     handleSubmit,
     setError,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<RegisterValues>({
     resolver: zodResolver(registerSchema),
@@ -39,6 +41,16 @@ export function RegisterPage() {
       last_name: '',
     },
   })
+
+  useEffect(() => {
+    const invite = inviteContext.data
+    if (!invite?.valid || !invite.personal_claim) return
+    setValue('first_name', invite.first_name ?? '')
+    setValue('middle_name', invite.middle_name ?? '')
+    setValue('last_name', invite.last_name ?? '')
+  }, [inviteContext.data, setValue])
+
+  const canonicalName = inviteContext.data?.valid && inviteContext.data.personal_claim
 
   // Usernames are lowercase-only (the backend lowercases on store). Mirror that
   // in the field so the user sees and submits the normalised value.
@@ -78,7 +90,7 @@ export function RegisterPage() {
       footer={
         <>
           Уже есть аккаунт?{' '}
-          <Link to="/login" className="font-medium text-accent hover:underline">
+          <Link to="/login" className="font-medium text-link hover:underline">
             Войти
           </Link>
         </>
@@ -100,19 +112,19 @@ export function RegisterPage() {
 
         <Field label="Имя" error={errors.first_name?.message}>
           {({ id, invalid }) => (
-            <Input id={id} invalid={invalid} autoComplete="given-name" {...register('first_name')} />
+            <Input id={id} invalid={invalid} readOnly={canonicalName} autoComplete="given-name" {...register('first_name')} />
           )}
         </Field>
 
         <Field label="Отчество (необязательно)" error={errors.middle_name?.message}>
           {({ id, invalid }) => (
-            <Input id={id} invalid={invalid} autoComplete="additional-name" {...register('middle_name')} />
+            <Input id={id} invalid={invalid} readOnly={canonicalName} autoComplete="additional-name" {...register('middle_name')} />
           )}
         </Field>
 
         <Field label="Фамилия" error={errors.last_name?.message}>
           {({ id, invalid }) => (
-            <Input id={id} invalid={invalid} autoComplete="family-name" {...register('last_name')} />
+            <Input id={id} invalid={invalid} readOnly={canonicalName} autoComplete="family-name" {...register('last_name')} />
           )}
         </Field>
 
@@ -161,7 +173,7 @@ function InviteBanner({ token }: { token: string }) {
   if (isPending) return null
   if (isError || !data || !data.valid) {
     return (
-      <p className="rounded-lg bg-surface-muted px-3 py-2 text-sm text-muted">
+      <p className="rounded-lg bg-surface-subtle px-3 py-2 text-sm text-muted">
         Приглашение недействительно или истекло. Проверьте ссылку.
       </p>
     )
@@ -175,11 +187,23 @@ function InviteBanner({ token }: { token: string }) {
         : null
 
   return (
-    <div className="rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-sm text-ink">
+    <div className="rounded-lg border border-selected-border/30 bg-action/5 px-3 py-2 text-sm text-text">
       {data.center_name && roleLabel ? (
         <p>
-          Вы вступаете в <span className="font-medium">«{data.center_name}»</span>{' '}
-          {roleLabel}
+          {data.personal_claim ? (
+            <>
+              Вы регистрируете личный аккаунт ученика{' '}
+              <span className="font-medium">
+                {[data.first_name, data.middle_name, data.last_name].filter(Boolean).join(' ')}
+              </span>{' '}
+              в <span className="font-medium">«{data.center_name}»</span>
+            </>
+          ) : (
+            <>
+              Вы вступаете в <span className="font-medium">«{data.center_name}»</span>{' '}
+              {roleLabel}
+            </>
+          )}
           {data.group_name ? (
             <>
               {' '}

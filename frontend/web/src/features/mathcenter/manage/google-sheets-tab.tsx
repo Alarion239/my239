@@ -13,7 +13,7 @@ import {
   useSyncGoogleSheetStudents,
   isUnallocatedGroup,
 } from '@my239/shared'
-import { Button, Card, CardContent, Input, Spinner } from '../../../design/ui'
+import { Button, Input, Spinner } from '../../../design/ui'
 import { ConfirmButton, SectionHeader } from '../../admin/_shared'
 
 // GoogleSheetsTab configures group conduit tabs and the term-level initials
@@ -101,8 +101,7 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
 
   return (
     <div className="flex flex-col gap-5">
-      <Card>
-        <CardContent className="flex flex-col gap-3">
+      <section className="flex flex-col gap-3 border-t border-border pt-5 first:border-t-0 first:pt-0">
           <SectionHeader
             title="Адрес service account для доступа к таблице"
             description="Скопируйте этот адрес и добавьте его в Google Sheets через «Настройки доступа». Роли «Читатель» достаточно для одностороннего импорта; «Редактор» нужен только для записи обратно."
@@ -132,11 +131,9 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
           ) : (
             <p className="text-sm text-muted">Адрес service account пока не настроен на backend.</p>
           )}
-        </CardContent>
-      </Card>
+      </section>
 
-      <Card>
-        <CardContent className="flex flex-col gap-4">
+      <section className="flex flex-col gap-4 border-t border-border pt-5 first:border-t-0 first:pt-0">
           <SectionHeader title="Google Sheets" description="Свяжите вкладку таблицы с группой или «Расшифровкой»." />
           <div className="flex flex-wrap items-end gap-2">
             <label className="flex min-w-64 flex-1 flex-col gap-1 text-xs text-muted">
@@ -151,14 +148,14 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
             <div className="flex flex-wrap items-end gap-2">
               <label className="flex flex-col gap-1 text-xs text-muted">
                 Период
-                <select className="rounded-lg border border-line bg-surface px-2 py-2 text-sm text-ink" value={termId} onChange={(event) => { setTermId(Number(event.target.value)); setGroupId(0) }}>
+                <select className="rounded-lg border border-border bg-surface px-2 py-2 text-sm text-text" value={termId} onChange={(event) => { setTermId(Number(event.target.value)); setGroupId(0) }}>
                   <option value={0}>Выберите период</option>
                   {(terms.data ?? []).map((term) => <option key={term.id} value={term.id}>{term.display_name}</option>)}
                 </select>
               </label>
               <label className="flex flex-col gap-1 text-xs text-muted">
                 Назначение
-                <select className="rounded-lg border border-line bg-surface px-2 py-2 text-sm text-ink" value={linkKind} onChange={(event) => { setLinkKind(event.target.value as 'conduit' | 'initials_legend'); setGroupId(0); setSheetId(null) }}>
+                <select className="rounded-lg border border-border bg-surface px-2 py-2 text-sm text-text" value={linkKind} onChange={(event) => { setLinkKind(event.target.value as 'conduit' | 'initials_legend'); setGroupId(0); setSheetId(null) }}>
                   <option value="conduit">Кондуит группы</option>
                   <option value="initials_legend">Расшифровка (только my239 → Sheets)</option>
                 </select>
@@ -166,7 +163,7 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
               {linkKind === 'conduit' ? (
                 <label className="flex flex-col gap-1 text-xs text-muted">
                   Группа
-                  <select className="rounded-lg border border-line bg-surface px-2 py-2 text-sm text-ink" value={groupId} onChange={(event) => setGroupId(Number(event.target.value))}>
+                  <select className="rounded-lg border border-border bg-surface px-2 py-2 text-sm text-text" value={groupId} onChange={(event) => setGroupId(Number(event.target.value))}>
                     <option value={0}>Выберите группу</option>
                     {(groups.data ?? []).filter((group) => !isUnallocatedGroup(group.name)).map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
                   </select>
@@ -174,7 +171,7 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
               ) : null}
               <label className="flex min-w-48 flex-col gap-1 text-xs text-muted">
                 Вкладка
-                <select className="rounded-lg border border-line bg-surface px-2 py-2 text-sm text-ink" value={sheetId ?? ''} onChange={(event) => setSheetId(Number(event.target.value))}>
+                <select className="rounded-lg border border-border bg-surface px-2 py-2 text-sm text-text" value={sheetId ?? ''} onChange={(event) => setSheetId(Number(event.target.value))}>
                   <option value="">Выберите вкладку</option>
                   {availableTabs.map((tab) => <option key={tab.id} value={tab.id}>{tab.title}</option>)}
                 </select>
@@ -183,13 +180,11 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
             </div>
           ) : null}
           {error ? <p className="text-sm text-danger">{error}</p> : null}
-        </CardContent>
-      </Card>
+      </section>
 
-      <Card>
-        <CardContent className="flex flex-col gap-3">
+      <section className="flex flex-col gap-3 border-t border-border pt-5 first:border-t-0 first:pt-0">
           <SectionHeader title="Как подключить" />
-          <ol className="flex list-decimal flex-col gap-3 pl-5 text-sm text-ink">
+          <ol className="flex list-decimal flex-col gap-3 pl-5 text-sm text-text">
             <li>
               В Google Sheets откройте «Настройки доступа» и добавьте адрес service account выше. Выберите «Читатель» для безопасного одностороннего импорта или «Редактор» для двусторонней синхронизации.
             </li>
@@ -200,11 +195,9 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
               Выберите период, группу и вкладку, затем нажмите «Связать». «Расшифровка» подключается отдельно.
             </li>
           </ol>
-        </CardContent>
-      </Card>
+      </section>
 
-      <Card>
-        <CardContent className="flex flex-col gap-3">
+      <section className="flex flex-col gap-3 border-t border-border pt-5 first:border-t-0 first:pt-0">
           <SectionHeader
             title="Синхронизация структуры"
             description="Импортирует данные из включённых вкладок выбранного периода. Если таблица доступна для редактирования, недостающие данные также добавляются в неё; ничего не удаляется."
@@ -212,7 +205,7 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
           <label className="flex w-fit flex-col gap-1 text-xs text-muted">
             Период
             <select
-              className="rounded-lg border border-line bg-surface px-2 py-2 text-sm text-ink"
+              className="rounded-lg border border-border bg-surface px-2 py-2 text-sm text-text"
               value={termId}
               onChange={(event) => setTermId(Number(event.target.value))}
             >
@@ -242,17 +235,15 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
           </p>
           {syncMessage ? <p className="text-sm text-success">{syncMessage}</p> : null}
           {syncError ? <p className="text-sm text-danger">{syncError}</p> : null}
-        </CardContent>
-      </Card>
+      </section>
 
-      <Card>
-        <CardContent className="flex flex-col gap-3">
+      <section className="flex flex-col gap-3 border-t border-border pt-5 first:border-t-0 first:pt-0">
           <SectionHeader title="Связанные вкладки" description="Отключённые вкладки не участвуют в ручной или автоматической синхронизации." />
           {links.isPending ? <Spinner /> : links.isError ? <p className="text-sm text-danger">Не удалось загрузить связи.</p> : links.data?.length === 0 ? <p className="text-sm text-muted">Пока нет связанных вкладок.</p> : (
             <ul className="flex flex-col gap-2">
               {links.data?.map((link) => (
-                <li key={link.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-surface-muted px-3 py-2">
-                  <span className="mr-auto text-sm text-ink">{link.sheet_title}</span>
+                <li key={link.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-surface-subtle px-3 py-2">
+                  <span className="mr-auto text-sm text-text">{link.sheet_title}</span>
                   <span className="text-xs text-muted">{link.link_kind === 'initials_legend' ? 'Расшифровка · только my239 → Sheets' : (link.group_name ?? 'группа не задана')}</span>
                   <Button type="button" size="sm" variant="ghost" disabled={setEnabled.isPending} onClick={() => setEnabled.mutate({ linkId: link.id, enabled: !link.enabled })}>{link.enabled ? 'Отключить' : 'Включить'}</Button>
                   <ConfirmButton variant="ghost" size="sm" disabled={remove.isPending} onConfirm={() => remove.mutate(link.id)}>Удалить</ConfirmButton>
@@ -260,15 +251,12 @@ export function GoogleSheetsTab({ centerId, activeTermId }: { centerId: number; 
               ))}
             </ul>
           )}
-        </CardContent>
-      </Card>
+      </section>
 
-      {visibleRuns.length > 0 ? <Card>
-        <CardContent className="flex flex-col gap-2">
+      {visibleRuns.length > 0 ? <section className="flex flex-col gap-2 border-t border-border pt-5 first:border-t-0 first:pt-0">
           <SectionHeader title="История синхронизаций" description="Время Google относится ко всей книге, а не к отдельной ячейке." />
           {runs.isPending ? <Spinner /> : visibleRuns.slice(0, 5).map((run) => <p key={run.id} className="text-sm text-muted">{run.status === 'failed' ? 'Ошибка: ' + run.error_message : run.status} · {new Date(run.started_at).toLocaleString('ru-RU')}</p>)}
-        </CardContent>
-      </Card> : null}
+      </section> : null}
     </div>
   )
 }

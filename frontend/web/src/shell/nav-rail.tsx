@@ -24,10 +24,10 @@ function NavItem({
       end={end}
       className={({ isActive }) =>
         cn(
-          'flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-colors',
+          'flex items-center gap-3 rounded-lg border-l-2 border-transparent px-2.5 py-2 text-sm transition-colors',
           isActive
-            ? 'bg-accent-soft font-medium text-accent-ink'
-            : 'text-muted hover:bg-surface-muted hover:text-ink',
+            ? 'border-selected-border bg-selected font-medium text-selected-text pl-2'
+            : 'text-muted hover:bg-surface-subtle hover:text-text',
         )
       }
     >
@@ -59,10 +59,10 @@ function MathCenterNavItem({ module }: { module: ModuleDef }) {
         aria-expanded={isCurrentCenter ? archiveOpen : undefined}
         aria-controls={isCurrentCenter ? 'mathcenter-periods-' + module.centerId : undefined}
         className={cn(
-          'flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-colors',
+          'flex items-center gap-3 rounded-lg border-l-2 border-transparent px-2.5 py-2 text-sm transition-colors',
           isCurrentCenter
-            ? 'bg-accent-soft font-medium text-accent-ink'
-            : 'text-muted hover:bg-surface-muted hover:text-ink',
+            ? 'border-selected-border bg-selected font-medium text-selected-text pl-2'
+            : 'text-muted hover:bg-surface-subtle hover:text-text',
         )}
       >
         <module.icon className="h-[18px] w-[18px]" aria-hidden />
@@ -78,10 +78,10 @@ function MathCenterNavItem({ module }: { module: ModuleDef }) {
       {isCurrentCenter && archiveOpen ? (
         <div
           id={'mathcenter-periods-' + module.centerId}
-          className="mx-2.5 mt-1 border-l border-line pl-3"
+          className="mx-2.5 mt-1 border-l border-border pl-3"
           aria-label="Периоды матцентра"
         >
-          {terms.isPending ? <p className="py-1 text-xs text-faint">Загрузка…</p> : null}
+          {terms.isPending ? <p className="py-1 text-xs text-text-subtle">Загрузка…</p> : null}
           {terms.isError ? <p className="py-1 text-xs text-danger">Не удалось загрузить периоды.</p> : null}
           {terms.data?.filter((term) => term.is_active).map((term) => {
             const selected = term.id === selectedTermID || (!selectedTermID && term.is_active)
@@ -92,18 +92,18 @@ function MathCenterNavItem({ module }: { module: ModuleDef }) {
                 className={cn(
                   'mb-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
                   selected
-                    ? 'bg-surface-muted font-medium text-ink'
-                    : 'text-muted hover:bg-surface-muted hover:text-ink',
+                    ? 'bg-surface-subtle font-medium text-text'
+                    : 'text-muted hover:bg-surface-subtle hover:text-text',
                 )}
               >
                 <Clock3 className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 <span>{term.display_name}</span>
-                {term.is_active ? <span className="ml-auto text-[10px] text-faint">сейчас</span> : null}
+                {term.is_active ? <span className="ml-auto text-[10px] text-text-subtle">сейчас</span> : null}
                 </NavLink>
             )
           })}
           {terms.data?.some((term) => !term.is_active) ? (
-            <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-faint">Архив</p>
+            <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-text-subtle">Архив</p>
           ) : null}
           {terms.data?.filter((term) => !term.is_active).map((term) => {
             const selected = term.id === selectedTermID
@@ -114,8 +114,8 @@ function MathCenterNavItem({ module }: { module: ModuleDef }) {
                 className={cn(
                   'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
                   selected
-                    ? 'bg-surface-muted font-medium text-ink'
-                    : 'text-muted hover:bg-surface-muted hover:text-ink',
+                    ? 'bg-surface-subtle font-medium text-text'
+                    : 'text-muted hover:bg-surface-subtle hover:text-text',
                 )}
               >
                 <Clock3 className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -141,11 +141,11 @@ export function NavRail({ open = true }: { open?: boolean }) {
     <aside
       id="desktop-nav-rail"
       className={cn(
-        'sticky top-0 hidden h-screen w-60 shrink-0 flex-col self-start overflow-y-auto border-r border-line bg-surface px-3 py-5',
+        'sticky top-0 hidden h-screen w-60 shrink-0 flex-col self-start overflow-y-auto border-r border-border bg-surface px-3 py-5',
         open && 'md:flex',
       )}
     >
-      <p className="mb-1 px-2.5 text-xs text-faint">Модули</p>
+      <p className="mb-1 px-2.5 text-xs text-text-subtle">Модули</p>
       <nav className="flex flex-col gap-0.5">
         {modules
           .filter((m) => !m.adminOnly || isAdmin)
@@ -162,7 +162,7 @@ export function NavRail({ open = true }: { open?: boolean }) {
             ) : (
               <div
                 key={m.id}
-                className="flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm text-faint"
+                className="flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm text-text-subtle"
               >
                 <m.icon className="h-[18px] w-[18px]" aria-hidden />
                 <span>{m.label}</span>
@@ -172,7 +172,7 @@ export function NavRail({ open = true }: { open?: boolean }) {
           )}
       </nav>
 
-      <div className="mt-auto flex flex-col gap-0.5 border-t border-line pt-3">
+      <div className="mt-auto flex flex-col gap-0.5 border-t border-border pt-3">
         <NavItem to="/profile" icon={UserIcon} label="Профиль" end />
       </div>
     </aside>

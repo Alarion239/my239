@@ -35,7 +35,7 @@ export function UserSearchSelect({
         aria-label="Поиск пользователя"
       />
       {showList ? (
-        <div className="rounded-lg border border-line bg-surface">
+        <div className="rounded-lg border border-border bg-surface">
           {isFetching ? (
             <div className="flex justify-center py-3">
               <Spinner />
@@ -53,9 +53,9 @@ export function UserSearchSelect({
                       setText('')
                       setDebounced('')
                     }}
-                    className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-surface-muted"
+                    className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-surface-subtle"
                   >
-                    <span className="text-ink">{fullName(u)}</span>
+                    <span className="text-text">{fullName(u)}</span>
                     <span className="text-xs text-muted">@{u.username}</span>
                   </button>
                 </li>

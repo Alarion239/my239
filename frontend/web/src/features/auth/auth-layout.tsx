@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Card, CardContent } from '../../design/ui'
 
-// Centered, paper-on-paper layout for the public auth screens (login/register).
+// Centered surface layout for the public auth screens (login/register).
 export function AuthLayout({
   subtitle,
   children,
@@ -12,10 +12,10 @@ export function AuthLayout({
   footer?: ReactNode
 }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-paper px-4 py-10">
-      <div className="w-full max-w-sm animate-rise">
+    <div className="flex min-h-screen items-center justify-center bg-canvas px-4 py-10">
+      <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
-          <div className="font-display text-3xl font-medium tracking-tight text-ink">my239</div>
+          <div className="font-display text-3xl font-medium tracking-tight text-text">my239</div>
           {subtitle ? <p className="mt-1 text-sm text-muted">{subtitle}</p> : null}
         </div>
         <Card>

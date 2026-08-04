@@ -1,237 +1,106 @@
-# my239 design system — "Scholarly warm"
+# my239 design system — “239 Indigo”
 
-The visual language of the my239 web app. It should feel like a **well-made
-textbook**: warm paper, a refined serif for headings, a clean humanist sans for
-the UI, generous whitespace, hairline rules, and restraint with motion and
-colour. Quiet and scholarly — never flashy.
+The visual language of my239 is crisp, neutral, and unmistakably tied to the
+school identity. Deep indigo carries actions and navigation; amber is a rare
+239 marker, never a call-to-action. Cards and work surfaces stay quiet so the
+content and homework states remain the focus.
 
-Everything here is defined as **design tokens** (CSS variables surfaced as
-Tailwind v4 utilities) and a small set of **owned components** built on Radix
-primitives. There is no third-party theme to fight; we own every pixel.
-
-- Tokens & theme: [`theme.css`](./theme.css)
-- Owned components: [`ui/`](./ui) (barrel: [`ui/index.ts`](./ui/index.ts))
-- Class helper: [`cn.ts`](./cn.ts)
-- Light/dark switch: [`theme-provider.tsx`](./theme-provider.tsx)
-- Module navigation: [`../shell/modules.ts`](../shell/modules.ts)
-
----
+Everything is an owned token or component. See [`theme.css`](./theme.css),
+[`ui/`](./ui), [`cn.ts`](./cn.ts), [`theme-provider.tsx`](./theme-provider.tsx),
+and the module registry in [`../shell/modules.ts`](../shell/modules.ts).
 
 ## Principles
 
-1. **Paper, not screens.** The base is warm off-white (`paper`), surfaces are a
-   touch lighter, separators are hairline. Avoid hard black and pure white.
-2. **Serif for voice, sans for work.** Display serif (Spectral) for the wordmark
-   and page/section titles; humanist sans (IBM Plex Sans) for everything
-   interactive. Mono (IBM Plex Mono) for code/TeX.
-3. **One accent, used sparingly.** A single deep teal carries primary actions,
-   active states, and links. Colour earns its place; most of the UI is ink on
-   paper.
-4. **Hairlines over boxes.** Prefer a `border-line` rule or whitespace to heavy
-   borders and shadows. Cards are flat with a thin border.
-5. **Restrained motion.** One staggered page-load reveal (`animate-rise`); subtle
-   hover transitions. Always honour `prefers-reduced-motion`.
-6. **Cyrillic-first.** The product is Russian — every font is chosen for full
-   Cyrillic coverage and self-hosted so it always renders.
-7. **Dark mode is first-class.** Every token has a light and dark value; never
-   hard-code a colour in a component.
-
----
+1. **Neutral hierarchy.** `canvas`, `surface`, `surface-subtle`, and
+   `surface-strong` create depth without chromatic muddiness.
+2. **Role before hue.** Actions, links, selection, focus, borders, and statuses
+   each have a token. Do not reuse a token because its hex value looks close.
+3. **Identity in restraint.** Indigo is the interaction color. `signature` amber
+   appears only in the small wordmark marker and teacher-private annotations.
+4. **Accessible states.** Status meaning is always conveyed by glyphs and text
+   as well as color. Ordinary text pairs target 4.5:1; controls and focus target
+   3:1. Decorative borders may be quieter.
+5. **Human, not “AI”.** No gradients, translucent blurred chrome, global rise-in
+   animation, or ubiquitous accent decoration. Use `rounded-lg` for cards and
+   `rounded-md` for controls; reserve `rounded-full` for pills and avatars.
+6. **Dark mode is first-class.** Every role has light and dark values. The
+   `my239.theme` preference and OS fallback remain unchanged.
 
 ## Typography
 
-Three self-hosted families (via `@fontsource`, imported in
-[`main.tsx`](../main.tsx); weights 400/500/600 only — we use just **regular**
-and **medium**):
+Spectral (`font-display`) is reserved for the `my239` wordmark and top-level
+page headings (`h1`). IBM Plex Sans (`font-sans`, the body default) is used for
+cards, dialogs, tables, section headings, labels, and controls. IBM Plex Mono
+(`font-mono`) is for code, TeX, tokens, and IDs. Use regular and medium weights.
 
-| Role | Family | Tailwind | Use for |
+## Role tokens
+
+The values below are the contract exposed as Tailwind utilities (`bg-*`,
+`text-*`, `border-*`). Add new roles in `theme.css` in both theme blocks rather
+than writing a raw hex in a component.
+
+| Role | Light | Dark | Use |
 | --- | --- | --- | --- |
-| Display | **Spectral** (serif) | `font-display` | Wordmark, page titles (`<h1>`), section/card titles |
-| Body / UI | **IBM Plex Sans** | `font-sans` (default on `body`) | All interface text, labels, tables, buttons |
-| Mono | **IBM Plex Mono** | `font-mono` | Code, raw TeX, tokens, IDs |
+| `canvas` | `#F5F6F8` | `#0F1118` | Page background |
+| `surface` | `#FFFFFF` | `#171A23` | Cards, inputs, menus |
+| `surface-subtle` | `#EAEDF2` | `#222733` | Table headers, hover, selected context |
+| `surface-strong` | `#DDE2EA` | `#2D3441` | Disabled and nested regions |
+| `text` | `#171A22` | `#F2F3F7` | Primary text |
+| `muted` | `#4E5868` | `#BBC2CE` | Secondary text |
+| `text-subtle` | `#626D7E` | `#9CA6B6` | Metadata and placeholders |
+| `border` | `#C9D0DB` | `#3A4251` | Decorative separators |
+| `border-control` | `#7C8798` | `#747F91` | Inputs and identifiable controls |
+| `action` / `action-hover` | `#202566` / `#171B52` | `#5B68C4` / `#4F5CB3` | Solid actions with `on-action` |
+| `link` | `#2F439E` | `#B9C1FF` | Text links only |
+| `focus` | `#425CC7` | `#AAB4FF` | Full-opacity 2px focus ring |
+| `selected` / `selected-text` | `#E5E9F8` / `#202566` | `#292F59` / `#D9DDFF` | Selected surfaces and content |
+| `selected-border` | `#596CCB` | `#8E9BE8` | Active tabs and selected controls |
+| `signature` / `on-signature` | `#FBB03B` / `#202566` | `#FBB03B` / `#202566` | Rare identity marker; never white on amber |
 
-Conventions:
-- Page title: `font-display text-3xl font-medium text-ink`.
-- Card/section title: `font-display text-xl font-medium`.
-- Body is `font-sans` by default (set on `body`) — you rarely set it explicitly.
-- Two weights only: **400** (normal) and **500** (`font-medium`). Avoid 600/700.
-- Sentence case everywhere (including Russian); no ALL-CAPS except tiny meta
-  labels like `СКОРО`.
+Pairings are explicit: `bg-action text-on-action`, `bg-danger text-on-danger`,
+`bg-selected text-selected-text`, and `bg-*-soft text-*`. Use `border` for
+decoration and `border-control` for a boundary users must identify or operate.
 
----
+### Semantic and homework states
 
-## Colour tokens
-
-Defined once in [`theme.css`](./theme.css) as CSS variables and exposed as
-Tailwind colour utilities (`bg-*`, `text-*`, `border-*`). **Always use the token
-utility — never a raw hex.**
-
-| Token / utility | Light | Dark | Meaning |
-| --- | --- | --- | --- |
-| `paper` | `#faf7f0` | `#14120d` | Page background |
-| `surface` | `#fffdf8` | `#1c1a13` | Cards, inputs, raised surfaces |
-| `surface-muted` | `#f2ede1` | `#262218` | Subtle fills, hover, metric tiles |
-| `ink` | `#211d17` | `#ece5d6` | Primary text |
-| `muted` | `#6c6557` | `#a79e8c` | Secondary text |
-| `faint` | `#948c7b` | `#7d7564` | Tertiary text, placeholders, hints |
-| `line` | `#e7e0cf` | `#322d21` | Hairline borders, row separators |
-| `line-strong` | `#d7cdb6` | `#433c2c` | Emphasised borders, input outline |
-| `accent` | `#0f6e56` | `#3cc39d` | Primary actions, links, active state |
-| `accent-strong` | `#0b5743` | `#57d3b0` | Accent hover/active |
-| `accent-soft` | `#e3f0ea` | `#143329` | Accent-tinted fills (badges, pills, active tab) |
-| `accent-ink` | `#0b4636` | `#bdeadf` | Text/icon on `accent-soft` |
-| `danger` | `#a3331f` | `#e8826f` | Destructive text/actions |
-| `danger-soft` | `#f7e7e2` | `#2e1a16` | Destructive tint |
-| `success` | `#2f7a4f` | `#5fbd86` | Success text |
-| `warning` | `#97670f` | `#d8a44a` | Warning text |
-
-Pairing rule: text on a tinted fill uses the matching `*-ink`/semantic token,
-never plain black/grey — e.g. `bg-accent-soft text-accent-ink`,
-`bg-danger-soft text-danger`.
-
-### Homework status colours
-
-Math Center homework has five grading states. Each maps to an abstract `tone`
-(from `homeworkStatusMeta(status)` in `@my239/shared`) which the web layer
-resolves to a warm, scholarly token pair: a `status-x` ink colour and a
-`status-x-soft` fill, so `bg-status-x-soft text-status-x` reads correctly in
-both themes. Used by [`StatusTile` / `StatusLegend`](./ui/status-tile.tsx).
-
-| Tone | Token | Soft fill | Meaning (RU) |
-| --- | --- | --- | --- |
-| `accepted` | `status-accepted` (warm green) | `status-accepted-soft` | Принято |
-| `checking` | `status-checking` (amber) | `status-checking-soft` | Проверяется |
-| `rejected` | `status-rejected` (oxblood) | `status-rejected-soft` | Отклонено |
-| `appeal` | `status-appeal` (warm plum) | `status-appeal-soft` | Апелляция |
-| `unsolved` | `status-unsolved` (neutral) | `status-unsolved-soft` | Не решено |
-
----
-
-## Theming (light / dark)
-
-- Class-based: `theme.css` declares `@custom-variant dark (&:where(.dark, .dark *))`.
-  Tokens live on `:root` (light) and `.dark` (dark).
-- [`ThemeProvider`](./theme-provider.tsx) toggles `document.documentElement.classList`
-  between light/dark, persists the choice to `localStorage` (`my239.theme`), and
-  defaults to the OS `prefers-color-scheme`. Read/flip it with `useTheme()`; the
-  [`ThemeToggle`](./ui/theme-toggle.tsx) button is in the top bar.
-- **To add a token:** add `--color-x: var(--x)` under `@theme`, then `--x` values
-  under both `:root` and `.dark`. It's now usable as `bg-x` / `text-x` / `border-x`.
-
----
-
-## Shape, spacing, motion
-
-- **Radius:** `rounded-lg` for controls (buttons, inputs), `rounded-2xl` for
-  cards, `rounded-full` for badges/avatars.
-- **Borders:** hairline `border border-line`; `border-line-strong` for emphasis
-  (e.g. input outline). Avoid drop shadows; the one exception is the dropdown/
-  dialog content (`shadow-lg shadow-black/5`).
-- **Focus:** `focus-visible:ring-2 focus-visible:ring-accent/40` (+
-  `ring-offset-2 ring-offset-paper` on buttons). Never remove focus rings.
-- **Spacing:** generous — page content is centred in `max-w-5xl`; cards pad
-  `p-6`; vertical rhythm in `rem`.
-- **Motion:** `animate-rise` (0.5s ease-out, fade + 6px lift) for page/section
-  entrances; stagger siblings with inline `style={{ animationDelay }}`. It is a
-  no-op under `prefers-reduced-motion`. Buttons use `active:scale-[0.98]`.
-
----
-
-## The `cn` helper
-
-[`cn.ts`](./cn.ts) = `clsx` + `tailwind-merge`. Use it to compose conditional
-classes and let later Tailwind classes win:
-
-```tsx
-import { cn } from '../design/cn'
-<div className={cn('rounded-2xl border border-line', active && 'border-line-strong', className)} />
-```
-
----
-
-## Components
-
-All live in [`ui/`](./ui) and are exported from [`ui/index.ts`](./ui/index.ts).
-They are **ours** — built on Radix primitives where interactive, styled only with
-tokens, and free to restyle. Import from the barrel:
-
-```tsx
-import { Button, Card, CardContent, Field, Input, Badge, Table, Tr, Td } from '../design/ui'
-```
-
-| Component | Variants / parts | Notes |
+| Meaning | Light text / fill | Dark text / fill |
 | --- | --- | --- |
-| `Button` | `variant`: primary · secondary · ghost · danger · link · `size`: sm · md · lg · icon | `asChild` to render as a link, e.g. `<Button asChild><Link …/></Button>` |
-| `Input` | `invalid` flag | Token-styled; pairs with `Field` |
-| `Label` | — | Radix Label |
-| `Field` | render-prop `({ id, invalid }) => …` | Wires label + control + error message with the right `id`/aria; the standard form row |
-| `Card` | `CardHeader` · `CardTitle` · `CardDescription` · `CardContent` | Flat surface, thin border, `rounded-2xl` |
-| `Avatar` | `initials` | Initials chip on `accent-soft` (Cyrillic-aware via `initials()` in `@my239/shared`) |
-| `Badge` | `variant`: accent · neutral · success · danger | Role/status pills |
-| `Spinner` / `FullPageSpinner` | — | Inline loader / centred full-page loader for route guards |
-| `Dialog` | `Trigger` · `Content` · `Title` · `Description` · `Close` · `Overlay` | Radix Dialog; used by the admin create-token / create-center flows |
-| `DropdownMenu` | `Trigger` · `Content` · `Item` · `Label` · `Separator` | User menu, mobile nav |
-| `Table` | `THead` · `TBody` · `Tr` · `Th` · `Td` | Hairline rows, responsive overflow wrapper; admin lists |
-| `ThemeToggle` | — | Light/dark switch |
+| Accepted | `#216E4A` / `#E4F3EB` | `#82D0A9` / `#193529` |
+| Rejected / danger | `#A92530` / `#FBE7E9` | `#EF858B` / `#3B2025` |
+| Checking / warning | `#755400` / `#FFF0C2` | `#E8C766` / `#382F18` |
+| Grading / info | `#245A96` / `#E3EDF8` | `#91B9E8` / `#1B2D44` |
+| Appeal | `#684384` / `#EFE7F4` | `#C9ADE2` / `#30243F` |
+| Unsolved | `#4E5868` / `#DDE2EA` | `#BBC2CE` / `#2D3441` |
 
-### Form pattern (the house style)
+The web layer exposes these as `status-*` and `status-*-soft`. Keep glyphs and
+text legends. Cards remain neutral; homework color belongs on the problem or
+subproblem identifier controls.
 
-`react-hook-form` + `zod` (schemas from `@my239/shared`) + `Field` + `Input`,
-mapping backend `APIError.fields` onto form errors:
+An open coffin is a teacher workflow state, not a submission verdict. Its
+problem header and empty/active problem cells use `bg-warning-soft
+text-warning`; accepted, checking, rejected, and appeal treatments still take
+precedence when a cell has a submission status. A released coffin returns to
+the neutral `surface-subtle` header treatment.
 
-```tsx
-const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(loginSchema) })
-…
-<Field label="Имя пользователя" error={errors.username?.message}>
-  {({ id, invalid }) => <Input id={id} invalid={invalid} {...register('username')} />}
-</Field>
-```
+Teacher-private notes use `private`, `private-soft`, and `private-border`. The
+photo viewer uses its owned `media-*` tokens so its dark canvas is intentional,
+not an undocumented gallery hex.
 
----
+## Navigation and components
 
-## Module navigation (the "macOS" pattern)
+The left rail uses a restrained `selected` background and a narrow indigo edge.
+The active top-bar tab uses an indigo bottom rule, not a rounded pill. Buttons,
+inputs, selects, textareas, dialogs, cards, tables, and dropdowns are owned
+components and should use the role utilities above. Never remove a focus ring.
 
-A defining piece of the system: a **unified per-module navigation**. The left
-rail is the module switcher (the "Dock"); the top bar shows the active module's
-**pages as tabs** to the right of the `my239` wordmark (the "menu bar").
+The class-based theme is toggled by `ThemeProvider` and persisted as
+`localStorage` key `my239.theme`; `ThemeToggle` lives in the top bar. The module
+registry drives rail entries and top-bar pages from one source.
 
-It is data-driven from one registry, [`../shell/modules.ts`](../shell/modules.ts):
+## Extension checklist
 
-```ts
-interface ModuleDef {
-  id; label; description; path; icon            // identity + rail entry
-  status: 'active' | 'soon'                      // 'soon' renders disabled ("СКОРО")
-  adminOnly?: boolean                            // hidden from non-admins
-  pages?: { label; path; end? }[]               // top-bar tabs for this module
-}
-```
-
-- `activeModule(pathname, isAdmin)` resolves the current module by longest path
-  prefix (so `/admin/users` → the admin module), excluding `adminOnly` modules
-  for non-admins.
-- The top bar (`../shell/top-bar.tsx`) renders that module's `pages` as
-  `NavLink` tabs (active tab = `accent-soft` pill); the rail
-  (`../shell/nav-rail.tsx`) renders the module list.
-
-**Adding a module** is one registry entry (+ its routes): give it `pages`, an
-icon, and `adminOnly`/`status` as needed — the rail and top-bar tabs update
-automatically.
-
----
-
-## Extending the system — checklist
-
-- **New colour?** Add it as a token in `theme.css` (both themes). Never hard-code.
-- **New component?** Put it in `ui/`, build on a Radix primitive if interactive,
-  style only with tokens, export from `ui/index.ts`, and support dark mode by
-  construction (you will, if you only use tokens).
-- **New page in a module?** Add a `ModulePage` to the module's `pages` and a route.
-- **New module?** Add a `ModuleDef` to `modules.ts` + routes.
-
-## Don'ts
-
-- ❌ Raw hex / Tailwind palette colours (`text-gray-500`, `#333`) — breaks dark mode.
-- ❌ `font-weight` 600/700, Title Case, or ALL-CAPS (except tiny meta labels).
-- ❌ Drop shadows on cards, heavy borders, gradients.
-- ❌ Removing focus rings.
-- ❌ A second accent colour — keep it to the teal + semantic danger/success/warning.
+- Add a token to `theme.css` under `@theme`, `:root`, and `.dark`.
+- Use a semantic pairing and verify contrast with `npm run test:colors`.
+- Keep card surfaces neutral and status communication redundant with text/glyphs.
+- Avoid raw hex, Tailwind named palettes, gradients, blurred chrome, and
+  decorative amber/indigo repetition.

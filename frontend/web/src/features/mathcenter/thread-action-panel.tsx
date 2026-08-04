@@ -57,7 +57,7 @@ function StudentActions({
 
   return (
     <Card className="p-4">
-      <h3 className="mb-3 font-display text-lg font-medium text-ink">
+      <h3 className="mb-3 text-lg font-medium text-text">
         {status === 'rejected' ? 'Отправить новое решение' : 'Отправить решение'}
       </h3>
       <SubmissionForm
@@ -127,7 +127,7 @@ function GraderActions({
       {canGrade ? (
         <Card className="p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="font-display text-lg font-medium text-ink">
+            <h3 className="text-lg font-medium text-text">
               Поставить оценку
             </h3>
             <Button

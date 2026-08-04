@@ -9,11 +9,13 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run",
+    "test": "npm run test:colors && vitest run",
+    "test:colors": "node scripts/check-theme-contrast.mjs",
     "test:watch": "vitest"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/modifiers": "^7.0.0",
     "@hookform/resolvers": "^3.9.0",
     "@my239/shared": "*",
     "@radix-ui/react-avatar": "^1.1.1",

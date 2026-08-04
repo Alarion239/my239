@@ -147,7 +147,7 @@ describe('CoffinsPage student cards', () => {
     )
     expect(screen.queryByText('Открыт для сдачи')).not.toBeInTheDocument()
     expect(screen.queryByText(/Разобрана/)).not.toBeInTheDocument()
-    expect(tile.closest('div.rounded-2xl')).not.toHaveClass('bg-status-checking-soft')
+    expect(tile.closest('div.rounded-lg')).not.toHaveClass('bg-status-checking-soft')
   })
 
   it('keeps the accepted letter control on solved coffins without lifecycle text', async () => {

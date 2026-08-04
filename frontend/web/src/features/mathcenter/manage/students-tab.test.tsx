@@ -162,6 +162,7 @@ describe('StudentsTab roster board', () => {
       groups: [{ id: 1, name: 'А' }, { id: 2, name: 'Б' }],
       students: [
         {
+          student_id: 201,
           user_id: 101,
           current_group_id: null,
           previous_group_id: 1,
@@ -172,6 +173,7 @@ describe('StudentsTab roster board', () => {
           rating: 4,
         },
         {
+          student_id: 202,
           user_id: 102,
           current_group_id: 1,
           previous_group_id: 2,
@@ -202,7 +204,11 @@ describe('StudentsTab roster board', () => {
 
     renderStudentsTab()
     const user = userEvent.setup()
-    expect(await screen.findByRole('region', { name: 'Не распределены, 1 учеников' })).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: 'Удалить ученика' })).toHaveClass('min-h-20')
+    expect(screen.getByTestId('roster-board-columns')).toHaveClass('overflow-x-auto', '[scrollbar-width:none]', '[&::-webkit-scrollbar]:hidden')
+    expect(screen.getByRole('region', { name: 'Не распределены, 1 учеников' })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'А список учеников' })).toHaveClass('overflow-y-auto', '[scrollbar-width:none]', '[&::-webkit-scrollbar]:hidden')
+    expect(screen.getByRole('region', { name: 'А, 1 учеников' })).toHaveClass('max-h-[65vh]')
     expect(screen.getByText('Предыдущая группа: А')).toBeInTheDocument()
     expect(screen.getByText('Новый ученик')).toBeInTheDocument()
     expect(screen.queryByRole('combobox', { name: 'Переместить Ира Петрова' })).not.toBeInTheDocument()
@@ -210,5 +216,74 @@ describe('StudentsTab roster board', () => {
     const sortButtons = screen.getAllByRole('button', { name: /Сортировка колонки/ })
     await user.click(sortButtons[0])
     expect(screen.getAllByRole('button', { name: /Рейтинг ↓/ })).toHaveLength(3)
+  })
+
+  it('filters across groups and confirms active-period removal', async () => {
+    const boardResponse: ManageRosterBoardResponse = {
+      term: { id: 20, math_center_id: 7, kind: 'academic', grade: 6, display_name: '6 класс', is_active: true },
+      previous_term: null,
+      published_series_count: 3,
+      rating_term: { id: 20, math_center_id: 7, kind: 'academic', grade: 6, display_name: '6 класс', is_active: true },
+      groups: [{ id: 1, name: 'А' }],
+      students: [
+        {
+          student_id: 201,
+          user_id: 101,
+          current_group_id: null,
+          previous_group_id: null,
+          previous_group_name: null,
+          first_name: 'Ира',
+          middle_name: null,
+          last_name: 'Петрова',
+          rating: 4,
+        },
+        {
+          student_id: 202,
+          user_id: 102,
+          current_group_id: 1,
+          previous_group_id: null,
+          previous_group_name: null,
+          first_name: 'Олег',
+          middle_name: null,
+          last_name: 'Сидоров',
+          rating: 7,
+        },
+      ],
+    }
+    let deleted = false
+    const deleteCalls: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input)
+        if (init?.method === 'DELETE') {
+          deleteCalls.push(url)
+          deleted = true
+          return new Response(null, { status: 204 })
+        }
+        if (url.endsWith('/manage/roster-board')) {
+          return Response.json(deleted ? { ...boardResponse, students: [boardResponse.students[1]] } : boardResponse)
+        }
+        if (url.endsWith('/manage/groups')) return Response.json([{ id: 1, math_center_id: 7, name: 'А', created_at: '2026-01-01' }])
+        return Response.json([])
+      }),
+    )
+
+    renderStudentsTab()
+    const user = userEvent.setup()
+    const search = await screen.findByRole('textbox', { name: 'Поиск ученика по имени' })
+    await user.type(search, 'ира')
+    expect(screen.getByRole('region', { name: 'Не распределены, 1 учеников' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'А, 0 учеников' })).toBeInTheDocument()
+    expect(screen.queryByText('Олег Сидоров')).not.toBeInTheDocument()
+
+    await user.clear(search)
+    const student = screen.getByRole('button', { name: /Ира Петрова.*Delete/ })
+    student.focus()
+    await user.keyboard('{Delete}')
+    expect(await screen.findByRole('heading', { name: 'Удалить ученика из матцентра?' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Удалить' }))
+    await waitFor(() => expect(deleteCalls).toEqual(['/api/v1/mathcenter/centers/7/manage/students/201']))
+    await waitFor(() => expect(screen.queryByText('Ира Петрова')).not.toBeInTheDocument())
   })
 })

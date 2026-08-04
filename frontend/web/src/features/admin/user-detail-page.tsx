@@ -58,7 +58,7 @@ export function UserDetailPage() {
   }
 
   return (
-    <div className="animate-rise flex flex-col gap-8">
+    <div className="flex flex-col gap-8">
       <BackLink />
       <ProfileHeader user={user} />
       <TeachingSection userId={userId} />
@@ -71,7 +71,7 @@ function BackLink() {
   return (
     <Link
       to="/admin/users"
-      className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-accent underline-offset-4 hover:underline"
+      className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-link underline-offset-4 hover:underline"
     >
       <ArrowLeft className="h-4 w-4" aria-hidden />
       К пользователям
@@ -81,7 +81,7 @@ function BackLink() {
 
 function NotFound() {
   return (
-    <div className="animate-rise flex flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <BackLink />
       <Card className="px-6 py-16 text-center">
         <p className="text-muted">Пользователь не найден.</p>
@@ -109,7 +109,7 @@ function ProfileHeader({ user }: { user: User }) {
       <CardContent className="flex flex-wrap items-center gap-4 pt-6">
         <Avatar initials={initials(user)} className="h-14 w-14 text-lg" />
         <div className="min-w-0 flex-1">
-          <h1 className="font-display text-2xl font-medium text-ink">
+          <h1 className="font-display text-2xl font-medium text-text">
             {fullName(user)}
           </h1>
           <p className="text-sm text-muted">@{user.username}</p>
@@ -206,8 +206,8 @@ function TeacherRow({
   }
 
   return (
-    <li className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-paper px-3 py-2">
-      <span className="font-medium text-ink">
+    <li className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-canvas px-3 py-2">
+      <span className="font-medium text-text">
         Матцентр {enrollment.graduation_year}
       </span>
       {enrollment.is_head_teacher ? <Badge variant="accent">Старший</Badge> : null}
@@ -267,7 +267,7 @@ function AddTeacher({
   }
 
   return (
-    <div className="flex flex-col gap-1.5 border-t border-line pt-3">
+    <div className="flex flex-col gap-1.5 border-t border-border pt-3">
       <div className="flex flex-wrap items-center gap-2">
         <Select
           aria-label="Матцентр"
@@ -344,8 +344,8 @@ function StudentRow({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-paper px-3 py-2">
-        <span className="font-medium text-ink">
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-canvas px-3 py-2">
+        <span className="font-medium text-text">
           Матцентр {enrollment.graduation_year} · {groupName}
         </span>
         <ConfirmButton
@@ -391,7 +391,7 @@ function AddStudent({ userId }: { userId: number }) {
   return (
     <div className="flex flex-col gap-2">
       <p className="text-sm text-muted">Не состоит ни в одной группе.</p>
-      <p className="text-xs text-faint">Ученик может быть только в одном матцентре.</p>
+      <p className="text-xs text-text-subtle">Ученик может быть только в одном матцентре.</p>
       <div className="flex flex-wrap items-center gap-2">
         <Select
           aria-label="Матцентр"

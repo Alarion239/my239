@@ -3,30 +3,50 @@
 /* Class-based dark mode: toggled by <html class="dark"> from ThemeProvider. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Design tokens -> Tailwind utilities (bg-paper, text-ink, border-line, ...). */
+/* Design tokens -> Tailwind utilities (bg-canvas, text-text, border, ...). */
 @theme {
   --font-display: "Spectral", Georgia, "Times New Roman", serif;
   --font-sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
 
-  --color-paper: var(--paper);
+  --color-canvas: var(--canvas);
   --color-surface: var(--surface);
-  --color-surface-muted: var(--surface-muted);
-  --color-ink: var(--ink);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-surface-strong: var(--surface-strong);
+  --color-text: var(--text);
   --color-muted: var(--muted);
-  --color-faint: var(--faint);
-  --color-line: var(--line);
-  --color-line-strong: var(--line-strong);
-  --color-accent: var(--accent);
-  --color-accent-strong: var(--accent-strong);
-  --color-accent-soft: var(--accent-soft);
-  --color-accent-ink: var(--accent-ink);
+  --color-text-subtle: var(--text-subtle);
+  --color-border: var(--border);
+  --color-border-control: var(--border-control);
+  --color-action: var(--action);
+  --color-action-hover: var(--action-hover);
+  --color-on-action: var(--on-action);
+  --color-link: var(--link);
+  --color-focus: var(--focus);
+  --color-selected: var(--selected);
+  --color-selected-text: var(--selected-text);
+  --color-selected-border: var(--selected-border);
+  --color-signature: var(--signature);
+  --color-on-signature: var(--on-signature);
+  --color-private: var(--private);
+  --color-private-soft: var(--private-soft);
+  --color-private-border: var(--private-border);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
+  --color-on-danger: var(--on-danger);
   --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
   --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
 
-  /* Homework status colours — warm, scholarly tones (see README). */
+  /* Full-screen media viewer tokens. */
+  --color-media-canvas: var(--media-canvas);
+  --color-media-text: var(--media-text);
+  --color-media-focus: var(--media-focus);
+
+  /* Homework status colours — semantic, color-vision-safe tones (see README). */
   --color-status-accepted: var(--status-accepted);
   --color-status-accepted-soft: var(--status-accepted-soft);
   --color-status-rejected: var(--status-rejected);
@@ -41,74 +61,108 @@
   --color-status-unsolved-soft: var(--status-unsolved-soft);
 }
 
-/* Scholarly warm — paper light theme. */
+/* 239 Indigo — a cool institutional canvas with the school's indigo/amber identity. */
 :root {
-  --paper: #faf7f0;
-  --surface: #fffdf8;
-  --surface-muted: #f2ede1;
-  --ink: #211d17;
-  --muted: #6c6557;
-  --faint: #948c7b;
-  --line: #e7e0cf;
-  --line-strong: #d7cdb6;
-  --accent: #0f6e56;
-  --accent-strong: #0b5743;
-  --accent-soft: #e3f0ea;
-  --accent-ink: #0b4636;
-  --danger: #a3331f;
-  --danger-soft: #f7e7e2;
-  --success: #2f7a4f;
-  --warning: #97670f;
+  --canvas: #f5f6f8;
+  --surface: #ffffff;
+  --surface-subtle: #eaedf2;
+  --surface-strong: #dde2ea;
+  --text: #171a22;
+  --muted: #4e5868;
+  --text-subtle: #626d7e;
+  --border: #c9d0db;
+  --border-control: #7c8798;
+  --action: #202566;
+  --action-hover: #171b52;
+  --on-action: #ffffff;
+  --link: #2f439e;
+  --focus: #425cc7;
+  --selected: #e5e9f8;
+  --selected-text: #202566;
+  --selected-border: #596ccb;
+  --signature: #fbb03b;
+  --on-signature: #202566;
+  --private: #684800;
+  --private-soft: #fff1cf;
+  --private-border: #a66e00;
+  --danger: #a92530;
+  --danger-soft: #fbe7e9;
+  --on-danger: #ffffff;
+  --success: #216e4a;
+  --success-soft: #e4f3eb;
+  --warning: #755400;
+  --warning-soft: #fff0c2;
+  --info: #245a96;
+  --info-soft: #e3edf8;
+  --media-canvas: #101218;
+  --media-text: #ffffff;
+  --media-focus: #aab4ff;
 
-  /* Homework status — warm fills + ink, tuned to the paper palette. */
-  --status-accepted: #2f7a4f;
-  --status-accepted-soft: #e4efe4;
-  --status-rejected: #9c3320;
-  --status-rejected-soft: #f6e4de;
-  --status-checking: #8a6411;
-  --status-checking-soft: #f4ecd6;
-  --status-grading: #2a5c8a;
-  --status-grading-soft: #e2e9f1;
-  --status-appeal: #5d4a8a;
-  --status-appeal-soft: #ebe6f3;
-  --status-unsolved: #6c6557;
-  --status-unsolved-soft: #efeade;
+  --status-accepted: #216e4a;
+  --status-accepted-soft: #e4f3eb;
+  --status-rejected: #a92530;
+  --status-rejected-soft: #fbe7e9;
+  --status-checking: #755400;
+  --status-checking-soft: #fff0c2;
+  --status-grading: #245a96;
+  --status-grading-soft: #e3edf8;
+  --status-appeal: #684384;
+  --status-appeal-soft: #efe7f4;
+  --status-unsolved: #4e5868;
+  --status-unsolved-soft: #dde2ea;
 
   color-scheme: light;
 }
 
-/* Warm charcoal dark theme — parchment text, brighter teal. */
+/* Dark 239 Indigo — blue-black surfaces and a readable indigo action color. */
 .dark {
-  --paper: #14120d;
-  --surface: #1c1a13;
-  --surface-muted: #262218;
-  --ink: #ece5d6;
-  --muted: #a79e8c;
-  --faint: #7d7564;
-  --line: #322d21;
-  --line-strong: #433c2c;
-  --accent: #3cc39d;
-  --accent-strong: #57d3b0;
-  --accent-soft: #143329;
-  --accent-ink: #bdeadf;
-  --danger: #e8826f;
-  --danger-soft: #2e1a16;
-  --success: #5fbd86;
-  --warning: #d8a44a;
+  --canvas: #0f1118;
+  --surface: #171a23;
+  --surface-subtle: #222733;
+  --surface-strong: #2d3441;
+  --text: #f2f3f7;
+  --muted: #bbc2ce;
+  --text-subtle: #9ca6b6;
+  --border: #3a4251;
+  --border-control: #747f91;
+  --action: #5b68c4;
+  --action-hover: #4f5cb3;
+  --on-action: #ffffff;
+  --link: #b9c1ff;
+  --focus: #aab4ff;
+  --selected: #292f59;
+  --selected-text: #d9ddff;
+  --selected-border: #8e9be8;
+  --signature: #fbb03b;
+  --on-signature: #202566;
+  --private: #f5d27c;
+  --private-soft: #3a2c16;
+  --private-border: #b7872e;
+  --danger: #ef858b;
+  --danger-soft: #3b2025;
+  --on-danger: #2a090c;
+  --success: #82d0a9;
+  --success-soft: #193529;
+  --warning: #e8c766;
+  --warning-soft: #382f18;
+  --info: #91b9e8;
+  --info-soft: #1b2d44;
+  --media-canvas: #101218;
+  --media-text: #ffffff;
+  --media-focus: #aab4ff;
 
-  /* Homework status — brighter ink on deep warm fills for the dark theme. */
-  --status-accepted: #6cc28d;
-  --status-accepted-soft: #18271c;
-  --status-rejected: #e89077;
-  --status-rejected-soft: #2c1813;
-  --status-checking: #d8a44a;
-  --status-checking-soft: #2a2210;
-  --status-grading: #7fb0e0;
-  --status-grading-soft: #15202c;
-  --status-appeal: #b3a3e0;
-  --status-appeal-soft: #211b30;
-  --status-unsolved: #a79e8c;
-  --status-unsolved-soft: #23201a;
+  --status-accepted: #82d0a9;
+  --status-accepted-soft: #193529;
+  --status-rejected: #ef858b;
+  --status-rejected-soft: #3b2025;
+  --status-checking: #e8c766;
+  --status-checking-soft: #382f18;
+  --status-grading: #91b9e8;
+  --status-grading-soft: #1b2d44;
+  --status-appeal: #c9ade2;
+  --status-appeal-soft: #30243f;
+  --status-unsolved: #bbc2ce;
+  --status-unsolved-soft: #2d3441;
 
   color-scheme: dark;
 }
@@ -122,26 +176,10 @@ body,
 body {
   margin: 0;
   font-family: var(--font-sans);
-  background-color: var(--paper);
-  color: var(--ink);
+  background-color: var(--canvas);
+  color: var(--text);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-}
-
-/* One restrained page-load reveal; stagger via inline animation-delay. */
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.animate-rise {
-  animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
 /* The workbench responds to its own panel width, not only the viewport. */
@@ -157,11 +195,5 @@ body {
 @container (min-width: 48rem) {
   .material-tex-grid {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .animate-rise {
-    animation: none;
   }
 }

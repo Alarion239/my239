@@ -175,16 +175,16 @@ export function OfflineCellDialog({
 
         {/* Internal comment — only once a thread exists. */}
         {threadId > 0 ? (
-          <div className="flex flex-col gap-2 border-t border-line pt-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+          <div className="flex flex-col gap-2 border-t border-border pt-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-private">
               Внутренняя заметка
             </p>
             {notes.data && notes.data.length > 0 ? (
               <ul className="flex flex-col gap-2">
                 {notes.data.map((n) => (
                   <li key={n.id} className="text-sm">
-                    <span className="font-semibold text-ink">{n.author_name}</span>
-                    <p className="whitespace-pre-wrap break-words text-ink">{n.body}</p>
+                    <span className="font-semibold text-text">{n.author_name}</span>
+                    <p className="whitespace-pre-wrap break-words text-text">{n.body}</p>
                   </li>
                 ))}
               </ul>
@@ -200,7 +200,7 @@ export function OfflineCellDialog({
               {target.threadHref ? (
                 <Link
                   to={target.threadHref}
-                  className="text-sm text-accent underline-offset-2 hover:underline"
+                  className="text-sm text-link underline-offset-2 hover:underline"
                 >
                   → Открыть проверку
                 </Link>

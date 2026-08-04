@@ -51,10 +51,10 @@ export function InternalNotesPanel({
   }
 
   return (
-    <section className="rounded-xl border border-amber-300/60 bg-amber-50/40 p-4 dark:border-amber-500/30 dark:bg-amber-500/5">
+    <section className="rounded-lg border border-private-border bg-private-soft p-4">
       <div className="mb-1 flex items-center gap-2">
-        <Lock className="h-4 w-4 text-amber-600 dark:text-amber-400" aria-hidden />
-        <h3 className="font-display text-base font-medium text-ink">{title}</h3>
+        <Lock className="h-4 w-4 text-private" aria-hidden />
+        <h3 className="text-base font-medium text-text">{title}</h3>
       </div>
       <p className="mb-3 text-xs text-muted">{hint}</p>
 
@@ -75,7 +75,7 @@ export function InternalNotesPanel({
           ))}
         </ul>
       ) : (
-        <p className="mb-3 text-sm text-faint">Пока нет заметок.</p>
+        <p className="mb-3 text-sm text-text-subtle">Пока нет заметок.</p>
       )}
 
       <div className="flex flex-col gap-2">
@@ -85,7 +85,7 @@ export function InternalNotesPanel({
           rows={2}
           placeholder="Новая внутренняя заметка…"
           aria-label="Новая внутренняя заметка"
-          className="w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          className="w-full rounded-lg border border-border-control bg-surface px-3 py-2 text-sm text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
         />
         {error ? <p className="text-sm text-danger">{error}</p> : null}
         <Button
@@ -147,10 +147,10 @@ function NoteRow({
   const edited = note.updated_at !== note.created_at
 
   return (
-    <li className="rounded-lg border border-line bg-surface px-3 py-2">
+    <li className="rounded-lg border border-border bg-surface px-3 py-2">
       <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="text-xs font-medium text-ink">{note.author_name}</span>
-        <span className="text-xs text-faint">
+        <span className="text-xs font-medium text-text">{note.author_name}</span>
+        <span className="text-xs text-text-subtle">
           {formatDateTime(note.created_at)}
           {edited ? ' · ред.' : ''}
         </span>
@@ -162,7 +162,7 @@ function NoteRow({
             onChange={(e) => setText(e.target.value)}
             rows={2}
             aria-label="Редактировать заметку"
-            className="w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            className="w-full rounded-lg border border-border-control bg-surface px-3 py-2 text-sm text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
           />
           {error ? <p className="text-sm text-danger">{error}</p> : null}
           <div className="flex gap-2">
@@ -186,7 +186,7 @@ function NoteRow({
         </div>
       ) : (
         <>
-          <p className={cn('text-sm text-ink whitespace-pre-wrap break-words')}>{note.body}</p>
+          <p className={cn('text-sm text-text whitespace-pre-wrap break-words')}>{note.body}</p>
           {error ? <p className="mt-1 text-sm text-danger">{error}</p> : null}
           {editable ? (
             <div className="mt-1.5 flex gap-1">

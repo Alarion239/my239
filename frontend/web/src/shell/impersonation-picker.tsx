@@ -54,7 +54,7 @@ export function ImpersonationPicker({ open, onOpenChange }: ImpersonationPickerP
           className="mt-4"
         />
 
-        <div className="mt-3 max-h-72 overflow-y-auto rounded-lg border border-line">
+        <div className="mt-3 max-h-72 overflow-y-auto rounded-lg border border-border">
           {isPending ? (
             <div className="flex items-center justify-center py-8">
               <Spinner />
@@ -72,10 +72,10 @@ export function ImpersonationPicker({ open, onOpenChange }: ImpersonationPickerP
                   <button
                     type="button"
                     onClick={() => choose(u)}
-                    className="flex w-full flex-col items-start gap-0.5 border-b border-line px-3 py-2.5 text-left outline-none transition-colors last:border-0 hover:bg-surface-muted focus-visible:bg-surface-muted"
+                    className="flex w-full flex-col items-start gap-0.5 border-b border-border px-3 py-2.5 text-left outline-none transition-colors last:border-0 hover:bg-surface-subtle focus-visible:bg-surface-subtle"
                   >
-                    <span className="text-sm font-medium text-ink">{fullName(u)}</span>
-                    <span className="text-xs text-faint">@{u.username}</span>
+                    <span className="text-sm font-medium text-text">{fullName(u)}</span>
+                    <span className="text-xs text-text-subtle">@{u.username}</span>
                   </button>
                 </li>
               ))}

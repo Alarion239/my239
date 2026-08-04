@@ -52,7 +52,7 @@ export const likbezSchema = z.object({
   number: z.number().int().min(1, 'Минимум 1').max(100000, 'Максимум 100000'),
   title: z.string().trim().min(1, 'Введите название').max(200, 'Максимум 200 символов'),
   held_on: z.string().refine((value) => russianLikbezDateToISO(value) !== null, 'Укажите дату в формате ДД-ММ-ГГГГ'),
-  description: z.string().trim().min(1, 'Добавьте краткое описание').max(4000, 'Максимум 4000 символов'),
+  description: z.string().trim().max(4000, 'Максимум 4000 символов'),
 })
 
 export type LikbezValues = z.infer<typeof likbezSchema>

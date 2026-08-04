@@ -1039,13 +1039,10 @@ candidates AS (
     SELECT student.user_id
     FROM math_center_students student
     WHERE student.term_id = (SELECT id FROM active_term)
-    UNION
-    SELECT student.user_id
-    FROM math_center_students student
-    WHERE student.term_id = (SELECT id FROM previous_term)
 ),
 current_enrollment AS (
-    SELECT student.user_id,
+    SELECT student.id AS student_id,
+           student.user_id,
            CASE WHEN group_row.name = 'Не распределены' THEN NULL::bigint ELSE student.group_id END AS group_id
     FROM math_center_students student
     JOIN math_center_groups group_row ON group_row.id = student.group_id
@@ -1084,7 +1081,8 @@ rating_totals AS (
       )
     GROUP BY thread.student_user_id
 )
-SELECT candidate.user_id,
+SELECT current_enrollment.student_id,
+       candidate.user_id,
        current_enrollment.group_id AS current_group_id,
        previous_enrollment.group_id AS previous_group_id,
        previous_enrollment.group_name AS previous_group_name,
@@ -1104,6 +1102,7 @@ ORDER BY user_row.last_name ASC, user_row.first_name ASC, user_row.middle_name A
 `
 
 type ListRosterBoardStudentsForManageRow struct {
+	StudentID            int64   `json:"student_id"`
 	UserID               int64   `json:"user_id"`
 	CurrentGroupID       *int64  `json:"current_group_id"`
 	PreviousGroupID      *int64  `json:"previous_group_id"`
@@ -1117,11 +1116,12 @@ type ListRosterBoardStudentsForManageRow struct {
 	RatingTermID         int64   `json:"rating_term_id"`
 }
 
-// The allocation board compares the active roster with the immediately
-// preceding term. The protected "Не распределены" group is represented as a
-// null current/previous group in this management view. Rating is deliberately a
-// derived value: it currently mirrors the credited "Решено" total and can be
-// replaced by a difficulty-weighted calculation without changing the API.
+// The allocation board lists the active roster and joins metadata from the
+// immediately preceding term. The protected "Не распределены" group is
+// represented as a null current/previous group in this management view. Rating
+// is deliberately a derived value: it currently mirrors the credited "Решено"
+// total and can be replaced by a difficulty-weighted calculation without
+// changing the API.
 func (q *Queries) ListRosterBoardStudentsForManage(ctx context.Context, mathCenterID int64) ([]ListRosterBoardStudentsForManageRow, error) {
 	rows, err := q.db.Query(ctx, listRosterBoardStudentsForManage, mathCenterID)
 	if err != nil {
@@ -1132,6 +1132,7 @@ func (q *Queries) ListRosterBoardStudentsForManage(ctx context.Context, mathCent
 	for rows.Next() {
 		var i ListRosterBoardStudentsForManageRow
 		if err := rows.Scan(
+			&i.StudentID,
 			&i.UserID,
 			&i.CurrentGroupID,
 			&i.PreviousGroupID,
@@ -1152,6 +1153,28 @@ func (q *Queries) ListRosterBoardStudentsForManage(ctx context.Context, mathCent
 		return nil, err
 	}
 	return items, nil
+}
+
+const removeActiveStudentForCenter = `-- name: RemoveActiveStudentForCenter :execrows
+DELETE FROM math_center_students student
+USING math_center_groups group_row, math_center_terms term_row
+WHERE student.id = $1::bigint
+  AND group_row.id = student.group_id
+  AND term_row.id = student.term_id
+  AND group_row.math_center_id = $2::bigint
+  AND term_row.is_active = TRUE`
+
+type RemoveActiveStudentForCenterParams struct {
+	StudentID    int64 `json:"student_id"`
+	MathCenterID int64 `json:"math_center_id"`
+}
+
+func (q *Queries) RemoveActiveStudentForCenter(ctx context.Context, arg RemoveActiveStudentForCenterParams) (int64, error) {
+	result, err := q.db.Exec(ctx, removeActiveStudentForCenter, arg.StudentID, arg.MathCenterID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const listStudentSeriesRazborAccessForCenter = `-- name: ListStudentSeriesRazborAccessForCenter :many

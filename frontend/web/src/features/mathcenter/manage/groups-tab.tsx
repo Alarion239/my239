@@ -8,7 +8,7 @@ import {
   isUnallocatedGroup,
   type CreateGroupValues,
 } from '@my239/shared'
-import { Button, Card, CardContent, Input, Spinner } from '../../../design/ui'
+import { Button, Input, Spinner } from '../../../design/ui'
 import { ConfirmButton, SectionHeader } from '../../admin/_shared'
 
 // GroupsTab lists a center's user-created groups and lets a head teacher add or
@@ -47,8 +47,7 @@ export function GroupsTab({ centerId }: { centerId: number }) {
   )
 
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4">
         <SectionHeader title="Группы" description="Группы учеников этого матцентра." />
 
         {isPending ? (
@@ -62,9 +61,9 @@ export function GroupsTab({ centerId }: { centerId: number }) {
             {groups.filter((group) => !isUnallocatedGroup(group.name)).map((g) => (
               <li
                 key={g.id}
-                className="flex items-center justify-between gap-2 rounded-lg bg-surface-muted px-3 py-2"
+                className="flex items-center justify-between gap-2 rounded-lg bg-surface-subtle px-3 py-2"
               >
-                <span className="text-sm text-ink">{g.name}</span>
+                <span className="text-sm text-text">{g.name}</span>
                 <ConfirmButton
                   variant="ghost"
                   size="sm"
@@ -94,7 +93,6 @@ export function GroupsTab({ centerId }: { centerId: number }) {
             Добавить
           </Button>
         </form>
-      </CardContent>
-    </Card>
+    </div>
   )
 }

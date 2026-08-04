@@ -104,10 +104,10 @@ function ThreadPageInner({ origin }: { origin: 'series' | 'coffins' }) {
   const backLabel = origin === 'coffins' ? 'Назад к очереди' : 'Назад к серии'
 
   return (
-    <div className="animate-rise mx-auto flex w-full max-w-3xl flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
       <Link
         to={backPath}
-        className="inline-flex items-center gap-1.5 self-start text-sm font-medium text-accent underline-offset-4 hover:underline"
+        className="inline-flex items-center gap-1.5 self-start text-sm font-medium text-link underline-offset-4 hover:underline"
       >
         <ArrowLeft className="h-4 w-4" aria-hidden />
         {backLabel}
@@ -172,7 +172,7 @@ function ThreadMode({
         visible={isGrader || closed}
       />
       <Card className="p-5">
-        <h2 className="mb-3 font-display text-lg font-medium text-ink">Диалог</h2>
+        <h2 className="mb-3 text-lg font-medium text-text">Диалог</h2>
         <ThreadTimeline
           thread={thread}
           viewerUserId={roleInfo.userId}
@@ -252,7 +252,7 @@ function SubmitMode({
     <>
       <Card className="p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="font-display text-xl font-medium text-ink">
+          <h1 className="font-display text-xl font-medium text-text">
             {taskTitle(ctx)}
           </h1>
         </div>
@@ -274,7 +274,7 @@ function SubmitMode({
         </Card>
       ) : roleInfo.role === 'student' ? (
         <Card className="p-4">
-          <h3 className="mb-3 font-display text-lg font-medium text-ink">
+          <h3 className="mb-3 text-lg font-medium text-text">
             Отправить решение
           </h3>
           <SubmissionForm
@@ -317,14 +317,14 @@ function ThreadHeader({
   const claimedByMe = live && thread.claim_holder_user_id === userId
   const claimedByOther = live && thread.claim_holder_user_id !== userId
   return (
-    <Card className={cn('p-5', claimedByMe && 'ring-2 ring-accent')}>
+    <Card className={cn('p-5', claimedByMe && 'ring-2 ring-focus')}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="font-display text-xl font-medium text-ink">
+          <h1 className="font-display text-xl font-medium text-text">
             {taskTitle(ctx)}
           </h1>
           {claimedByMe ? (
-            <span className="rounded-full bg-accent px-2.5 py-0.5 text-xs font-medium text-white">
+            <span className="rounded-full bg-action px-2.5 py-0.5 text-xs font-medium text-on-action">
               На вашей проверке
             </span>
           ) : null}
@@ -366,7 +366,7 @@ function Statement({ seriesId }: { seriesId: number }) {
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-3 px-5 py-3 text-sm font-medium text-ink hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        className="flex w-full items-center justify-between gap-3 px-5 py-3 text-sm font-medium text-text hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
       >
         <span>Условие задачи</span>
         <ChevronDown
@@ -375,7 +375,7 @@ function Statement({ seriesId }: { seriesId: number }) {
         />
       </button>
       {open ? (
-        <StatementPanel series={series} className="rounded-none border-0 border-t border-line" />
+        <StatementPanel series={series} className="rounded-none border-0 border-t border-border" />
       ) : null}
     </Card>
   )
@@ -422,7 +422,7 @@ function Razbor({
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-3 px-5 py-3 text-sm font-medium text-ink hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        className="flex w-full items-center justify-between gap-3 px-5 py-3 text-sm font-medium text-text hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
       >
         <span>Разбор</span>
         <ChevronDown
@@ -431,7 +431,7 @@ function Razbor({
         />
       </button>
       {open ? (
-        <div className="border-t border-line px-5 py-4">
+        <div className="border-t border-border px-5 py-4">
           <SolutionContent
             hasTex={sub.has_solution_tex}
             hasPdf={sub.has_solution_pdf}
@@ -467,12 +467,12 @@ function NotFound({
   origin?: 'series' | 'coffins'
 }) {
   return (
-    <Card className="animate-rise px-6 py-16 text-center">
+    <Card className="px-6 py-16 text-center">
       <p className="text-muted">Нет доступа к этой задаче.</p>
       {year && Number.isFinite(centerId) && centerId > 0 ? (
         <Link
           to={threadBackPath(year, origin, termSearch, seriesId)}
-          className="mt-2 inline-block text-sm font-medium text-accent underline-offset-4 hover:underline"
+          className="mt-2 inline-block text-sm font-medium text-link underline-offset-4 hover:underline"
         >
           {origin === 'coffins' ? 'Назад к очереди' : 'Назад к серии'}
         </Link>

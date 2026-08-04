@@ -6,7 +6,7 @@ import type {
 } from 'react'
 import { cn } from '../cn'
 
-// Minimal, composable scholarly-warm table primitives. Hairline `border-line`
+// Minimal, composable table primitives. Hairline `border-border`
 // row separators, muted header text, comfortable padding. The wrapper makes the
 // table scroll horizontally on narrow screens rather than overflow the layout.
 export function Table({ className, ...props }: TableHTMLAttributes<HTMLTableElement>) {
@@ -27,7 +27,7 @@ export function TBody({ className, ...props }: HTMLAttributes<HTMLTableSectionEl
 
 export function Tr({ className, ...props }: HTMLAttributes<HTMLTableRowElement>) {
   return (
-    <tr className={cn('border-b border-line last:border-0', className)} {...props} />
+    <tr className={cn('border-b border-border last:border-0', className)} {...props} />
   )
 }
 
@@ -45,6 +45,6 @@ export function Th({ className, ...props }: ThHTMLAttributes<HTMLTableCellElemen
 
 export function Td({ className, ...props }: TdHTMLAttributes<HTMLTableCellElement>) {
   return (
-    <td className={cn('px-3 py-3 align-middle text-ink', className)} {...props} />
+    <td className={cn('px-3 py-3 align-middle text-text', className)} {...props} />
   )
 }

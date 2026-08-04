@@ -70,10 +70,10 @@ function ModuleTabs({ user }: { user: User }) {
           end={p.end}
           className={({ isActive }) =>
             cn(
-              'whitespace-nowrap rounded-lg px-3 py-1.5 text-sm transition-colors',
+              'whitespace-nowrap border-b-2 border-transparent px-3 py-1.5 text-sm transition-colors',
               isActive
-                ? 'bg-accent-soft font-medium text-accent-ink'
-                : 'text-muted hover:bg-surface-muted hover:text-ink',
+                ? 'border-selected-border font-medium text-selected-text'
+                : 'text-muted hover:border-border-control hover:text-text',
             )
           }
         >
@@ -103,7 +103,7 @@ export function TopBar({
   const isConduit = pathname.endsWith('/conduit')
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-paper/80 px-4 backdrop-blur">
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
       <MobileNav user={user} />
       <Link
         to="/"
@@ -117,9 +117,10 @@ export function TopBar({
         }
         aria-expanded={navOpen}
         aria-controls={navOpen == null ? undefined : 'desktop-nav-rail'}
-        className="shrink-0 rounded-md font-display text-xl font-medium text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        className="shrink-0 rounded-md font-display text-xl font-medium text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
       >
         my239
+        <span aria-hidden="true" className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-signature align-middle" />
       </Link>
       <ModuleTabs user={user} />
       {isConduit ? (

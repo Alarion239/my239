@@ -11,9 +11,9 @@ import { Avatar, Badge, Card, CardContent } from '../../design/ui'
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-line py-3 last:border-0">
+    <div className="flex items-center justify-between gap-4 border-b border-border py-3 last:border-0">
       <span className="text-sm text-muted">{label}</span>
-      <span className="text-right text-sm text-ink">{value}</span>
+      <span className="text-right text-sm text-text">{value}</span>
     </div>
   )
 }
@@ -24,15 +24,15 @@ export function ProfilePage() {
   if (!user) return null
 
   return (
-    <div className="animate-rise">
-      <h1 className="mb-6 font-display text-3xl font-medium text-ink">Профиль</h1>
+    <div>
+      <h1 className="mb-6 font-display text-3xl font-medium text-text">Профиль</h1>
 
       <Card>
         <CardContent className="pt-6">
           <div className="mb-5 flex items-center gap-4">
             <Avatar initials={initials(user)} className="h-14 w-14 text-lg" />
             <div className="min-w-0">
-              <div className="truncate font-display text-xl font-medium text-ink">
+              <div className="truncate text-xl font-medium text-text">
                 {fullName(user)}
               </div>
               <div className="text-sm text-muted">@{user.username}</div>

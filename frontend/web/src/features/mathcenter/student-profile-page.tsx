@@ -33,10 +33,10 @@ export function StudentProfilePage() {
   const conduitPath = '/mathcenter/' + year + '/conduit' + search
 
   return (
-    <div className="animate-rise mx-auto flex w-full max-w-3xl flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
       <Link
         to={conduitPath}
-        className="inline-flex items-center gap-1.5 self-start text-sm font-medium text-accent underline-offset-4 hover:underline"
+        className="inline-flex items-center gap-1.5 self-start text-sm font-medium text-link underline-offset-4 hover:underline"
       >
         <ArrowLeft className="h-4 w-4" aria-hidden />
         Назад к кондуиту
@@ -53,7 +53,7 @@ export function StudentProfilePage() {
       ) : (
         <>
           <Card className="p-5">
-            <h1 className="font-display text-xl font-medium text-ink">
+            <h1 className="font-display text-xl font-medium text-text">
               {profile.data.display_name}
             </h1>
             <p className="mt-1 text-sm text-muted">

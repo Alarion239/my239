@@ -167,14 +167,14 @@ export function SubmissionForm({
           {files.map((f, i) => (
             <li
               key={f.name + ':' + i}
-              className="flex items-center justify-between gap-2 rounded-md bg-surface-muted px-2.5 py-1.5 text-xs text-muted"
+              className="flex items-center justify-between gap-2 rounded-md bg-surface-subtle px-2.5 py-1.5 text-xs text-muted"
             >
               <span className="min-w-0 truncate">{f.name}</span>
               <button
                 type="button"
                 aria-label={'Убрать ' + f.name}
                 onClick={() => removeFile(i)}
-                className="shrink-0 rounded p-0.5 text-faint hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                className="shrink-0 rounded p-0.5 text-text-subtle hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
               >
                 <X className="h-3.5 w-3.5" aria-hidden />
               </button>
@@ -208,19 +208,19 @@ function VerdictPill({
 }) {
   const activeClasses =
     tone === 'accepted'
-      ? 'bg-status-accepted text-white border-status-accepted'
-      : 'bg-status-rejected text-white border-status-rejected'
+      ? 'bg-status-accepted text-on-action border-status-accepted'
+      : 'bg-status-rejected text-on-danger border-status-rejected'
   const idleClasses =
     tone === 'accepted'
-      ? 'border-line-strong text-status-accepted hover:bg-status-accepted-soft'
-      : 'border-line-strong text-status-rejected hover:bg-status-rejected-soft'
+      ? 'border-border-control text-status-accepted hover:bg-status-accepted-soft'
+      : 'border-border-control text-status-rejected hover:bg-status-rejected-soft'
   return (
     <button
       type="button"
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        'inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+        'inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus',
         active ? activeClasses : idleClasses,
       )}
     >

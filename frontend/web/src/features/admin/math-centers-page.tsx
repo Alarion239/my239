@@ -60,7 +60,7 @@ function CentersTable() {
                     type="button"
                     aria-label={isOpen ? 'Свернуть' : 'Развернуть'}
                     aria-expanded={isOpen}
-                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-muted hover:text-ink"
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-subtle hover:text-text"
                     onClick={() => setExpanded(isOpen ? null : c.id)}
                   >
                     {isOpen ? (
@@ -70,7 +70,7 @@ function CentersTable() {
                     )}
                   </button>
                 </Td>
-                <Td className="font-medium text-ink">{c.graduation_year}</Td>
+                <Td className="font-medium text-text">{c.graduation_year}</Td>
                 <Td className="whitespace-nowrap text-muted">{formatDate(c.created_at)}</Td>
                 <Td className="text-right">
                   <ConfirmButton
@@ -85,7 +85,7 @@ function CentersTable() {
               </Tr>
               {isOpen ? (
                 <Tr>
-                  <Td colSpan={4} className="bg-surface-muted/40">
+                  <Td colSpan={4} className="bg-surface-subtle/40">
                     <CenterGroups centerId={c.id} />
                   </Td>
                 </Tr>
@@ -100,7 +100,7 @@ function CentersTable() {
 
 export function MathCentersPage() {
   return (
-    <div className="animate-rise flex flex-col gap-8">
+    <div className="flex flex-col gap-8">
       <section>
         <SectionHeader
           title="Матцентры"

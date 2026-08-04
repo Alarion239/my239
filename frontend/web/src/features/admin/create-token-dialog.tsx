@@ -282,12 +282,12 @@ export function CreateTokenDialog() {
                     </Select>
                   )}
                 </Field>
-                <label className="flex items-center gap-2 text-sm text-ink">
+                <label className="flex items-center gap-2 text-sm text-text">
                   <input
                     type="checkbox"
                     checked={isHeadTeacher}
                     onChange={(e) => setIsHeadTeacher(e.target.checked)}
-                    className="h-4 w-4 rounded border-line-strong text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                    className="h-4 w-4 rounded border-border-control text-link focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                   />
                   Старший преподаватель (может управлять центром)
                 </label>

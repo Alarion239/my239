@@ -30,8 +30,8 @@ export const gridTable = 'border-separate border-spacing-0 text-sm'
 // start of a series, a hairline otherwise. Single-series tables pass `false`.
 export function vert(firstInSeries: boolean): string {
   return firstInSeries
-    ? 'border-l-2 border-l-line-strong'
-    : 'border-l border-line'
+    ? 'border-l-2 border-l-selected-border'
+    : 'border-l border-border'
 }
 
 // The corner «Ученик» header cell — sticky on both axes, top z-index so the
@@ -39,36 +39,37 @@ export function vert(firstInSeries: boolean): string {
 // four borders (it is the frame's corner), including the bottom + right edges
 // that face the scrolling content.
 export const cornerHeaderCell =
-  'sticky left-0 top-0 z-40 min-w-44 border-b border-l border-r border-t border-line bg-surface-muted px-3 py-2 text-left align-top font-medium text-ink'
+  'sticky left-0 top-0 z-40 min-w-44 border-b border-l border-r border-t border-border bg-surface-subtle px-3 py-2 text-left align-top font-medium text-text'
 
 // The sticky student-name column cell. Owns `border-r` (the seam facing the
-// scrolling columns) + `border-b`; tinted `bg-surface-muted` to read as a
+// scrolling columns) + `border-b`; tinted `bg-surface-subtle` to read as a
 // frozen rail.
 export const nameCell =
-  'sticky left-0 z-10 min-w-44 whitespace-nowrap border-b border-l border-r border-line bg-surface-muted px-3 py-1.5 text-ink'
+  'sticky left-0 z-10 min-w-44 whitespace-nowrap border-b border-l border-r border-border bg-surface-subtle px-3 py-1.5 text-text'
 
 // The group-label row's sticky inner label.
 export const groupLabel =
-  'sticky left-0 inline-block px-3 py-1 text-xs font-medium uppercase tracking-wide text-faint'
+  'sticky left-0 inline-block px-3 py-1 text-xs font-medium uppercase tracking-wide text-text-subtle'
 
-// Coffin columns use the same quiet header treatment as ordinary columns. The
-// current/solved split is structural, not a second status-color system.
-export function coffinColumnClasses(_isCoffin: boolean, _open: boolean): string {
-  return 'bg-surface-muted text-muted'
+// An open coffin is an intentional teacher workflow state: use the existing
+// warning scale to distinguish the problem without competing with submission
+// statuses in the cells below it.
+export function coffinColumnClasses(_isCoffin: boolean, open: boolean): string {
+  return open ? 'bg-warning-soft text-warning' : 'bg-surface-subtle text-muted'
 }
 
-// Coffin data cells do not add a separate coffin tint; submission status colors
-// remain the only state colors in the grid.
-export function coffinCellClasses(_isCoffin: boolean, _open: boolean): string {
-  return ''
+// Keep the same restrained warning wash in an open coffin's problem cells.
+// Accepted/checking/appeal classes are composed after this and remain readable.
+export function coffinCellClasses(_isCoffin: boolean, open: boolean): string {
+  return open ? 'bg-warning-soft' : ''
 }
 
 // Exercise columns have a quiet accent wash so the special У problem remains
 // recognizable without adding explanatory copy.
 export function exerciseColumnClasses(isExercise: boolean): string {
-  return isExercise ? 'bg-accent-soft text-accent-ink' : ''
+  return isExercise ? 'bg-selected text-selected-text' : ''
 }
 
 export function exerciseCellClasses(isExercise: boolean): string {
-  return isExercise ? 'bg-accent-soft/70 font-medium text-accent-ink' : ''
+  return isExercise ? 'bg-selected/70 font-medium text-selected-text' : ''
 }

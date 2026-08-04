@@ -47,7 +47,6 @@ import {
   exerciseColumnClasses,
   gridScrollerWithHeight,
   gridTable,
-  groupLabel,
   nameCell,
   vert,
 } from './grid-style'
@@ -204,17 +203,10 @@ type ConduitCellAction = (
   column: FlatCol,
 ) => void
 
-type ConduitVirtualRow =
-  | {
-      kind: 'group'
-      key: string
-      name: string
-    }
-  | {
-      kind: 'student'
-      key: string
-      student: CenterGridStudentEntry
-    }
+type ConduitVirtualRow = {
+  key: string
+  student: CenterGridStudentEntry
+}
 
 interface ConduitStudentRowProps {
   student: CenterGridStudentEntry
@@ -268,8 +260,8 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
   return (
     <tr
       className={cn(
-        'h-9 hover:bg-surface-muted/40',
-        active && 'bg-amber-50/60 dark:bg-amber-500/10',
+        'h-9 hover:bg-surface-subtle/40',
+        active && 'bg-private-soft',
       )}
     >
       <td className={nameCell}>
@@ -278,7 +270,7 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
           to={'../students/' + student.user_id + search}
           className={cn(
             'inline-flex items-center gap-1.5 underline-offset-2 hover:underline',
-            active && 'font-semibold text-ink',
+            active && 'font-semibold text-text',
           )}
         >
           <span>{student.name}</span>
@@ -286,7 +278,7 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
             <span
               title="Есть заметки об ученике"
               aria-label="Есть заметки об ученике"
-              className="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-500"
+              className="inline-block h-2 w-2 shrink-0 rounded-full bg-signature"
             />
           ) : null}
         </Link>
@@ -295,7 +287,7 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
         <td
           aria-hidden="true"
           colSpan={leadingColumns}
-          className="h-9 border-b border-line p-0"
+          className="h-9 border-b border-border p-0"
           data-conduit-column-spacer="left"
         />
       ) : null}
@@ -348,14 +340,14 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
             onClick={pending ? undefined : activate}
             onKeyDown={pending ? undefined : onKeyDown}
             className={cn(
-              'h-9 min-w-9 cursor-pointer select-none border-b border-line px-1.5 text-center align-middle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40',
+              'h-9 min-w-9 cursor-pointer select-none border-b border-border px-1.5 text-center align-middle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus',
               vert(firstInSeries),
               exercise
                 ? exerciseCellClasses(true)
                 : accepted && !inactive
                   ? 'bg-status-accepted-soft font-medium text-status-accepted'
                   : accepted
-                    ? 'bg-surface-muted font-medium text-muted opacity-70'
+                    ? 'bg-surface-subtle font-medium text-muted opacity-70'
                     : pendingStatus
                       ? cn(
                           'font-medium',
@@ -365,10 +357,10 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
                       : cn(
                           coffinCellClasses(col.is_coffin, coffinIsOpen),
                           inactive
-                            ? 'bg-surface-muted/70 text-faint hover:bg-surface-muted'
+                            ? 'bg-surface-subtle/70 text-text-subtle hover:bg-surface-subtle'
                             : active
                               ? 'text-status-accepted hover:bg-status-accepted-soft'
-                              : 'text-faint hover:bg-surface-muted',
+                              : 'text-text-subtle hover:bg-surface-subtle',
                         ),
             )}
           >
@@ -388,11 +380,11 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
         <td
           aria-hidden="true"
           colSpan={trailingColumns}
-          className="h-9 border-b border-line p-0"
+          className="h-9 border-b border-border p-0"
           data-conduit-column-spacer="right"
         />
       ) : null}
-      <td className="sticky right-0 z-10 border-b border-l border-r border-line bg-surface px-3 py-1.5 text-center font-medium text-ink">
+      <td className="sticky right-0 z-10 border-b border-l border-r border-border bg-surface px-3 py-1.5 text-center font-medium text-text">
         {solvedTotal}
       </td>
     </tr>
@@ -441,7 +433,11 @@ export function ConduitTable({
   const { search } = useLocation()
   const [query, setQuery] = useState('')
   const [solvedSort, setSolvedSort] = useState<SolvedSort>('none')
-  const [groupSolvedRanking, setGroupSolvedRanking] = useState(true)
+  const [centerWideRanking, setCenterWideRanking] = useState(false)
+  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(
+    () =>
+      data.groups.find((group) => group.students.length > 0)?.group_id ?? null,
+  )
 
   // Offline-grading interaction state. A grader picks an active student (their
   // row lights up) and enters their initials once; tapping un-accepted cells in
@@ -579,6 +575,20 @@ export function ConduitTable({
     () => data.groups.flatMap((g) => g.students),
     [data.groups],
   )
+  const availableGroups = useMemo(
+    () => data.groups.filter((group) => group.students.length > 0),
+    [data.groups],
+  )
+
+  useEffect(() => {
+    if (
+      selectedGroupId != null &&
+      availableGroups.some((group) => group.group_id === selectedGroupId)
+    ) {
+      return
+    }
+    setSelectedGroupId(availableGroups[0]?.group_id ?? null)
+  }, [availableGroups, selectedGroupId])
 
   const creditGatesByStudent = useMemo(() => {
     const gates = new Map<number, Map<number, boolean>>()
@@ -649,63 +659,32 @@ export function ConduitTable({
       .filter((g) => g.students.length > 0)
   }, [data.groups, query])
 
-  const displayedGroups = useMemo(
-    () =>
-      filteredGroups.map((group) => ({
-        ...group,
-        students: [...group.students].sort((left, right) =>
-          solvedSort === 'none'
-            ? compareStudentNames(left, right)
-            : compareStudentsBySolved(
-                left,
-                right,
-                solvedSort,
-                solvedTotals,
-              ),
-        ),
-      })),
-    [filteredGroups, solvedSort, solvedTotals],
-  )
+  const globalRanking = solvedSort !== 'none' && centerWideRanking
 
-  const globalRanking = solvedSort !== 'none' && !groupSolvedRanking
+  const displayedStudents = useMemo(() => {
+    const visible = globalRanking
+      ? filteredGroups.flatMap((group) => group.students)
+      : (filteredGroups.find((group) => group.group_id === selectedGroupId)
+          ?.students ?? [])
+    return [...visible].sort((left, right) =>
+      solvedSort === 'none'
+        ? compareStudentNames(left, right)
+        : compareStudentsBySolved(left, right, solvedSort, solvedTotals),
+    )
+  }, [filteredGroups, globalRanking, selectedGroupId, solvedSort, solvedTotals])
 
-  const shown = useMemo(
-    () => filteredGroups.reduce((n, g) => n + g.students.length, 0),
-    [filteredGroups],
-  )
+  const selectedGroupSize =
+    availableGroups.find((group) => group.group_id === selectedGroupId)?.students
+      .length ?? 0
+  const shown = displayedStudents.length
+  const shownFrom = globalRanking ? students.length : selectedGroupSize
 
   const virtualRows = useMemo<ConduitVirtualRow[]>(() => {
-    if (globalRanking) {
-      return filteredGroups
-        .flatMap((group) => group.students)
-        .sort((left, right) =>
-          compareStudentsBySolved(left, right, solvedSort, solvedTotals),
-        )
-        .map((student) => ({
-          kind: 'student' as const,
-          key: 'student:' + student.user_id,
-          student,
-        }))
-    }
-    return displayedGroups.flatMap((group) => [
-      {
-        kind: 'group' as const,
-        key: 'group:' + group.group_id,
-        name: group.name,
-      },
-      ...group.students.map((student) => ({
-        kind: 'student' as const,
-        key: 'student:' + student.user_id,
-        student,
-      })),
-    ])
-  }, [
-    displayedGroups,
-    filteredGroups,
-    globalRanking,
-    solvedSort,
-    solvedTotals,
-  ])
+    return displayedStudents.map((student) => ({
+      key: 'student:' + student.user_id,
+      student,
+    }))
+  }, [displayedStudents])
   const scrollerRef = useRef<HTMLDivElement>(null)
   const [rowWindow, setRowWindow] = useState({
     start: 0,
@@ -907,7 +886,7 @@ export function ConduitTable({
         title="Импортировать отмеченные решения из связанных Google Sheets"
         disabled={termId <= 0 || syncGoogleSheets.isPending}
         onClick={() => syncGoogleSheets.mutate(termId)}
-        className="h-8 shrink-0 rounded-lg border border-line px-2.5 text-xs text-muted hover:bg-surface-muted hover:text-ink disabled:opacity-50"
+        className="h-8 shrink-0 rounded-lg border border-border px-2.5 text-xs text-muted hover:bg-surface-subtle hover:text-text disabled:opacity-50"
       >
         {syncGoogleSheets.isPending ? 'Импорт…' : 'Sheets'}
       </button>
@@ -925,9 +904,90 @@ export function ConduitTable({
     </div>
   )
 
+  function showGroup(groupId: number) {
+    if (activeStudentId != null) selectStudent(null)
+    setSelectedGroupId(groupId)
+    setCenterWideRanking(false)
+    if (scrollerRef.current) scrollerRef.current.scrollTop = 0
+  }
+
+  function showCenterWideRanking() {
+    setCenterWideRanking(true)
+    if (scrollerRef.current) scrollerRef.current.scrollTop = 0
+  }
+
+  function cycleSolvedSort() {
+    if (solvedSort === 'none') {
+      setSolvedSort('desc')
+      return
+    }
+    if (solvedSort === 'desc') {
+      setSolvedSort('asc')
+      return
+    }
+    setSolvedSort('none')
+    setCenterWideRanking(false)
+  }
+
   return (
     <div className="flex h-full flex-col">
       {toolbarSlot ? createPortal(toolbar, toolbarSlot) : null}
+
+      <div className="flex shrink-0 items-center gap-2 border-b border-border bg-surface px-3 py-2">
+        <span className="shrink-0 text-xs font-medium text-text-subtle">Группа</span>
+        <div
+          role="group"
+          aria-label="Выбор группы"
+          className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {availableGroups.map((group) => {
+            const selected = !globalRanking && group.group_id === selectedGroupId
+            return (
+              <button
+                key={group.group_id}
+                type="button"
+                aria-label={'Группа ' + group.name}
+                aria-pressed={selected}
+                onClick={() => showGroup(group.group_id)}
+                className={cn(
+                  'inline-flex h-8 shrink-0 items-center gap-2 rounded-md border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus',
+                  selected
+                    ? 'border-selected-border bg-action text-on-action shadow-sm'
+                    : 'border-transparent text-muted hover:border-border hover:bg-surface-subtle hover:text-text',
+                )}
+              >
+                <span>{group.name}</span>
+                <span
+                  className={cn(
+                    'text-[0.65rem] font-normal tabular-nums',
+                    selected ? 'text-on-action/75' : 'text-text-subtle',
+                  )}
+                >
+                  {group.students.length}
+                </span>
+              </button>
+            )
+          })}
+          {solvedSort !== 'none' ? (
+            <>
+              <span aria-hidden="true" className="mx-1 h-5 w-px shrink-0 bg-border" />
+              <button
+                type="button"
+                aria-pressed={globalRanking}
+                onClick={showCenterWideRanking}
+                className={cn(
+                  'h-8 shrink-0 rounded-md border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus',
+                  globalRanking
+                    ? 'border-selected-border bg-action text-on-action shadow-sm'
+                    : 'border-border text-muted hover:bg-surface-subtle hover:text-text',
+                )}
+              >
+                Общий рейтинг
+              </button>
+            </>
+          ) : null}
+        </div>
+      </div>
 
       <div ref={scrollerRef} className={gridScrollerWithHeight('min-h-0 flex-1')}>
         <table className={gridTable}>
@@ -945,8 +1005,8 @@ export function ConduitTable({
                     className="h-8 w-full min-w-40"
                     aria-label="Поиск ученика"
                   />
-                  <span className="text-[0.65rem] font-normal text-faint">
-                    {shown} из {students.length}
+                  <span className="text-[0.65rem] font-normal text-text-subtle">
+                    {shown} из {shownFrom}
                   </span>
                 </div>
               </th>
@@ -956,7 +1016,7 @@ export function ConduitTable({
                   ref={s.series_id === currentId ? currentThRef : undefined}
                   colSpan={s.columns.length}
                   className={cn(
-                    'sticky top-0 z-20 h-9 whitespace-nowrap border-b border-t border-line bg-surface-muted px-3 text-center font-medium text-ink',
+                    'sticky top-0 z-20 h-9 whitespace-nowrap border-b border-t border-border bg-surface-subtle px-3 text-center font-medium text-text',
                     vert(true),
                   )}
                   title={s.display_name + ' — открыть условие'}
@@ -971,7 +1031,7 @@ export function ConduitTable({
                       search
                     }
                     aria-label={'Серия ' + s.number + ' — открыть условие'}
-                    className="rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                    className="rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                   >
                     Серия {s.number}
                   </Link>
@@ -979,21 +1039,13 @@ export function ConduitTable({
               ))}
               <th
                 rowSpan={2}
-                className="sticky right-0 top-0 z-40 border-b border-l border-r border-t border-line bg-surface-muted px-2 py-1 text-center font-medium text-ink"
+                className="sticky right-0 top-0 z-40 border-b border-l border-r border-t border-border bg-surface-subtle px-2 py-1 text-center font-medium text-text"
               >
                 <div className="flex min-h-14 flex-col items-center justify-center">
                   <button
                     type="button"
-                    onClick={() =>
-                      setSolvedSort((current) =>
-                        current === 'none'
-                          ? 'desc'
-                          : current === 'desc'
-                            ? 'asc'
-                            : 'none',
-                      )
-                    }
-                    className="whitespace-nowrap rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                    onClick={cycleSolvedSort}
+                    className="whitespace-nowrap rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                     title={
                       solvedSort === 'none'
                         ? 'Сортировать по убыванию числа решённых задач'
@@ -1010,43 +1062,11 @@ export function ConduitTable({
                         ? ' ↑'
                         : ''}
                   </button>
-                  {solvedSort !== 'none' ? (
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={groupSolvedRanking}
-                      aria-label="Группировать рейтинг по группам"
-                      onClick={() =>
-                        setGroupSolvedRanking((current) => !current)
-                      }
-                      className="mt-1 flex items-center gap-1 rounded-sm text-[0.625rem] font-normal text-faint hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-                    >
-                      <span
-                        aria-hidden="true"
-                        className={cn(
-                          'relative inline-flex h-3.5 w-6 rounded-full border transition-colors',
-                          groupSolvedRanking
-                            ? 'border-accent bg-accent'
-                            : 'border-line-strong bg-surface',
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            'absolute top-0.5 h-2.5 w-2.5 rounded-full transition-transform',
-                            groupSolvedRanking
-                              ? 'translate-x-2.5 bg-white'
-                              : 'translate-x-0.5 bg-faint',
-                          )}
-                        />
-                      </span>
-                      по группам
-                    </button>
-                  ) : null}
                 </div>
               </th>
             </tr>
-            {/* Per-subproblem column labels. Coffins stay structurally marked
-                but use the same neutral treatment in every queue. */}
+            {/* Per-subproblem column labels. Open coffins use the warning scale
+                so the problem itself is visible before reading cell status. */}
             <tr>
               {cols.map(({ col, seriesId, firstInSeries }) => {
                 const open = col.is_coffin && coffinOpen(col.coffin_released_at)
@@ -1061,7 +1081,7 @@ export function ConduitTable({
                         : undefined
                     }
                     className={cn(
-                      'sticky top-9 z-20 min-w-9 border-b border-line px-1.5 py-1 text-center text-xs font-medium',
+                      'sticky top-9 z-20 min-w-9 border-b border-border px-1.5 py-1 text-center text-xs font-medium',
                       vert(firstInSeries),
                       col.problem_number === 0
                         ? exerciseColumnClasses(true)
@@ -1082,7 +1102,7 @@ export function ConduitTable({
                         col.column_label +
                         ' — открыть разбор'
                       }
-                      className="inline-flex min-h-6 min-w-6 items-center justify-center rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                      className="inline-flex min-h-6 min-w-6 items-center justify-center rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                     >
                       {col.column_label}
                     </Link>
@@ -1102,19 +1122,6 @@ export function ConduitTable({
               </tr>
             ) : null}
             {visibleRows.map((row) => {
-              if (row.kind === 'group') {
-                return (
-                  <tr key={row.key} className="h-9 bg-surface-muted/60">
-                    <td
-                      colSpan={cols.length + 2}
-                      className="border-b border-line p-0"
-                    >
-                      <div className={groupLabel}>{row.name}</div>
-                    </td>
-                  </tr>
-                )
-              }
-
               const st = row.student
               const isActiveRow = activeStudentId === st.user_id
               const pendingPrefix = st.user_id + ':'
@@ -1162,21 +1169,21 @@ export function ConduitTable({
             {/* Column totals: people who solved each problem — pinned to the
                 bottom so it's always on screen. Always over ALL students. */}
             <tr>
-              <td className="sticky bottom-0 left-0 z-30 border-b border-l border-r border-t border-line bg-surface-muted px-3 py-1.5 font-medium text-ink">
+              <td className="sticky bottom-0 left-0 z-30 border-b border-l border-r border-t border-border bg-surface-subtle px-3 py-1.5 font-medium text-text">
                 Решили
               </td>
               {cols.map(({ col, firstInSeries }) => (
                 <td
                   key={col.subproblem_id}
                   className={cn(
-                    'sticky bottom-0 z-20 border-b border-t border-line bg-surface-muted px-1.5 py-1.5 text-center font-medium text-ink',
+                    'sticky bottom-0 z-20 border-b border-t border-border bg-surface-subtle px-1.5 py-1.5 text-center font-medium text-text',
                     vert(firstInSeries),
                   )}
                 >
                   {solvedSummary.columnTotals.get(col.subproblem_id) ?? 0}
                 </td>
               ))}
-              <td className="sticky bottom-0 right-0 z-30 border-b border-l border-r border-t border-line bg-surface-muted px-3 py-1.5 text-center font-medium text-ink">
+              <td className="sticky bottom-0 right-0 z-30 border-b border-l border-r border-t border-border bg-surface-subtle px-3 py-1.5 text-center font-medium text-text">
                 {solvedSummary.grandTotal}
               </td>
             </tr>

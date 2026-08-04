@@ -75,8 +75,8 @@ func validateLikbezFields(termID int64, number int, title, heldOn, description s
 	if title == "" || len(title) > 200 {
 		return pgtype.Date{}, "title must be 1..200 characters"
 	}
-	if description == "" || len(description) > 4000 {
-		return pgtype.Date{}, "description must be 1..4000 characters"
+	if len(description) > 4000 {
+		return pgtype.Date{}, "description must be at most 4000 characters"
 	}
 	return parseLikbezDate(heldOn)
 }
@@ -88,8 +88,8 @@ func validateLikbezCreateFields(termID int64, title, heldOn, description string)
 	if title == "" || len(title) > 200 {
 		return pgtype.Date{}, "title must be 1..200 characters"
 	}
-	if description == "" || len(description) > 4000 {
-		return pgtype.Date{}, "description must be 1..4000 characters"
+	if len(description) > 4000 {
+		return pgtype.Date{}, "description must be at most 4000 characters"
 	}
 	return parseLikbezDate(heldOn)
 }

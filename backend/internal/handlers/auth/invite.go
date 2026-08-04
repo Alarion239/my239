@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -22,11 +23,15 @@ import (
 // itself is the bearer secret and is supplied by the caller, so echoing its
 // description/role discloses nothing new.
 type inviteContextView struct {
-	Valid       bool   `json:"valid"`
-	Description string `json:"description"`
-	Role        string `json:"role,omitempty"` // "teacher" | "student" | "" (plain token)
-	CenterName  string `json:"center_name,omitempty"`
-	GroupName   string `json:"group_name,omitempty"`
+	Valid         bool    `json:"valid"`
+	Description   string  `json:"description"`
+	Role          string  `json:"role,omitempty"` // "teacher" | "student" | "" (plain token)
+	CenterName    string  `json:"center_name,omitempty"`
+	GroupName     string  `json:"group_name,omitempty"`
+	PersonalClaim bool    `json:"personal_claim,omitempty"`
+	FirstName     string  `json:"first_name,omitempty"`
+	MiddleName    *string `json:"middle_name,omitempty"`
+	LastName      string  `json:"last_name,omitempty"`
 }
 
 // InviteLookup resolves an invitation token by value for the registration page.
@@ -85,6 +90,24 @@ func InviteLookup(database *db.DB) http.HandlerFunc {
 				if c, err := q.GetMathCenter(ctx, g.MathCenterID); err == nil {
 					view.CenterName = centerName(int(c.GraduationYear))
 				}
+			}
+		case preset.MathCenterStudentClaim != nil:
+			view.Role = "student"
+			view.PersonalClaim = true
+			if invitation.MathCenterID != nil {
+				if c, err := q.GetMathCenter(ctx, *invitation.MathCenterID); err == nil {
+					view.CenterName = centerName(int(c.GraduationYear))
+				}
+			}
+			if user, err := q.GetUserByID(ctx, preset.MathCenterStudentClaim.UserID); err == nil {
+				view.FirstName = user.FirstName
+				view.MiddleName = user.MiddleName
+				view.LastName = user.LastName
+				if !strings.HasPrefix(user.Username, "sheets-") || user.InvitationTokenID != nil || user.IsMathCenter {
+					view.Valid = false
+				}
+			} else {
+				view.Valid = false
 			}
 		}
 

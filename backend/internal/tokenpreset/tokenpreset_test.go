@@ -178,6 +178,20 @@ func TestValidate(t *testing.T) {
 			preset: tokenpreset.Preset{MathCenterStudent: &tokenpreset.MathCenterStudent{GroupID: 3}},
 		},
 		{
+			name:   "valid personal student claim",
+			store:  &mockStore{},
+			preset: tokenpreset.Preset{MathCenterStudentClaim: &tokenpreset.MathCenterStudentClaim{UserID: 77}},
+		},
+		{
+			name:  "personal claim with another grant rejected",
+			store: &mockStore{},
+			preset: tokenpreset.Preset{
+				GrantsAdmin:            true,
+				MathCenterStudentClaim: &tokenpreset.MathCenterStudentClaim{UserID: 77},
+			},
+			wantErr: tokenpreset.ErrInvalidPreset,
+		},
+		{
 			name:    "unknown student group rejected",
 			store:   &mockStore{groups: map[int64]store.MathCenterGroup{}},
 			preset:  tokenpreset.Preset{MathCenterStudent: &tokenpreset.MathCenterStudent{GroupID: 99}},

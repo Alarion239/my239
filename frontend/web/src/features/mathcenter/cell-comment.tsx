@@ -14,7 +14,7 @@ function CommentMark() {
     <span
       aria-hidden
       tabIndex={0}
-      className="absolute right-0.5 top-0.5 h-0 w-0 border-l-[7px] border-t-[7px] border-l-transparent border-t-amber-500 focus-visible:outline-none focus-visible:border-t-amber-600"
+      className="absolute right-0.5 top-0.5 h-0 w-0 border-l-[7px] border-t-[7px] border-l-transparent border-t-signature focus-visible:outline-none focus-visible:border-t-private-border"
     />
   )
 }
@@ -59,17 +59,17 @@ function CommentPopup({
         left: coords?.left ?? -9999,
         visibility: coords ? 'visible' : 'hidden',
       }}
-      className="z-50 max-w-sm rounded-xl border border-amber-300/70 bg-surface p-3.5 text-sm leading-relaxed text-ink shadow-xl dark:border-amber-500/40"
+      className="z-50 max-w-sm rounded-lg border border-private-border bg-surface p-3.5 text-sm leading-relaxed text-text shadow-xl"
     >
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-private">
         Внутренняя заметка
       </p>
       {data && data.length > 0 ? (
         <ul className="flex flex-col gap-2.5">
           {data.map((n) => (
             <li key={n.id}>
-              <span className="text-sm font-semibold text-ink">{n.author_name}</span>
-              <p className="whitespace-pre-wrap break-words text-sm text-ink">{n.body}</p>
+              <span className="text-sm font-semibold text-text">{n.author_name}</span>
+              <p className="whitespace-pre-wrap break-words text-sm text-text">{n.body}</p>
             </li>
           ))}
         </ul>

@@ -55,7 +55,7 @@ function rewriteKatexFontUrls(css: string): string {
   })
 }
 
-// :host keeps body text in our Cyrillic sans and inherits the surrounding ink
+// :host keeps body text in our Cyrillic sans and inherits the surrounding text
 // colour, while KaTeX math keeps its own families for sharp glyphs.
 const HOST_CSS = `
 :host {

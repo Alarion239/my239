@@ -76,7 +76,7 @@ function TexStatement({ series }: { series: Series }) {
 
 function EmptyStatement() {
   return (
-    <p className="py-8 text-center text-sm text-faint">
+    <p className="py-8 text-center text-sm text-text-subtle">
       Условие ещё не опубликовано
     </p>
   )
@@ -85,7 +85,7 @@ function EmptyStatement() {
 // ViewToggle is a two-pill segmented control for TeX vs PDF.
 function ViewToggle({ value, onChange }: { value: View; onChange: (v: View) => void }) {
   return (
-    <div className="inline-flex rounded-full border border-line bg-surface-muted p-0.5" role="group" aria-label="Формат условия">
+    <div className="inline-flex rounded-full border border-border bg-surface-subtle p-0.5" role="group" aria-label="Формат условия">
       <Pill active={value === 'tex'} onClick={() => onChange('tex')}>
         TeX
       </Pill>
@@ -111,8 +111,8 @@ function Pill({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        'rounded-full px-3 py-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-        active ? 'bg-accent-soft text-accent-ink' : 'text-muted hover:text-ink',
+        'rounded-full px-3 py-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus',
+        active ? 'bg-selected text-selected-text' : 'text-muted hover:text-text',
       )}
     >
       {children}

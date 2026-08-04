@@ -169,6 +169,7 @@ export interface TokenPreset {
   grants_admin?: boolean
   mathcenter_teacher?: { center_id: number; is_head_teacher: boolean }
   mathcenter_student?: { group_id: number }
+  mathcenter_student_claim?: { user_id: number }
 }
 
 // MathCenter is a cohort grouped by graduation year.
@@ -338,6 +339,7 @@ export interface ManageRosterBoardGroup {
 }
 
 export interface ManageRosterBoardStudent {
+  student_id: number
   user_id: number
   current_group_id: number | null
   previous_group_id: number | null
@@ -426,7 +428,17 @@ export interface CenterInvite {
   created_at: string
   role: 'teacher' | 'student'
   group_id?: number | null
+  claim_user_id?: number | null
   is_head_teacher: boolean
+}
+
+export interface PersonalInviteStudent {
+  user_id: number
+  group_id: number
+  group_name: string
+  first_name: string
+  middle_name?: string | null
+  last_name: string
 }
 
 // InviteContext is the public description of an invite link shown on the
@@ -437,6 +449,10 @@ export interface InviteContext {
   role?: 'teacher' | 'student' | ''
   center_name?: string
   group_name?: string
+  personal_claim?: boolean
+  first_name?: string
+  middle_name?: string | null
+  last_name?: string
 }
 
 // --- Admin user management ---------------------------------------------------

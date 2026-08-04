@@ -46,8 +46,8 @@ export function StudentRazbor({ series }: { series: Series }) {
 
   if (!videoAccess && !pdfTexAccess && !releasedCoffinAvailable) {
     return (
-      <div className="rounded-xl border border-line bg-surface-muted px-5 py-6">
-        <p className="font-medium text-ink">Доступ к разборам закрыт.</p>
+      <div className="rounded-lg border border-border bg-surface-subtle px-5 py-6">
+        <p className="font-medium text-text">Доступ к разборам закрыт.</p>
         <p className="mt-1 text-sm text-muted">
           Условия серий и сдача задач по-прежнему доступны.
         </p>
@@ -84,7 +84,7 @@ export function StudentRazbor({ series }: { series: Series }) {
   return (
     <div className="flex flex-col gap-4">
       {!videoAccess || !pdfTexAccess ? (
-        <div className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-sm text-muted">
+        <div className="rounded-lg border border-border bg-surface-subtle px-3 py-2 text-sm text-muted">
           {videoAccess
             ? 'Доступны только видеоразборы этой серии.'
             : 'Доступны только PDF и LaTeX этой серии.'}
@@ -105,12 +105,12 @@ export function StudentRazbor({ series }: { series: Series }) {
               title={released ? sub.display : sub.display + ' — разбор ещё не вышел'}
               className={cn(
                 'inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-sm font-medium transition-colors',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus',
                 lit
-                  ? 'border-accent bg-accent-soft text-accent-ink ring-2 ring-accent/40'
+                  ? 'border-selected-border bg-selected text-selected-text ring-2 ring-focus'
                   : released
-                    ? 'cursor-pointer border-line-strong text-ink hover:border-accent hover:text-accent'
-                    : 'cursor-not-allowed border-line text-faint',
+                    ? 'cursor-pointer border-border-control text-text hover:border-selected-border hover:text-link'
+                    : 'cursor-not-allowed border-border text-text-subtle',
               )}
             >
               {sub.is_coffin ? <Skull className="h-3.5 w-3.5" aria-hidden /> : null}

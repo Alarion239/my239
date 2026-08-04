@@ -198,7 +198,7 @@ describe('StudentProblemList — per-subproblem deadline gating', () => {
     renderList(gatedSeries, gatedRollup)
     const exerciseRow = screen.getByText('Упражнение').closest('div')?.parentElement?.parentElement
     const regularRow = screen.getByText('Задача 1').closest('div')?.parentElement?.parentElement
-    expect(exerciseRow).toHaveClass('bg-accent-soft/50')
+    expect(exerciseRow).toHaveClass('bg-selected/50')
     expect(regularRow).toHaveClass('opacity-70')
   })
 })

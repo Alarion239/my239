@@ -46,7 +46,7 @@ export function CenterGroups({ centerId }: { centerId: number }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs font-medium uppercase tracking-wide text-faint">Группы</p>
+      <p className="text-xs font-medium uppercase tracking-wide text-text-subtle">Группы</p>
 
       {isPending ? (
         <Spinner />
@@ -59,9 +59,9 @@ export function CenterGroups({ centerId }: { centerId: number }) {
           {groups.filter((group) => !isUnallocatedGroup(group.name)).map((g) => (
             <li
               key={g.id}
-              className="flex items-center justify-between gap-2 rounded-lg bg-paper px-3 py-2"
+              className="flex items-center justify-between gap-2 rounded-lg bg-canvas px-3 py-2"
             >
-              <span className="text-sm text-ink">{g.name}</span>
+              <span className="text-sm text-text">{g.name}</span>
               <ConfirmButton
                 variant="ghost"
                 size="sm"

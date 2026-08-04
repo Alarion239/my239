@@ -112,21 +112,21 @@ function SeedResultView({ result, onClose }: { result: SeedResult; onClose: () =
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
         {counts.map((c) => (
           <span key={c.label}>
-            {c.label}: <span className="font-medium text-ink">{c.value}</span>
+            {c.label}: <span className="font-medium text-text">{c.value}</span>
           </span>
         ))}
       </div>
 
       <p className="text-xs text-muted">
         Показаны преподаватели и первые ученики. Всего учеников:{' '}
-        <span className="font-medium text-ink">{result.student_count}</span> —
+        <span className="font-medium text-text">{result.student_count}</span> —
         логины <code>demo-student-1</code> … <code>demo-student-{result.student_count}</code>,
         пароль тот же.
       </p>
 
-      <div className="max-h-64 overflow-y-auto rounded-lg border border-line">
+      <div className="max-h-64 overflow-y-auto rounded-lg border border-border">
         <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-surface-muted text-left text-xs text-muted">
+          <thead className="sticky top-0 bg-surface-subtle text-left text-xs text-muted">
             <tr>
               <th className="px-3 py-2 font-medium">Логин</th>
               <th className="px-3 py-2 font-medium">Роль</th>
@@ -135,10 +135,10 @@ function SeedResultView({ result, onClose }: { result: SeedResult; onClose: () =
           </thead>
           <tbody>
             {result.logins.map((l) => (
-              <tr key={l.username} className="border-t border-line">
-                <td className="px-3 py-1.5 font-mono text-xs text-ink">{l.username}</td>
+              <tr key={l.username} className="border-t border-border">
+                <td className="px-3 py-1.5 font-mono text-xs text-text">{l.username}</td>
                 <td className="px-3 py-1.5 text-muted">{l.role}</td>
-                <td className="px-3 py-1.5 text-ink">{l.name}</td>
+                <td className="px-3 py-1.5 text-text">{l.name}</td>
               </tr>
             ))}
           </tbody>
