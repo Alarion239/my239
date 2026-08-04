@@ -5,6 +5,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   APIErrorImpl,
   registerSchema,
+  studentName,
   useInviteContext,
   useRegister,
   type RegisterValues,
@@ -194,7 +195,7 @@ function InviteBanner({ token }: { token: string }) {
             <>
               Вы регистрируете личный аккаунт ученика{' '}
               <span className="font-medium">
-                {[data.first_name, data.middle_name, data.last_name].filter(Boolean).join(' ')}
+                {studentName({ first_name: data.first_name ?? '', last_name: data.last_name ?? '' })}
               </span>{' '}
               в <span className="font-medium">«{data.center_name}»</span>
             </>

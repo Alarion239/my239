@@ -40,12 +40,29 @@ func TeacherDisplayName(firstName string, middleName *string) string {
 	return strings.TrimSpace(firstName)
 }
 
-// StudentDisplayName returns the "Имя Фамилия" form used in the teacher-facing
+// StudentDisplayName returns the "Фамилия Имя" form used in the teacher-facing
 // student list. We don't show patronymic for students because the class roster
 // is informal.
 func StudentDisplayName(firstName, lastName string) string {
 	first := strings.TrimSpace(firstName)
 	last := strings.TrimSpace(lastName)
+	if first == "" {
+		return last
+	}
+	if last == "" {
+		return first
+	}
+	return last + " " + first
+}
+
+// DisplayName is the general first-name-first form used for non-student
+// authors such as teachers in internal notes.
+func DisplayName(firstName, lastName string) string {
+	first := strings.TrimSpace(firstName)
+	last := strings.TrimSpace(lastName)
+	if first == "" {
+		return last
+	}
 	if last == "" {
 		return first
 	}

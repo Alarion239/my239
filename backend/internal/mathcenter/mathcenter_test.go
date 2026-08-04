@@ -38,11 +38,14 @@ func TestDisplayNames(t *testing.T) {
 	if got := TeacherDisplayName("Анна", nil); got != "Анна" {
 		t.Errorf("teacher no patronymic: got %q", got)
 	}
-	if got := StudentDisplayName("Алексей", "Петров"); got != "Алексей Петров" {
+	if got := StudentDisplayName("Алексей", "Петров"); got != "Петров Алексей" {
 		t.Errorf("student: got %q", got)
 	}
 	if got := StudentDisplayName("Алексей", ""); got != "Алексей" {
 		t.Errorf("student no last name: got %q", got)
+	}
+	if got := StudentDisplayName("", "Петров"); got != "Петров" {
+		t.Errorf("student no first name: got %q", got)
 	}
 }
 

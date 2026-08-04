@@ -272,7 +272,7 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
       >
         {/* Names stay profile/comment links; grading starts from a task cell. */}
         <Link
-          to={'../students/' + student.user_id + search}
+          to={'../students/' + student.user_id + (search ? search + '&origin=conduit' : '?origin=conduit')}
           className={cn(
             'inline-flex items-center gap-1.5 underline-offset-2 hover:underline',
             active && 'font-semibold text-text',

@@ -33,16 +33,23 @@ export function StudentProfilePage() {
   const remove = useDeleteStudentNote(centerId, studentUserId)
   const color = useUpdateStudentNameColor(centerId, studentUserId)
 
-  const conduitPath = '/mathcenter/' + year + '/conduit' + search
+  const profileSearch = new URLSearchParams(search)
+  const origin = profileSearch.get('origin') === 'students' ? 'students' : 'conduit'
+  profileSearch.delete('origin')
+  const backSearch = profileSearch.toString()
+  const backPath = origin === 'students'
+    ? '/mathcenter/' + year + '/manage/students'
+    : '/mathcenter/' + year + '/conduit'
+  const backLabel = origin === 'students' ? 'Назад к ученикам' : 'Назад к кондуиту'
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
       <Link
-        to={conduitPath}
+        to={backPath + (backSearch ? '?' + backSearch : '')}
         className="inline-flex items-center gap-1.5 self-start text-sm font-medium text-link underline-offset-4 hover:underline"
       >
         <ArrowLeft className="h-4 w-4" aria-hidden />
-        Назад к кондуиту
+        {backLabel}
       </Link>
 
       {profile.isPending ? (

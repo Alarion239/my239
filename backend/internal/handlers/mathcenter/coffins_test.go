@@ -189,7 +189,7 @@ func TestListCoffinQueue_AdminReturnsRows(t *testing.T) {
 	}
 	var resp []map[string]any
 	_ = json.Unmarshal(rr.Body.Bytes(), &resp)
-	if len(resp) != 1 || resp[0]["student_name"] != "Аня Иванова" || resp[0]["series_id"] != float64(100) {
+	if len(resp) != 1 || resp[0]["student_name"] != "Иванова Аня" || resp[0]["series_id"] != float64(100) {
 		t.Errorf("unexpected coffin queue: %v", resp)
 	}
 }

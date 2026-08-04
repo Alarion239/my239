@@ -249,6 +249,19 @@ describe('module navigation', () => {
     expect(tabNav).toHaveTextContent('Гробы')
   })
 
+  it('hides the wordmark and scrollbar on phone-sized viewports while keeping tabs scrollable', async () => {
+    const member = makeUser({ is_admin: false })
+    mockFetch(member)
+    renderShell(<TopBar user={member} />, '/mathcenter/2025/series', true)
+
+    expect(await screen.findByRole('navigation', { name: 'Разделы модуля' })).toHaveClass(
+      'overflow-x-auto',
+      'max-md:[scrollbar-width:none]',
+      'max-md:[&::-webkit-scrollbar]:hidden',
+    )
+    expect(screen.getByRole('link', { name: 'my239' })).toHaveClass('hidden', 'md:inline-block')
+  })
+
   it('shows queue notifications on the module tabs', async () => {
     const member = makeUser({ is_admin: false })
     mockFetch(member, mcMe, true)

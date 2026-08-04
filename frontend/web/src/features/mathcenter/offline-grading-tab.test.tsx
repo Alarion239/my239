@@ -35,7 +35,7 @@ const grid = {
   students: [
     {
       student_user_id: 7,
-      student_name: 'Аня Иванова',
+      student_name: 'Иванова Аня',
       group_id: 10,
       group_name: 'А',
       cells: [
@@ -108,7 +108,7 @@ describe('OfflineGradingTab (phone flow)', () => {
     renderTab()
 
     // Roster shows the student with a 1/2 solved count.
-    const studentBtn = await screen.findByText('Аня Иванова')
+    const studentBtn = await screen.findByText('Иванова Аня')
     expect(screen.getByText('1/2')).toBeInTheDocument()
     await userEvent.click(studentBtn)
 
@@ -144,7 +144,7 @@ describe('OfflineGradingTab (phone flow)', () => {
       students: [
         {
           student_user_id: 7,
-          student_name: 'Аня Иванова',
+          student_name: 'Иванова Аня',
           group_id: 10,
           group_name: 'А',
           cells: [
@@ -157,9 +157,9 @@ describe('OfflineGradingTab (phone flow)', () => {
     stubFetch(() => {}, gatedGrid)
     renderTab()
 
-    await screen.findByText('Аня Иванова')
+    await screen.findByText('Иванова Аня')
     expect(screen.getByText('0/1')).toBeInTheDocument()
-    await userEvent.click(screen.getByText('Аня Иванова'))
+    await userEvent.click(screen.getByText('Иванова Аня'))
     expect(await screen.findByText('Уa')).toBeInTheDocument()
     expect(screen.getByText('1')).toBeInTheDocument()
   })

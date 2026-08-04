@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fullName, initials, primaryRole, roleLabel } from './user'
+import { fullName, initials, primaryRole, roleLabel, studentName } from './user'
 
 describe('fullName', () => {
   it('joins first, middle, last', () => {
@@ -21,6 +21,14 @@ describe('initials', () => {
 
   it('falls back to ? when empty', () => {
     expect(initials({ first_name: '', last_name: '' })).toBe('?')
+  })
+})
+
+describe('studentName', () => {
+  it('formats surname first and handles missing parts', () => {
+    expect(studentName({ first_name: 'Иван', last_name: 'Сидоров' })).toBe('Сидоров Иван')
+    expect(studentName({ first_name: 'Иван', last_name: '' })).toBe('Иван')
+    expect(studentName({ first_name: '', last_name: 'Сидоров' })).toBe('Сидоров')
   })
 })
 

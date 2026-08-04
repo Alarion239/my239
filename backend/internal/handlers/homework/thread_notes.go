@@ -79,7 +79,7 @@ func ListThreadNotes(database *db.DB) http.HandlerFunc {
 			out = append(out, threadNoteView{
 				ID:           n.ID,
 				AuthorUserID: n.AuthorUserID,
-				AuthorName:   mc.StudentDisplayName(n.AuthorFirstName, n.AuthorLastName),
+				AuthorName:   mc.DisplayName(n.AuthorFirstName, n.AuthorLastName),
 				Body:         n.Body,
 				CreatedAt:    n.CreatedAt,
 				UpdatedAt:    n.UpdatedAt,
@@ -280,7 +280,7 @@ func writeThreadNoteView(ctx context.Context, w http.ResponseWriter, r *http.Req
 	httpx.WriteJSON(w, status, threadNoteView{
 		ID:           n.ID,
 		AuthorUserID: n.AuthorUserID,
-		AuthorName:   mc.StudentDisplayName(n.AuthorFirstName, n.AuthorLastName),
+		AuthorName:   mc.DisplayName(n.AuthorFirstName, n.AuthorLastName),
 		Body:         n.Body,
 		CreatedAt:    n.CreatedAt,
 		UpdatedAt:    n.UpdatedAt,

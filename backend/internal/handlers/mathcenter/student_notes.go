@@ -132,7 +132,7 @@ func ListStudentNotes(database *db.DB) http.HandlerFunc {
 			out = append(out, studentNoteView{
 				ID:           n.ID,
 				AuthorUserID: n.AuthorUserID,
-				AuthorName:   mc.StudentDisplayName(n.AuthorFirstName, n.AuthorLastName),
+				AuthorName:   mc.DisplayName(n.AuthorFirstName, n.AuthorLastName),
 				Body:         n.Body,
 				CreatedAt:    n.CreatedAt,
 				UpdatedAt:    n.UpdatedAt,
@@ -321,7 +321,7 @@ func writeStudentNoteView(ctx context.Context, w http.ResponseWriter, r *http.Re
 	httpx.WriteJSON(w, status, studentNoteView{
 		ID:           n.ID,
 		AuthorUserID: n.AuthorUserID,
-		AuthorName:   mc.StudentDisplayName(n.AuthorFirstName, n.AuthorLastName),
+		AuthorName:   mc.DisplayName(n.AuthorFirstName, n.AuthorLastName),
 		Body:         n.Body,
 		CreatedAt:    n.CreatedAt,
 		UpdatedAt:    n.UpdatedAt,

@@ -97,7 +97,7 @@ func TestTeacherGrid_HappyPath(t *testing.T) {
 	if len(resp.Students) != 2 {
 		t.Fatalf("want 2 students, got %d", len(resp.Students))
 	}
-	if resp.Students[0].StudentName != "Аня Иванова" {
+	if resp.Students[0].StudentName != "Иванова Аня" {
 		t.Errorf("student 0 name: %v", resp.Students[0].StudentName)
 	}
 	if len(resp.Students[0].Cells) != 2 {

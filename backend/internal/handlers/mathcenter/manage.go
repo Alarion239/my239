@@ -724,7 +724,7 @@ func manageListRazborAccess(database *db.DB) http.HandlerFunc {
 			})
 		}
 		for _, item := range students {
-			name := strings.TrimSpace(strings.Join([]string{item.FirstName, stringValue(item.MiddleName), item.LastName}, " "))
+			name := mcdomain.StudentDisplayName(item.FirstName, item.LastName)
 			var backgroundHex *string
 			if color := colors[item.UserID]; color != "" {
 				backgroundHex = &color

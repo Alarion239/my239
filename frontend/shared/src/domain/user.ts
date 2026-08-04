@@ -4,11 +4,20 @@
 import type { User } from '../types'
 
 type NameParts = Pick<User, 'first_name' | 'middle_name' | 'last_name'>
+type StudentNameParts = Pick<User, 'first_name' | 'last_name'>
 
 // fullName joins the name parts, skipping an absent middle name. The product
 // is Russian, so order is first [middle] last.
 export function fullName(u: NameParts): string {
   return [u.first_name, u.middle_name, u.last_name]
+    .filter((p): p is string => !!p && p.trim().length > 0)
+    .join(' ')
+}
+
+// studentName follows the conventional Russian roster order and intentionally
+// omits patronymics from compact Math Center student surfaces.
+export function studentName(u: StudentNameParts): string {
+  return [u.last_name, u.first_name]
     .filter((p): p is string => !!p && p.trim().length > 0)
     .join(' ')
 }

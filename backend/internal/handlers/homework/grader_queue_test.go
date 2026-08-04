@@ -48,7 +48,7 @@ func TestGraderQueue_HappyPath(t *testing.T) {
 	if len(items) != 2 {
 		t.Fatalf("want 2 items, got %d", len(items))
 	}
-	if items[0]["student_name"] != "Аня Иванова" {
+	if items[0]["student_name"] != "Иванова Аня" {
 		t.Errorf("student name: %v", items[0]["student_name"])
 	}
 	if items[1]["problem_display"] != "Задача 2" {

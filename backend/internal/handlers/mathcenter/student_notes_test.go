@@ -145,7 +145,7 @@ func TestGetStudentProfile_TeacherSucceeds(t *testing.T) {
 	}
 	var got map[string]any
 	_ = json.Unmarshal(rr.Body.Bytes(), &got)
-	if got["display_name"] != "Иван Иванов" {
+	if got["display_name"] != "Иванов Иван" {
 		t.Errorf("display_name: got %v", got["display_name"])
 	}
 	if got["group_name"] != "Группа А" {

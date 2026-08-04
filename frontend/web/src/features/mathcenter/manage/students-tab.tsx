@@ -18,6 +18,7 @@ import {
 } from '@dnd-kit/core'
 import {
   fullName,
+  studentName,
   useManageAddStudent,
   useManageGroups,
   useManageRazborAccess,
@@ -546,7 +547,7 @@ const EMPTY_ROSTER_STUDENTS: ManageRosterBoardStudent[] = []
 const EMPTY_ROSTER_GROUPS: ManageRosterBoardGroup[] = []
 
 function rosterStudentName(student: ManageRosterBoardStudent): string {
-  return fullName(student)
+  return studentName(student)
 }
 
 function rosterColumnId(groupId: number | null): string {
@@ -928,7 +929,7 @@ function RosterStudentCard({
   return (
     <Link
       ref={setNodeRef}
-      to={'../students/' + student.user_id + search}
+      to={'../students/' + student.user_id + (search ? search + '&origin=students' : '?origin=students')}
       data-roster-card={'student:' + student.user_id}
       style={style}
       {...listeners}

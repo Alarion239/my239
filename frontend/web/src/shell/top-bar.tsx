@@ -62,7 +62,10 @@ function ModuleTabs({ user }: { user: User }) {
   if (!pages || pages.length === 0) return null
 
   return (
-    <nav className="flex min-w-0 items-center gap-1 overflow-x-auto" aria-label="Разделы модуля">
+    <nav
+      className="flex min-w-0 items-center gap-1 overflow-x-auto max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden"
+      aria-label="Разделы модуля"
+    >
       {pages.map((p) => (
         <NavLink
           key={p.path}
@@ -117,7 +120,7 @@ export function TopBar({
         }
         aria-expanded={navOpen}
         aria-controls={navOpen == null ? undefined : 'desktop-nav-rail'}
-        className="shrink-0 rounded-md font-display text-xl font-medium text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+        className="hidden shrink-0 rounded-md font-display text-xl font-medium text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus md:inline-block"
       >
         my239
         <span aria-hidden="true" className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-signature align-middle" />

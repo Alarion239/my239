@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   createInviteSchema,
   useManageGroups,
@@ -8,6 +8,8 @@ import {
   useManagePersonalInviteStudents,
   useManageRevokeInvite,
   isUnallocatedGroup,
+  studentName,
+  type PersonalInviteStudent,
 } from '@my239/shared'
 import { Button, Input, Select } from '../../../design/ui'
 import { ConfirmButton, SectionHeader } from '../../admin/_shared'
@@ -80,13 +82,14 @@ export function InviteSection({
 function CreatePersonalInviteForm({ centerId }: { centerId: number }) {
   const students = useManagePersonalInviteStudents(centerId)
   const create = useManageCreatePersonalInvite(centerId)
-  const [userId, setUserId] = useState('')
+  const [userId, setUserId] = useState<number | null>(null)
+  const [studentQuery, setStudentQuery] = useState('')
   const [expiresHours, setExpiresHours] = useState('336')
   const [error, setError] = useState<string | null>(null)
 
   const onSubmit = (event: React.FormEvent) => {
     event.preventDefault()
-    const selectedUserId = Number(userId)
+    const selectedUserId = userId ?? 0
     const hours = Number(expiresHours)
     if (!selectedUserId || !Number.isInteger(hours) || hours <= 0) {
       setError('Выберите ученика и срок действия')
@@ -96,7 +99,10 @@ function CreatePersonalInviteForm({ centerId }: { centerId: number }) {
     create.mutate(
       { user_id: selectedUserId, expires_in_hours: hours },
       {
-        onSuccess: () => setUserId(''),
+        onSuccess: () => {
+          setUserId(null)
+          setStudentQuery('')
+        },
         onError: () => setError('Не удалось создать личную ссылку'),
       },
     )
@@ -109,41 +115,131 @@ function CreatePersonalInviteForm({ centerId }: { centerId: number }) {
         <p className="text-xs text-muted">Ссылка привязана к одному ученику и используется один раз.</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <Select
-          value={userId}
-          onChange={(event) => setUserId(event.target.value)}
-          aria-label="Ученик для личной ссылки"
-          className="min-w-56"
-          disabled={students.isPending || (students.data?.length ?? 0) === 0}
-        >
-          <option value="">
-            {students.isPending
-              ? 'Загрузка…'
-              : (students.data?.length ?? 0) === 0
-                ? 'Нет учеников без аккаунта'
-                : 'Выберите ученика'}
-          </option>
-          {(students.data ?? []).map((student) => (
-            <option key={student.user_id} value={student.user_id}>
-              {student.last_name} {student.first_name}
-              {student.middle_name ? ' ' + student.middle_name : ''} · {student.group_name}
-            </option>
-          ))}
-        </Select>
-        <Input
-          type="number"
-          min={1}
-          value={expiresHours}
-          onChange={(event) => setExpiresHours(event.target.value)}
-          aria-label="Срок личной ссылки (часов)"
-          className="max-w-28"
+        <PersonalStudentCombobox
+          students={students.data ?? []}
+          value={studentQuery}
+          selectedUserId={userId}
+          isLoading={students.isPending}
+          onChange={(value) => {
+            setStudentQuery(value)
+            setUserId(null)
+          }}
+          onSelect={(student) => {
+            setStudentQuery(studentName(student))
+            setUserId(student.user_id)
+          }}
         />
-        <Button type="submit" variant="secondary" disabled={create.isPending || !userId}>
+        <label className="flex flex-col gap-1 text-xs font-medium text-text">
+          Срок действия, часов
+          <span className="font-normal text-muted">Когда личная ссылка перестанет работать.</span>
+          <Input
+            type="number"
+            min={1}
+            value={expiresHours}
+            onChange={(event) => setExpiresHours(event.target.value)}
+            aria-label="Срок личной ссылки (часов)"
+            className="max-w-28"
+          />
+        </label>
+        <Button type="submit" variant="secondary" disabled={create.isPending || userId == null}>
           Создать личную ссылку
         </Button>
       </div>
       {error ? <p className="text-sm text-danger">{error}</p> : null}
     </form>
+  )
+}
+
+function PersonalStudentCombobox({
+  students,
+  value,
+  selectedUserId,
+  isLoading,
+  onChange,
+  onSelect,
+}: {
+  students: PersonalInviteStudent[]
+  value: string
+  selectedUserId: number | null
+  isLoading: boolean
+  onChange: (value: string) => void
+  onSelect: (student: PersonalInviteStudent) => void
+}) {
+  const [focused, setFocused] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(0)
+  const normalized = value.trim().toLocaleLowerCase('ru-RU')
+  const filtered = useMemo(
+    () => students.filter((student) => {
+      if (!normalized) return true
+      return [studentName(student), student.middle_name ?? '', student.group_name]
+        .join(' ')
+        .toLocaleLowerCase('ru-RU')
+        .includes(normalized)
+    }),
+    [normalized, students],
+  )
+  const showOptions = focused && !selectedUserId
+
+  return (
+    <div className="relative min-w-64">
+      <label className="mb-1 block text-xs font-medium text-text" htmlFor="personal-invite-student">
+        Ученик
+      </label>
+      <p className="mb-1 text-xs text-muted">Начните вводить фамилию или имя и выберите точное совпадение.</p>
+      <Input
+        id="personal-invite-student"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onFocus={() => setFocused(true)}
+        onKeyDown={(event) => {
+          if (!showOptions || filtered.length === 0) return
+          if (event.key === 'ArrowDown') {
+            event.preventDefault()
+            setActiveIndex((index) => Math.min(index + 1, filtered.length - 1))
+          } else if (event.key === 'ArrowUp') {
+            event.preventDefault()
+            setActiveIndex((index) => Math.max(index - 1, 0))
+          } else if (event.key === 'Enter') {
+            event.preventDefault()
+            onSelect(filtered[activeIndex] ?? filtered[0])
+            setFocused(false)
+          } else if (event.key === 'Escape') {
+            setFocused(false)
+          }
+        }}
+        onBlur={() => setFocused(false)}
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={showOptions}
+        aria-controls="personal-invite-student-options"
+        aria-label="Ученик для личной ссылки"
+        placeholder={isLoading ? 'Загрузка…' : students.length === 0 ? 'Нет учеников без аккаунта' : 'Выберите ученика'}
+        disabled={isLoading || students.length === 0}
+      />
+      {showOptions ? (
+        <div id="personal-invite-student-options" role="listbox" className="absolute inset-x-0 top-full z-20 mt-1 max-h-56 overflow-auto rounded-lg border border-border bg-surface shadow-lg">
+          {filtered.length === 0 ? (
+            <p className="px-3 py-2 text-sm text-muted">Никого не найдено.</p>
+          ) : filtered.map((student, index) => (
+            <button
+              key={student.user_id}
+              type="button"
+              role="option"
+              aria-selected={index === activeIndex}
+              className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-surface-subtle"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onSelect(student)
+                setFocused(false)
+              }}
+            >
+              <span className="text-text">{studentName(student)}</span>
+              <span className="text-xs text-muted">{student.group_name}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   )
 }
 
@@ -216,27 +312,36 @@ function CreateInviteForm({
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-2 rounded-lg bg-surface-subtle p-3">
-      <Input
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        placeholder="Описание (например, «Поток сентября»)"
-        aria-label="Описание приглашения"
-      />
+      <label className="flex flex-col gap-1 text-xs font-medium text-text" htmlFor={'invite-description-' + role}>
+        Описание
+        <span className="font-normal text-muted">Поможет отличать ссылку в списке, например «Поток сентября».</span>
+        <Input
+          id={'invite-description-' + role}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Поток сентября"
+          aria-label="Описание приглашения"
+        />
+      </label>
       <div className="flex flex-wrap items-center gap-2">
         {role === 'student' ? (
-          <Select
-            value={groupId}
-            onChange={(e) => setGroupId(e.target.value)}
-            aria-label="Группа"
-            className="max-w-40"
-          >
-            <option value="">Без группы (по умолчанию)</option>
-            {(groups ?? []).filter((group) => !isUnallocatedGroup(group.name)).map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
-              </option>
-            ))}
-          </Select>
+          <label className="flex flex-col gap-1 text-xs font-medium text-text">
+            Группа
+            <span className="font-normal text-muted">Куда добавить ученика после регистрации; можно назначить позже.</span>
+            <Select
+              value={groupId}
+              onChange={(e) => setGroupId(e.target.value)}
+              aria-label="Группа"
+              className="max-w-40"
+            >
+              <option value="">Без группы (по умолчанию)</option>
+              {(groups ?? []).filter((group) => !isUnallocatedGroup(group.name)).map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </Select>
+          </label>
         ) : (
           <label className="flex items-center gap-2 text-sm text-text">
             <input
@@ -247,22 +352,16 @@ function CreateInviteForm({
             Старший преподаватель
           </label>
         )}
-        <Input
-          type="number"
-          min={1}
-          value={maxUses}
-          onChange={(e) => setMaxUses(e.target.value)}
-          aria-label="Макс. использований"
-          className="max-w-28"
-        />
-        <Input
-          type="number"
-          min={1}
-          value={expiresHours}
-          onChange={(e) => setExpiresHours(e.target.value)}
-          aria-label="Срок (часов)"
-          className="max-w-28"
-        />
+        <label className="flex flex-col gap-1 text-xs font-medium text-text">
+          Количество регистраций
+          <span className="font-normal text-muted">Сколько аккаунтов можно создать по ссылке.</span>
+          <Input type="number" min={1} value={maxUses} onChange={(e) => setMaxUses(e.target.value)} aria-label="Макс. использований" className="max-w-28" />
+        </label>
+        <label className="flex flex-col gap-1 text-xs font-medium text-text">
+          Срок действия, часов
+          <span className="font-normal text-muted">Когда ссылка перестанет работать.</span>
+          <Input type="number" min={1} value={expiresHours} onChange={(e) => setExpiresHours(e.target.value)} aria-label="Срок (часов)" className="max-w-28" />
+        </label>
         <Button type="submit" variant="secondary" disabled={create.isPending}>
           Создать ссылку
         </Button>

@@ -107,7 +107,7 @@ describe('RazborAccessTab', () => {
                 user_id: 55,
                 group_id: 3,
                 group_name: 'А',
-                name: 'Аня Иванова',
+                name: 'Иванова Аня',
                 razbor_default_video: true,
                 razbor_default_pdf_tex: true,
               },
@@ -134,7 +134,7 @@ describe('RazborAccessTab', () => {
     renderTab()
     const user = userEvent.setup()
     const written = await screen.findByRole('button', {
-      name: /Аня Иванова · серия 4: Письменный разбор/,
+      name: /Иванова Аня · серия 4: Письменный разбор/,
     })
     expect(written).toHaveAccessibleName(/доступно/)
     await user.click(written)
@@ -155,7 +155,7 @@ describe('RazborAccessTab', () => {
 
     const collapse = screen.getByRole('button', { name: 'Свернуть группу А' })
     await user.click(collapse)
-    expect(screen.queryByRole('button', { name: /Аня Иванова · серия 4/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Иванова Аня · серия 4/ })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Развернуть группу А' })).toBeInTheDocument()
   })
 })
@@ -219,14 +219,14 @@ describe('StudentsTab roster board', () => {
     expect(screen.getByRole('region', { name: 'А, 1 учеников' })).toHaveClass('max-h-[65vh]')
     expect(screen.getByText('Предыдущая группа: А')).toBeInTheDocument()
     expect(screen.getByText('Новый ученик')).toBeInTheDocument()
-    expect(screen.queryByRole('combobox', { name: 'Переместить Ира Петрова' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: 'Переместить Петрова Ира' })).not.toBeInTheDocument()
 
     const sortButtons = screen.getAllByRole('button', { name: /Сортировка колонки/ })
     await user.click(sortButtons[0])
     expect(screen.getAllByRole('button', { name: /Рейтинг ↓/ })).toHaveLength(3)
 
-    const studentLink = screen.getByRole('link', { name: /Ира Петрова.*Открыть профиль/ })
-    expect(studentLink).toHaveAttribute('href', '/mathcenter/2032/students/101?term=20')
+    const studentLink = screen.getByRole('link', { name: /Петрова Ира.*Открыть профиль/ })
+    expect(studentLink).toHaveAttribute('href', '/mathcenter/2032/students/101?term=20&origin=students')
     await user.click(studentLink)
     expect(await screen.findByText('Профиль ученика')).toBeInTheDocument()
   })
@@ -291,12 +291,12 @@ describe('StudentsTab roster board', () => {
     expect(screen.queryByText('Олег Сидоров')).not.toBeInTheDocument()
 
     await user.clear(search)
-    const student = screen.getByRole('link', { name: /Ира Петрова.*Delete/ })
+    const student = screen.getByRole('link', { name: /Петрова Ира.*Delete/ })
     student.focus()
     await user.keyboard('{Delete}')
     expect(await screen.findByRole('heading', { name: 'Удалить ученика из матцентра?' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Удалить' }))
     await waitFor(() => expect(deleteCalls).toEqual(['/api/v1/mathcenter/centers/7/manage/students/201']))
-    await waitFor(() => expect(screen.queryByText('Ира Петрова')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByText('Петрова Ира')).not.toBeInTheDocument())
   })
 })

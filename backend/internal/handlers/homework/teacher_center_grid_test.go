@@ -106,7 +106,7 @@ func TestGetCenterGrid_HappyPath(t *testing.T) {
 	if len(resp.Groups) != 1 || resp.Groups[0].Name != "А" {
 		t.Fatalf("groups: %+v", resp.Groups)
 	}
-	if len(resp.Groups[0].Students) != 1 || resp.Groups[0].Students[0].Name != "Аня Иванова" {
+	if len(resp.Groups[0].Students) != 1 || resp.Groups[0].Students[0].Name != "Иванова Аня" {
 		t.Fatalf("students: %+v", resp.Groups[0].Students)
 	}
 	if len(resp.Series) != 2 {
