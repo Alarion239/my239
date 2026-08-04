@@ -76,6 +76,12 @@ The web layer exposes these as `status-*` and `status-*-soft`. Keep glyphs and
 text legends. Cards remain neutral; homework color belongs on the problem or
 subproblem identifier controls.
 
+An open coffin is a teacher workflow state, not a submission verdict. Its
+problem header and empty/active problem cells use `bg-warning-soft
+text-warning`; accepted, checking, rejected, and appeal treatments still take
+precedence when a cell has a submission status. A released coffin returns to
+the neutral `surface-subtle` header treatment.
+
 Teacher-private notes use `private`, `private-soft`, and `private-border`. The
 photo viewer uses its owned `media-*` tokens so its dark canvas is intentional,
 not an undocumented gallery hex.

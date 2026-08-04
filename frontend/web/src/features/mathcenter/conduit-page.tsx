@@ -1065,8 +1065,8 @@ export function ConduitTable({
                 </div>
               </th>
             </tr>
-            {/* Per-subproblem column labels. Coffins stay structurally marked
-                but use the same neutral treatment in every queue. */}
+            {/* Per-subproblem column labels. Open coffins use the warning scale
+                so the problem itself is visible before reading cell status. */}
             <tr>
               {cols.map(({ col, seriesId, firstInSeries }) => {
                 const open = col.is_coffin && coffinOpen(col.coffin_released_at)

@@ -207,6 +207,21 @@ function rankingData(): CenterGridResponse {
   }
 }
 
+function openCoffinData(): CenterGridResponse {
+  return {
+    ...data,
+    series: [{
+      ...data.series[0],
+      columns: data.series[0].columns.map((column, index) =>
+        index === 1
+          ? { ...column, is_coffin: true, coffin_released_at: '2099-01-01T00:00:00Z' }
+          : column,
+      ),
+    }],
+    cells: {},
+  }
+}
+
 function renderedStudentNames(container: HTMLElement): string[] {
   return Array.from(container.querySelectorAll('tbody a')).map(
     (link) => link.textContent ?? '',
@@ -363,6 +378,17 @@ describe('ConduitTable', () => {
       'bg-status-grading-soft',
       'text-status-grading',
     )
+  })
+
+  it('marks open coffin problem headers and cells with the warning treatment', () => {
+    const { container } = renderConduit(openCoffinData())
+    const header = screen.getByRole('columnheader', { name: /Задача 2/ })
+    expect(header).toHaveClass('bg-warning-soft', 'text-warning')
+
+    const firstRow = screen.getByRole('link', { name: 'Первый Ученик' }).closest('tr')!
+    const cells = firstRow.querySelectorAll('td[data-conduit-cell]')
+    expect(cells[1]).toHaveClass('bg-warning-soft')
+    expect(container.querySelector('[title="Гроб — открыт"]')).not.toBeNull()
   })
 
   it('gates regular credit and totals on the exercise while keeping cells active', () => {
