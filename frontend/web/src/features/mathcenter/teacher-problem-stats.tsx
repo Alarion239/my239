@@ -35,6 +35,12 @@ function isPublished(meta: Subproblem | undefined): boolean {
   return !!meta?.solution_published_at
 }
 
+// A saved draft is still an authoring surface, so it opens directly in edit
+// mode. Only an explicitly published razbor has a separate view-first state.
+function workbenchMode(meta: Subproblem | undefined): SolutionWorkbenchMode {
+  return isPublished(meta) ? 'view' : 'edit'
+}
+
 function sharesRazbor(
   first: Subproblem | undefined,
   second: Subproblem | undefined,
@@ -159,7 +165,7 @@ export function TeacherProblemStats({
     openedInitialId.current = initialSubproblemId
     originId.current = initialSubproblemId
     setPanel({
-      mode: 'view',
+      mode: workbenchMode(initialMeta),
       representativeId: initialSubproblemId,
       subproblemIds: solutionIds(initialSubproblemId, metaById),
     })
@@ -200,10 +206,11 @@ export function TeacherProblemStats({
     }
 
     if (hasRazbor(pressed)) {
+      const mode = workbenchMode(pressed)
       setPanel((cur) =>
-        cur?.mode === 'view' && sharesRazbor(metaById.get(cur.representativeId), pressed)
+        cur?.mode === mode && sharesRazbor(metaById.get(cur.representativeId), pressed)
           ? null
-          : { mode: 'view', representativeId: id, subproblemIds: solutionIds(id, metaById) },
+          : { mode, representativeId: id, subproblemIds: solutionIds(id, metaById) },
       )
       return
     }

@@ -247,7 +247,7 @@ describe('TeacherProblemStats — разбор frame', () => {
     expect(screen.queryByRole('region', { name: 'Задача 1 (а)' })).not.toBeInTheDocument()
   })
 
-  it('labels an unpublished solution as a draft razbor', async () => {
+  it('opens an unpublished solution directly in the draft editor', async () => {
     const series = makeSeries()
     series.problems[0].subproblems[0] = sub({
       id: 1000,
@@ -262,7 +262,25 @@ describe('TeacherProblemStats — разбор frame', () => {
         .getByRole('img', { name: /по задаче Задача 1 \(а\)/ })
         .closest('[role="button"]') as HTMLElement,
     )
-    expect(await screen.findByRole('region', { name: 'Черновик разбора задачи 1 (а)' })).toBeInTheDocument()
+    const workbench = await screen.findByRole('region', { name: 'Черновик разбора задачи 1 (а)' })
+    expect(within(workbench).getByRole('textbox', { name: 'LaTeX' })).toBeInTheDocument()
+    expect(within(workbench).queryByRole('button', { name: 'Редактировать' })).not.toBeInTheDocument()
+  })
+
+  it('opens a draft selected by a coffin link directly in edit mode', async () => {
+    const series = makeSeries()
+    series.problems[0].subproblems[0] = sub({
+      id: 1000,
+      label: 'а',
+      display: 'Задача 1 (а)',
+      solution_link: 'https://example.com/draft',
+    })
+    renderStats(series, 1000)
+
+    const workbench = await screen.findByRole('region', { name: 'Черновик разбора задачи 1 (а)' })
+    await userEvent.setup().click(within(workbench).getByRole('tab', { name: 'Видео' }))
+    expect(within(workbench).getByRole('textbox', { name: 'Ссылка на видео' })).toBeInTheDocument()
+    expect(within(workbench).queryByRole('button', { name: 'Редактировать' })).not.toBeInTheDocument()
   })
 
   it('highlights every problem covered by the selected shared разбор', async () => {
@@ -285,12 +303,10 @@ describe('TeacherProblemStats — разбор frame', () => {
     const title = within(workbench).getByRole('heading', { name: 'Черновик разбора задач 1' })
     const header = title.closest('header') as HTMLElement
     const formatTabs = within(workbench).getByRole('tablist', { name: 'Формат разбора' })
-    const edit = within(workbench).getByRole('button', { name: 'Редактировать' })
 
     expect(header).toContainElement(formatTabs)
-    expect(header).toContainElement(edit)
-    expect(edit).toHaveTextContent('')
-    expect(edit.querySelector('svg')).not.toBeNull()
+    expect(within(workbench).queryByRole('button', { name: 'Редактировать' })).not.toBeInTheDocument()
+    expect(within(workbench).getByRole('textbox', { name: 'LaTeX' })).toBeInTheDocument()
     expect(within(workbench).queryByText(/Общий разбор|Подзадач в группе|^Просмотр$/)).not.toBeInTheDocument()
 
     expect(firstRow).toHaveAttribute('aria-pressed', 'true')
@@ -301,9 +317,9 @@ describe('TeacherProblemStats — разбор frame', () => {
 
     await user.click(secondRow)
 
-    expect(firstRow).toHaveAttribute('aria-pressed', 'false')
+    expect(firstRow).toHaveAttribute('aria-pressed', 'true')
     expect(secondRow).toHaveAttribute('aria-pressed', 'false')
-    expect(screen.queryByRole('button', { name: 'Редактировать' })).not.toBeInTheDocument()
+    expect(workbench).toBeInTheDocument()
   })
 
   it('keeps a shared разбор together when editing it', async () => {
@@ -318,7 +334,7 @@ describe('TeacherProblemStats — разбор frame', () => {
         .getByRole('img', { name: /по задаче Задача 1 \(а\)/ })
         .closest('[role="button"]') as HTMLElement,
     )
-    await user.click(screen.getByRole('button', { name: 'Редактировать' }))
+    await user.click(screen.getByRole('tab', { name: 'Видео' }))
     const link = screen.getByRole('textbox', { name: 'Ссылка на видео' })
     await user.clear(link)
     await user.type(link, 'https://example.com/updated')
