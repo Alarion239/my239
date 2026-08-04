@@ -65,6 +65,9 @@ func TestGetCenterGrid_HappyPath(t *testing.T) {
 			AddRow(int64(7), int64(901), int64(3), "ungraded", (*int64)(nil), "", (*string)(nil), (*string)(nil), (*int64)(nil), (*time.Time)(nil), false).
 			// Offline accepted with a free-text grader and no comment.
 			AddRow(int64(7), int64(910), int64(2), "accepted", (*int64)(nil), "Анна А", (*string)(nil), (*string)(nil), (*int64)(nil), (*time.Time)(nil), false))
+	mock.ExpectQuery(`FROM math_center_student_name_color`).
+		WithArgs(int64(42)).
+		WillReturnRows(mock.NewRows([]string{"student_user_id", "background_hex"}))
 	mock.ExpectCommit()
 
 	req := authedRequest(t, access, 3, false, http.MethodGet, "/centers/42/grid?term_id=5", nil)

@@ -13,6 +13,7 @@ import {
 import { Card, Input, Spinner } from '../../design/ui'
 import { cn } from '../../design/cn'
 import { OfflineCellDialog, type OfflineCellTarget } from './offline-cell-dialog'
+import { StudentNameLabel, studentNameColorStyle } from './student-name-color'
 
 // columnLabelFor renders a compact chip label from a series GridColumn:
 // "Задача 3" → "3", with the subpart letter appended ("3a"); the exercise
@@ -118,7 +119,7 @@ function StudentPicker({
                 onClick={() => onPick(s.student_user_id)}
                 className="flex w-full items-center justify-between gap-3 bg-surface px-4 py-3 text-left hover:bg-surface-subtle"
               >
-                <span className="text-text">{s.student_name}</span>
+                <StudentNameLabel name={s.student_name} backgroundHex={s.background_hex} />
                 <span className="text-sm tabular-nums text-muted">
                   {solved}/{total}
                 </span>
@@ -184,6 +185,7 @@ function StudentOfflineGrader({
     setDialog({
       studentUserId: student.student_user_id,
       studentName: student.student_name,
+      backgroundHex: student.background_hex,
       subproblemId: col.subproblem_id,
       columnLabel: columnLabelFor(col),
       threadId: cell?.thread_id ?? 0,
@@ -206,7 +208,12 @@ function StudentOfflineGrader({
         >
           ← Ученики
         </button>
-        <h3 className="text-lg font-medium text-text">{student.student_name}</h3>
+        <h3
+          className="rounded px-1.5 py-0.5 text-lg font-medium"
+          style={studentNameColorStyle(student.background_hex)}
+        >
+          {student.student_name}
+        </h3>
       </div>
       <p className="text-sm text-muted">
         Нажмите на задачу, чтобы отметить её решённой очно. Зелёную — чтобы отменить или оставить заметку.

@@ -55,6 +55,9 @@ func TestTeacherGrid_HappyPath(t *testing.T) {
 			AddRow(int64(8), "Боря", (*string)(nil), "Петров", int64(10), "А",
 				int64(901), "b", int64(500), int32(1), false, (*time.Time)(nil),
 				int64(0), "ungraded", (*int64)(nil), "", (*int64)(nil), (*time.Time)(nil), (*time.Time)(nil), false, false))
+	mock.ExpectQuery(`FROM math_center_student_name_color`).
+		WithArgs(int64(42)).
+		WillReturnRows(mock.NewRows([]string{"student_user_id", "background_hex"}))
 
 	req := authedRequest(t, access, 3, false, http.MethodGet, "/series/100/grid", nil)
 	rr := httptest.NewRecorder()

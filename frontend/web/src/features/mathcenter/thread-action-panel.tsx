@@ -7,12 +7,14 @@ import {
   useReleaseClaim,
   useRetractGrade,
   useSubmitAttempt,
+  useUpdateStudentNameColor,
   userNameFromThread,
   type ThreadView,
 } from '@my239/shared'
 import { Button, Card, Textarea } from '../../design/ui'
 import { SubmissionForm } from './submission-form'
 import type { ThreadRole } from './use-thread-role'
+import { StudentNameColorSelector } from './student-name-color'
 
 export interface ThreadActionPanelProps {
   thread: ThreadView
@@ -20,6 +22,8 @@ export interface ThreadActionPanelProps {
   userId: number
   // Whether the series deadline has passed (hides the student submit form).
   closed: boolean
+  centerId?: number
+  studentBackgroundHex?: string | null
 }
 
 // ThreadActionPanel renders the one action available to the viewer given the
@@ -30,12 +34,22 @@ export function ThreadActionPanel({
   role,
   userId,
   closed,
+  centerId = 0,
+  studentBackgroundHex,
 }: ThreadActionPanelProps) {
   if (role === 'student') {
     return <StudentActions thread={thread} closed={closed} />
   }
   if (role === 'teacher' || role === 'admin') {
-    return <GraderActions thread={thread} role={role} userId={userId} />
+    return (
+      <GraderActions
+        thread={thread}
+        role={role}
+        userId={userId}
+        centerId={centerId}
+        studentBackgroundHex={studentBackgroundHex}
+      />
+    )
   }
   return null
 }
@@ -81,14 +95,19 @@ function GraderActions({
   thread,
   role,
   userId,
+  centerId,
+  studentBackgroundHex,
 }: {
   thread: ThreadView
   role: ThreadRole
   userId: number
+  centerId: number
+  studentBackgroundHex?: string | null
 }) {
   const claim = useClaimThread(thread.id)
   const grade = useGradeThread(thread.id)
   const release = useReleaseClaim(thread.id)
+  const updateColor = useUpdateStudentNameColor(centerId, thread.student_user_id)
 
   const live = claimIsLive(thread)
   const heldByMe = live && thread.claim_holder_user_id === userId
@@ -158,6 +177,14 @@ function GraderActions({
               })
             }}
           />
+          <div className="mt-3 border-t border-border pt-3">
+            <StudentNameColorSelector
+              value={studentBackgroundHex}
+              onChange={(value) => updateColor.mutate(value)}
+              disabled={updateColor.isPending}
+              error={updateColor.error?.message}
+            />
+          </div>
         </Card>
       ) : null}
 

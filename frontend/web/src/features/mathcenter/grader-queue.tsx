@@ -10,6 +10,7 @@ import { Spinner } from '../../design/ui'
 import { cn } from '../../design/cn'
 import { displayPill } from './status-style'
 import { appealsLast } from './queue-order'
+import { StudentNameLabel } from './student-name-color'
 
 export interface GraderQueueProps {
   seriesId: number
@@ -107,7 +108,7 @@ function QueueRow({
       className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface px-4 py-3 transition-colors hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
     >
       <div className="min-w-0 flex-1">
-        <div className="truncate font-medium text-text">{item.student_name}</div>
+        <StudentNameLabel name={item.student_name} backgroundHex={item.background_hex} className="font-medium" />
         <div className="text-xs text-muted">{itemLabel(item)}</div>
       </div>
       {locked ? (

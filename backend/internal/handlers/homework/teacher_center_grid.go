@@ -41,8 +41,9 @@ type centerGridGroup struct {
 }
 
 type centerGridStudentEntry struct {
-	UserID int64  `json:"user_id"`
-	Name   string `json:"name"`
+	UserID        int64   `json:"user_id"`
+	Name          string  `json:"name"`
+	BackgroundHex *string `json:"background_hex"`
 	// HasStudentComment marks the student when at least one internal teacher
 	// note is attached to them.
 	HasStudentComment bool `json:"has_student_comment"`
@@ -296,8 +297,13 @@ func loadCenterGridSnapshot(ctx context.Context, pool db.Pool, centerID, termID 
 	}
 	timings.cellRows = len(cells)
 
+	colors, err := mc.StudentNameColorsForCenter(ctx, q, centerID)
+	if err != nil {
+		return centerGridResponse{}, timings, fmt.Errorf("query center grid student name colors: %w", err)
+	}
+
 	started = time.Now()
-	response := buildCenterGridResponse(roster, columns, cells)
+	response := buildCenterGridResponse(roster, columns, cells, colors)
 	timings.assembly = time.Since(started)
 
 	if err := tx.Commit(ctx); err != nil {
@@ -317,11 +323,15 @@ func emptyCenterGridResponse() centerGridResponse {
 
 // buildCenterGridResponse assembles independent roster, column and cell rows
 // into the existing three-axis response. Empty cells are intentionally absent.
-func buildCenterGridResponse(roster []store.TeacherCenterGridRosterRow, columns []store.TeacherCenterGridColumnRow, cellRows []store.TeacherCenterGridCellRow) centerGridResponse {
+func buildCenterGridResponse(roster []store.TeacherCenterGridRosterRow, columns []store.TeacherCenterGridColumnRow, cellRows []store.TeacherCenterGridCellRow, colorMaps ...map[int64]string) centerGridResponse {
+	colors := map[int64]string{}
+	if len(colorMaps) > 0 && colorMaps[0] != nil {
+		colors = colorMaps[0]
+	}
 	groups := newGroupBuilder()
 	series := newSeriesBuilder()
 	for _, row := range roster {
-		groups.add(row)
+		groups.add(row, colors)
 	}
 	for _, row := range columns {
 		series.add(row)
@@ -414,7 +424,7 @@ func newGroupBuilder() *groupBuilder {
 	}
 }
 
-func (b *groupBuilder) add(r store.TeacherCenterGridRosterRow) {
+func (b *groupBuilder) add(r store.TeacherCenterGridRosterRow, colors map[int64]string) {
 	gIdx, ok := b.byID[r.GroupID]
 	if !ok {
 		b.out = append(b.out, centerGridGroup{GroupID: r.GroupID, Name: r.GroupName})
@@ -424,9 +434,14 @@ func (b *groupBuilder) add(r store.TeacherCenterGridRosterRow) {
 	}
 	if !b.stuByGroup[r.GroupID][r.StudentUserID] {
 		b.stuByGroup[r.GroupID][r.StudentUserID] = true
+		var backgroundHex *string
+		if color := colors[r.StudentUserID]; color != "" {
+			backgroundHex = &color
+		}
 		b.out[gIdx].Students = append(b.out[gIdx].Students, centerGridStudentEntry{
 			UserID:            r.StudentUserID,
 			Name:              mc.StudentDisplayName(r.StudentFirstName, r.StudentLastName),
+			BackgroundHex:     backgroundHex,
 			HasStudentComment: r.HasStudentComment,
 		})
 	}

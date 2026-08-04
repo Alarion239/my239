@@ -101,6 +101,9 @@ func TestManage_RosterBoardSnapshot(t *testing.T) {
 			"student_id", "user_id", "current_group_id", "previous_group_id", "previous_group_name",
 			"previous_term_enrolled", "first_name", "middle_name", "last_name", "rating", "published_series_count", "rating_term_id",
 		}).AddRow(int64(55), int64(101), nil, nil, nil, false, "Ира", nil, "Петрова", float64(4), int64(3), int64(19)))
+	mock.ExpectQuery(`FROM math_center_student_name_color`).
+		WithArgs(int64(42)).
+		WillReturnRows(mock.NewRows([]string{"student_user_id", "background_hex"}))
 
 	req := authedAdminRequest(t, access, 9, http.MethodGet, "/centers/42/manage/roster-board", nil)
 	rr := httptest.NewRecorder()

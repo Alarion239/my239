@@ -322,6 +322,7 @@ export interface ManageStudent {
   first_name: string
   middle_name?: string | null
   last_name: string
+  background_hex?: string | null
 }
 
 export interface ManageRosterBoardTerm {
@@ -349,6 +350,7 @@ export interface ManageRosterBoardStudent {
   middle_name?: string | null
   last_name: string
   rating: number
+	background_hex?: string | null
 }
 
 export interface ManageRosterBoardResponse {
@@ -389,6 +391,7 @@ export interface ManageRazborAccessStudent {
   group_id: number
   group_name: string
   name: string
+  background_hex?: string | null
   razbor_default_video: boolean
   razbor_default_pdf_tex: boolean
 }
@@ -783,6 +786,7 @@ export interface CoffinQueueItem {
   last_grader_user_id?: number | null
   claim_holder_user_id?: number | null
   claim_expires_at?: string | null
+	background_hex?: string | null
 }
 
 // QueueItem is one row of the grader queue (GET /homework/series/{id}/queue):
@@ -800,6 +804,7 @@ export interface QueueItem {
   claim_holder_user_id?: number | null
   claim_expires_at?: string | null
   updated_at: string
+	background_hex?: string | null
 }
 
 // GraderStats are the at-a-glance workload counters for a center
@@ -848,6 +853,7 @@ export interface GridStudent {
   cells: GridCell[]
   // True when the student carries at least one internal teacher note.
   has_student_comment?: boolean
+	background_hex?: string | null
 }
 
 export interface GridResponse {
@@ -879,6 +885,7 @@ export interface CenterGridSeries {
 export interface CenterGridStudentEntry {
   user_id: number
   name: string
+	background_hex?: string | null
   // True when the student carries at least one internal teacher note.
   has_student_comment?: boolean
 }
@@ -968,4 +975,9 @@ export interface StudentProfile {
   group_id: number
   group_name: string
   graduation_year: number
+  background_hex?: string | null
+}
+
+export interface StudentNameColorResponse {
+  background_hex: string | null
 }

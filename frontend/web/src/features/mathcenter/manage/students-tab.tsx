@@ -49,6 +49,7 @@ import { cn } from '../../../design/cn'
 import { SectionHeader } from '../../admin/_shared'
 import { UserSearchSelect } from './user-search-select'
 import { InviteSection } from './invite-section'
+import { StudentNameLabel } from '../student-name-color'
 
 type Format = 'pdf_tex' | 'video'
 type TriState = boolean | 'mixed'
@@ -415,7 +416,11 @@ function RazborAccessMatrix({
                   {!isCollapsed && students.map((student) => (
                     <tr key={student.student_id}>
                       <td className="sticky left-0 z-10 border-b border-r border-border bg-surface px-3 py-1.5 text-sm text-text">
-                        {fullNameFromMatrix(student)}
+                        <StudentNameLabel
+                          name={fullNameFromMatrix(student)}
+                          backgroundHex={student.background_hex}
+                          className="px-0 py-0"
+                        />
                       </td>
                       <td className="border-b border-border px-2 py-1">
                         <TriangleCell
@@ -962,7 +967,11 @@ function RosterStudentCardBody({ student }: { student: ManageRosterBoardStudent 
   return (
     <div className="flex items-start gap-2">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-text">{rosterStudentName(student)}</p>
+        <StudentNameLabel
+          name={rosterStudentName(student)}
+          backgroundHex={student.background_hex}
+          className="truncate text-sm font-medium"
+        />
         <p className="truncate text-xs text-muted">
           {student.previous_group_name
             ? 'Предыдущая группа: ' + student.previous_group_name

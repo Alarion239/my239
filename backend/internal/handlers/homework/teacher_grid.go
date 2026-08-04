@@ -25,7 +25,8 @@ type gridStudent struct {
 	Cells         []gridCell `json:"cells"`
 	// HasStudentComment marks the student row when at least one internal
 	// teacher note is attached to this student.
-	HasStudentComment bool `json:"has_student_comment"`
+	HasStudentComment bool    `json:"has_student_comment"`
+	BackgroundHex     *string `json:"background_hex"`
 }
 
 // gridCell is one (student, subproblem) cell. ThreadID == 0 means no
@@ -110,6 +111,12 @@ func TeacherGrid(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
+		colors, err := mc.StudentNameColorsForCenter(ctx, q, series.MathCenterID)
+		if err != nil {
+			logger.LogErrorContext(ctx, "homework: teacher grid student name colors", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
 
 		// Build the column header set once (subproblems appear identically
 		// for every student, so the first student's column ordering is
@@ -118,7 +125,7 @@ func TeacherGrid(database *db.DB) http.HandlerFunc {
 
 		// Bucket rows by student preserving first-seen order, which matches
 		// the SQL ORDER BY (group → last → first).
-		students := buildGridStudents(rows, columns)
+		students := buildGridStudents(rows, columns, colors)
 
 		httpx.WriteJSON(w, http.StatusOK, gridResponse{Columns: columns, Students: students})
 	}
@@ -145,7 +152,7 @@ func buildGridColumns(rows []store.TeacherSeriesGridRow) []gridSubproblemHeader 
 	return cols
 }
 
-func buildGridStudents(rows []store.TeacherSeriesGridRow, columns []gridSubproblemHeader) []gridStudent {
+func buildGridStudents(rows []store.TeacherSeriesGridRow, columns []gridSubproblemHeader, colors map[int64]string) []gridStudent {
 	// Pre-allocate an empty cell slot per column for every student so the
 	// final shape is rectangular (frontend can index by column position).
 	colIndex := make(map[int64]int, len(columns))
@@ -158,14 +165,18 @@ func buildGridStudents(rows []store.TeacherSeriesGridRow, columns []gridSubprobl
 	for _, row := range rows {
 		idx, ok := studentIndex[row.StudentUserID]
 		if !ok {
-			out = append(out, gridStudent{
+			student := gridStudent{
 				StudentUserID:     row.StudentUserID,
 				StudentName:       mc.StudentDisplayName(row.StudentFirstName, row.StudentLastName),
 				GroupID:           row.GroupID,
 				GroupName:         row.GroupName,
 				Cells:             make([]gridCell, len(columns)),
 				HasStudentComment: row.HasStudentComment,
-			})
+			}
+			if color := colors[row.StudentUserID]; color != "" {
+				student.BackgroundHex = &color
+			}
+			out = append(out, student)
 			idx = len(out) - 1
 			studentIndex[row.StudentUserID] = idx
 		}

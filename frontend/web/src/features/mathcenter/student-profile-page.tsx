@@ -5,12 +5,14 @@ import {
   useDeleteStudentNote,
   useStudentNotes,
   useStudentProfile,
+  useUpdateStudentNameColor,
   useUpdateStudentNote,
 } from '@my239/shared'
 import { Card, Spinner } from '../../design/ui'
 import { useAuth } from '../../auth/auth-context'
 import { InternalNotesPanel } from './internal-notes-panel'
 import { useCenterIdContext } from './center-id-context'
+import { StudentNameColorSelector, StudentNameLabel } from './student-name-color'
 
 // StudentProfilePage is the teacher-facing student page: identity + group and
 // the internal teacher-only note log. Reached from the «Кондуит» (a student's
@@ -29,6 +31,7 @@ export function StudentProfilePage() {
   const create = useCreateStudentNote(centerId, studentUserId)
   const update = useUpdateStudentNote(centerId, studentUserId)
   const remove = useDeleteStudentNote(centerId, studentUserId)
+  const color = useUpdateStudentNameColor(centerId, studentUserId)
 
   const conduitPath = '/mathcenter/' + year + '/conduit' + search
 
@@ -54,11 +57,19 @@ export function StudentProfilePage() {
         <>
           <Card className="p-5">
             <h1 className="font-display text-xl font-medium text-text">
-              {profile.data.display_name}
+              <StudentNameLabel name={profile.data.display_name} backgroundHex={profile.data.background_hex} />
             </h1>
             <p className="mt-1 text-sm text-muted">
               Группа {profile.data.group_name} · выпуск {profile.data.graduation_year}
             </p>
+            <div className="mt-4 border-t border-border pt-4">
+              <StudentNameColorSelector
+                value={profile.data.background_hex}
+                onChange={(value) => color.mutate(value)}
+                disabled={color.isPending}
+                error={color.error?.message}
+              />
+            </div>
           </Card>
 
           <InternalNotesPanel

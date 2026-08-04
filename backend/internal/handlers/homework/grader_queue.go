@@ -31,6 +31,7 @@ type queueItem struct {
 	ClaimHolderUserID *int64     `json:"claim_holder_user_id,omitempty"`
 	ClaimExpiresAt    *time.Time `json:"claim_expires_at,omitempty"`
 	UpdatedAt         time.Time  `json:"updated_at"`
+	BackgroundHex     *string    `json:"background_hex"`
 }
 
 // GraderQueue — teacher of the series's center. Returns items that need
@@ -76,9 +77,19 @@ func GraderQueue(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
+		colors, err := mc.StudentNameColorsForCenter(ctx, q, series.MathCenterID)
+		if err != nil {
+			logger.LogErrorContext(ctx, "homework: grader queue student name colors", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
 
 		out := make([]queueItem, 0, len(rows))
 		for _, row := range rows {
+			var backgroundHex *string
+			if color := colors[row.StudentUserID]; color != "" {
+				backgroundHex = &color
+			}
 			out = append(out, queueItem{
 				ThreadID:          row.ID,
 				StudentUserID:     row.StudentUserID,
@@ -92,6 +103,7 @@ func GraderQueue(database *db.DB) http.HandlerFunc {
 				ClaimHolderUserID: row.ClaimHolderUserID,
 				ClaimExpiresAt:    row.ClaimExpiresAt,
 				UpdatedAt:         row.UpdatedAt,
+				BackgroundHex:     backgroundHex,
 			})
 		}
 		httpx.WriteJSON(w, http.StatusOK, out)

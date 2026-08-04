@@ -15,6 +15,7 @@ import {
   useSubproblemSolutionTex,
   useThread,
   useThreadNotes,
+  useStudentProfile,
   useUpdateThreadNote,
   userNameFromThread,
   type Series,
@@ -145,6 +146,7 @@ function ThreadMode({
   const ctx = useSubproblemContext(thread?.subproblem_id ?? 0)
   const roleInfo = useThreadRole(centerId, thread?.student_user_id)
   const isGrader = roleInfo.role === 'teacher' || roleInfo.role === 'admin'
+  const studentProfile = useStudentProfile(centerId, thread?.student_user_id ?? 0, isGrader)
   useClaimHeartbeat(thread ?? null, isGrader, roleInfo.userId)
 
   if (isPending) return <CenteredSpinner />
@@ -177,6 +179,7 @@ function ThreadMode({
           thread={thread}
           viewerUserId={roleInfo.userId}
           isStudent={roleInfo.role === 'student'}
+          studentBackgroundHex={studentProfile.data?.background_hex}
         />
       </Card>
       <ThreadActionPanel
@@ -184,6 +187,8 @@ function ThreadMode({
         role={roleInfo.role}
         userId={roleInfo.userId}
         closed={closed}
+        centerId={centerId}
+        studentBackgroundHex={studentProfile.data?.background_hex}
       />
       {isGrader ? (
         <ThreadNotes threadId={thread.id} currentUserId={roleInfo.userId} />
@@ -214,7 +219,7 @@ function ThreadNotes({
       onUpdate={(noteId, body) => update.mutateAsync({ noteId, body })}
       onDelete={(noteId) => remove.mutateAsync(noteId)}
       title="Внутренние заметки"
-      hint="Видно только преподавателям — например, подозрения в списывании. Ученик их не видит."
+      hint="Видно только преподавателям. Ученик их не видит."
     />
   )
 }

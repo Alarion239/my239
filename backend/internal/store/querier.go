@@ -104,6 +104,7 @@ type Querier interface {
 	GetStudentByUserID(ctx context.Context, userID int64) (GetStudentByUserIDRow, error)
 	GetStudentNote(ctx context.Context, id int64) (MathCenterStudentNote, error)
 	GetStudentNoteAuthored(ctx context.Context, id int64) (GetStudentNoteAuthoredRow, error)
+	GetStudentNameColor(ctx context.Context, arg GetStudentNameColorParams) (string, error)
 	GetStudentSeriesRazborAccess(ctx context.Context, arg GetStudentSeriesRazborAccessParams) (GetStudentSeriesRazborAccessRow, error)
 	// One-shot fetch of "what center/series/problem does this subproblem belong
 	// to", used at the start of every event-creating handler so we don't have to
@@ -189,6 +190,7 @@ type Querier interface {
 	ListSeriesForCenter(ctx context.Context, mathCenterID int64) ([]ListSeriesForCenterRow, error)
 	ListSeriesForTerm(ctx context.Context, arg ListSeriesForTermParams) ([]MathCenterSeries, error)
 	ListStudentNotesAuthored(ctx context.Context, arg ListStudentNotesAuthoredParams) ([]ListStudentNotesAuthoredRow, error)
+	ListStudentNameColorsForCenter(ctx context.Context, mathCenterID int64) ([]ListStudentNameColorsForCenterRow, error)
 	// Use the enrollment belonging to the series' term when it exists; otherwise
 	// fall back to the student's current center enrollment for carried coffins.
 	ListStudentSeriesRazborAccessForCenter(ctx context.Context, arg ListStudentSeriesRazborAccessForCenterParams) ([]ListStudentSeriesRazborAccessForCenterRow, error)
@@ -308,6 +310,8 @@ type Querier interface {
 	UpdateLikbez(ctx context.Context, arg UpdateLikbezParams) (MathCenterLikbez, error)
 	UpdateSeries(ctx context.Context, arg UpdateSeriesParams) (UpdateSeriesRow, error)
 	UpdateStudentNote(ctx context.Context, arg UpdateStudentNoteParams) (int64, error)
+	UpsertStudentNameColor(ctx context.Context, arg UpsertStudentNameColorParams) (string, error)
+	ClearStudentNameColor(ctx context.Context, arg ClearStudentNameColorParams) (int64, error)
 	UpdateThreadAfterAppeal(ctx context.Context, arg UpdateThreadAfterAppealParams) error
 	// One statement does all four things atomically: set new status from
 	// verdict, point the cache at the new grade event, record the grader for

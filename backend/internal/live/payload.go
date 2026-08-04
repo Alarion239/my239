@@ -13,17 +13,19 @@ const Channel = "mc_live"
 type Kind string
 
 const (
-	KindGrading    Kind = "grading"    // submit/claim/grade/retract/release/appeal
-	KindCoffins    Kind = "coffins"    // mark/unmark/release/solution
-	KindLikbez     Kind = "likbez"     // lecture catalog/content/publication
-	KindMembership Kind = "membership" // groups/teachers/students changes
-	KindComments   Kind = "comments"   // internal teacher notes on threads/students
+	KindGrading          Kind = "grading"            // submit/claim/grade/retract/release/appeal
+	KindCoffins          Kind = "coffins"            // mark/unmark/release/solution
+	KindLikbez           Kind = "likbez"             // lecture catalog/content/publication
+	KindMembership       Kind = "membership"         // groups/teachers/students changes
+	KindComments         Kind = "comments"           // internal teacher notes on threads/students
+	KindStudentNameColor Kind = "student_name_color" // teacher-only student name colors
 )
 
 // Event is the JSON payload carried by pg_notify and pushed to SSE clients.
 // SeriesID is 0 for non-series kinds (coffins/membership are center-wide).
 type Event struct {
-	CenterID int64 `json:"center_id"`
-	Kind     Kind  `json:"kind"`
-	SeriesID int64 `json:"series_id,omitempty"`
+	CenterID      int64 `json:"center_id"`
+	Kind          Kind  `json:"kind"`
+	SeriesID      int64 `json:"series_id,omitempty"`
+	StudentUserID int64 `json:"student_user_id,omitempty"`
 }

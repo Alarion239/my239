@@ -46,6 +46,25 @@ describe('center live events', () => {
     expect(client.getQueryState(conduitKey)?.isInvalidated).toBe(true)
   })
 
+  it('invalidates teacher name surfaces after a color change', () => {
+    const client = queryClient()
+    const profileKey = queryKeys.studentProfile(2, 9)
+    const gridKey = queryKeys.centerGrids(2)
+    const rosterKey = queryKeys.manageRosterBoard(2)
+    const queueKey = queryKeys.coffinQueue(2)
+    seed(client, profileKey)
+    seed(client, gridKey)
+    seed(client, rosterKey)
+    seed(client, queueKey)
+
+    handleCenterEvent(client, 2, 'student_name_color', JSON.stringify({ student_user_id: 9 }))
+
+    expect(client.getQueryState(profileKey)?.isInvalidated).toBe(true)
+    expect(client.getQueryState(gridKey)?.isInvalidated).toBe(true)
+    expect(client.getQueryState(rosterKey)?.isInvalidated).toBe(true)
+    expect(client.getQueryState(queueKey)?.isInvalidated).toBe(true)
+  })
+
   it('coalesces rapid refreshes and runs one trailing request', async () => {
     const client = queryClient()
     const gridKey = queryKeys.centerGrid(2, 1)
