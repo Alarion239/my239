@@ -1689,13 +1689,6 @@ func manageRevokeInvite(database *db.DB) http.HandlerFunc {
 
 // helpers --------------------------------------------------------------------
 
-func stringValue(value *string) string {
-	if value == nil {
-		return ""
-	}
-	return *value
-}
-
 // groupInCenter loads a group and confirms it belongs to {centerID}. On any
 // mismatch it writes 404 and returns false. Foreign groups are reported as "not
 // found" rather than "forbidden" so a head teacher cannot probe other centers.
