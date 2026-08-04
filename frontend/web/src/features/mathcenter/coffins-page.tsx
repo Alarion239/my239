@@ -9,6 +9,7 @@ import {
 } from '@my239/shared'
 import { Card, Spinner } from '../../design/ui'
 import { cn } from '../../design/cn'
+import { StudentNameLabel } from './student-name-color'
 import { useSeriesContext } from './use-series-context'
 import { useCenterIdContext, useCenterTermContext } from './center-id-context'
 import { displayPill } from './status-style'
@@ -290,7 +291,7 @@ function CoffinQueueRow({ item }: { item: CoffinQueueItem }) {
       className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface px-4 py-3 transition-colors hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
     >
       <div className="min-w-0 flex-1">
-        <div className="truncate font-medium text-text">{item.student_name}</div>
+        <StudentNameLabel name={item.student_name} backgroundHex={item.background_hex} className="font-medium" />
         <div className="text-xs text-muted">{label}</div>
       </div>
       <span className="hidden text-xs text-text-subtle sm:inline">

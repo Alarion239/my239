@@ -39,6 +39,7 @@ import {
 import { statusPillClasses } from './status-style'
 import { useSeriesContext } from './use-series-context'
 import { useCenterIdContext, useCenterTermContext } from './center-id-context'
+import { StudentNameLabel, studentNameColorStyle } from './student-name-color'
 import {
   coffinCellClasses,
   coffinColumnClasses,
@@ -264,7 +265,11 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
         active && 'bg-private-soft',
       )}
     >
-      <td className={nameCell}>
+      <td
+        className={nameCell}
+        style={studentNameColorStyle(student.background_hex)}
+        data-student-name-cell
+      >
         {/* Names stay profile/comment links; grading starts from a task cell. */}
         <Link
           to={'../students/' + student.user_id + search}
@@ -273,7 +278,7 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
             active && 'font-semibold text-text',
           )}
         >
-          <span>{student.name}</span>
+          <StudentNameLabel name={student.name} backgroundHex={student.background_hex} className="px-0 py-0" />
           {student.has_student_comment ? (
             <span
               title="Есть заметки об ученике"
@@ -805,6 +810,7 @@ export function ConduitTable({
   function openCellDialog(
     studentId: number,
     studentName: string,
+    backgroundHex: string | null | undefined,
     fc: FlatCol,
   ) {
     const sub = fc.col.subproblem_id
@@ -812,6 +818,7 @@ export function ConduitTable({
     setDialog({
       studentUserId: studentId,
       studentName,
+      backgroundHex,
       subproblemId: sub,
       columnLabel: fc.col.column_label,
       threadId: cell?.thread_id ?? 0,
@@ -840,7 +847,7 @@ export function ConduitTable({
 
     if (activeStudentId !== sid) {
       if (isAccepted) {
-        openCellDialog(sid, student.name, fc)
+        openCellDialog(sid, student.name, student.background_hex, fc)
         return
       }
       const remembered = recentGrader()
@@ -853,7 +860,7 @@ export function ConduitTable({
       unmarkCell(sid, col)
       focusGraderInput()
     } else if (isAccepted) {
-      openCellDialog(sid, student.name, fc)
+      openCellDialog(sid, student.name, student.background_hex, fc)
     } else if (grader.name.trim()) {
       markCell(sid, col)
       focusGraderInput()

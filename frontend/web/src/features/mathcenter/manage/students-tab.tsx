@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { ChevronDown, Trash2 } from 'lucide-react'
 import { snapCenterToCursor } from '@dnd-kit/modifiers'
 import {
@@ -48,6 +49,7 @@ import { cn } from '../../../design/cn'
 import { SectionHeader } from '../../admin/_shared'
 import { UserSearchSelect } from './user-search-select'
 import { InviteSection } from './invite-section'
+import { StudentNameLabel } from '../student-name-color'
 
 type Format = 'pdf_tex' | 'video'
 type TriState = boolean | 'mixed'
@@ -414,7 +416,11 @@ function RazborAccessMatrix({
                   {!isCollapsed && students.map((student) => (
                     <tr key={student.student_id}>
                       <td className="sticky left-0 z-10 border-b border-r border-border bg-surface px-3 py-1.5 text-sm text-text">
-                        {fullNameFromMatrix(student)}
+                        <StudentNameLabel
+                          name={fullNameFromMatrix(student)}
+                          backgroundHex={student.background_hex}
+                          className="px-0 py-0"
+                        />
                       </td>
                       <td className="border-b border-border px-2 py-1">
                         <TriangleCell
@@ -916,15 +922,19 @@ function RosterStudentCard({
   isMoving?: boolean
   onRequestRemoval: (student: ManageRosterBoardStudent) => void
 }) {
+  const { search } = useLocation()
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: 'student:' + student.user_id })
   const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined
   return (
-    <article
+    <Link
       ref={setNodeRef}
+      to={'../students/' + student.user_id + search}
       data-roster-card={'student:' + student.user_id}
       style={style}
       {...listeners}
       {...attributes}
+      role="link"
+      draggable={false}
       tabIndex={0}
       onKeyDown={(event) => {
         if ((event.key === 'Delete' || event.key === 'Backspace') && !isMoving) {
@@ -932,7 +942,7 @@ function RosterStudentCard({
           onRequestRemoval(student)
         }
       }}
-      aria-label={rosterStudentName(student) + '. Нажмите Delete, чтобы удалить из матцентра.'}
+      aria-label={rosterStudentName(student) + '. Открыть профиль. Нажмите Delete, чтобы удалить из матцентра.'}
       className={cn(
         'rounded-lg border border-border bg-surface-subtle px-3 py-2 shadow-sm transition-opacity',
         'cursor-grab active:cursor-grabbing',
@@ -941,7 +951,7 @@ function RosterStudentCard({
       )}
     >
       <RosterStudentCardBody student={student} />
-    </article>
+    </Link>
   )
 }
 
@@ -957,7 +967,11 @@ function RosterStudentCardBody({ student }: { student: ManageRosterBoardStudent 
   return (
     <div className="flex items-start gap-2">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-text">{rosterStudentName(student)}</p>
+        <StudentNameLabel
+          name={rosterStudentName(student)}
+          backgroundHex={student.background_hex}
+          className="truncate text-sm font-medium"
+        />
         <p className="truncate text-xs text-muted">
           {student.previous_group_name
             ? 'Предыдущая группа: ' + student.previous_group_name

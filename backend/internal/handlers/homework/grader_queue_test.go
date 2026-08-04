@@ -33,6 +33,9 @@ func TestGraderQueue_HappyPath(t *testing.T) {
 			AddRow(int64(2), int64(8), int64(901), int64(100), int64(42),
 				"appealed", ptr64(3), (*int64)(nil), (*time.Time)(nil), now,
 				"Боря", (*string)(nil), "Петров", "b", int32(2)))
+	mock.ExpectQuery(`FROM math_center_student_name_color`).
+		WithArgs(int64(42)).
+		WillReturnRows(mock.NewRows([]string{"student_user_id", "background_hex"}))
 
 	req := authedRequest(t, access, 3, false, http.MethodGet, "/series/100/queue", nil)
 	rr := httptest.NewRecorder()
@@ -70,6 +73,9 @@ func TestGraderQueue_MineQueryParam(t *testing.T) {
 	mock.ExpectQuery(`FROM homework_thread t\s+JOIN users u`).
 		WithArgs(int64(100), int64(3), true).
 		WillReturnRows(mock.NewRows(queueRowColumns))
+	mock.ExpectQuery(`FROM math_center_student_name_color`).
+		WithArgs(int64(42)).
+		WillReturnRows(mock.NewRows([]string{"student_user_id", "background_hex"}))
 
 	req := authedRequest(t, access, 3, false, http.MethodGet, "/series/100/queue?mine=true", nil)
 	rr := httptest.NewRecorder()
@@ -98,6 +104,9 @@ func TestGraderQueue_AdminNotEnrolledAllowed(t *testing.T) {
 	mock.ExpectQuery(`FROM homework_thread t\s+JOIN users u`).
 		WithArgs(int64(100), int64(99), false).
 		WillReturnRows(mock.NewRows(queueRowColumns))
+	mock.ExpectQuery(`FROM math_center_student_name_color`).
+		WithArgs(int64(42)).
+		WillReturnRows(mock.NewRows([]string{"student_user_id", "background_hex"}))
 
 	// userID 99 is an admin (isAdmin=true) but enrolled in no center.
 	req := authedRequest(t, access, 99, true, http.MethodGet, "/series/100/queue", nil)

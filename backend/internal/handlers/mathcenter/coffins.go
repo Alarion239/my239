@@ -300,6 +300,7 @@ type coffinQueueItem struct {
 	LastGraderUserID  *int64     `json:"last_grader_user_id,omitempty"`
 	ClaimHolderUserID *int64     `json:"claim_holder_user_id,omitempty"`
 	ClaimExpiresAt    *time.Time `json:"claim_expires_at,omitempty"`
+	BackgroundHex     *string    `json:"background_hex"`
 }
 
 // ListCoffinQueue — teacher of the center. The center-wide coffin grading queue:
@@ -328,8 +329,18 @@ func ListCoffinQueue(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to load coffin queue")
 			return
 		}
+		colors, err := StudentNameColorsForCenter(ctx, q, centerID)
+		if err != nil {
+			logger.LogErrorContext(ctx, "coffins: queue student name colors", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
 		out := make([]coffinQueueItem, 0, len(rows))
 		for _, row := range rows {
+			var backgroundHex *string
+			if color := colors[row.StudentUserID]; color != "" {
+				backgroundHex = &color
+			}
 			out = append(out, coffinQueueItem{
 				ThreadID:          row.ThreadID,
 				StudentUserID:     row.StudentUserID,
@@ -344,6 +355,7 @@ func ListCoffinQueue(database *db.DB) http.HandlerFunc {
 				LastGraderUserID:  row.LastGraderUserID,
 				ClaimHolderUserID: row.ClaimHolderUserID,
 				ClaimExpiresAt:    row.ClaimExpiresAt,
+				BackgroundHex:     backgroundHex,
 			})
 		}
 		httpx.WriteJSON(w, http.StatusOK, out)

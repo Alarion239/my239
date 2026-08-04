@@ -28,6 +28,7 @@ type studentProfileView struct {
 	GroupID        int64   `json:"group_id"`
 	GroupName      string  `json:"group_name"`
 	GraduationYear int     `json:"graduation_year"`
+	BackgroundHex  *string `json:"background_hex"`
 }
 
 // studentNoteView is the wire shape for one internal note on a student.
@@ -87,6 +88,12 @@ func GetStudentProfile(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 			return
 		}
+		backgroundHex, err := studentNameColorForProfile(ctx, q, centerID, studentUserID)
+		if err != nil {
+			logger.LogErrorContext(ctx, "mathcenter: get student name color", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
+			return
+		}
 		httpx.WriteJSON(w, http.StatusOK, studentProfileView{
 			UserID:         u.ID,
 			FirstName:      u.FirstName,
@@ -96,6 +103,7 @@ func GetStudentProfile(database *db.DB) http.HandlerFunc {
 			GroupID:        student.GroupID,
 			GroupName:      student.GroupName,
 			GraduationYear: int(student.GraduationYear),
+			BackgroundHex:  backgroundHex,
 		})
 	}
 }

@@ -3,7 +3,7 @@
 // backend; these hooks run unchanged on web and native.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { InternalNote, StudentProfile } from '../types'
+import type { InternalNote, StudentNameColorResponse, StudentProfile } from '../types'
 import { useApiClient } from './context'
 import { queryKeys } from './keys'
 
@@ -73,13 +73,13 @@ const studentNotesPath = (centerId: number, studentUserId: number) =>
   studentBasePath(centerId, studentUserId) + '/notes'
 
 // useStudentProfile fetches a student's identity + group for the teacher page.
-export function useStudentProfile(centerId: number, studentUserId: number) {
+export function useStudentProfile(centerId: number, studentUserId: number, enabled = true) {
   const client = useApiClient()
   return useQuery<StudentProfile>({
     queryKey: queryKeys.studentProfile(centerId, studentUserId),
     queryFn: () =>
       client.request<StudentProfile>(studentBasePath(centerId, studentUserId) + '/'),
-    enabled: centerId > 0 && studentUserId > 0,
+    enabled: enabled && centerId > 0 && studentUserId > 0,
   })
 }
 
@@ -90,6 +90,38 @@ export function useStudentNotes(centerId: number, studentUserId: number) {
     queryFn: () =>
       client.request<InternalNote[]>(studentNotesPath(centerId, studentUserId)),
     enabled: centerId > 0 && studentUserId > 0,
+  })
+}
+
+// useUpdateStudentNameColor persists the teacher-only name background and
+// keeps the open profile responsive while the server and other teacher views
+// catch up through the center event stream.
+export function useUpdateStudentNameColor(centerId: number, studentUserId: number) {
+  const client = useApiClient()
+  const qc = useQueryClient()
+  const key = queryKeys.studentProfile(centerId, studentUserId)
+  return useMutation({
+    mutationFn: (backgroundHex: string | null) =>
+      client.request<StudentNameColorResponse>(studentBasePath(centerId, studentUserId) + '/name-color', {
+        method: 'PUT',
+        body: { background_hex: backgroundHex },
+      }),
+    onMutate: async (backgroundHex) => {
+      await qc.cancelQueries({ queryKey: key })
+      const previous = qc.getQueryData<StudentProfile>(key)
+      qc.setQueryData<StudentProfile>(key, (profile) =>
+        profile ? { ...profile, background_hex: backgroundHex } : profile,
+      )
+      return { previous }
+    },
+    onError: (_error, _backgroundHex, context) => {
+      if (context?.previous) qc.setQueryData(key, context.previous)
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: key })
+      qc.invalidateQueries({ queryKey: queryKeys.centerGrids(centerId) })
+      qc.invalidateQueries({ queryKey: queryKeys.manageRosterBoard(centerId) })
+    },
   })
 }
 

@@ -6,6 +6,7 @@ import {
   useOfflineAccept,
   useOfflineUndo,
   useThreadNotes,
+  useUpdateStudentNameColor,
   type HomeworkStatus,
 } from '@my239/shared'
 import {
@@ -17,6 +18,7 @@ import {
   Textarea,
 } from '../../design/ui'
 import { GraderInitialsInput, emptyGrader, type CreditedGrader } from './grader-initials-input'
+import { StudentNameColorSelector, StudentNameLabel } from './student-name-color'
 
 export interface OfflineCellTarget {
   studentUserId: number
@@ -26,6 +28,7 @@ export interface OfflineCellTarget {
   threadId: number
   status: HomeworkStatus
   lastGraderName?: string
+  backgroundHex?: string | null
   // Pre-rendered initials for an accepted cell (from the grid's grader map or
   // last_grader_name), shown on the undo button.
   acceptedInitials?: string
@@ -55,6 +58,7 @@ export function OfflineCellDialog({
   const [status, setStatus] = useState<HomeworkStatus>(target.status)
   const [threadId, setThreadId] = useState(target.threadId)
   const [comment, setComment] = useState('')
+  const [backgroundHex, setBackgroundHex] = useState<string | null>(target.backgroundHex ?? null)
   const [focusCommentAfterUndo, setFocusCommentAfterUndo] = useState(false)
   const commentRef = useRef<HTMLTextAreaElement>(null)
 
@@ -65,9 +69,10 @@ export function OfflineCellDialog({
       setThreadId(target.threadId)
       setGrader(emptyGrader)
       setComment('')
+      setBackgroundHex(target.backgroundHex ?? null)
       setFocusCommentAfterUndo(false)
     }
-  }, [open, target.status, target.threadId])
+  }, [open, target.backgroundHex, target.status, target.threadId])
 
   // Undo turns an accepted cell back into an actionable unsolved cell. Keep
   // the newly-mounted grader input from stealing focus and put the caret in
@@ -83,6 +88,7 @@ export function OfflineCellDialog({
   const undo = useOfflineUndo()
   const notes = useThreadNotes(threadId, open && threadId > 0)
   const createNote = useCreateThreadNote(threadId)
+  const updateColor = useUpdateStudentNameColor(centerId, target.studentUserId)
 
   const accepted = status === 'accepted'
   const canAccept = mode === 'self' || grader.name.trim().length > 0
@@ -135,7 +141,7 @@ export function OfflineCellDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="gap-4">
         <DialogTitle>
-          {target.studentName} · {target.columnLabel}
+          <StudentNameLabel name={target.studentName} backgroundHex={backgroundHex} /> · {target.columnLabel}
         </DialogTitle>
 
         {/* Mark / undo */}
@@ -222,6 +228,16 @@ export function OfflineCellDialog({
             Отметьте решение, чтобы оставить заметку.
           </p>
         )}
+
+        <StudentNameColorSelector
+          value={backgroundHex}
+          onChange={(value) => {
+            setBackgroundHex(value)
+            updateColor.mutate(value)
+          }}
+          disabled={updateColor.isPending}
+          error={updateColor.error?.message}
+        />
 
         {notes.isLoading ? <Spinner /> : null}
       </DialogContent>

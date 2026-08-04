@@ -14,6 +14,7 @@ import {
 import { Button, Textarea } from '../../design/ui'
 import { cn } from '../../design/cn'
 import { PhotoAttachments } from './photo-gallery'
+import { StudentNameLabel } from './student-name-color'
 
 export interface ThreadTimelineProps {
   thread: ThreadView
@@ -21,6 +22,7 @@ export interface ThreadTimelineProps {
   viewerUserId: number
   // Whether the viewer is the owning student (gates the inline appeal box).
   isStudent: boolean
+  studentBackgroundHex?: string | null
 }
 
 // accentClasses maps an event to its left-border + heading colour. submitted →
@@ -51,6 +53,7 @@ export function ThreadTimeline({
   thread,
   viewerUserId,
   isStudent,
+  studentBackgroundHex,
 }: ThreadTimelineProps) {
   const events = thread.events
   if (events.length === 0) {
@@ -79,6 +82,7 @@ export function ThreadTimeline({
             event={ev}
             thread={thread}
             viewerUserId={viewerUserId}
+            studentBackgroundHex={studentBackgroundHex}
           />
           {canAppeal && ev.id === lastRejectionId ? (
             <InlineAppeal subproblemId={thread.subproblem_id} />
@@ -93,10 +97,12 @@ function EventCard({
   event,
   thread,
   viewerUserId,
+  studentBackgroundHex,
 }: {
   event: EventView
   thread: ThreadView
   viewerUserId: number
+  studentBackgroundHex?: string | null
 }) {
   const accent = accentClasses(event.kind, event.verdict)
   const actorName =
@@ -118,6 +124,10 @@ function EventCard({
         return actorName
     }
   })()
+  const renderedAttribution =
+    event.actor_user_id === thread.student_user_id && event.actor_user_id !== viewerUserId
+      ? <StudentNameLabel name={attribution} backgroundHex={studentBackgroundHex} className="px-0 py-0" />
+      : attribution
   return (
     <div className={cn('border-l-2 pl-3', accent.border)}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
@@ -125,7 +135,7 @@ function EventCard({
           {eventKindLabel(event.kind, event.verdict)}
         </span>
         <span className="text-xs text-text-subtle">
-          {attribution} · {formatDateTime(event.created_at)}
+          {renderedAttribution} · {formatDateTime(event.created_at)}
         </span>
       </div>
       {event.body ? (

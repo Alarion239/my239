@@ -449,13 +449,14 @@ type manageRazborGroup struct {
 }
 
 type manageRazborStudent struct {
-	StudentID           int64  `json:"student_id"`
-	UserID              int64  `json:"user_id"`
-	GroupID             int64  `json:"group_id"`
-	GroupName           string `json:"group_name"`
-	Name                string `json:"name"`
-	RazborDefaultVideo  bool   `json:"razbor_default_video"`
-	RazborDefaultPdfTex bool   `json:"razbor_default_pdf_tex"`
+	StudentID           int64   `json:"student_id"`
+	UserID              int64   `json:"user_id"`
+	GroupID             int64   `json:"group_id"`
+	GroupName           string  `json:"group_name"`
+	Name                string  `json:"name"`
+	BackgroundHex       *string `json:"background_hex"`
+	RazborDefaultVideo  bool    `json:"razbor_default_video"`
+	RazborDefaultPdfTex bool    `json:"razbor_default_pdf_tex"`
 }
 
 type manageRazborCell struct {
@@ -476,6 +477,18 @@ type manageRazborMatrixRequest struct {
 	Allowed   *bool  `json:"allowed"`
 }
 
+type manageStudentView struct {
+	ID             int64   `json:"id"`
+	UserID         int64   `json:"user_id"`
+	GroupID        int64   `json:"group_id"`
+	CanViewRazbors bool    `json:"can_view_razbors"`
+	GroupName      string  `json:"group_name"`
+	FirstName      string  `json:"first_name"`
+	MiddleName     *string `json:"middle_name"`
+	LastName       string  `json:"last_name"`
+	BackgroundHex  *string `json:"background_hex"`
+}
+
 func manageListStudents(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := store.New(database.Pool())
@@ -489,7 +502,26 @@ func manageListStudents(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to list students")
 			return
 		}
-		httpx.WriteJSON(w, http.StatusOK, students)
+		colors, err := StudentNameColorsForCenter(r.Context(), q, centerID)
+		if err != nil {
+			logger.LogErrorContext(r.Context(), "manage: list student name colors", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to list students")
+			return
+		}
+		out := make([]manageStudentView, 0, len(students))
+		for _, student := range students {
+			var backgroundHex *string
+			if color := colors[student.UserID]; color != "" {
+				backgroundHex = &color
+			}
+			out = append(out, manageStudentView{
+				ID: student.ID, UserID: student.UserID, GroupID: student.GroupID,
+				CanViewRazbors: student.CanViewRazbors, GroupName: student.GroupName,
+				FirstName: student.FirstName, MiddleName: student.MiddleName,
+				LastName: student.LastName, BackgroundHex: backgroundHex,
+			})
+		}
+		httpx.WriteJSON(w, http.StatusOK, out)
 	}
 }
 
@@ -509,6 +541,7 @@ type manageRosterBoardStudent struct {
 	MiddleName           *string `json:"middle_name"`
 	LastName             string  `json:"last_name"`
 	Rating               float64 `json:"rating"`
+	BackgroundHex        *string `json:"background_hex"`
 }
 
 type manageRosterBoardResponse struct {
@@ -575,6 +608,12 @@ func manageListRosterBoard(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to load roster board")
 			return
 		}
+		colors, err := StudentNameColorsForCenter(ctx, q, centerID)
+		if err != nil {
+			logger.LogErrorContext(ctx, "manage: roster board student name colors", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to load roster board")
+			return
+		}
 
 		var ratingTerm *store.MathCenterTerm
 		for i := range terms {
@@ -605,6 +644,10 @@ func manageListRosterBoard(database *db.DB) http.HandlerFunc {
 			out.Groups = append(out.Groups, manageRosterBoardGroup{ID: group.ID, Name: group.Name})
 		}
 		for _, student := range students {
+			var backgroundHex *string
+			if color := colors[student.UserID]; color != "" {
+				backgroundHex = &color
+			}
 			out.Students = append(out.Students, manageRosterBoardStudent{
 				StudentID:            student.StudentID,
 				UserID:               student.UserID,
@@ -616,6 +659,7 @@ func manageListRosterBoard(database *db.DB) http.HandlerFunc {
 				MiddleName:           student.MiddleName,
 				LastName:             student.LastName,
 				Rating:               student.Rating,
+				BackgroundHex:        backgroundHex,
 			})
 		}
 		httpx.WriteJSON(w, http.StatusOK, out)
@@ -654,6 +698,12 @@ func manageListRazborAccess(database *db.DB) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to load razbor access")
 			return
 		}
+		colors, err := StudentNameColorsForCenter(ctx, q, centerID)
+		if err != nil {
+			logger.LogErrorContext(ctx, "manage: list razbor student name colors", err)
+			httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "failed to load razbor access")
+			return
+		}
 		out := manageRazborAccessResponse{
 			Series:   make([]manageRazborSeries, 0, len(series)),
 			Groups:   make([]manageRazborGroup, 0, len(groups)),
@@ -675,9 +725,14 @@ func manageListRazborAccess(database *db.DB) http.HandlerFunc {
 		}
 		for _, item := range students {
 			name := strings.TrimSpace(strings.Join([]string{item.FirstName, stringValue(item.MiddleName), item.LastName}, " "))
+			var backgroundHex *string
+			if color := colors[item.UserID]; color != "" {
+				backgroundHex = &color
+			}
 			out.Students = append(out.Students, manageRazborStudent{
 				StudentID: item.StudentID, UserID: item.UserID, GroupID: item.GroupID,
 				GroupName: item.GroupName, Name: name,
+				BackgroundHex:       backgroundHex,
 				RazborDefaultVideo:  item.RazborDefaultVideo,
 				RazborDefaultPdfTex: item.RazborDefaultPdfTex,
 			})

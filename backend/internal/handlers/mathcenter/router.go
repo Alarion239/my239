@@ -62,6 +62,7 @@ func Router(database *db.DB, hub *live.Hub, tokens *internalAuth.TokenService, b
 	// (any teacher of the center reads/writes; author-or-admin edits/deletes).
 	r.Route("/centers/{centerID}/students/{studentUserID}", func(r chi.Router) {
 		r.Get("/", GetStudentProfile(database))
+		r.Put("/name-color", UpdateStudentNameColor(database))
 		r.Get("/notes", ListStudentNotes(database))
 		r.Post("/notes", CreateStudentNote(database))
 		r.Patch("/notes/{noteID}", UpdateStudentNote(database))

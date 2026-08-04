@@ -177,6 +177,9 @@ func TestListCoffinQueue_AdminReturnsRows(t *testing.T) {
 			AddRow(int64(55), int64(7), int64(901), int64(100),
 				"submitted", (*int64)(nil), (*int64)(nil), (*time.Time)(nil), now,
 				"Аня", (*string)(nil), "Иванова", "b", int32(4)))
+	mock.ExpectQuery(`FROM math_center_student_name_color`).
+		WithArgs(int64(42)).
+		WillReturnRows(mock.NewRows([]string{"student_user_id", "background_hex"}))
 
 	req := authedAdminRequest(t, access, 1, http.MethodGet, "/centers/42/coffin-queue", nil)
 	rr := httptest.NewRecorder()

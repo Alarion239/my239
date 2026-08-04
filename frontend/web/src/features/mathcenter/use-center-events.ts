@@ -187,6 +187,21 @@ export function handleCenterEvent(
       // center snapshot is still required when no series is attached.
       qc.invalidateQueries({ queryKey: queryKeys.centerGrids(centerId) })
     }
+  } else if (kind === 'student_name_color') {
+    const studentUserId = (() => {
+      try {
+        return (JSON.parse(data) as { student_user_id?: number })?.student_user_id ?? 0
+      } catch {
+        return 0
+      }
+    })()
+    if (studentUserId > 0) {
+      qc.invalidateQueries({ queryKey: queryKeys.studentProfile(centerId, studentUserId) })
+    }
+    qc.invalidateQueries({ queryKey: ['homework', 'series'] })
+    qc.invalidateQueries({ queryKey: queryKeys.centerGrids(centerId) })
+    qc.invalidateQueries({ queryKey: queryKeys.manageRosterBoard(centerId) })
+    qc.invalidateQueries({ queryKey: queryKeys.coffinQueue(centerId) })
   } else if (kind === 'membership') {
     qc.invalidateQueries({ queryKey: queryKeys.manageGroups(centerId) })
     qc.invalidateQueries({ queryKey: queryKeys.manageTeachers(centerId) })

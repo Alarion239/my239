@@ -132,6 +132,9 @@ func TestGetStudentProfile_TeacherSucceeds(t *testing.T) {
 		WithArgs(int64(99)).
 		WillReturnRows(mock.NewRows(userColumns).
 			AddRow(int64(99), "ivanov", "x", "Иван", (*string)(nil), "Иванов", (*int64)(nil), now, now, false, false))
+	mock.ExpectQuery(`FROM math_center_student_name_color`).
+		WithArgs(int64(42), int64(99)).
+		WillReturnRows(mock.NewRows([]string{"background_hex"}).AddRow("#FFD09A"))
 
 	req := authedRequest(t, access, 3, http.MethodGet, "/centers/42/students/99/", nil)
 	rr := httptest.NewRecorder()

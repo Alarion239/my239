@@ -117,6 +117,65 @@ func (q *Queries) GetStudentNote(ctx context.Context, id int64) (MathCenterStude
 	return i, err
 }
 
+const getStudentNameColor = `-- name: GetStudentNameColor :one
+SELECT background_hex
+FROM math_center_student_name_color
+WHERE math_center_id = $1
+  AND student_user_id = $2
+`
+
+type GetStudentNameColorParams struct {
+	MathCenterID  int64 `json:"math_center_id"`
+	StudentUserID int64 `json:"student_user_id"`
+}
+
+func (q *Queries) GetStudentNameColor(ctx context.Context, arg GetStudentNameColorParams) (string, error) {
+	row := q.db.QueryRow(ctx, getStudentNameColor, arg.MathCenterID, arg.StudentUserID)
+	var backgroundHex string
+	err := row.Scan(&backgroundHex)
+	return backgroundHex, err
+}
+
+const upsertStudentNameColor = `-- name: UpsertStudentNameColor :one
+INSERT INTO math_center_student_name_color (math_center_id, student_user_id, background_hex)
+VALUES ($1, $2, $3)
+ON CONFLICT (math_center_id, student_user_id)
+DO UPDATE SET background_hex = EXCLUDED.background_hex, updated_at = NOW()
+RETURNING background_hex
+`
+
+type UpsertStudentNameColorParams struct {
+	MathCenterID  int64  `json:"math_center_id"`
+	StudentUserID int64  `json:"student_user_id"`
+	BackgroundHex string `json:"background_hex"`
+}
+
+func (q *Queries) UpsertStudentNameColor(ctx context.Context, arg UpsertStudentNameColorParams) (string, error) {
+	row := q.db.QueryRow(ctx, upsertStudentNameColor, arg.MathCenterID, arg.StudentUserID, arg.BackgroundHex)
+	var backgroundHex string
+	err := row.Scan(&backgroundHex)
+	return backgroundHex, err
+}
+
+const clearStudentNameColor = `-- name: ClearStudentNameColor :execrows
+DELETE FROM math_center_student_name_color
+WHERE math_center_id = $1
+  AND student_user_id = $2
+`
+
+type ClearStudentNameColorParams struct {
+	MathCenterID  int64 `json:"math_center_id"`
+	StudentUserID int64 `json:"student_user_id"`
+}
+
+func (q *Queries) ClearStudentNameColor(ctx context.Context, arg ClearStudentNameColorParams) (int64, error) {
+	result, err := q.db.Exec(ctx, clearStudentNameColor, arg.MathCenterID, arg.StudentUserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getStudentNoteAuthored = `-- name: GetStudentNoteAuthored :one
 SELECT n.id,
        n.student_user_id,
@@ -273,6 +332,37 @@ func (q *Queries) ListStudentNotesAuthored(ctx context.Context, arg ListStudentN
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStudentNameColorsForCenter = `-- name: ListStudentNameColorsForCenter :many
+SELECT student_user_id, background_hex
+FROM math_center_student_name_color
+WHERE math_center_id = $1
+`
+
+type ListStudentNameColorsForCenterRow struct {
+	StudentUserID int64  `json:"student_user_id"`
+	BackgroundHex string `json:"background_hex"`
+}
+
+func (q *Queries) ListStudentNameColorsForCenter(ctx context.Context, mathCenterID int64) ([]ListStudentNameColorsForCenterRow, error) {
+	rows, err := q.db.Query(ctx, listStudentNameColorsForCenter, mathCenterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListStudentNameColorsForCenterRow{}
+	for rows.Next() {
+		var i ListStudentNameColorsForCenterRow
+		if err := rows.Scan(&i.StudentUserID, &i.BackgroundHex); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

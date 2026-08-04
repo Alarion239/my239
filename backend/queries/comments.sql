@@ -90,3 +90,26 @@ WHERE id = $1;
 
 -- name: DeleteStudentNote :execrows
 DELETE FROM math_center_student_note WHERE id = $1;
+
+-- name: GetStudentNameColor :one
+SELECT background_hex
+FROM math_center_student_name_color
+WHERE math_center_id = $1
+  AND student_user_id = $2;
+
+-- name: UpsertStudentNameColor :one
+INSERT INTO math_center_student_name_color (math_center_id, student_user_id, background_hex)
+VALUES ($1, $2, $3)
+ON CONFLICT (math_center_id, student_user_id)
+DO UPDATE SET background_hex = EXCLUDED.background_hex, updated_at = NOW()
+RETURNING background_hex;
+
+-- name: ClearStudentNameColor :execrows
+DELETE FROM math_center_student_name_color
+WHERE math_center_id = $1
+  AND student_user_id = $2;
+
+-- name: ListStudentNameColorsForCenter :many
+SELECT student_user_id, background_hex
+FROM math_center_student_name_color
+WHERE math_center_id = $1;
