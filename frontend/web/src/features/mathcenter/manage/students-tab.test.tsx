@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import {
   ApiClient,
   ApiClientProvider,
@@ -36,11 +37,18 @@ function renderStudentsTab() {
     defaultOptions: { queries: { retry: false } },
   })
   render(
-    <QueryClientProvider client={queryClient}>
-      <ApiClientProvider client={client}>
-        <StudentsTab centerId={7} />
-      </ApiClientProvider>
-    </QueryClientProvider>,
+    <MemoryRouter initialEntries={['/mathcenter/2032/manage/students?term=20']}>
+      <QueryClientProvider client={queryClient}>
+        <ApiClientProvider client={client}>
+          <Routes>
+            <Route path="/mathcenter/:year">
+              <Route path="manage/students" element={<StudentsTab centerId={7} />} />
+              <Route path="students/:studentUserId" element={<p>Профиль ученика</p>} />
+            </Route>
+          </Routes>
+        </ApiClientProvider>
+      </QueryClientProvider>
+    </MemoryRouter>,
   )
 }
 
@@ -216,6 +224,11 @@ describe('StudentsTab roster board', () => {
     const sortButtons = screen.getAllByRole('button', { name: /Сортировка колонки/ })
     await user.click(sortButtons[0])
     expect(screen.getAllByRole('button', { name: /Рейтинг ↓/ })).toHaveLength(3)
+
+    const studentLink = screen.getByRole('link', { name: /Ира Петрова.*Открыть профиль/ })
+    expect(studentLink).toHaveAttribute('href', '/mathcenter/2032/students/101?term=20')
+    await user.click(studentLink)
+    expect(await screen.findByText('Профиль ученика')).toBeInTheDocument()
   })
 
   it('filters across groups and confirms active-period removal', async () => {
@@ -278,7 +291,7 @@ describe('StudentsTab roster board', () => {
     expect(screen.queryByText('Олег Сидоров')).not.toBeInTheDocument()
 
     await user.clear(search)
-    const student = screen.getByRole('button', { name: /Ира Петрова.*Delete/ })
+    const student = screen.getByRole('link', { name: /Ира Петрова.*Delete/ })
     student.focus()
     await user.keyboard('{Delete}')
     expect(await screen.findByRole('heading', { name: 'Удалить ученика из матцентра?' })).toBeInTheDocument()
