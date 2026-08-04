@@ -14,7 +14,6 @@ export function useNavModules(): ModuleDef[] {
 
   const seen = new Set<number>()
   const teacherCenters = new Set<number>()
-  const headTeacherCenters = new Set<number>()
   const centers: { id: number; graduationYear: number }[] = []
   const push = (id: number, graduationYear: number) => {
     if (seen.has(id)) return
@@ -24,7 +23,6 @@ export function useNavModules(): ModuleDef[] {
 
   for (const c of me.data?.teacher?.centers ?? []) {
     teacherCenters.add(c.id)
-    if (c.is_head_teacher) headTeacherCenters.add(c.id)
     push(c.id, c.graduation_year)
   }
   const student = me.data?.student?.center
@@ -54,8 +52,8 @@ export function useNavModules(): ModuleDef[] {
         { label: 'Серии', path: base + '/series', notification: 'series-queue' },
         { label: 'Гробы', path: base + '/coffins', notification: 'coffin-queue' },
         { label: 'Ликбезы', path: base + '/likbez' },
-        // «Управление» (the management panel) is a head-teacher self-service tool.
-        ...(headTeacherCenters.has(c.id)
+        // Every teacher can manage the center; "senior teacher" is only a title.
+        ...(teacherCenters.has(c.id)
           ? [{ label: 'Управление', path: base + '/manage' }]
           : []),
       ],

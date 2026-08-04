@@ -1,7 +1,6 @@
 package mathcenter
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -25,10 +24,10 @@ import (
 	"github.com/Alarion239/my239/backend/pkg/db"
 )
 
-// ManageRouter is the head-teacher self-service panel, mounted under
-// /centers/{centerID}/manage. Every handler re-checks head-teacher access (or
-// admin) and that the target row belongs to {centerID}, so a head teacher of
-// one center can never touch another center's rows via a guessed id.
+// ManageRouter is the teacher self-service panel, mounted under
+// /centers/{centerID}/manage. Every handler re-checks teacher access (or admin)
+// and that the target row belongs to {centerID}, so a teacher of one center can
+// never touch another center's rows via a guessed id.
 func ManageRouter(database *db.DB, hub *live.Hub, sheetServices ...*googlesheets.Service) chi.Router {
 	r := chi.NewRouter()
 	sheets := googlesheets.NewDisabledService(database.Pool())
@@ -65,7 +64,7 @@ func ManageRouter(database *db.DB, hub *live.Hub, sheetServices ...*googlesheets
 	r.Post("/invites/personal", manageCreatePersonalInvite(database))
 	r.Delete("/invites/{tokenID}", manageRevokeInvite(database))
 
-	// Google Sheets link configuration remains a head-teacher operation.
+	// Google Sheets link configuration is available to every center teacher.
 	r.Get("/google-sheets/links", manageGoogleSheetLinks(database, sheets))
 	r.Post("/google-sheets/discover", manageGoogleSheetDiscover(database, sheets))
 	r.Post("/google-sheets/links", manageGoogleSheetCreate(database, sheets))
@@ -79,31 +78,8 @@ func ManageRouter(database *db.DB, hub *live.Hub, sheetServices ...*googlesheets
 	return r
 }
 
-// requireHeadTeacher gates the per-center management panel. Like requireTeacher
-// it admits admins (effective is_admin) as a superset; otherwise the caller
-// must be a HEAD teacher of {centerID}. On false it has already written the
-// response.
-func requireHeadTeacher(ctx context.Context, w http.ResponseWriter, r *http.Request, q *store.Queries, userID, centerID int64) bool {
-	if callerIsAdmin(r) {
-		return true
-	}
-	isHead, err := q.IsHeadTeacherInCenter(ctx, store.IsHeadTeacherInCenterParams{
-		UserID: userID, MathCenterID: centerID,
-	})
-	if err != nil {
-		logger.LogErrorContext(ctx, "manage: head-teacher check", err)
-		httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
-		return false
-	}
-	if !isHead {
-		httpx.WriteAPIError(w, r, http.StatusForbidden, httpx.CodeForbidden, "not a head teacher of this center")
-		return false
-	}
-	return true
-}
-
 // manageGate resolves the {centerID} path param + the caller and runs the
-// head-teacher check. On !ok the response is already written.
+// teacher check. On !ok the response is already written.
 func manageGate(w http.ResponseWriter, r *http.Request, q *store.Queries) (centerID, userID int64, ok bool) {
 	centerID, err := strconv.ParseInt(chi.URLParam(r, "centerID"), 10, 64)
 	if err != nil {
@@ -115,7 +91,7 @@ func manageGate(w http.ResponseWriter, r *http.Request, q *store.Queries) (cente
 		httpx.WriteAPIError(w, r, http.StatusUnauthorized, httpx.CodeUnauthenticated, "unauthenticated")
 		return 0, 0, false
 	}
-	if !requireHeadTeacher(r.Context(), w, r, q, userID, centerID) {
+	if !requireTeacher(r.Context(), w, r, q, userID, centerID) {
 		return 0, 0, false
 	}
 	return centerID, userID, true
@@ -356,13 +332,7 @@ func manageSetTeacherHead(database *db.DB, hub *live.Hub) http.HandlerFunc {
 		if !httpx.DecodeJSONBody(w, r, &req) {
 			return
 		}
-		teacher, ok := teacherInCenter(w, r, q, teacherID, centerID)
-		if !ok {
-			return
-		}
-		// Demoting the last head teacher would lock the center out of its own
-		// management panel.
-		if !req.IsHeadTeacher && !guardLastHead(r.Context(), w, r, q, centerID, teacher) {
+		if _, ok := teacherInCenter(w, r, q, teacherID, centerID); !ok {
 			return
 		}
 		if _, err := q.SetTeacherHead(r.Context(), store.SetTeacherHeadParams{
@@ -389,11 +359,7 @@ func manageRemoveTeacher(database *db.DB, hub *live.Hub) http.HandlerFunc {
 			httpx.WriteAPIError(w, r, http.StatusBadRequest, httpx.CodeBadRequest, "invalid teacher id")
 			return
 		}
-		teacher, ok := teacherInCenter(w, r, q, teacherID, centerID)
-		if !ok {
-			return
-		}
-		if !guardLastHead(r.Context(), w, r, q, centerID, teacher) {
+		if _, ok := teacherInCenter(w, r, q, teacherID, centerID); !ok {
 			return
 		}
 		if _, err := q.RemoveTeacher(r.Context(), teacherID); err != nil {
@@ -1153,7 +1119,7 @@ func manageSetStudentGroupByUser(database *db.DB, hub *live.Hub) http.HandlerFun
 
 // manageSetStudentRazborAccess changes only the selected current-term
 // enrollment. The database default remains open, so no student is restricted
-// unless a head teacher explicitly uses this control.
+// unless a teacher explicitly uses this control.
 func manageSetStudentRazborAccess(database *db.DB, hub *live.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := store.New(database.Pool())
@@ -1545,7 +1511,7 @@ func manageCreatePersonalInvite(database *db.DB) http.HandlerFunc {
 
 // manageCreateInvite mints a center-scoped invitation token. The preset is built
 // SERVER-SIDE from role+group — the client never supplies a raw preset — so a
-// head teacher cannot grant admin or bind the token to another center.
+// teacher cannot grant admin or bind the token to another center.
 func manageCreateInvite(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := store.New(database.Pool())
@@ -1691,7 +1657,7 @@ func manageRevokeInvite(database *db.DB) http.HandlerFunc {
 
 // groupInCenter loads a group and confirms it belongs to {centerID}. On any
 // mismatch it writes 404 and returns false. Foreign groups are reported as "not
-// found" rather than "forbidden" so a head teacher cannot probe other centers.
+// found" rather than "forbidden" so a teacher cannot probe other centers.
 func groupInCenter(w http.ResponseWriter, r *http.Request, q *store.Queries, groupID, centerID int64) bool {
 	group, err := q.GetGroup(r.Context(), groupID)
 	if err != nil {
@@ -1742,25 +1708,6 @@ func studentInCenter(w http.ResponseWriter, r *http.Request, q *store.Queries, s
 		return false
 	}
 	return groupInCenter(w, r, q, student.GroupID, centerID)
-}
-
-// guardLastHead returns false (and writes 409) if removing/demoting {teacher}
-// would leave the center with zero head teachers.
-func guardLastHead(ctx context.Context, w http.ResponseWriter, r *http.Request, q *store.Queries, centerID int64, teacher store.MathCenterTeacher) bool {
-	if !teacher.IsHeadTeacher {
-		return true
-	}
-	n, err := q.CountHeadTeachersForCenter(ctx, centerID)
-	if err != nil {
-		logger.LogErrorContext(ctx, "manage: count heads", err)
-		httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
-		return false
-	}
-	if n <= 1 {
-		httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "cannot remove the last head teacher")
-		return false
-	}
-	return true
 }
 
 func isFKViolation(err error) bool {

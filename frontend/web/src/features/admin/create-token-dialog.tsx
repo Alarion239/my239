@@ -289,7 +289,7 @@ export function CreateTokenDialog() {
                     onChange={(e) => setIsHeadTeacher(e.target.checked)}
                     className="h-4 w-4 rounded border-border-control text-link focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                   />
-                  Старший преподаватель (может управлять центром)
+                  Старший преподаватель
                 </label>
               </>
             ) : null}

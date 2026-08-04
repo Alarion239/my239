@@ -228,10 +228,11 @@ describe('module navigation', () => {
     }
   })
 
-  it('orders the teacher math-center tabs with conduit first', async () => {
+  it('shows management to every teacher and keeps conduit first', async () => {
     const member = makeUser({ is_admin: false })
     mockFetch(member)
-    renderShell(<TopBar user={member} />, '/mathcenter/2025/series')
+    // Center 7 is an ordinary-teacher enrollment (is_head_teacher: false).
+    renderShell(<TopBar user={member} />, '/mathcenter/2026/series')
 
     const tabNav = await screen.findByRole('navigation', { name: 'Разделы модуля' })
     const labels = Array.from(tabNav.querySelectorAll('a')).map((link) => link.textContent)

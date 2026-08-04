@@ -78,8 +78,7 @@ export function TeachersTab({ centerId }: { centerId: number }) {
                     disabled={remove.isPending}
                     onConfirm={() =>
                       remove.mutate(t.id, {
-                        onError: () =>
-                          setError('Нельзя удалить последнего старшего преподавателя'),
+                        onError: () => setError('Не удалось удалить преподавателя'),
                       })
                     }
                   >

@@ -25,20 +25,39 @@ var (
 	}
 )
 
-// expectHeadCheck mocks IsHeadTeacherInCenter for a non-admin caller.
-func expectHeadCheck(mock pgxmock.PgxPoolIface, userID, centerID int64, isHead bool) {
-	mock.ExpectQuery(`AND is_head_teacher = TRUE`).
+// expectTeacherCheck mocks IsTeacherInCenter for a non-admin caller.
+func expectTeacherCheck(mock pgxmock.PgxPoolIface, userID, centerID int64, isTeacher bool) {
+	mock.ExpectQuery(`FROM math_center_teachers\s+WHERE user_id = \$1\s+AND math_center_id = \$2`).
 		WithArgs(userID, centerID).
-		WillReturnRows(mock.NewRows([]string{"is_head_teacher"}).AddRow(isHead))
+		WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(isTeacher))
 }
 
-func TestManage_NonHeadTeacherForbidden(t *testing.T) {
+func TestManage_TeacherAllowedRegardlessOfTitle(t *testing.T) {
 	t.Parallel()
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
 	r, access, _ := newRouter(t, mock)
 
-	expectHeadCheck(mock, 3, 42, false)
+	expectTeacherCheck(mock, 3, 42, true)
+	mock.ExpectQuery(`FROM math_center_groups g\s+WHERE g.math_center_id = \$1`).
+		WithArgs(int64(42)).
+		WillReturnRows(mock.NewRows(manageGroupColumns))
+
+	req := authedRequest(t, access, 3, http.MethodGet, "/centers/42/manage/groups", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestManage_NonTeacherForbidden(t *testing.T) {
+	t.Parallel()
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	r, access, _ := newRouter(t, mock)
+
+	expectTeacherCheck(mock, 3, 42, false)
 
 	req := authedRequest(t, access, 3, http.MethodGet, "/centers/42/manage/groups", nil)
 	rr := httptest.NewRecorder()
@@ -55,7 +74,7 @@ func TestManage_ListGroupsAdmin(t *testing.T) {
 	r, access, _ := newRouter(t, mock)
 
 	now := time.Now()
-	// Admin token → callerIsAdmin bypass, no head-teacher query.
+	// Admin token → callerIsAdmin bypass, no teacher query.
 	mock.ExpectQuery(`FROM math_center_groups g\s+WHERE g.math_center_id = \$1`).
 		WithArgs(int64(42)).
 		WillReturnRows(mock.NewRows(manageGroupColumns).
@@ -263,7 +282,7 @@ func TestManage_CreateGroup(t *testing.T) {
 
 	now := time.Now()
 	grade := int32(5)
-	expectHeadCheck(mock, 3, 42, true)
+	expectTeacherCheck(mock, 3, 42, true)
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT graduation_year FROM math_centers`).
 		WithArgs(int64(42)).
@@ -295,7 +314,7 @@ func TestManage_DeleteGroupForeignCenter(t *testing.T) {
 	r, access, _ := newRouter(t, mock)
 
 	now := time.Now()
-	expectHeadCheck(mock, 3, 42, true)
+	expectTeacherCheck(mock, 3, 42, true)
 	// The group belongs to a DIFFERENT center → treated as not found.
 	mock.ExpectQuery(`FROM math_center_groups\s+WHERE id = \$1`).
 		WithArgs(int64(5)).
@@ -316,7 +335,7 @@ func TestManage_AddTeacherHappy(t *testing.T) {
 	r, access, _ := newRouter(t, mock)
 
 	now := time.Now()
-	expectHeadCheck(mock, 3, 42, true)
+	expectTeacherCheck(mock, 3, 42, true)
 	mock.ExpectBegin()
 	mock.ExpectQuery(`FROM math_center_students s`).
 		WithArgs(int64(55), int64(42)).
@@ -336,26 +355,26 @@ func TestManage_AddTeacherHappy(t *testing.T) {
 	}
 }
 
-func TestManage_RemoveLastHeadTeacher(t *testing.T) {
+func TestManage_RemoveSoleSeniorTeacherAllowed(t *testing.T) {
 	t.Parallel()
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
 	r, access, _ := newRouter(t, mock)
 
 	now := time.Now()
-	expectHeadCheck(mock, 3, 42, true)
+	expectTeacherCheck(mock, 3, 42, true)
 	mock.ExpectQuery(`FROM math_center_teachers\s+WHERE id = \$1`).
 		WithArgs(int64(8)).
 		WillReturnRows(mock.NewRows(manageTeacherColumns).AddRow(int64(8), int64(3), int64(42), true, now))
-	mock.ExpectQuery(`SELECT COUNT\(\*\)\s+FROM math_center_teachers\s+WHERE math_center_id = \$1`).
-		WithArgs(int64(42)).
-		WillReturnRows(mock.NewRows([]string{"count"}).AddRow(int64(1)))
+	mock.ExpectExec(`DELETE FROM math_center_teachers`).
+		WithArgs(int64(8)).
+		WillReturnResult(pgxmock.NewResult("DELETE", 1))
 
 	req := authedRequest(t, access, 3, http.MethodDelete, "/centers/42/manage/teachers/8", nil)
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
-	if rr.Code != http.StatusConflict {
-		t.Fatalf("got %d, want 409; body=%s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("got %d, want 204; body=%s", rr.Code, rr.Body.String())
 	}
 }
 
@@ -366,7 +385,7 @@ func TestManage_AddStudentForeignGroup(t *testing.T) {
 	r, access, _ := newRouter(t, mock)
 
 	now := time.Now()
-	expectHeadCheck(mock, 3, 42, true)
+	expectTeacherCheck(mock, 3, 42, true)
 	mock.ExpectBegin()
 	mock.ExpectQuery(`FROM math_center_groups\s+WHERE id = \$1`).
 		WithArgs(int64(5)).
@@ -390,7 +409,7 @@ func TestManage_MoveStudent(t *testing.T) {
 	r, access, _ := newRouter(t, mock)
 
 	now := time.Now()
-	expectHeadCheck(mock, 3, 42, true)
+	expectTeacherCheck(mock, 3, 42, true)
 	// Resolve the student, then its current group (in center), then the target.
 	mock.ExpectQuery(`FROM math_center_students\s+WHERE id = \$1`).
 		WithArgs(int64(11)).
@@ -422,7 +441,7 @@ func TestManage_SetStudentRazborAccess(t *testing.T) {
 	r, access, _ := newRouter(t, mock)
 
 	now := time.Now()
-	expectHeadCheck(mock, 3, 42, true)
+	expectTeacherCheck(mock, 3, 42, true)
 	mock.ExpectQuery(`FROM math_center_students\s+WHERE id = \$1`).
 		WithArgs(int64(11)).
 		WillReturnRows(mock.NewRows(manageStudentColumns).
@@ -452,7 +471,7 @@ func TestManage_ListStudentSeriesRazborAccess(t *testing.T) {
 	r, access, _ := newRouter(t, mock)
 
 	now := time.Now()
-	expectHeadCheck(mock, 3, 42, true)
+	expectTeacherCheck(mock, 3, 42, true)
 	mock.ExpectQuery(`FROM math_center_students\s+WHERE id = \$1`).
 		WithArgs(int64(11)).
 		WillReturnRows(mock.NewRows(manageStudentColumns).
@@ -489,7 +508,7 @@ func TestManage_SetStudentSeriesRazborAccess(t *testing.T) {
 	r, access, _ := newRouter(t, mock)
 
 	now := time.Now()
-	expectHeadCheck(mock, 3, 42, true)
+	expectTeacherCheck(mock, 3, 42, true)
 	mock.ExpectQuery(`FROM math_center_students\s+WHERE id = \$1`).
 		WithArgs(int64(11)).
 		WillReturnRows(mock.NewRows(manageStudentColumns).
@@ -519,7 +538,7 @@ func TestManage_SetStudentSeriesRazborAccessRejectsForeignSeries(t *testing.T) {
 	r, access, _ := newRouter(t, mock)
 
 	now := time.Now()
-	expectHeadCheck(mock, 3, 42, true)
+	expectTeacherCheck(mock, 3, 42, true)
 	mock.ExpectQuery(`FROM math_center_students\s+WHERE id = \$1`).
 		WithArgs(int64(11)).
 		WillReturnRows(mock.NewRows(manageStudentColumns).
@@ -548,7 +567,7 @@ func TestManage_UserSearch(t *testing.T) {
 	defer mock.Close()
 	r, access, _ := newRouter(t, mock)
 
-	expectHeadCheck(mock, 3, 42, true)
+	expectTeacherCheck(mock, 3, 42, true)
 	mock.ExpectQuery(`FROM users\s+WHERE username ILIKE`).
 		WithArgs("an").
 		WillReturnRows(mock.NewRows([]string{"id", "username", "first_name", "middle_name", "last_name"}).
@@ -568,7 +587,7 @@ func TestManage_UserSearchShortQuery(t *testing.T) {
 	defer mock.Close()
 	r, access, _ := newRouter(t, mock)
 
-	expectHeadCheck(mock, 3, 42, true)
+	expectTeacherCheck(mock, 3, 42, true)
 	// q too short → empty result, no SearchUsers query issued.
 
 	req := authedRequest(t, access, 3, http.MethodGet, "/centers/42/manage/user-search?q=a", nil)
@@ -589,7 +608,7 @@ func TestManage_CreateTeacherInvite(t *testing.T) {
 	r, access, _ := newRouter(t, mock)
 
 	now := time.Now()
-	expectHeadCheck(mock, 3, 42, true)
+	expectTeacherCheck(mock, 3, 42, true)
 	// Validate the teacher preset → the center must exist.
 	mock.ExpectQuery(`FROM math_centers\s+WHERE id = \$1`).
 		WithArgs(int64(42)).
@@ -627,7 +646,7 @@ func TestManage_CreatePersonalStudentInvite(t *testing.T) {
 	r, access, _ := newRouter(t, mock)
 
 	now := time.Now()
-	expectHeadCheck(mock, 3, 42, true)
+	expectTeacherCheck(mock, 3, 42, true)
 	mock.ExpectQuery(`FROM users user_row`).
 		WithArgs(int64(77), int64(42)).
 		WillReturnRows(mock.NewRows([]string{"first_name", "middle_name", "last_name"}).
@@ -665,7 +684,7 @@ func TestManage_ListPersonalInviteStudents(t *testing.T) {
 	defer mock.Close()
 	r, access, _ := newRouter(t, mock)
 
-	expectHeadCheck(mock, 3, 42, true)
+	expectTeacherCheck(mock, 3, 42, true)
 	mock.ExpectQuery(`WITH selected_term AS`).
 		WithArgs(int64(42)).
 		WillReturnRows(mock.NewRows([]string{
@@ -696,7 +715,7 @@ func TestManage_CreateInviteBadRole(t *testing.T) {
 	defer mock.Close()
 	r, access, _ := newRouter(t, mock)
 
-	expectHeadCheck(mock, 3, 42, true)
+	expectTeacherCheck(mock, 3, 42, true)
 
 	body := strings.NewReader(`{"role":"admin","description":"x","max_uses":1,"expires_in_hours":1}`)
 	req := authedRequest(t, access, 3, http.MethodPost, "/centers/42/manage/invites", body)
@@ -715,7 +734,7 @@ func TestManage_RevokeInviteForeignCenter(t *testing.T) {
 	r, access, _ := newRouter(t, mock)
 
 	now := time.Now()
-	expectHeadCheck(mock, 3, 42, true)
+	expectTeacherCheck(mock, 3, 42, true)
 	// Token belongs to another center → not found.
 	mock.ExpectQuery(`FROM invitation_tokens\s+WHERE id = \$1`).
 		WithArgs(int64(20)).

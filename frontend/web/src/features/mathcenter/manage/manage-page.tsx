@@ -23,10 +23,9 @@ const TABS: PillTabOption<Tab>[] = [
 
 const TAB_IDS = TABS.map((t) => t.id)
 
-// ManagePage is the head-teacher self-service panel for one center. Access is
-// limited to a head teacher of this center or a global admin; everyone else
-// sees "Нет доступа". The three URL-driven tabs manage groups, teachers, and
-// students, and разбор access.
+// ManagePage is the teacher self-service panel for one center. Every teacher of
+// this center and every global admin has access; everyone else sees
+// "Нет доступа". The URL-driven tabs manage the center's operational data.
 export function ManagePage() {
   const centerId = useCenterIdContext()
   const { term } = useCenterTermContext()
@@ -44,10 +43,8 @@ export function ManagePage() {
   }
 
   const isAdmin = user?.is_admin ?? false
-  const isHead = (me.data?.teacher?.centers ?? []).some(
-    (c) => c.id === centerId && c.is_head_teacher,
-  )
-  if (!isAdmin && !isHead) {
+  const isTeacher = (me.data?.teacher?.centers ?? []).some((c) => c.id === centerId)
+  if (!isAdmin && !isTeacher) {
     return <NoAccess />
   }
 
