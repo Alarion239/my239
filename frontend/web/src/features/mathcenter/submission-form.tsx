@@ -36,6 +36,16 @@ export interface SubmissionFormProps {
 
 const MAX_PHOTOS = 10
 const ACCEPT = 'image/jpeg,image/png,image/heic,image/webp'
+const ACCEPTED_COMMENTS = [
+  'Супер!',
+  'Хорошая работа!',
+  'Хорошо!',
+  'Замечательно!',
+  'Крутое решение!',
+  'Так держать!',
+  'Отлично выполнено!',
+  'Без ошибок!',
+]
 
 // SubmissionForm is the shared photo + text panel behind student submit/appeal
 // and teacher grade. It owns the presigned-PUT handshake so the parent only
@@ -64,6 +74,17 @@ export function SubmissionForm({
 
   function removeFile(index: number) {
     setFiles((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  function selectVerdict(nextVerdict: Verdict) {
+    setVerdict(nextVerdict)
+    if (nextVerdict === 'accepted' && body.trim() === '') {
+      const comment =
+        ACCEPTED_COMMENTS[
+          Math.floor(Math.random() * ACCEPTED_COMMENTS.length)
+        ]
+      setBody(comment)
+    }
   }
 
   async function handleSubmit() {
@@ -115,14 +136,14 @@ export function SubmissionForm({
           <VerdictPill
             tone="accepted"
             active={verdict === 'accepted'}
-            onClick={() => setVerdict('accepted')}
+            onClick={() => selectVerdict('accepted')}
           >
             Принять
           </VerdictPill>
           <VerdictPill
             tone="rejected"
             active={verdict === 'rejected'}
-            onClick={() => setVerdict('rejected')}
+            onClick={() => selectVerdict('rejected')}
           >
             Отклонить
           </VerdictPill>

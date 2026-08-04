@@ -55,7 +55,7 @@ describe('SubmissionForm — grade validation', () => {
     expect(onFinalize).not.toHaveBeenCalled()
   })
 
-  it('requires a comment for a grade once a verdict is chosen', async () => {
+  it('prefills a positive comment when a grade is accepted', async () => {
     const user = userEvent.setup()
     const { onFinalize } = renderForm({
       showVerdict: true,
@@ -64,6 +64,29 @@ describe('SubmissionForm — grade validation', () => {
     })
 
     await user.click(screen.getByRole('button', { name: 'Принять' }))
+
+    const comment = screen.getByLabelText('Комментарий') as HTMLTextAreaElement
+    expect([
+      'Супер! Хорошая работа!',
+      'Хорошо!',
+      'Замечательно!',
+      'Крутое решение!',
+      'Так держать!',
+      'Отлично выполнено!',
+      'Без ошибок!',
+    ]).toContain(comment.value)
+    expect(onFinalize).not.toHaveBeenCalled()
+  })
+
+  it('still requires a comment when a grade is rejected', async () => {
+    const user = userEvent.setup()
+    const { onFinalize } = renderForm({
+      showVerdict: true,
+      bodyRequired: true,
+      submitLabel: 'Сохранить оценку',
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Отклонить' }))
     await user.click(screen.getByRole('button', { name: 'Сохранить оценку' }))
 
     expect(await screen.findByText('Комментарий обязателен.')).toBeInTheDocument()
