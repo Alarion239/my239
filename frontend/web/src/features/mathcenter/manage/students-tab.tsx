@@ -36,8 +36,6 @@ import {
 } from '@my239/shared'
 import {
   Button,
-  Card,
-  CardContent,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -470,8 +468,7 @@ export function RazborAccessTab({ centerId }: { centerId: number }) {
   const setAccess = useManageSetRazborAccess(centerId)
 
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4">
         <SectionHeader
           title="Доступ к разборам"
           description="Верхний левый треугольник — письменный разбор, нижний правый — видео. Серые треугольники ещё не опубликованы, но их можно настроить заранее."
@@ -481,8 +478,7 @@ export function RazborAccessTab({ centerId }: { centerId: number }) {
         ) : (
           <RazborAccessMatrix data={access.data} setAccess={setAccess} />
         )}
-      </CardContent>
-    </Card>
+    </div>
   )
 }
 

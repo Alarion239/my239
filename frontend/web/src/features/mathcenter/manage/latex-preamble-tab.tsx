@@ -4,7 +4,7 @@ import {
   useMathCenterLatexPreamble,
   useUpdateMathCenterLatexPreamble,
 } from '@my239/shared'
-import { Button, Card, CardContent, Spinner, Textarea } from '../../../design/ui'
+import { Button, Spinner, Textarea } from '../../../design/ui'
 import { SectionHeader } from '../../admin/_shared'
 
 export function LatexPreambleTab({ centerId }: { centerId: number }) {
@@ -28,8 +28,7 @@ export function LatexPreambleTab({ centerId }: { centerId: number }) {
   }
 
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4">
         <SectionHeader
           title="Преамбула LaTeX"
           description="Она автоматически добавляется к тексту без \\documentclass и \\begin{document}. Оставьте полную преамбулу с \\documentclass; маркеры тела сюда добавлять не нужно."
@@ -55,7 +54,6 @@ export function LatexPreambleTab({ centerId }: { centerId: number }) {
           {saved ? <span className="text-sm text-status-accepted">Сохранено.</span> : null}
         </div>
         {error ? <p className="text-sm text-danger" role="alert">{error}</p> : null}
-      </CardContent>
-    </Card>
+    </div>
   )
 }

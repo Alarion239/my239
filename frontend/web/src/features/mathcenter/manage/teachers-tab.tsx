@@ -7,7 +7,7 @@ import {
   useManageRemoveTeacher,
   type UserSearchResult,
 } from '@my239/shared'
-import { Badge, Button, Card, CardContent, Spinner } from '../../../design/ui'
+import { Badge, Button, Spinner } from '../../../design/ui'
 import { ConfirmButton, SectionHeader } from '../../admin/_shared'
 import { UserSearchSelect } from './user-search-select'
 import { InviteSection } from './invite-section'
@@ -40,8 +40,7 @@ export function TeachersTab({ centerId }: { centerId: number }) {
   }
 
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4">
         <SectionHeader title="Преподаватели" description="Преподаватели этого матцентра." />
 
         {isPending ? (
@@ -123,7 +122,6 @@ export function TeachersTab({ centerId }: { centerId: number }) {
         </div>
 
         <InviteSection centerId={centerId} role="teacher" />
-      </CardContent>
-    </Card>
+    </div>
   )
 }
