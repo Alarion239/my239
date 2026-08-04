@@ -32,7 +32,7 @@ func normalizeStudentNameColor(raw *string) (*string, string) {
 		return nil, "background_hex must be a six-digit HEX color"
 	}
 	for _, c := range value[1:] {
-		if !((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F')) {
+		if (c < '0' || c > '9') && (c < 'A' || c > 'F') {
 			return nil, "background_hex must be a six-digit HEX color"
 		}
 	}
