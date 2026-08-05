@@ -44,8 +44,9 @@ export function CreateTokenDialog() {
   // Role/preset selection lives outside react-hook-form: it's a small dependent
   // state machine (center → group) that's clearer as plain state.
   const [grant, setGrant] = useState<Grant>('none')
-  const [teacherCenterId, setTeacherCenterId] = useState(0)
-  const [isHeadTeacher, setIsHeadTeacher] = useState(false)
+  const [teacherCenters, setTeacherCenters] = useState<Array<{ centerId: number; isHeadTeacher: boolean }>>([
+    { centerId: 0, isHeadTeacher: false },
+  ])
   const [studentGroups, setStudentGroups] = useState<Array<{ centerId: number; groupId: number }>>([
     { centerId: 0, groupId: 0 },
   ])
@@ -72,8 +73,7 @@ export function CreateTokenDialog() {
     setCopied('none')
     setFormError(null)
     setGrant('none')
-    setTeacherCenterId(0)
-    setIsHeadTeacher(false)
+    setTeacherCenters([{ centerId: 0, isHeadTeacher: false }])
     setStudentGroups([{ centerId: 0, groupId: 0 }])
     setPresetError(null)
   }
@@ -85,19 +85,18 @@ export function CreateTokenDialog() {
     if (grant === 'none') return { ok: true, preset: undefined }
     if (grant === 'admin') return { ok: true, preset: { grants_admin: true } }
     if (grant === 'teacher') {
-      if (!teacherCenterId) {
-        setPresetError('Выберите матцентр')
+      if (teacherCenters.some((row) => !row.centerId)) {
+        setPresetError('Выберите матцентр для каждой строки')
         return { ok: false }
       }
-      return {
-        ok: true,
-        preset: {
-          mathcenter_teacher: {
-            center_id: teacherCenterId,
-            is_head_teacher: isHeadTeacher,
-          },
-        },
+      if (new Set(teacherCenters.map((row) => row.centerId)).size !== teacherCenters.length) {
+        setPresetError('Выберите каждый матцентр только один раз')
+        return { ok: false }
       }
+      return { ok: true, preset: { mathcenter_teachers: teacherCenters.map((row) => ({
+        center_id: row.centerId,
+        is_head_teacher: row.isHeadTeacher,
+      })) } }
     }
     if (studentGroups.some((row) => !row.centerId || !row.groupId)) {
       setPresetError('Выберите матцентр и группу для каждой строки')
@@ -268,34 +267,28 @@ export function CreateTokenDialog() {
             </Field>
 
             {grant === 'teacher' ? (
-              <>
-                <Field label="Матцентр">
-                  {({ id, invalid }) => (
-                    <Select
-                      id={id}
-                      invalid={invalid}
-                      value={teacherCenterId || ''}
-                      onChange={(e) => setTeacherCenterId(Number(e.target.value))}
-                    >
-                      <option value="">— выберите —</option>
-                      {centerOptions.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          Выпуск {c.graduation_year}
-                        </option>
-                      ))}
-                    </Select>
-                  )}
-                </Field>
-                <label className="flex items-center gap-2 text-sm text-text">
-                  <input
-                    type="checkbox"
-                    checked={isHeadTeacher}
-                    onChange={(e) => setIsHeadTeacher(e.target.checked)}
-                    className="h-4 w-4 rounded border-border-control text-link focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+              <div className="flex flex-col gap-2">
+                {teacherCenters.map((row, index) => (
+                  <TeacherCenterRow
+                    key={index}
+                    index={index}
+                    row={row}
+                    centers={centerOptions}
+                    selectedCenterIds={teacherCenters.map((item) => item.centerId)}
+                    onChange={(next) => setTeacherCenters((current) => current.map((item, i) => i === index ? next : item))}
+                    onRemove={() => setTeacherCenters((current) => current.filter((_, i) => i !== index))}
+                    canRemove={teacherCenters.length > 1}
                   />
-                  Старший преподаватель
-                </label>
-              </>
+                ))}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="self-start"
+                  onClick={() => setTeacherCenters((current) => [...current, { centerId: 0, isHeadTeacher: false }])}
+                >
+                  Добавить матцентр
+                </Button>
+              </div>
             ) : null}
 
             {grant === 'student' ? (
@@ -395,6 +388,63 @@ function StudentGroupRow({
           </Select>
         )}
       </Field>
+      {canRemove ? (
+        <Button type="button" variant="ghost" onClick={onRemove}>
+          Удалить
+        </Button>
+      ) : null}
+    </div>
+  )
+}
+
+function TeacherCenterRow({
+  index,
+  row,
+  centers,
+  selectedCenterIds,
+  onChange,
+  onRemove,
+  canRemove,
+}: {
+  index: number
+  row: { centerId: number; isHeadTeacher: boolean }
+  centers: MathCenter[]
+  selectedCenterIds: number[]
+  onChange: (row: { centerId: number; isHeadTeacher: boolean }) => void
+  onRemove: () => void
+  canRemove: boolean
+}) {
+  const availableCenters = centers.filter((center) =>
+    center.id === row.centerId || !selectedCenterIds.includes(center.id),
+  )
+
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <Field label={index === 0 ? 'Матцентр' : `Матцентр ${index + 1}`}>
+        {({ id }) => (
+          <Select
+            id={id}
+            value={row.centerId || ''}
+            onChange={(event) => onChange({ ...row, centerId: Number(event.target.value) })}
+          >
+            <option value="">— выберите —</option>
+            {availableCenters.map((center) => (
+              <option key={center.id} value={center.id}>
+                Выпуск {center.graduation_year}
+              </option>
+            ))}
+          </Select>
+        )}
+      </Field>
+      <label className="flex items-center gap-2 text-sm text-text">
+        <input
+          type="checkbox"
+          checked={row.isHeadTeacher}
+          onChange={(event) => onChange({ ...row, isHeadTeacher: event.target.checked })}
+          className="h-4 w-4 rounded border-border-control text-link focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+        />
+        Старший преподаватель
+      </label>
       {canRemove ? (
         <Button type="button" variant="ghost" onClick={onRemove}>
           Удалить

@@ -49,6 +49,7 @@ type Preset struct {
 	MathCenterStudents     []MathCenterStudent     `json:"mathcenter_students,omitempty"`
 	MathCenterStudentClaim *MathCenterStudentClaim `json:"mathcenter_student_claim,omitempty"`
 	MathCenterTeacher      *MathCenterTeacher      `json:"mathcenter_teacher,omitempty"`
+	MathCenterTeachers     []MathCenterTeacher     `json:"mathcenter_teachers,omitempty"`
 }
 
 // MathCenterStudent enrolls the registrant as a student in the given group. The
@@ -150,6 +151,12 @@ func Validate(ctx context.Context, q Store, p Preset) error {
 	if p.MathCenterStudent != nil && p.MathCenterStudents != nil {
 		return fmt.Errorf("%w: use one student grant form", ErrInvalidPreset)
 	}
+	if p.MathCenterTeacher != nil && p.MathCenterTeachers != nil {
+		return fmt.Errorf("%w: use one teacher grant form", ErrInvalidPreset)
+	}
+	if p.MathCenterTeachers != nil && len(p.MathCenterTeachers) == 0 {
+		return fmt.Errorf("%w: at least one teacher center is required", ErrInvalidPreset)
+	}
 	if p.MathCenterStudents != nil && len(p.MathCenterStudents) == 0 {
 		return fmt.Errorf("%w: at least one student group is required", ErrInvalidPreset)
 	}
@@ -160,7 +167,7 @@ func Validate(ctx context.Context, q Store, p Preset) error {
 		if p.MathCenterStudentClaim.UserID <= 0 {
 			return fmt.Errorf("%w: claimed student user id must be positive", ErrInvalidPreset)
 		}
-		if p.GrantsAdmin || p.MathCenterStudent != nil || p.MathCenterTeacher != nil {
+		if p.GrantsAdmin || p.MathCenterStudent != nil || p.MathCenterTeacher != nil || len(p.MathCenterTeachers) > 0 {
 			return fmt.Errorf("%w: a personal student claim cannot carry another grant", ErrInvalidPreset)
 		}
 	}
@@ -219,6 +226,25 @@ func Validate(ctx context.Context, q Store, p Preset) error {
 		}
 	}
 
+	if len(p.MathCenterTeachers) > 0 {
+		seenCenters := make(map[int64]struct{}, len(p.MathCenterTeachers))
+		for _, teacher := range p.MathCenterTeachers {
+			if _, ok := seenCenters[teacher.CenterID]; ok {
+				return fmt.Errorf("%w: duplicate math-center %d", ErrInvalidPreset, teacher.CenterID)
+			}
+			seenCenters[teacher.CenterID] = struct{}{}
+			if _, err := q.GetMathCenter(ctx, teacher.CenterID); err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					return fmt.Errorf("%w: math-center %d does not exist", ErrInvalidPreset, teacher.CenterID)
+				}
+				return fmt.Errorf("validate teacher center: %w", err)
+			}
+			if hasCenter(studentCenters, teacher.CenterID) {
+				return fmt.Errorf("%w: cannot enroll as both student and teacher of the same center (%d)", ErrInvalidPreset, teacher.CenterID)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -256,6 +282,11 @@ func Apply(ctx context.Context, q Store, userID int64, p Preset) error {
 
 	if p.MathCenterTeacher != nil {
 		if err := applyTeacher(ctx, q, userID, *p.MathCenterTeacher); err != nil {
+			return err
+		}
+	}
+	for _, teacher := range p.MathCenterTeachers {
+		if err := applyTeacher(ctx, q, userID, teacher); err != nil {
 			return err
 		}
 	}

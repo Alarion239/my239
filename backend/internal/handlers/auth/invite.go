@@ -23,16 +23,17 @@ import (
 // itself is the bearer secret and is supplied by the caller, so echoing its
 // description/role discloses nothing new.
 type inviteContextView struct {
-	Valid         bool              `json:"valid"`
-	Description   string            `json:"description"`
-	Role          string            `json:"role,omitempty"` // "teacher" | "student" | "" (plain token)
-	CenterName    string            `json:"center_name,omitempty"`
-	GroupName     string            `json:"group_name,omitempty"`
-	PersonalClaim bool              `json:"personal_claim,omitempty"`
-	FirstName     string            `json:"first_name,omitempty"`
-	MiddleName    *string           `json:"middle_name,omitempty"`
-	LastName      string            `json:"last_name,omitempty"`
-	Groups        []inviteGroupView `json:"groups,omitempty"`
+	Valid          bool              `json:"valid"`
+	Description    string            `json:"description"`
+	Role           string            `json:"role,omitempty"` // "teacher" | "student" | "" (plain token)
+	CenterName     string            `json:"center_name,omitempty"`
+	GroupName      string            `json:"group_name,omitempty"`
+	PersonalClaim  bool              `json:"personal_claim,omitempty"`
+	FirstName      string            `json:"first_name,omitempty"`
+	MiddleName     *string           `json:"middle_name,omitempty"`
+	LastName       string            `json:"last_name,omitempty"`
+	Groups         []inviteGroupView `json:"groups,omitempty"`
+	TeacherCenters []string          `json:"teacher_centers,omitempty"`
 }
 
 type inviteGroupView struct {
@@ -88,6 +89,16 @@ func InviteLookup(database *db.DB) http.HandlerFunc {
 			view.Role = "teacher"
 			if c, err := q.GetMathCenter(ctx, preset.MathCenterTeacher.CenterID); err == nil {
 				view.CenterName = centerName(int(c.GraduationYear))
+			}
+		case len(preset.MathCenterTeachers) > 0:
+			view.Role = "teacher"
+			view.TeacherCenters = make([]string, 0, len(preset.MathCenterTeachers))
+			for _, teacher := range preset.MathCenterTeachers {
+				if c, err := q.GetMathCenter(ctx, teacher.CenterID); err == nil {
+					view.TeacherCenters = append(view.TeacherCenters, centerName(int(c.GraduationYear)))
+				} else {
+					view.Valid = false
+				}
 			}
 		case preset.MathCenterStudent != nil:
 			view.Role = "student"

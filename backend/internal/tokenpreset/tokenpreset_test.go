@@ -322,6 +322,23 @@ func TestApply_EnrollsMultipleStudents(t *testing.T) {
 	}
 }
 
+func TestApply_EnrollsMultipleTeachers(t *testing.T) {
+	t.Parallel()
+	ms := &mockStore{centers: map[int64]store.MathCenter{7: {ID: 7}, 8: {ID: 8}}}
+	err := tokenpreset.Apply(context.Background(), ms, 42, tokenpreset.Preset{
+		MathCenterTeachers: []tokenpreset.MathCenterTeacher{
+			{CenterID: 7, IsHeadTeacher: true},
+			{CenterID: 8},
+		},
+	})
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if len(ms.addTeacherCall) != 2 || ms.addTeacherCall[0].MathCenterID != 7 || ms.addTeacherCall[1].MathCenterID != 8 {
+		t.Errorf("teacher grants: %+v", ms.addTeacherCall)
+	}
+}
+
 func TestApply_StudentBlockedWhenTeacher(t *testing.T) {
 	t.Parallel()
 	ms := &mockStore{

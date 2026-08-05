@@ -125,6 +125,37 @@ func TestCreateToken_WithMultipleStudentGroups(t *testing.T) {
 	}
 }
 
+func TestCreateToken_WithMultipleTeacherCenters(t *testing.T) {
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	now := time.Now()
+	for _, centerID := range []int64{7, 8} {
+		mock.ExpectQuery(`SELECT .* FROM math_centers WHERE id = \$1`).WithArgs(centerID).
+			WillReturnRows(mock.NewRows([]string{"id", "graduation_year", "created_at"}).AddRow(centerID, int32(2030+centerID-7), now))
+	}
+	wantPreset := json.RawMessage(`{"version":1,"mathcenter_teachers":[{"center_id":7,"is_head_teacher":true},{"center_id":8,"is_head_teacher":false}]}`)
+	mock.ExpectQuery(`INSERT INTO invitation_tokens`).
+		WithArgs(pgxmock.AnyArg(), "Multi-center teacher invite", int32(2), pgxmock.AnyArg(), wantPreset, (*int64)(nil)).
+		WillReturnRows(mock.NewRows(invitationTokenColumns).
+			AddRow(int64(10), "tok-teachers", "Multi-center teacher invite", int32(2), now.Add(72*time.Hour), now, wantPreset, nil))
+	router, access := newAdminRouter(t, mock)
+	body := accountBody(t, map[string]any{
+		"description": "Multi-center teacher invite", "max_uses": 2, "expires_in_hours": 72,
+		"preset": map[string]any{"mathcenter_teachers": []map[string]any{
+			{"center_id": 7, "is_head_teacher": true}, {"center_id": 8, "is_head_teacher": false},
+		}},
+	})
+	req := adminRequest(t, access, true, http.MethodPost, "/tokens", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("status: got %d, body=%s", rr.Code, rr.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled: %v", err)
+	}
+}
+
 // TestCreateToken_NoPreset verifies an omitted preset defaults to the empty
 // "{}" object and the token is created without any DB validation lookups.
 func TestCreateToken_NoPreset(t *testing.T) {

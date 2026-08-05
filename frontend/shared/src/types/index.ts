@@ -171,6 +171,7 @@ export interface TokenPreset {
   mathcenter_student?: { group_id: number }
   mathcenter_students?: Array<{ group_id: number }>
   mathcenter_student_claim?: { user_id: number }
+  mathcenter_teachers?: Array<{ center_id: number; is_head_teacher: boolean }>
 }
 
 // MathCenter is a cohort grouped by graduation year.
@@ -458,6 +459,7 @@ export interface InviteContext {
   middle_name?: string | null
   last_name?: string
   groups?: Array<{ center_name: string; group_name: string }>
+  teacher_centers?: string[]
 }
 
 // --- Admin user management ---------------------------------------------------

@@ -202,6 +202,17 @@ function InviteBanner({ token }: { token: string }) {
     )
   }
 
+  if (data.teacher_centers && data.teacher_centers.length > 0 && data.role === 'teacher') {
+    return (
+      <div className="rounded-lg border border-selected-border/30 bg-action/5 px-3 py-2 text-sm text-text">
+        <p>Вы регистрируетесь преподавателем в:</p>
+        <ul className="mt-1 list-disc pl-5">
+          {data.teacher_centers.map((center) => <li key={center}>{center}</li>)}
+        </ul>
+      </div>
+    )
+  }
+
   return (
     <div className="rounded-lg border border-selected-border/30 bg-action/5 px-3 py-2 text-sm text-text">
       {data.center_name && roleLabel ? (
