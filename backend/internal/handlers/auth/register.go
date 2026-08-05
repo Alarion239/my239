@@ -110,7 +110,8 @@ func Register(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 		claimedSheetsStudent := false
 		var claimedStudentGroups []int64
 		personalSheetsClaim := preset.MathCenterStudentClaim != nil
-		if personalSheetsClaim {
+		switch {
+		case personalSheetsClaim:
 			if invitation.MathCenterID == nil {
 				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 				return
@@ -128,7 +129,7 @@ func Register(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "student account has already been claimed or is no longer in this math center")
 				return
 			}
-		} else if len(preset.MathCenterStudents) > 0 {
+		case len(preset.MathCenterStudents) > 0:
 			user, claimedSheetsStudent, claimedStudentGroups, err = claimUniqueSheetsStudentInGroups(
 				ctx,
 				tx,
@@ -139,7 +140,7 @@ func Register(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 				passwordHash,
 				invitation.ID,
 			)
-		} else if preset.MathCenterStudent != nil {
+		case preset.MathCenterStudent != nil:
 			user, claimedSheetsStudent, err = claimUniqueSheetsStudent(
 				ctx,
 				tx,
