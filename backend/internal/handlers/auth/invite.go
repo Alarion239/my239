@@ -23,15 +23,21 @@ import (
 // itself is the bearer secret and is supplied by the caller, so echoing its
 // description/role discloses nothing new.
 type inviteContextView struct {
-	Valid         bool    `json:"valid"`
-	Description   string  `json:"description"`
-	Role          string  `json:"role,omitempty"` // "teacher" | "student" | "" (plain token)
-	CenterName    string  `json:"center_name,omitempty"`
-	GroupName     string  `json:"group_name,omitempty"`
-	PersonalClaim bool    `json:"personal_claim,omitempty"`
-	FirstName     string  `json:"first_name,omitempty"`
-	MiddleName    *string `json:"middle_name,omitempty"`
-	LastName      string  `json:"last_name,omitempty"`
+	Valid         bool              `json:"valid"`
+	Description   string            `json:"description"`
+	Role          string            `json:"role,omitempty"` // "teacher" | "student" | "" (plain token)
+	CenterName    string            `json:"center_name,omitempty"`
+	GroupName     string            `json:"group_name,omitempty"`
+	PersonalClaim bool              `json:"personal_claim,omitempty"`
+	FirstName     string            `json:"first_name,omitempty"`
+	MiddleName    *string           `json:"middle_name,omitempty"`
+	LastName      string            `json:"last_name,omitempty"`
+	Groups        []inviteGroupView `json:"groups,omitempty"`
+}
+
+type inviteGroupView struct {
+	CenterName string `json:"center_name"`
+	GroupName  string `json:"group_name"`
 }
 
 // InviteLookup resolves an invitation token by value for the registration page.
@@ -90,6 +96,25 @@ func InviteLookup(database *db.DB) http.HandlerFunc {
 				if c, err := q.GetMathCenter(ctx, g.MathCenterID); err == nil {
 					view.CenterName = centerName(int(c.GraduationYear))
 				}
+			}
+		case len(preset.MathCenterStudents) > 0:
+			view.Role = "student"
+			view.Groups = make([]inviteGroupView, 0, len(preset.MathCenterStudents))
+			for _, student := range preset.MathCenterStudents {
+				group, groupErr := q.GetGroup(ctx, student.GroupID)
+				if groupErr != nil {
+					view.Valid = false
+					continue
+				}
+				item := inviteGroupView{GroupName: group.Name}
+				if center, centerErr := q.GetMathCenter(ctx, group.MathCenterID); centerErr == nil {
+					item.CenterName = centerName(int(center.GraduationYear))
+				}
+				view.Groups = append(view.Groups, item)
+			}
+			if len(view.Groups) == 1 {
+				view.CenterName = view.Groups[0].CenterName
+				view.GroupName = view.Groups[0].GroupName
 			}
 		case preset.MathCenterStudentClaim != nil:
 			view.Role = "student"

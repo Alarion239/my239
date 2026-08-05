@@ -11,6 +11,7 @@ import {
   type CreateTokenValues,
   type InvitationToken,
   type TokenPreset,
+  type MathCenter,
 } from '@my239/shared'
 import {
   Button,
@@ -45,14 +46,14 @@ export function CreateTokenDialog() {
   const [grant, setGrant] = useState<Grant>('none')
   const [teacherCenterId, setTeacherCenterId] = useState(0)
   const [isHeadTeacher, setIsHeadTeacher] = useState(false)
-  const [studentCenterId, setStudentCenterId] = useState(0)
-  const [studentGroupId, setStudentGroupId] = useState(0)
+  const [studentGroups, setStudentGroups] = useState<Array<{ centerId: number; groupId: number }>>([
+    { centerId: 0, groupId: 0 },
+  ])
   const [presetError, setPresetError] = useState<string | null>(null)
 
   const createToken = useCreateToken()
   // Only fetch centers once the dialog is open (admin-gated endpoint).
   const centers = useMathCenters(open)
-  const groups = useCenterGroups(grant === 'student' ? studentCenterId : 0)
 
   const {
     register,
@@ -73,8 +74,7 @@ export function CreateTokenDialog() {
     setGrant('none')
     setTeacherCenterId(0)
     setIsHeadTeacher(false)
-    setStudentCenterId(0)
-    setStudentGroupId(0)
+    setStudentGroups([{ centerId: 0, groupId: 0 }])
     setPresetError(null)
   }
 
@@ -99,11 +99,15 @@ export function CreateTokenDialog() {
         },
       }
     }
-    if (!studentGroupId) {
-      setPresetError('Выберите группу')
+    if (studentGroups.some((row) => !row.centerId || !row.groupId)) {
+      setPresetError('Выберите матцентр и группу для каждой строки')
       return { ok: false }
     }
-    return { ok: true, preset: { mathcenter_student: { group_id: studentGroupId } } }
+    if (new Set(studentGroups.map((row) => row.centerId)).size !== studentGroups.length) {
+      setPresetError('Выберите не более одной группы из каждого матцентра')
+      return { ok: false }
+    }
+    return { ok: true, preset: { mathcenter_students: studentGroups.map((row) => ({ group_id: row.groupId })) } }
   }
 
   const onSubmit = handleSubmit((values) => {
@@ -295,51 +299,28 @@ export function CreateTokenDialog() {
             ) : null}
 
             {grant === 'student' ? (
-              <>
-                <Field label="Матцентр">
-                  {({ id }) => (
-                    <Select
-                      id={id}
-                      value={studentCenterId || ''}
-                      onChange={(e) => {
-                        setStudentCenterId(Number(e.target.value))
-                        setStudentGroupId(0)
-                      }}
-                    >
-                      <option value="">— выберите —</option>
-                      {centerOptions.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          Выпуск {c.graduation_year}
-                        </option>
-                      ))}
-                    </Select>
-                  )}
-                </Field>
-                <Field label="Группа">
-                  {({ id, invalid }) => (
-                    <Select
-                      id={id}
-                      invalid={invalid}
-                      disabled={!studentCenterId || groups.isPending}
-                      value={studentGroupId || ''}
-                      onChange={(e) => setStudentGroupId(Number(e.target.value))}
-                    >
-                      <option value="">
-                        {!studentCenterId
-                          ? '— сначала выберите матцентр —'
-                          : (groups.data?.length ?? 0) === 0
-                            ? '— в центре нет групп —'
-                            : '— выберите —'}
-                      </option>
-                      {(groups.data ?? []).filter((group) => !isUnallocatedGroup(group.name)).map((g) => (
-                        <option key={g.id} value={g.id}>
-                          {g.name}
-                        </option>
-                      ))}
-                    </Select>
-                  )}
-                </Field>
-              </>
+              <div className="flex flex-col gap-2">
+                {studentGroups.map((row, index) => (
+                  <StudentGroupRow
+                    key={index}
+                    index={index}
+                    row={row}
+                    centers={centerOptions}
+                    selectedCenterIds={studentGroups.map((item) => item.centerId)}
+                    onChange={(next) => setStudentGroups((current) => current.map((item, i) => i === index ? next : item))}
+                    onRemove={() => setStudentGroups((current) => current.filter((_, i) => i !== index))}
+                    canRemove={studentGroups.length > 1}
+                  />
+                ))}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="self-start"
+                  onClick={() => setStudentGroups((current) => [...current, { centerId: 0, groupId: 0 }])}
+                >
+                  Добавить группу
+                </Button>
+              </div>
             ) : null}
 
             {presetError ? <p className="text-sm text-danger">{presetError}</p> : null}
@@ -352,5 +333,73 @@ export function CreateTokenDialog() {
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+function StudentGroupRow({
+  index,
+  row,
+  centers,
+  selectedCenterIds,
+  onChange,
+  onRemove,
+  canRemove,
+}: {
+  index: number
+  row: { centerId: number; groupId: number }
+  centers: MathCenter[]
+  selectedCenterIds: number[]
+  onChange: (row: { centerId: number; groupId: number }) => void
+  onRemove: () => void
+  canRemove: boolean
+}) {
+  const groups = useCenterGroups(row.centerId)
+  const availableCenters = centers.filter((center) =>
+    center.id === row.centerId || !selectedCenterIds.includes(center.id),
+  )
+
+  return (
+    <div className="flex flex-wrap items-end gap-2">
+      <Field label={index === 0 ? 'Матцентр' : `Матцентр ${index + 1}`}>
+        {({ id }) => (
+          <Select
+            id={id}
+            value={row.centerId || ''}
+            onChange={(event) => onChange({ centerId: Number(event.target.value), groupId: 0 })}
+          >
+            <option value="">— выберите —</option>
+            {availableCenters.map((center) => (
+              <option key={center.id} value={center.id}>
+                Выпуск {center.graduation_year}
+              </option>
+            ))}
+          </Select>
+        )}
+      </Field>
+      <Field label="Группа">
+        {({ id }) => (
+          <Select
+            id={id}
+            disabled={!row.centerId || groups.isPending}
+            value={row.groupId || ''}
+            onChange={(event) => onChange({ ...row, groupId: Number(event.target.value) })}
+          >
+            <option value="">
+              {!row.centerId ? '— сначала выберите матцентр —' : groups.isPending ? 'Загрузка…' : '— выберите —'}
+            </option>
+            {(groups.data ?? []).filter((group) => !isUnallocatedGroup(group.name)).map((group) => (
+              <option key={group.id} value={group.id}>
+                {group.name}
+              </option>
+            ))}
+          </Select>
+        )}
+      </Field>
+      {canRemove ? (
+        <Button type="button" variant="ghost" onClick={onRemove}>
+          Удалить
+        </Button>
+      ) : null}
+    </div>
   )
 }

@@ -41,6 +41,17 @@ func (m *mockStore) GetGroup(_ context.Context, id int64) (store.GetGroupRow, er
 	return store.GetGroupRow{ID: g.ID, MathCenterID: g.MathCenterID, Name: g.Name, CreatedAt: g.CreatedAt}, nil
 }
 
+func (m *mockStore) GetGroupCenter(_ context.Context, id int64) (store.GetGroupCenterRow, error) {
+	if m.groupErr != nil {
+		return store.GetGroupCenterRow{}, m.groupErr
+	}
+	g, ok := m.groups[id]
+	if !ok {
+		return store.GetGroupCenterRow{}, pgx.ErrNoRows
+	}
+	return store.GetGroupCenterRow{ID: g.ID, MathCenterID: g.MathCenterID, TermID: g.ID}, nil
+}
+
 func (m *mockStore) GetMathCenter(_ context.Context, id int64) (store.MathCenter, error) {
 	if m.centerErr != nil {
 		return store.MathCenter{}, m.centerErr
@@ -273,6 +284,41 @@ func TestApply_EnrollsStudent(t *testing.T) {
 	}
 	if len(ms.addStudentCall) != 1 || ms.addStudentCall[0].UserID != 42 || ms.addStudentCall[0].GroupID != 3 {
 		t.Errorf("AddStudentToGroup not called correctly: %+v", ms.addStudentCall)
+	}
+}
+
+func TestValidate_MultipleStudentGroups(t *testing.T) {
+	t.Parallel()
+	groups := map[int64]store.MathCenterGroup{
+		3: {ID: 3, MathCenterID: 7},
+		4: {ID: 4, MathCenterID: 8},
+	}
+	if err := tokenpreset.Validate(context.Background(), &mockStore{groups: groups}, tokenpreset.Preset{
+		MathCenterStudents: []tokenpreset.MathCenterStudent{{GroupID: 3}, {GroupID: 4}},
+	}); err != nil {
+		t.Fatalf("validate multiple groups: %v", err)
+	}
+	if err := tokenpreset.Validate(context.Background(), &mockStore{groups: groups}, tokenpreset.Preset{
+		MathCenterStudents: []tokenpreset.MathCenterStudent{{GroupID: 3}, {GroupID: 3}},
+	}); !errors.Is(err, tokenpreset.ErrInvalidPreset) {
+		t.Fatalf("duplicate groups error: %v", err)
+	}
+}
+
+func TestApply_EnrollsMultipleStudents(t *testing.T) {
+	t.Parallel()
+	ms := &mockStore{groups: map[int64]store.MathCenterGroup{
+		3: {ID: 3, MathCenterID: 7},
+		4: {ID: 4, MathCenterID: 8},
+	}}
+	err := tokenpreset.Apply(context.Background(), ms, 42, tokenpreset.Preset{
+		MathCenterStudents: []tokenpreset.MathCenterStudent{{GroupID: 3}, {GroupID: 4}},
+	})
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if len(ms.addStudentCall) != 2 || ms.addStudentCall[0].GroupID != 3 || ms.addStudentCall[1].GroupID != 4 {
+		t.Errorf("student grants: %+v", ms.addStudentCall)
 	}
 }
 

@@ -92,6 +92,39 @@ func TestCreateToken_InvalidPreset(t *testing.T) {
 	}
 }
 
+func TestCreateToken_WithMultipleStudentGroups(t *testing.T) {
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	now := time.Now()
+	for _, group := range []struct {
+		id, center, term int64
+	}{{3, 7, 70}, {4, 8, 80}} {
+		mock.ExpectQuery(`SELECT id, math_center_id, term_id FROM math_center_groups WHERE id = \$1`).
+			WithArgs(group.id).
+			WillReturnRows(mock.NewRows([]string{"id", "math_center_id", "term_id"}).AddRow(group.id, group.center, group.term))
+	}
+	wantPreset := json.RawMessage(`{"version":1,"mathcenter_students":[{"group_id":3},{"group_id":4}]}`)
+	mock.ExpectQuery(`INSERT INTO invitation_tokens`).
+		WithArgs(pgxmock.AnyArg(), "Multi-group invite", int32(5), pgxmock.AnyArg(), wantPreset, (*int64)(nil)).
+		WillReturnRows(mock.NewRows(invitationTokenColumns).
+			AddRow(int64(10), "tok-multi", "Multi-group invite", int32(5), now.Add(72*time.Hour), now, wantPreset, nil))
+
+	router, access := newAdminRouter(t, mock)
+	body := accountBody(t, map[string]any{
+		"description": "Multi-group invite", "max_uses": 5, "expires_in_hours": 72,
+		"preset": map[string]any{"mathcenter_students": []map[string]any{{"group_id": 3}, {"group_id": 4}}},
+	})
+	req := adminRequest(t, access, true, http.MethodPost, "/tokens", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("status: got %d, body=%s", rr.Code, rr.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled: %v", err)
+	}
+}
+
 // TestCreateToken_NoPreset verifies an omitted preset defaults to the empty
 // "{}" object and the token is created without any DB validation lookups.
 func TestCreateToken_NoPreset(t *testing.T) {

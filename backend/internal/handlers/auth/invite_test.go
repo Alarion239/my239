@@ -83,6 +83,54 @@ func TestInviteLookup_StudentToken(t *testing.T) {
 	}
 }
 
+func TestInviteLookup_MultipleStudentGroups(t *testing.T) {
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	now := time.Now()
+	preset := []byte(`{"version":1,"mathcenter_students":[{"group_id":3},{"group_id":4}]}`)
+	mock.ExpectQuery(`FROM invitation_tokens\s+WHERE token = \$1`).
+		WithArgs("multi").
+		WillReturnRows(mock.NewRows(invitationTokenColumns).
+			AddRow(int64(1), "multi", "Join two groups", int32(5), now.Add(48*time.Hour), now, preset, nil))
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM users WHERE invitation_token_id`).
+		WithArgs(int64(1)).
+		WillReturnRows(mock.NewRows([]string{"count"}).AddRow(int64(0)))
+	for _, group := range []struct {
+		id, center int64
+		name       string
+	}{{3, 7, "А"}, {4, 8, "Б"}} {
+		mock.ExpectQuery(`FROM math_center_groups\s+WHERE id = \$1`).
+			WithArgs(group.id).
+			WillReturnRows(mock.NewRows([]string{"id", "math_center_id", "name", "created_at"}).AddRow(group.id, group.center, group.name, now))
+		mock.ExpectQuery(`FROM math_centers\s+WHERE id = \$1`).
+			WithArgs(group.center).
+			WillReturnRows(mock.NewRows([]string{"id", "graduation_year", "created_at"}).AddRow(group.center, int32(2030+group.id-3), now))
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/invite/multi", nil)
+	rr := httptest.NewRecorder()
+	inviteRouter(db.NewWithPool(mock)).ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status: got %d, body=%s", rr.Code, rr.Body.String())
+	}
+	var resp struct {
+		Role   string `json:"role"`
+		Groups []struct {
+			CenterName string `json:"center_name"`
+			GroupName  string `json:"group_name"`
+		} `json:"groups"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Role != "student" || len(resp.Groups) != 2 || resp.Groups[0].GroupName != "А" || resp.Groups[1].GroupName != "Б" {
+		t.Fatalf("view = %+v", resp)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled: %v", err)
+	}
+}
+
 func TestInviteLookup_PersonalStudentClaim(t *testing.T) {
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()

@@ -364,6 +364,41 @@ func TestRegister_StudentPreset(t *testing.T) {
 	}
 }
 
+func TestRegister_MultipleStudentPreset(t *testing.T) {
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	now := time.Now()
+	mock.ExpectBegin()
+	mock.ExpectQuery(`FOR UPDATE`).WithArgs("invite-abc").WillReturnRows(mock.NewRows(invitationTokenColumns).
+		AddRow(int64(1), "invite-abc", "multi", int32(5), now.Add(24*time.Hour), now, []byte(`{"version":1,"mathcenter_students":[{"group_id":3},{"group_id":4}]}`), nil))
+	mock.ExpectQuery(`SELECT COUNT`).WithArgs(int64(1)).WillReturnRows(mock.NewRows([]string{"count"}).AddRow(int64(0)))
+	mock.ExpectQuery(`ANY\(\$1::bigint\[\]\)`).WithArgs(pgxmock.AnyArg(), "New", "User").WillReturnRows(mock.NewRows([]string{"id"}))
+	mock.ExpectQuery(`INSERT INTO users`).WithArgs("newuser", pgxmock.AnyArg(), "New", (*string)(nil), "User", ptrInt64(1)).WillReturnRows(mock.NewRows(userColumns).
+		AddRow(int64(42), "newuser", "argon2idhash", "New", (*string)(nil), "User", ptrInt64(1), now, now, false, false))
+	for _, group := range []struct{ id, center int64 }{{3, 7}, {4, 8}} {
+		mock.ExpectQuery(`SELECT .* FROM math_center_groups WHERE id = \$1`).WithArgs(group.id).
+			WillReturnRows(mock.NewRows([]string{"id", "math_center_id", "name", "created_at"}).AddRow(group.id, group.center, "Group", now))
+		mock.ExpectQuery(`SELECT EXISTS`).WithArgs(int64(42), group.center).
+			WillReturnRows(mock.NewRows([]string{"is_teacher"}).AddRow(false))
+		mock.ExpectQuery(`INSERT INTO math_center_students`).WithArgs(int64(42), group.id).
+			WillReturnRows(mock.NewRows([]string{"id", "user_id", "group_id", "created_at"}).AddRow(group.id, int64(42), group.id, now))
+	}
+	mock.ExpectCommit()
+	expectRefreshInsert(t, mock, 42)
+
+	req := httptest.NewRequest(http.MethodPost, "/register", bytes.NewReader(validRegisterBody()))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	database := db.NewWithPool(mock)
+	authHandlers.Register(database, newTokens(t, database))(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("status: got %d, body=%s", rr.Code, rr.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled: %v", err)
+	}
+}
+
 func TestRegister_ClaimsUniqueSheetsStudentInInvitedGroup(t *testing.T) {
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()

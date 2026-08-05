@@ -46,6 +46,7 @@ type Preset struct {
 	Version                int                     `json:"version"`
 	GrantsAdmin            bool                    `json:"grants_admin,omitempty"`
 	MathCenterStudent      *MathCenterStudent      `json:"mathcenter_student,omitempty"`
+	MathCenterStudents     []MathCenterStudent     `json:"mathcenter_students,omitempty"`
 	MathCenterStudentClaim *MathCenterStudentClaim `json:"mathcenter_student_claim,omitempty"`
 	MathCenterTeacher      *MathCenterTeacher      `json:"mathcenter_teacher,omitempty"`
 }
@@ -93,6 +94,7 @@ var (
 // Validate/Apply with a pgxmock-backed *store.Queries or a hand-written mock.
 type Store interface {
 	GetGroup(ctx context.Context, id int64) (store.GetGroupRow, error)
+	GetGroupCenter(ctx context.Context, id int64) (store.GetGroupCenterRow, error)
 	GetMathCenter(ctx context.Context, id int64) (store.MathCenter, error)
 	IsTeacherInCenter(ctx context.Context, arg store.IsTeacherInCenterParams) (bool, error)
 	IsStudentInCenter(ctx context.Context, arg store.IsStudentInCenterParams) (bool, error)
@@ -145,6 +147,15 @@ func Marshal(p Preset) (json.RawMessage, error) {
 //     at registration on per-center student/teacher exclusivity, so reject the
 //     contradiction up front rather than mint an unusable token.
 func Validate(ctx context.Context, q Store, p Preset) error {
+	if p.MathCenterStudent != nil && p.MathCenterStudents != nil {
+		return fmt.Errorf("%w: use one student grant form", ErrInvalidPreset)
+	}
+	if p.MathCenterStudents != nil && len(p.MathCenterStudents) == 0 {
+		return fmt.Errorf("%w: at least one student group is required", ErrInvalidPreset)
+	}
+	if p.MathCenterStudentClaim != nil && len(p.MathCenterStudents) > 0 {
+		return fmt.Errorf("%w: a personal student claim cannot carry another grant", ErrInvalidPreset)
+	}
 	if p.MathCenterStudentClaim != nil {
 		if p.MathCenterStudentClaim.UserID <= 0 {
 			return fmt.Errorf("%w: claimed student user id must be positive", ErrInvalidPreset)
@@ -156,6 +167,7 @@ func Validate(ctx context.Context, q Store, p Preset) error {
 
 	var studentCenterID int64
 	haveStudentCenter := false
+	studentCenters := make(map[int64]struct{})
 
 	if p.MathCenterStudent != nil {
 		group, err := q.GetGroup(ctx, p.MathCenterStudent.GroupID)
@@ -167,6 +179,31 @@ func Validate(ctx context.Context, q Store, p Preset) error {
 		}
 		studentCenterID = group.MathCenterID
 		haveStudentCenter = true
+		studentCenters[group.MathCenterID] = struct{}{}
+	}
+
+	if len(p.MathCenterStudents) > 0 {
+		seenGroups := make(map[int64]struct{}, len(p.MathCenterStudents))
+		seenTerms := make(map[int64]struct{}, len(p.MathCenterStudents))
+		for _, student := range p.MathCenterStudents {
+			if _, ok := seenGroups[student.GroupID]; ok {
+				return fmt.Errorf("%w: duplicate math-center group %d", ErrInvalidPreset, student.GroupID)
+			}
+			seenGroups[student.GroupID] = struct{}{}
+			group, err := q.GetGroupCenter(ctx, student.GroupID)
+			if err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					return fmt.Errorf("%w: math-center group %d does not exist", ErrInvalidPreset, student.GroupID)
+				}
+				return fmt.Errorf("validate student group: %w", err)
+			}
+			if _, ok := seenTerms[group.TermID]; ok {
+				return fmt.Errorf("%w: multiple student groups belong to the same term", ErrInvalidPreset)
+			}
+			seenTerms[group.TermID] = struct{}{}
+			studentCenters[group.MathCenterID] = struct{}{}
+		}
+		haveStudentCenter = true
 	}
 
 	if p.MathCenterTeacher != nil {
@@ -177,7 +214,7 @@ func Validate(ctx context.Context, q Store, p Preset) error {
 			return fmt.Errorf("validate teacher center: %w", err)
 		}
 
-		if haveStudentCenter && studentCenterID == p.MathCenterTeacher.CenterID {
+		if (haveStudentCenter && studentCenterID == p.MathCenterTeacher.CenterID) || hasCenter(studentCenters, p.MathCenterTeacher.CenterID) {
 			return fmt.Errorf("%w: cannot enroll as both student and teacher of the same center (%d)", ErrInvalidPreset, p.MathCenterTeacher.CenterID)
 		}
 	}
@@ -211,6 +248,11 @@ func Apply(ctx context.Context, q Store, userID int64, p Preset) error {
 			return err
 		}
 	}
+	for _, student := range p.MathCenterStudents {
+		if err := applyStudent(ctx, q, userID, student); err != nil {
+			return err
+		}
+	}
 
 	if p.MathCenterTeacher != nil {
 		if err := applyTeacher(ctx, q, userID, *p.MathCenterTeacher); err != nil {
@@ -219,6 +261,11 @@ func Apply(ctx context.Context, q Store, userID int64, p Preset) error {
 	}
 
 	return nil
+}
+
+func hasCenter(centers map[int64]struct{}, centerID int64) bool {
+	_, ok := centers[centerID]
+	return ok
 }
 
 func applyStudent(ctx context.Context, q Store, userID int64, s MathCenterStudent) error {
