@@ -232,6 +232,19 @@ describe('ConduitTable', () => {
   it('uses the table cells themselves as controls and sorts existing rows', () => {
     const { container } = renderConduit()
 
+    const firstHeader = container.querySelector('thead tr:first-child')!
+    expect(
+      Array.from(firstHeader.children).map((cell) =>
+        cell instanceof HTMLElement
+          ? cell.dataset.conduitSolvedHeader
+            ? 'solved'
+            : cell.dataset.conduitStudentHeader
+              ? 'student'
+              : 'series'
+          : 'unknown',
+      ),
+    ).toEqual(['student', 'solved', 'series'])
+
     const taskCells = container.querySelectorAll('td[data-conduit-cell]')
     expect(taskCells).toHaveLength(6)
     expect(container.querySelectorAll('tbody button')).toHaveLength(0)
@@ -402,15 +415,15 @@ describe('ConduitTable', () => {
     expect(firstCells[0]).toHaveClass('bg-selected/70')
     expect(firstCells[2]).toHaveClass('bg-surface-subtle')
     expect(firstCells[2]).not.toHaveAttribute('aria-disabled')
-    expect(firstRow.lastElementChild).toHaveTextContent('0')
-    expect(secondRow.lastElementChild).toHaveTextContent('1')
+    expect(firstRow.querySelector('[data-conduit-solved]')).toHaveTextContent('0')
+    expect(secondRow.querySelector('[data-conduit-solved]')).toHaveTextContent('1')
 
     const totals = Array.from(container.querySelectorAll('tbody tr')).find((row) =>
       row.textContent?.startsWith('Решили'),
     )!
     const totalCells = totals.querySelectorAll('td')
-    expect(totalCells[1]).toHaveTextContent('2')
-    expect(totalCells[2]).toHaveTextContent('1')
+    expect(totals.querySelector('[data-conduit-solved-total]')).toHaveTextContent('1')
+    expect(totalCells[2]).toHaveTextContent('2')
     expect(totalCells[3]).toHaveTextContent('1')
     expect(totalCells[4]).toHaveTextContent('1')
   })
