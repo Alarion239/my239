@@ -187,6 +187,21 @@ function InviteBanner({ token }: { token: string }) {
         ? 'учеником'
         : null
 
+  if (data.groups && data.groups.length > 0 && data.role === 'student') {
+    return (
+      <div className="rounded-lg border border-selected-border/30 bg-action/5 px-3 py-2 text-sm text-text">
+        <p>Вы вступаете в выбранные группы:</p>
+        <ul className="mt-1 list-disc pl-5">
+          {data.groups.map((group) => (
+            <li key={`${group.center_name}-${group.group_name}`}>
+              <span className="font-medium">{group.center_name}</span> — {group.group_name}
+            </li>
+          ))}
+        </ul>
+      </div>
+    )
+  }
+
   return (
     <div className="rounded-lg border border-selected-border/30 bg-action/5 px-3 py-2 text-sm text-text">
       {data.center_name && roleLabel ? (

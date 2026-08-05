@@ -185,6 +185,7 @@ const CONDUIT_COLUMN_WIDTH = 36
 const CONDUIT_COLUMN_OVERSCAN = 8
 const CONDUIT_INITIAL_COLUMNS = 60
 const CONDUIT_STUDENT_COLUMN_WIDTH = 176
+const CONDUIT_SOLVED_COLUMN_WIDTH = 72
 const EMPTY_CREDIT_GATES = new Map<number, boolean>()
 
 function acceptedCell(
@@ -211,6 +212,7 @@ type ConduitVirtualRow = {
 
 interface ConduitStudentRowProps {
   student: CenterGridStudentEntry
+  studentColumnWidth: number
   cols: FlatCol[]
   leadingColumns: number
   trailingColumns: number
@@ -244,6 +246,7 @@ function persistedCellInitials(
 // whose active/pending state changed.
 const ConduitStudentRow = memo(function ConduitStudentRow({
   student,
+  studentColumnWidth,
   cols,
   leadingColumns,
   trailingColumns,
@@ -287,6 +290,13 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
             />
           ) : null}
         </Link>
+      </td>
+      <td
+        className="sticky z-20 border-b border-l border-r border-border bg-surface px-3 py-1.5 text-center font-medium text-text"
+        style={{ left: studentColumnWidth }}
+        data-conduit-solved
+      >
+        {solvedTotal}
       </td>
       {leadingColumns > 0 ? (
         <td
@@ -389,9 +399,6 @@ const ConduitStudentRow = memo(function ConduitStudentRow({
           data-conduit-column-spacer="right"
         />
       ) : null}
-      <td className="sticky right-0 z-10 border-b border-l border-r border-border bg-surface px-3 py-1.5 text-center font-medium text-text">
-        {solvedTotal}
-      </td>
     </tr>
   )
 }, sameConduitStudentRowProps)
@@ -402,6 +409,7 @@ function sameConduitStudentRowProps(
 ): boolean {
   if (
     previous.student !== next.student ||
+    previous.studentColumnWidth !== next.studentColumnWidth ||
     previous.cols !== next.cols ||
     previous.leadingColumns !== next.leadingColumns ||
     previous.trailingColumns !== next.trailingColumns ||
@@ -699,6 +707,12 @@ export function ConduitTable({
     start: 0,
     end: CONDUIT_INITIAL_COLUMNS,
   })
+  const [studentColumnWidth, setStudentColumnWidth] = useState(
+    CONDUIT_STUDENT_COLUMN_WIDTH,
+  )
+  const [solvedColumnWidth, setSolvedColumnWidth] = useState(
+    CONDUIT_SOLVED_COLUMN_WIDTH,
+  )
 
   // A synced center can exceed 50k task cells. Keep only the rows around the
   // viewport mounted; fixed-height spacer rows preserve the full scrollbar and
@@ -731,7 +745,7 @@ export function ConduitTable({
       const firstVisibleColumn = Math.floor(
         Math.max(
           0,
-          scroller.scrollLeft - CONDUIT_STUDENT_COLUMN_WIDTH,
+          scroller.scrollLeft - studentColumnWidth - solvedColumnWidth,
         ) / CONDUIT_COLUMN_WIDTH,
       )
       const visibleColumnCount = Math.ceil(
@@ -771,7 +785,7 @@ export function ConduitTable({
       resizeObserver?.disconnect()
       if (animationFrame !== 0) window.cancelAnimationFrame(animationFrame)
     }
-  }, [virtualRows.length, cols.length])
+  }, [studentColumnWidth, solvedColumnWidth, virtualRows.length, cols.length])
 
   const visibleRows = virtualRows.slice(rowWindow.start, rowWindow.end)
   const visibleCols = useMemo(
@@ -874,7 +888,26 @@ export function ConduitTable({
   )
 
   // Centre the current series on open.
+  const nameHeaderRef = useRef<HTMLTableCellElement | null>(null)
+  const solvedHeaderRef = useRef<HTMLTableCellElement | null>(null)
   const currentThRef = useRef<HTMLTableCellElement | null>(null)
+  useEffect(() => {
+    const nameHeader = nameHeaderRef.current
+    const solvedHeader = solvedHeaderRef.current
+    if (!nameHeader || !solvedHeader) return
+    const measure = () => {
+      const nameWidth = nameHeader.getBoundingClientRect().width
+      const solvedWidth = solvedHeader.getBoundingClientRect().width
+      if (nameWidth > 0) setStudentColumnWidth(nameWidth)
+      if (solvedWidth > 0) setSolvedColumnWidth(solvedWidth)
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(nameHeader)
+    observer.observe(solvedHeader)
+    return () => observer.disconnect()
+  }, [])
   const currentId = useMemo(() => currentSeriesId(data.series), [data.series])
   useEffect(() => {
     const scroller = scrollerRef.current
@@ -882,9 +915,10 @@ export function ConduitTable({
     if (!scroller || !el) return
     const elRect = el.getBoundingClientRect()
     const scRect = scroller.getBoundingClientRect()
-    // Bring the series just to the right of the sticky student column (~12rem).
-    scroller.scrollLeft += elRect.left - scRect.left - 200
-  }, [currentId])
+    // Bring the series just to the right of the frozen student + solved rail.
+    scroller.scrollLeft +=
+      elRect.left - scRect.left - studentColumnWidth - solvedColumnWidth
+  }, [currentId, studentColumnWidth, solvedColumnWidth])
 
   const toolbar = (
     <div className="flex min-w-0 items-center justify-end gap-2">
@@ -1002,7 +1036,12 @@ export function ConduitTable({
             {/* Series band — one header spanning each series' columns. */}
             <tr>
               {/* Corner cell — holds the student search filter. */}
-              <th rowSpan={2} className={cornerHeaderCell}>
+              <th
+                ref={nameHeaderRef}
+                rowSpan={2}
+                className={cornerHeaderCell}
+                data-conduit-student-header
+              >
                 <div className="flex flex-col gap-1">
                   <Input
                     type="search"
@@ -1015,6 +1054,36 @@ export function ConduitTable({
                   <span className="text-[0.65rem] font-normal text-text-subtle">
                     {shown} из {shownFrom}
                   </span>
+                </div>
+              </th>
+              <th
+                ref={solvedHeaderRef}
+                rowSpan={2}
+                className="sticky top-0 z-40 border-b border-l border-r border-t border-border bg-surface-subtle px-2 py-1 text-center font-medium text-text"
+                style={{ left: studentColumnWidth }}
+                data-conduit-solved-header
+              >
+                <div className="flex min-h-14 flex-col items-center justify-center">
+                  <button
+                    type="button"
+                    onClick={cycleSolvedSort}
+                    className="whitespace-nowrap rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                    title={
+                      solvedSort === 'none'
+                        ? 'Сортировать по убыванию числа решённых задач'
+                        : solvedSort === 'desc'
+                          ? 'Сортировать по возрастанию числа решённых задач'
+                          : 'Вернуть алфавитный порядок'
+                    }
+                    aria-label="Сортировать учеников по числу решённых задач"
+                  >
+                    Решено
+                    {solvedSort === 'desc'
+                      ? ' ↓'
+                      : solvedSort === 'asc'
+                        ? ' ↑'
+                        : ''}
+                  </button>
                 </div>
               </th>
               {data.series.map((s) => (
@@ -1044,33 +1113,6 @@ export function ConduitTable({
                   </Link>
                 </th>
               ))}
-              <th
-                rowSpan={2}
-                className="sticky right-0 top-0 z-40 border-b border-l border-r border-t border-border bg-surface-subtle px-2 py-1 text-center font-medium text-text"
-              >
-                <div className="flex min-h-14 flex-col items-center justify-center">
-                  <button
-                    type="button"
-                    onClick={cycleSolvedSort}
-                    className="whitespace-nowrap rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-                    title={
-                      solvedSort === 'none'
-                        ? 'Сортировать по убыванию числа решённых задач'
-                        : solvedSort === 'desc'
-                          ? 'Сортировать по возрастанию числа решённых задач'
-                          : 'Вернуть алфавитный порядок'
-                    }
-                    aria-label="Сортировать учеников по числу решённых задач"
-                  >
-                    Решено
-                    {solvedSort === 'desc'
-                      ? ' ↓'
-                      : solvedSort === 'asc'
-                        ? ' ↑'
-                        : ''}
-                  </button>
-                </div>
-              </th>
             </tr>
             {/* Per-subproblem column labels. Open coffins use the warning scale
                 so the problem itself is visible before reading cell status. */}
@@ -1140,6 +1182,7 @@ export function ConduitTable({
                 <ConduitStudentRow
                   key={row.key}
                   student={st}
+                  studentColumnWidth={studentColumnWidth}
                   cols={visibleCols}
                   leadingColumns={columnWindow.start}
                   trailingColumns={trailingColumns}
@@ -1179,6 +1222,13 @@ export function ConduitTable({
               <td className="sticky bottom-0 left-0 z-30 border-b border-l border-r border-t border-border bg-surface-subtle px-3 py-1.5 font-medium text-text">
                 Решили
               </td>
+              <td
+                className="sticky bottom-0 z-30 border-b border-l border-r border-t border-border bg-surface-subtle px-3 py-1.5 text-center font-medium text-text"
+                style={{ left: studentColumnWidth }}
+                data-conduit-solved-total
+              >
+                {solvedSummary.grandTotal}
+              </td>
               {cols.map(({ col, firstInSeries }) => (
                 <td
                   key={col.subproblem_id}
@@ -1190,9 +1240,6 @@ export function ConduitTable({
                   {solvedSummary.columnTotals.get(col.subproblem_id) ?? 0}
                 </td>
               ))}
-              <td className="sticky bottom-0 right-0 z-30 border-b border-l border-r border-t border-border bg-surface-subtle px-3 py-1.5 text-center font-medium text-text">
-                {solvedSummary.grandTotal}
-              </td>
             </tr>
           </tbody>
         </table>

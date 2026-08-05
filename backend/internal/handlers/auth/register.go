@@ -108,8 +108,10 @@ func Register(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 
 		var user store.User
 		claimedSheetsStudent := false
+		var claimedStudentGroups []int64
 		personalSheetsClaim := preset.MathCenterStudentClaim != nil
-		if personalSheetsClaim {
+		switch {
+		case personalSheetsClaim:
 			if invitation.MathCenterID == nil {
 				httpx.WriteAPIError(w, r, http.StatusInternalServerError, httpx.CodeInternal, "internal error")
 				return
@@ -127,7 +129,18 @@ func Register(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 				httpx.WriteAPIError(w, r, http.StatusConflict, httpx.CodeConflict, "student account has already been claimed or is no longer in this math center")
 				return
 			}
-		} else if preset.MathCenterStudent != nil {
+		case len(preset.MathCenterStudents) > 0:
+			user, claimedSheetsStudent, claimedStudentGroups, err = claimUniqueSheetsStudentInGroups(
+				ctx,
+				tx,
+				preset.MathCenterStudents,
+				req.FirstName,
+				req.LastName,
+				username,
+				passwordHash,
+				invitation.ID,
+			)
+		case preset.MathCenterStudent != nil:
 			user, claimedSheetsStudent, err = claimUniqueSheetsStudent(
 				ctx,
 				tx,
@@ -169,6 +182,19 @@ func Register(database *db.DB, tokens *auth.TokenService) http.HandlerFunc {
 			// do not try to insert that enrollment a second time.
 			presetToApply.MathCenterStudent = nil
 			presetToApply.MathCenterStudentClaim = nil
+			if len(claimedStudentGroups) > 0 {
+				claimed := make(map[int64]struct{}, len(claimedStudentGroups))
+				for _, groupID := range claimedStudentGroups {
+					claimed[groupID] = struct{}{}
+				}
+				remaining := make([]tokenpreset.MathCenterStudent, 0, len(presetToApply.MathCenterStudents))
+				for _, student := range presetToApply.MathCenterStudents {
+					if _, ok := claimed[student.GroupID]; !ok {
+						remaining = append(remaining, student)
+					}
+				}
+				presetToApply.MathCenterStudents = remaining
+			}
 		}
 		if err := tokenpreset.Apply(ctx, q, user.ID, presetToApply); err != nil {
 			switch {
@@ -354,6 +380,115 @@ func claimUniqueSheetsStudent(
 		return store.User{}, false, err
 	}
 	return user, true, nil
+}
+
+// claimUniqueSheetsStudentInGroups activates one unclaimed Sheets placeholder
+// when the submitted name matches exactly one placeholder across all invited
+// groups. It returns the groups the placeholder already owns so registration
+// can apply only the remaining grants.
+func claimUniqueSheetsStudentInGroups(
+	ctx context.Context,
+	tx pgx.Tx,
+	students []tokenpreset.MathCenterStudent,
+	firstName string,
+	lastName string,
+	username string,
+	passwordHash string,
+	invitationTokenID int64,
+) (store.User, bool, []int64, error) {
+	groupIDs := make([]int64, 0, len(students))
+	for _, student := range students {
+		groupIDs = append(groupIDs, student.GroupID)
+	}
+	const findQuery = `
+		SELECT u.id
+		FROM users u
+		JOIN math_center_students student ON student.user_id = u.id
+		WHERE student.group_id = ANY($1::bigint[])
+		  AND u.username LIKE 'sheets-%'
+		  AND u.invitation_token_id IS NULL
+		  AND NOT u.is_math_center
+		  AND lower(regexp_replace(btrim(u.first_name), '[[:space:]]+', ' ', 'g')) =
+		      lower(regexp_replace(btrim($2), '[[:space:]]+', ' ', 'g'))
+		  AND lower(regexp_replace(btrim(u.last_name), '[[:space:]]+', ' ', 'g')) =
+		      lower(regexp_replace(btrim($3), '[[:space:]]+', ' ', 'g'))
+		GROUP BY u.id
+		ORDER BY u.id
+		LIMIT 2`
+	rows, err := tx.Query(ctx, findQuery, groupIDs, firstName, lastName)
+	if err != nil {
+		return store.User{}, false, nil, err
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return store.User{}, false, nil, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return store.User{}, false, nil, err
+	}
+	if len(ids) != 1 {
+		return store.User{}, false, nil, nil
+	}
+
+	const claimQuery = `
+		UPDATE users
+		SET username = $2,
+		    password_hash = $3,
+		    invitation_token_id = $4,
+		    updated_at = NOW()
+		WHERE id = $1
+		  AND username LIKE 'sheets-%'
+		  AND invitation_token_id IS NULL
+		RETURNING id, username, password_hash, first_name, middle_name, last_name,
+		          invitation_token_id, created_at, updated_at, is_admin, is_math_center`
+	var user store.User
+	err = tx.QueryRow(ctx, claimQuery, ids[0], username, passwordHash, invitationTokenID).Scan(
+		&user.ID,
+		&user.Username,
+		&user.PasswordHash,
+		&user.FirstName,
+		&user.MiddleName,
+		&user.LastName,
+		&user.InvitationTokenID,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+		&user.IsAdmin,
+		&user.IsMathCenter,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return store.User{}, false, nil, nil
+	}
+	if err != nil {
+		return store.User{}, false, nil, err
+	}
+
+	const groupsQuery = `
+		SELECT group_id
+		FROM math_center_students
+		WHERE user_id = $1
+		  AND group_id = ANY($2::bigint[])`
+	groupRows, err := tx.Query(ctx, groupsQuery, user.ID, groupIDs)
+	if err != nil {
+		return store.User{}, false, nil, err
+	}
+	defer groupRows.Close()
+	claimedGroups := make([]int64, 0)
+	for groupRows.Next() {
+		var groupID int64
+		if err := groupRows.Scan(&groupID); err != nil {
+			return store.User{}, false, nil, err
+		}
+		claimedGroups = append(claimedGroups, groupID)
+	}
+	if err := groupRows.Err(); err != nil {
+		return store.User{}, false, nil, err
+	}
+	return user, true, claimedGroups, nil
 }
 
 // isUniqueViolation reports whether err is a Postgres unique-constraint

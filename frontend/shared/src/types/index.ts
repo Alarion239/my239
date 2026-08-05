@@ -169,6 +169,7 @@ export interface TokenPreset {
   grants_admin?: boolean
   mathcenter_teacher?: { center_id: number; is_head_teacher: boolean }
   mathcenter_student?: { group_id: number }
+  mathcenter_students?: Array<{ group_id: number }>
   mathcenter_student_claim?: { user_id: number }
 }
 
@@ -456,6 +457,7 @@ export interface InviteContext {
   first_name?: string
   middle_name?: string | null
   last_name?: string
+  groups?: Array<{ center_name: string; group_name: string }>
 }
 
 // --- Admin user management ---------------------------------------------------
